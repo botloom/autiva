@@ -6,19 +6,13 @@ spring:
   ai:
     deepseek:
       api-key: sk-ff1e0328e7b24ad7ace72e69d4710172
-      chat:
-        options:
-          model: deepseek-chat
     chat:
       client:
         enabled: false
 server:
   port: 9527
-logging:
-  level:
-    org:
-      springframework:
-        ai:
-          chat:
-            client:
-              advisor: DEBUG
+#logging:
+#  level:
+#    org:
+#      springframework:
+#        ai: DEBUG

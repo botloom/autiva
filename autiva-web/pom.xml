@@ -20,7 +20,7 @@
     <dependencies>
         <dependency>
             <groupId>cn.bitloom</groupId>
-            <artifactId>autiva-agent</artifactId>
+            <artifactId>autiva-agentic</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -29,6 +29,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-test</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
     </dependencies>
 

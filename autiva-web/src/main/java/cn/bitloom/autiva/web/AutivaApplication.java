@@ -12,7 +12,7 @@ import org.springframework.context.annotation.ComponentScan;
  */
 @SpringBootApplication
 @ComponentScan(basePackages = "cn.bitloom.autiva")
-@ConfigurationPropertiesScan(basePackages = {"cn.bitloom.autiva.agent.acm"})
+@ConfigurationPropertiesScan(basePackages = {"cn.bitloom.autiva.agentic.acm"})
 public class AutivaApplication {
 
     /**

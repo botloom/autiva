@@ -9,6 +9,11 @@
     </option>
     <option name="ignoredFiles">
       <set>
+        <option value="$PROJECT_DIR$/autiva-api/pom.xml" />
+        <option value="$PROJECT_DIR$/autiva-common/pom.xml" />
+        <option value="$PROJECT_DIR$/autiva-flow/pom.xml" />
+        <option value="$PROJECT_DIR$/autiva-mcp/pom.xml" />
+        <option value="$PROJECT_DIR$/autiva-sandbox/pom.xml" />
         <option value="$PROJECT_DIR$/autiva-support/pom.xml" />
         <option value="$PROJECT_DIR$/autiva-tool/pom.xml" />
         <option value="$PROJECT_DIR$/sandbox/pom.xml" />
