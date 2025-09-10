@@ -1,0 +1,1 @@
+![autiva_ch.svg](autiva-web/src/main/resources/autiva_ch.svg)
