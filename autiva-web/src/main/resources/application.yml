@@ -11,8 +11,3 @@ spring:
         enabled: false
 server:
   port: 9527
-#logging:
-#  level:
-#    org:
-#      springframework:
-#        ai: DEBUG
