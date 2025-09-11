@@ -1,12 +1,13 @@
 package cn.bitloom.autiva.agentic.agent.browser;
 
-import com.microsoft.playwright.ElementHandle;
+import com.microsoft.playwright.Frame;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.BoundingBox;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -20,7 +21,6 @@ public class InteractivePage {
     private Page page;
     private AtomicInteger globalId = new AtomicInteger(0);
     private String elementTree;
-
 
     /**
      * Instantiates a new Interactive page.
@@ -44,62 +44,46 @@ public class InteractivePage {
      * 扫描可交互元素
      */
     public void scanInteractiveElement() {
-        this.clearAllOverlay();
-        StringBuilder sb = new StringBuilder();
-
-        List<ElementHandle> elements = page.querySelectorAll(
-                "button, input, a, textarea, select, [role='button'], *[onclick], [tabindex], [contenteditable]"
-        );
-
-        for (ElementHandle el : elements) {
-            try {
-                BoundingBox box = el.boundingBox();
+        StringBuilder treeBuilder = new StringBuilder();
+        for (Frame frame : this.page.frames()) {
+            //删除所有overlay
+            frame.evaluate("() => document.querySelectorAll('div[autiva-interactive-overlay-id]').forEach(overlay => overlay.remove());");
+            /*
+             * 查询所有可交互元素并设置overlay
+             */
+            Locator frameLocator = frame.locator("button, input, a, textarea, select, [role='button'], *[onclick], [tabindex], [contenteditable]");
+            for (Locator elLocator : frameLocator.all()) {
+                BoundingBox box = elLocator.boundingBox();
                 if (box == null || box.width == 0 || box.height == 0) {
                     continue;
                 }
-
-                Object elementIdObj = el.evaluate("e => e.dataset.autivaId");
-                boolean isNew = false;
-
-                if (elementIdObj == null) {
-                    elementIdObj = this.globalId.getAndIncrement();
-                    el.evaluate("(e, id) => e.dataset.autivaId = id", elementIdObj);
-                    isNew = true;
+                String autivaInteractiveId = elLocator.getAttribute("autiva-interactive-id");
+                if (Objects.isNull(autivaInteractiveId)) {
+                    autivaInteractiveId = frame.name() + "@" + this.globalId.getAndIncrement();
+                    elLocator.evaluate("(el, id) => el.setAttribute('autiva-interactive-id', id)", autivaInteractiveId);
+                    treeBuilder.append("*");
                 }
-
-                int elementId = elementIdObj instanceof Number
-                        ? ((Number) elementIdObj).intValue()
-                        : Integer.parseInt(String.valueOf(elementIdObj));
-
-                this.highlight(elementId, box);
-
-                String text = el.innerText();
-                if (text.isBlank()) {
-                    text = el.getAttribute("value") != null ? el.getAttribute("value") : "";
-                }
-
-                String tag = el.evaluate("e => e.tagName.toLowerCase()").toString();
-                sb.append(isNew ? "*" : "").append("[").append(elementId).append("]<").append(tag).append(">").append(text).append("</").append(tag).append(">\n");
-
-            } catch (Exception e) {
-                log.warn("[scanInteractiveElement] 处理失败", e);
+                String tagName = elLocator.evaluate("el => el.tagName").toString();
+                treeBuilder.append("[").append(autivaInteractiveId).append("]<")
+                        .append(tagName).append(">").append(elLocator.textContent()).append("</").append(tagName)
+                        .append(">\n");
+                this.highlight(autivaInteractiveId, box);
             }
         }
-
-        this.elementTree = sb.toString();
+        this.elementTree = treeBuilder.toString();
     }
 
     /**
      * 高亮元素
      */
-    private void highlight(int idx, BoundingBox box) {
+    private void highlight(String idx, BoundingBox box) {
         String[] palette = {"red", "blue", "green", "orange", "purple", "brown"};
-        String color = palette[idx % palette.length];
+        String color = palette[idx.length() % palette.length];
         String js = """
                     ([idx, x, y, width, height, color]) => {
                         const overlay = document.createElement('div');
                         overlay.innerText = '[' + idx + ']';
-                        overlay.dataset.autivaOverlay = idx;
+                        overlay.setAttribute('autiva-interactive-overlay-id', idx);
                         overlay.style.position = 'absolute';
                         overlay.style.left = x + 'px';
                         overlay.style.top = y + 'px';
@@ -124,31 +108,14 @@ public class InteractivePage {
         });
     }
 
-    private void clearAllOverlay() {
-        String js = """
-                    () => {
-                        document.querySelectorAll('div[data-autiva-overlay]').forEach(overlay => overlay.remove());
-                    }
-                """;
-        try {
-            page.evaluate(js);
-        } catch (Exception e) {
-            log.warn("[clearAllOverlays] 失败", e);
-        }
-    }
-
     /**
-     * 根据 data-autiva-id 获取元素
+     * Gets element by id.
      *
      * @param id the id
      * @return the element by id
      */
-    public ElementHandle getElementById(int id) {
-        try {
-            return page.querySelector(String.format("[data-autiva-id='%d']", id));
-        } catch (Exception e) {
-            log.warn("[getElementById] 失败 id={}", id, e);
-            return null;
-        }
+    public Locator getElementById(String id) {
+        String[] frameAndAutivaInteractiveId = id.split("@");
+        return this.page.frame(frameAndAutivaInteractiveId[0]).getByTestId(frameAndAutivaInteractiveId[1]);
     }
 }

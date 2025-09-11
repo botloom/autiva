@@ -2,14 +2,9 @@ package cn.bitloom.autiva.agentic.tool;
 
 import cn.bitloom.autiva.agentic.agent.BrowserAgent;
 import cn.bitloom.autiva.agentic.agent.browser.InteractiveBrowserContext;
-import cn.bitloom.autiva.agentic.agent.browser.InteractivePage;
-import com.microsoft.playwright.ElementHandle;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
-
-import java.util.Objects;
-import java.util.function.BiConsumer;
 
 /**
  * The type Browser tools.
@@ -26,14 +21,6 @@ public class BrowserTools extends AbstractTools<BrowserAgent> {
      */
     public BrowserTools(BrowserAgent AGENT) {
         super(AGENT);
-    }
-
-    private String operateElementByIndex(String sessionId, Integer elementId, BiConsumer<InteractivePage, ElementHandle> operator) {
-        InteractiveBrowserContext context = this.AGENT.getInteractiveBrowser().getContext(sessionId);
-        InteractivePage currentPage = context.getCurrentPage();
-        ElementHandle element = Objects.isNull(elementId) ? null : currentPage.getElementById(elementId);
-        operator.accept(currentPage, element);
-        return "操作成功";
     }
 
     /**
@@ -89,12 +76,11 @@ public class BrowserTools extends AbstractTools<BrowserAgent> {
      * @return the string
      */
     @Tool(description = "点击可交互元素")
-    public String click(@ToolParam(description = "会话ID") String sessionId, @ToolParam(description = "元素唯一编号") int elId) {
+    public String click(@ToolParam(description = "会话ID") String sessionId, @ToolParam(description = "元素唯一编号") String elId) {
         log.info("[BrowserTools]-[click],sessionId:{},elId:{}", sessionId, elId);
-        return this.operateElementByIndex(sessionId, elId, (page, el) -> {
-            el.scrollIntoViewIfNeeded();
-            el.click();
-        });
+        InteractiveBrowserContext context = this.AGENT.getInteractiveBrowser().getContext(sessionId);
+        context.getCurrentPage().getElementById(elId).click();
+        return "点击成功";
     }
 
 
@@ -107,12 +93,11 @@ public class BrowserTools extends AbstractTools<BrowserAgent> {
      * @return the string
      */
     @Tool(description = "在可交互元素中输入文本")
-    public String inputText(@ToolParam(description = "会话ID") String sessionId, @ToolParam(description = "元素唯一编号") int elId, @ToolParam String text) {
+    public String inputText(@ToolParam(description = "会话ID") String sessionId, @ToolParam(description = "元素唯一编号") String elId, @ToolParam String text) {
         log.info("[BrowserTools]-[inputText],sessionId:{},elId:{},text:{}", sessionId, elId, text);
-        return operateElementByIndex(sessionId, elId, (page, el) -> {
-            el.scrollIntoViewIfNeeded();
-            el.fill(text);
-        });
+        InteractiveBrowserContext context = this.AGENT.getInteractiveBrowser().getContext(sessionId);
+        context.getCurrentPage().getElementById(elId).fill(text);
+        return "输入成功";
     }
 
 }

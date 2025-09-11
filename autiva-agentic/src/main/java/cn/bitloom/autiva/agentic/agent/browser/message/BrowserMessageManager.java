@@ -47,7 +47,7 @@ public class BrowserMessageManager extends AbstractMessageManager<BrowserAgentIn
             this.input.setTarget(userMessage.getText());
             this.input.setSessionId((String) metadata.get(MetaDataInfoEnum.SESSION_ID.name()));
         } else if (metadata.containsKey(MetaDataInfoEnum.EVENT.name())) {
-            this.input.setEvent(userMessage.getText());
+//            this.input.setEvent(userMessage.getText());
         } else {
             this.memoryList.add(JSON.parseObject(userMessage.getText(), BrowserAgentMemory.class));
         }
