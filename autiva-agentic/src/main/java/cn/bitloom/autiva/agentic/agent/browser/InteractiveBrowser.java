@@ -1,15 +1,16 @@
 package cn.bitloom.autiva.agentic.agent.browser;
 
 import cn.bitloom.autiva.agentic.agent.browser.message.BrowserAgentInput;
-import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ResourceUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -64,8 +65,18 @@ public class InteractiveBrowser {
         if (this.contextMap.containsKey(contextId)) {
             return;
         }
-        InteractiveBrowserContext interactiveBrowserContext = new InteractiveBrowserContext(this.browser.newContext(), eventSink);
-        this.contextMap.put(contextId, interactiveBrowserContext);
+        Browser.NewContextOptions options = new Browser.NewContextOptions();
+        try {
+            //获取登录信息
+            File session = ResourceUtils.getFile(ResourceUtils.CLASSPATH_URL_PREFIX + "/session/" + contextId + ".json");
+            if (session.exists()) {
+                options.setStorageStatePath(session.toPath());
+            }
+        } catch (FileNotFoundException e) {
+            log.error("[InteractiveBrowser]-[newContext],加载session文件失败", e);
+        }
+        BrowserContext browserContext = browser.newContext(options);
+        this.contextMap.put(contextId, new InteractiveBrowserContext(contextId, browserContext, this.eventSink));
     }
 
     /**
@@ -87,7 +98,6 @@ public class InteractiveBrowser {
         if (Objects.isNull(currentPage)) {
             return browserStatus;
         }
-        browserStatus.setUrl(context.getCurrentPage().getUrl());
         browserStatus.setElementTree(context.getCurrentPage().getElementTree());
         return browserStatus;
     }

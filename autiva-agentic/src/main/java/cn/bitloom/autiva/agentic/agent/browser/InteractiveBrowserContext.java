@@ -4,8 +4,11 @@ import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.util.ResourceUtils;
 import reactor.core.publisher.Sinks;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -19,6 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class InteractiveBrowserContext {
 
+    private final String id;
     private final BrowserContext context;
     private final Sinks.Many<UserMessage> eventSink;
     private final AtomicReference<InteractivePage> currentPage;
@@ -30,13 +34,25 @@ public class InteractiveBrowserContext {
      *
      * @param context the context
      */
-    public InteractiveBrowserContext(BrowserContext context, Sinks.Many<UserMessage> eventSink) {
+    public InteractiveBrowserContext(String id, BrowserContext context, Sinks.Many<UserMessage> eventSink) {
+        this.id = id;
         this.context = context;
         this.eventSink = eventSink;
         this.currentPage = new AtomicReference<>(null);
         this.pageIdMappedInteractivePage = new HashMap<>();
         this.pageMappedInteractivePage = new HashMap<>();
         this.context.onPage(this::attachPageListener);
+        this.context.onClose((toCloseContext) -> {
+            try {
+                //保存登录信息
+                File session = ResourceUtils.getFile(ResourceUtils.CLASSPATH_URL_PREFIX + "/session/" + id + ".json");
+                toCloseContext.storageState(
+                        new BrowserContext.StorageStateOptions().setPath(session.toPath())
+                );
+            } catch (FileNotFoundException e) {
+                log.error("[InteractiveBrowserContext]-[onClose],保存session文件失败", e);
+            }
+        });
     }
 
     /**
