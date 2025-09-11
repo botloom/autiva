@@ -13,6 +13,7 @@ import reactor.core.publisher.Sinks;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -87,6 +88,12 @@ public class InteractiveBrowser {
         this.browser.close();
     }
 
+    /**
+     * Gets browser status.
+     *
+     * @param sessionId the session id
+     * @return the browser status
+     */
     public BrowserAgentInput.BrowserStatus getBrowserStatus(String sessionId) {
         BrowserAgentInput.BrowserStatus browserStatus = new BrowserAgentInput.BrowserStatus();
         InteractiveBrowserContext context = this.getContext(sessionId);
@@ -97,7 +104,17 @@ public class InteractiveBrowser {
         if (Objects.isNull(currentPage)) {
             return browserStatus;
         }
-        browserStatus.setElementTree(context.getCurrentPage().getElementTree());
+        browserStatus.setCurrentPage(currentPage.getId());
+        browserStatus.setElementTree(currentPage.getElementTree());
+        List<BrowserAgentInput.PageStatus> pageList = context.pageList().stream()
+                .map(page -> {
+                    BrowserAgentInput.PageStatus pageStatus = new BrowserAgentInput.PageStatus();
+                    pageStatus.setId(page.getId());
+                    pageStatus.setUrl(page.getUrl());
+                    return pageStatus;
+                })
+                .toList();
+        browserStatus.setPageList(pageList);
         return browserStatus;
     }
 

@@ -7,9 +7,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import reactor.core.publisher.Sinks;
 
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -29,7 +27,9 @@ public class InteractiveBrowserContext {
     /**
      * Instantiates a new Interactive browser context.
      *
-     * @param context the context
+     * @param id        the id
+     * @param context   the context
+     * @param eventSink the event sink
      */
     public InteractiveBrowserContext(String id, BrowserContext context, Sinks.Many<UserMessage> eventSink) {
         this.context = context;
@@ -89,6 +89,15 @@ public class InteractiveBrowserContext {
     }
 
     /**
+     * Page list list.
+     *
+     * @return the list
+     */
+    public List<InteractivePage> pageList(){
+        return new ArrayList<>(this.pageMappedInteractivePage.values()) ;
+    }
+
+    /**
      * Close.
      */
     public void close() {
@@ -111,7 +120,7 @@ public class InteractiveBrowserContext {
             }
             //创建可交互page
             String pageId = UUID.randomUUID().toString();
-            InteractivePage interactivePage = new InteractivePage(page.url(), page);
+            InteractivePage interactivePage = new InteractivePage(pageId, page.url(), page);
             interactivePage.scanInteractiveElement();
             this.pageIdMappedInteractivePage.put(pageId, interactivePage);
             this.pageMappedInteractivePage.put(page, interactivePage);
@@ -119,63 +128,7 @@ public class InteractiveBrowserContext {
             this.currentPage.compareAndSet(null, interactivePage);
         });
         //刷新
-        page.onFrameNavigated((frame) -> this.pageMappedInteractivePage.get(frame.page()).scanInteractiveElement());
-    }
-
-    private void onPageDomMutation(Page page) {
-        // 监听到弹窗时发送系统消息
-        page.exposeFunction("onDomMutation", event -> {
-            this.eventSink.tryEmitNext(UserMessage.builder().text("弹窗").build());
-            return null;
-        });
-
-        String js = """
-                    (() => {
-                        const observer = new MutationObserver((mutationsList) => {
-                            let shouldNotifyAI = false;
-                
-                            for (const m of mutationsList) {
-                                if (m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
-                                    shouldNotifyAI = true;
-                
-                                    // 检查新增节点是否可能是弹窗
-                                    m.addedNodes.forEach(node => {
-                                        if (node.nodeType !== Node.ELEMENT_NODE) return;
-                                        const el = node;
-                                        const style = window.getComputedStyle(el);
-                                        const rect = el.getBoundingClientRect();
-                
-                                        if (style.display !== 'none' && style.visibility !== 'hidden'
-                                            && rect.width > 50 && rect.height > 50
-                                            && (style.position === 'fixed' || style.position === 'absolute')) {
-                
-                                            // 发现可能弹窗，通知Java
-                                            window.onDomMutation('发现可能弹窗: ' + el.innerText);
-                
-                                            // 尝试点击关闭按钮
-                                            const btn = el.querySelector('button, .close, [class*=close]');
-                                            if (btn) btn.click();
-                                        }
-                                    });
-                                    break; // 已发现新增节点，跳出
-                                }
-                
-                                if (m.type === 'attributes') {
-                                    shouldNotifyAI = true;
-                                    break;
-                                }
-                            }
-                
-                            if (shouldNotifyAI) {
-                                window.onDomMutation('页面更新了');
-                            }
-                        });
-                
-                        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-                    })();
-                """;
-
-        page.evaluate(js);
+//        page.onFrameNavigated((frame) -> this.pageMappedInteractivePage.get(frame.page()).scanInteractiveElement());
     }
 
 

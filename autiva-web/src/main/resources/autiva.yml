@@ -33,13 +33,12 @@ autiva:
             }
           ],
           "browser": {
-            "currentPage": "page-2",      // 当前活动页面的ID
+            "currentPage": "...",      // 当前活动页面的ID
             "pageList": [                 // 浏览器中所有打开的页面
               {
                 "id": "page-1",           // 页面ID
                 "url": "..",              // 页面URL
                 "isActive": false,        // 是否是当前活动页面
-                "frames": [ ... ]         // 页面内的iframe或frame信息
               }
             ],
             "dialogList": [               // 当前上下文中存在的对话框列表
@@ -54,7 +53,7 @@ autiva:
               "timestamp": "...",           // 事件发生的时间戳
               "details": { ... }            // 事件的详细信息（根据事件类型不同而不同）
             },
-            "elementTree":"..."             //当前页面的dom树
+            "elementTree":"..."             //currentPage页面的dom树
           }
         }
 

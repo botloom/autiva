@@ -35,7 +35,6 @@ public class BrowserAgentInput {
     public static class PageStatus {
         private String id;
         private String url;
-        private Boolean isActive;
         private String type;
         private String message;
     }

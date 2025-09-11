@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class InteractivePage {
 
+    private String id;
     private String url;
     private Page page;
     private AtomicInteger globalId = new AtomicInteger(0);
@@ -25,10 +26,12 @@ public class InteractivePage {
     /**
      * Instantiates a new Interactive page.
      *
+     * @param id   the id
      * @param url  the url
      * @param page the page
      */
-    public InteractivePage(String url, Page page) {
+    public InteractivePage(String id, String url, Page page) {
+        this.id = id;
         this.url = url;
         this.page = page;
     }
@@ -116,6 +119,6 @@ public class InteractivePage {
      */
     public Locator getElementById(String id) {
         String[] frameAndAutivaInteractiveId = id.split("@");
-        return this.page.frame(frameAndAutivaInteractiveId[0]).getByTestId(frameAndAutivaInteractiveId[1]);
+        return this.page.frame(frameAndAutivaInteractiveId[0]).getByTestId(id);
     }
 }
