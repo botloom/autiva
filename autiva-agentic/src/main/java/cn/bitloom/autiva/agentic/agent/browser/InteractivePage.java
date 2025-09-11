@@ -7,6 +7,7 @@ import com.microsoft.playwright.options.BoundingBox;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -21,7 +22,6 @@ public class InteractivePage {
     private String url;
     private Page page;
     private AtomicInteger globalId = new AtomicInteger(0);
-    private String elementTree;
 
     /**
      * Instantiates a new Interactive page.
@@ -46,8 +46,15 @@ public class InteractivePage {
     /**
      * 扫描可交互元素
      */
-    public void scanInteractiveElement() {
+    public String scanInteractiveElement() {
         StringBuilder treeBuilder = new StringBuilder();
+        Object viewport = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })");
+        double viewportWidth = 0;
+        double viewportHeight = 0;
+        if (viewport instanceof Map<?, ?> box) {
+            viewportWidth = Double.parseDouble(box.get("width").toString());
+            viewportHeight = Double.parseDouble(box.get("height").toString());
+        }
         for (Frame frame : this.page.frames()) {
             //删除所有overlay
             frame.evaluate("() => document.querySelectorAll('div[autiva-interactive-overlay-id]').forEach(overlay => overlay.remove());");
@@ -60,6 +67,9 @@ public class InteractivePage {
                 if (box == null || box.width == 0 || box.height == 0) {
                     continue;
                 }
+                if (box.x + box.width < 0 || box.x > viewportWidth || box.y + box.height < 0 || box.y > viewportHeight) {
+                    continue;
+                }
                 String autivaInteractiveId = elLocator.getAttribute("autiva-interactive-id");
                 if (Objects.isNull(autivaInteractiveId)) {
                     autivaInteractiveId = frame.name() + "@" + this.globalId.getAndIncrement();
@@ -68,20 +78,18 @@ public class InteractivePage {
                 }
                 String tagName = elLocator.evaluate("el => el.tagName").toString();
                 treeBuilder.append("[").append(autivaInteractiveId).append("]<")
-                        .append(tagName).append(">").append(elLocator.textContent()).append("</").append(tagName)
+                        .append(tagName).append(">").append(elLocator.textContent().trim()).append("</").append(tagName)
                         .append(">\n");
                 this.highlight(autivaInteractiveId, box);
             }
         }
-        this.elementTree = treeBuilder.toString();
+        return treeBuilder.toString();
     }
 
     /**
      * 高亮元素
      */
     private void highlight(String idx, BoundingBox box) {
-        String[] palette = {"red", "blue", "green", "orange", "purple", "brown"};
-        String color = palette[idx.length() % palette.length];
         String js = """
                     ([idx, x, y, width, height, color]) => {
                         const overlay = document.createElement('div');
@@ -92,7 +100,7 @@ public class InteractivePage {
                         overlay.style.top = y + 'px';
                         overlay.style.width = width + 'px';
                         overlay.style.height = height + 'px';
-                        overlay.style.backgroundColor = 'rgba(255,0,0,0.2)';
+                        overlay.style.backgroundColor = 'rgba(255,0,0,0.1)';
                         overlay.style.border = '2px solid red';
                         overlay.style.color = color;
                         overlay.style.fontSize = '12px';
@@ -107,7 +115,7 @@ public class InteractivePage {
                     }
                 """;
         this.page.evaluate(js, new Object[]{
-                idx, (int) box.x, (int) box.y, (int) box.width, (int) box.height, color
+                idx, (int) box.x, (int) box.y, (int) box.width, (int) box.height, "black"
         });
     }
 

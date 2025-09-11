@@ -19,7 +19,6 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
-import java.util.UUID;
 
 
 /**
@@ -64,7 +63,7 @@ public class BrowserAgent extends AbstractReActAgent implements ApplicationRunne
 
     @Override
     public void run(ApplicationArguments args) {
-        String sessionId = UUID.randomUUID().toString();
+        String sessionId = "autiva";
         this.run(sessionId)
                 .doOnNext(System.out::print)
                 .doOnComplete(System.out::println)

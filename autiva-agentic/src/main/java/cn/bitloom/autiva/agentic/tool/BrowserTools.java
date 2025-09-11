@@ -100,4 +100,18 @@ public class BrowserTools extends AbstractTools<BrowserAgent> {
         return "输入成功";
     }
 
+    /**
+     * Scroll page string.
+     *
+     * @param sessionId the session id
+     * @return the string
+     */
+    @Tool(description = "滚动页面")
+    public String scrollPage(@ToolParam(description = "会话ID") String sessionId) {
+        log.info("[BrowserTools]-[switchPage],sessionId:{}", sessionId);
+        InteractiveBrowserContext context = this.AGENT.getInteractiveBrowser().getContext(sessionId);
+        context.getCurrentPage().getPage().evaluate("()=>window.scrollBy(0, 500)");
+        return "滚动成功";
+    }
+
 }

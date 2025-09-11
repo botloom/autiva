@@ -93,8 +93,8 @@ public class InteractiveBrowserContext {
      *
      * @return the list
      */
-    public List<InteractivePage> pageList(){
-        return new ArrayList<>(this.pageMappedInteractivePage.values()) ;
+    public List<InteractivePage> pageList() {
+        return new ArrayList<>(this.pageMappedInteractivePage.values());
     }
 
     /**
@@ -110,25 +110,18 @@ public class InteractiveBrowserContext {
     private void attachPageListener(Page page) {
         //加载完成
         page.onLoad(loadedPage -> {
-            //如果page已存在则刷新可交互元素
-            for (Map.Entry<Page, InteractivePage> entry : this.pageMappedInteractivePage.entrySet()) {
-                if (entry.getKey().equals(page)) {
-                    InteractivePage interactivePage = entry.getValue();
-                    interactivePage.scanInteractiveElement();
-                    return;
-                }
+            //如果page已存在则直接返回
+            if (this.pageMappedInteractivePage.containsKey(page)) {
+                return;
             }
             //创建可交互page
             String pageId = UUID.randomUUID().toString();
             InteractivePage interactivePage = new InteractivePage(pageId, page.url(), page);
-            interactivePage.scanInteractiveElement();
             this.pageIdMappedInteractivePage.put(pageId, interactivePage);
             this.pageMappedInteractivePage.put(page, interactivePage);
             //如果当前page为空则设置为当前page
-            this.currentPage.compareAndSet(null, interactivePage);
+            this.currentPage.set(interactivePage);
         });
-        //刷新
-//        page.onFrameNavigated((frame) -> this.pageMappedInteractivePage.get(frame.page()).scanInteractiveElement());
     }
 
 

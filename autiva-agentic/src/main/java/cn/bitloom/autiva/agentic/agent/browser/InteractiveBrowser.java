@@ -105,7 +105,7 @@ public class InteractiveBrowser {
             return browserStatus;
         }
         browserStatus.setCurrentPage(currentPage.getId());
-        browserStatus.setElementTree(currentPage.getElementTree());
+        browserStatus.setElementTree(currentPage.scanInteractiveElement());
         List<BrowserAgentInput.PageStatus> pageList = context.pageList().stream()
                 .map(page -> {
                     BrowserAgentInput.PageStatus pageStatus = new BrowserAgentInput.PageStatus();
