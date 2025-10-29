@@ -7,7 +7,6 @@ import com.microsoft.playwright.options.BoundingBox;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -48,38 +47,29 @@ public class InteractivePage {
      */
     public String scanInteractiveElement() {
         StringBuilder treeBuilder = new StringBuilder();
-        Object viewport = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })");
-        double viewportWidth = 0;
-        double viewportHeight = 0;
-        if (viewport instanceof Map<?, ?> box) {
-            viewportWidth = Double.parseDouble(box.get("width").toString());
-            viewportHeight = Double.parseDouble(box.get("height").toString());
-        }
         for (Frame frame : this.page.frames()) {
             //删除所有overlay
             frame.evaluate("() => document.querySelectorAll('div[autiva-interactive-overlay-id]').forEach(overlay => overlay.remove());");
             /*
              * 查询所有可交互元素并设置overlay
              */
-            Locator frameLocator = frame.locator("button, input, a, textarea, select, [role='button'], *[onclick], [tabindex], [contenteditable]");
+            Locator frameLocator = frame.locator(" ");
             for (Locator elLocator : frameLocator.all()) {
                 BoundingBox box = elLocator.boundingBox();
                 if (box == null || box.width == 0 || box.height == 0) {
                     continue;
                 }
-                if (box.x + box.width < 0 || box.x > viewportWidth || box.y + box.height < 0 || box.y > viewportHeight) {
-                    continue;
-                }
                 String autivaInteractiveId = elLocator.getAttribute("autiva-interactive-id");
                 if (Objects.isNull(autivaInteractiveId)) {
-                    autivaInteractiveId = frame.name() + "@" + this.globalId.getAndIncrement();
+                    autivaInteractiveId = String.valueOf(this.globalId.getAndIncrement());
                     elLocator.evaluate("(el, id) => el.setAttribute('autiva-interactive-id', id)", autivaInteractiveId);
                     treeBuilder.append("*");
                 }
                 String tagName = elLocator.evaluate("el => el.tagName").toString();
-                treeBuilder.append("[").append(autivaInteractiveId).append("]<")
-                        .append(tagName).append(">").append(elLocator.textContent().trim()).append("</").append(tagName)
-                        .append(">\n");
+                treeBuilder.append("[").append(autivaInteractiveId).append("]")
+                        .append("(").append(box.x).append(",").append(box.y).append(")")
+                        .append("<").append(tagName).append(">").append(elLocator.innerText().trim()).append("</").append(tagName).append(">")
+                        .append("\n");
                 this.highlight(autivaInteractiveId, box);
             }
         }
@@ -126,7 +116,12 @@ public class InteractivePage {
      * @return the element by id
      */
     public Locator getElementById(String id) {
-        String[] frameAndAutivaInteractiveId = id.split("@");
-        return this.page.frame(frameAndAutivaInteractiveId[0]).getByTestId(id);
+        for (Frame frame : this.page.frames()) {
+            Locator elLocator = frame.getByTestId(id);
+            if (Objects.nonNull(elLocator)) {
+                return elLocator;
+            }
+        }
+        return null;
     }
 }

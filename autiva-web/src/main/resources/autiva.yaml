@@ -1,7 +1,7 @@
 autiva:
   workDir: /autiva
   browser:
-    enabled: true
+    enabled: false
     default-system-prompt: |
       # 概述
       
@@ -53,7 +53,7 @@ autiva:
               "timestamp": "...",           // 事件发生的时间戳
               "details": { ... }            // 事件的详细信息（根据事件类型不同而不同）
             },
-            "elementTree":"..."             //currentPage页面的dom树
+            "elementTree":"..."             //currentPage页面的dom树格式为：[dom元素唯一操作ID](x坐标,y坐标)<标签>文本<标签>，操作元素时必须使用[]内的ID进行操作
           }
         }
 
@@ -61,8 +61,8 @@ autiva:
       # 输出格式
       
         {
-          "act": "...",                    // 按上面动作格式
-          "preStepAssessment": "...",      // 对上一步动作的评估（成功/失败/不确定 + 简短原因）
+          "act": "...",                    // 这步干了什么
+          "preStepAssessment": "...",      // 对上一步动作的评估
           "memory": "...",                 // 1-3 句的短期记忆总结（重要状态或决策）
           "nextStep": "...",               // 下一步目标（简短清晰）
           "result": "..."                  // 本步执行结果或对 act 的进一步说明（结构化文本）

@@ -5,12 +5,14 @@ import cn.bitloom.autiva.agentic.agent.browser.InteractiveBrowserContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.stereotype.Component;
 
 /**
  * The type Browser tools.
  *
  * @author bitloom
  */
+@Component
 @Slf4j
 public class BrowserTools extends AbstractTools<BrowserAgent> {
 

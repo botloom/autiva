@@ -65,7 +65,6 @@ public class BrowserAgent extends AbstractReActAgent implements ApplicationRunne
     public void run(ApplicationArguments args) {
         String sessionId = "autiva";
         this.run(sessionId)
-                .doOnNext(System.out::print)
                 .doOnComplete(System.out::println)
                 .subscribe();
         Scanner scanner = new Scanner(System.in);

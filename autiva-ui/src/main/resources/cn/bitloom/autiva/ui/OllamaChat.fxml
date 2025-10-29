@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.collections.FXCollections?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.*?>
+<?import javafx.scene.layout.*?>
+<?import java.lang.String?>
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="cn.bitloom.autiva.ui.OllamaChatController"
+            style="-fx-background-color: #fafafa;">
+
+    <!-- 顶部区域 - 仅包含图标 -->
+    <top>
+        <HBox padding="10" style="-fx-background-color: #f0f0f0;">
+            <ImageView fx:id="ollamaIcon" fitWidth="24" fitHeight="24" />
+        </HBox>
+    </top>
+
+    <!-- 左侧区域 - 导航和聊天历史 -->
+    <left>
+        <VBox style="-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-width: 0 1 0 0;"
+              prefWidth="250">
+            <!-- 功能按钮 -->
+            <VBox padding="10" spacing="5">
+                <Button fx:id="newChatBtn" text="New Chat"
+                        style="-fx-background-color: #f0f0f0; -fx-text-fill: #333; -fx-pref-height: 36; -fx-alignment: center-left; -fx-padding: 0 0 0 10;"
+                        graphicTextGap="10">
+                    <graphic>
+                        <ImageView fitWidth="16" fitHeight="16" />
+                    </graphic>
+                </Button>
+                <Button fx:id="settingsBtn" text="Settings"
+                        style="-fx-background-color: transparent; -fx-text-fill: #333; -fx-pref-height: 36; -fx-alignment: center-left; -fx-padding: 0 0 0 10;"
+                        graphicTextGap="10">
+                    <graphic>
+                        <ImageView fitWidth="16" fitHeight="16" />
+                    </graphic>
+                </Button>
+            </VBox>
+
+            <Separator style="-fx-background-color: #e0e0e0;" />
+
+            <!-- 聊天历史 -->
+            <ScrollPane fitToWidth="true" style="-fx-background-color: white;">
+                <VBox fx:id="chatHistoryContainer" spacing="5" padding="10">
+                    <!-- 今天的聊天 -->
+                    <Label text="Today" font="12 bold" style="-fx-text-fill: #888;" />
+                    <Label text="你会javaFX吗" style="-fx-background-color: #f0f0f0; -fx-padding: 8; -fx-background-radius: 6; -fx-wrap-text: true;" />
+
+                    <!-- 本周的聊天 -->
+                    <Label text="This week" font="12 bold" style="-fx-text-fill: #888; -fx-margin-top: 10;" />
+                    <Label text="在沙海中，黎族是怎么消失的" style="-fx-background-color: #f0f0f0; -fx-padding: 8; -fx-background-radius: 6; -fx-wrap-text: true;" />
+                    <Label text="晚上最好几点睡觉" style="-fx-background-color: #f0f0f0; -fx-padding: 8; -fx-background-radius: 6; -fx-wrap-text: true;" />
+
+                    <!-- 更早的聊天 -->
+                    <Label text="Older" font="12 bold" style="-fx-text-fill: #888; -fx-margin-top: 10;" />
+                    <Label text="你好" style="-fx-background-color: #f0f0f0; -fx-padding: 8; -fx-background-radius: 6; -fx-wrap-text: true;" />
+                </VBox>
+            </ScrollPane>
+        </VBox>
+    </left>
+
+    <!-- 中央区域 - 聊天内容 -->
+    <center>
+        <VBox style="-fx-background-color: #fafafa;">
+            <!-- 聊天内容区域 -->
+            <ScrollPane fx:id="chatContentScrollPane" fitToWidth="true" fitToHeight="true">
+                <VBox fx:id="chatContentContainer" spacing="20" padding="20">
+                    <!-- 示例聊天对 -->
+                    <HBox spacing="10" alignment="top-left">
+                        <Label text="你" style="-fx-font-weight: bold;" />
+                        <Label text="你会javaFX吗" style="-fx-background-color: #e3f2fd; -fx-padding: 10; -fx-background-radius: 10; -fx-wrap-text: true; -fx-max-width: 500;" />
+                    </HBox>
+                    <HBox spacing="10" alignment="top-left">
+                        <ImageView fx:id="llamaIcon" fitWidth="24" fitHeight="24" />
+                        <Label text="(等待回复...)" style="-fx-background-color: #f0f0f0; -fx-padding: 10; -fx-background-radius: 10; -fx-wrap-text: true; -fx-max-width: 500;" />
+                    </HBox>
+                </VBox>
+            </ScrollPane>
+
+            <!-- 分隔线 -->
+            <Separator style="-fx-background-color: #e0e0e0;" />
+
+            <!-- 输入区域 -->
+            <HBox padding="10" spacing="10" alignment="center">
+                <TextField fx:id="messageField" promptText="Send a message"
+                           style="-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-radius: 20; -fx-padding: 10 15; -fx-pref-height: 40;"
+                           prefWidth="400" />
+
+                <Button fx:id="globeBtn" style="-fx-background-color: transparent;">
+                    <graphic>
+                        <ImageView fitWidth="20" fitHeight="20" />
+                    </graphic>
+                </Button>
+
+                <Button fx:id="cloudBtn" style="-fx-background-color: transparent;">
+                    <graphic>
+                        <ImageView fitWidth="20" fitHeight="20" />
+                    </graphic>
+                </Button>
+
+                <ComboBox fx:id="modelSelector" promptText="Model"
+                          style="-fx-background-color: white; -fx-border-color: #e0e0e0; -fx-border-radius: 20; -fx-padding: 5 10 0 0;">
+                    <items>
+                        <FXCollections fx:factory="observableArrayList">
+                            <String fx:value="gpt-oss:20b" />
+                            <String fx:value="llama2:7b" />
+                            <String fx:value="mistral:7b" />
+                        </FXCollections>
+                    </items>
+                </ComboBox>
+
+                <Button fx:id="sendBtn" style="-fx-background-color: #007bff; -fx-text-fill: white; -fx-background-radius: 50%; -fx-pref-width: 36; -fx-pref-height: 36;">
+                    <graphic>
+                        <ImageView fitWidth="16" fitHeight="16" />
+                    </graphic>
+                </Button>
+            </HBox>
+        </VBox>
+    </center>
+</BorderPane>

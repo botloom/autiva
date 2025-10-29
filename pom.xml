@@ -13,6 +13,7 @@
         <module>autiva-agentic</module>
         <module>autiva-web</module>
         <module>autiva-learn</module>
+        <module>autiva-ui</module>
     </modules>
 
     <properties>
@@ -20,7 +21,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.boot.version>3.4.5</spring.boot.version>
-        <spring.ai.version>1.0.1</spring.ai.version>
+        <spring.ai.version>1.1.0-SNAPSHOT</spring.ai.version>
         <commons-collections4.version>4.4</commons-collections4.version>
         <commons-lang3.version>3.18.0</commons-lang3.version>
         <fastjson2.version>2.0.58</fastjson2.version>
@@ -33,7 +34,12 @@
             <dependency>
                 <groupId>cn.bitloom</groupId>
                 <artifactId>autiva-agentic</artifactId>
-                <version>${version}</version>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.bitloom</groupId>
+                <artifactId>autiva-mcp</artifactId>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
@@ -83,6 +89,25 @@
         <repository>
             <id>djl.ai</id>
             <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        </repository>
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+        <repository>
+            <name>Central Portal Snapshots</name>
+            <id>central-portal-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
         </repository>
     </repositories>
 </project>

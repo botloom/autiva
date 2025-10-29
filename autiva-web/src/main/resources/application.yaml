@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: autiva
+  config:
+    import: classpath:autiva.yaml
+  ai:
+    deepseek:
+      api-key: sk-ad309109927844a0bcfa701622ecc6d1
+    chat:
+      client:
+        enabled: false
+    mcp:
+      server:
+        protocol: STREAMABLE
+        name: streamable-mcp-server
+        version: 1.0.0
+        type: SYNC
+        instructions: "This streamable server provides real-time notifications"
+        resource-change-notification: true
+        tool-change-notification: true
+        prompt-change-notification: true
+        streamable-http:
+          mcp-endpoint: /mcp
+          keep-alive-interval: 30s
+server:
+  port: 9527

@@ -46,10 +46,8 @@ public class BrowserMessageManager extends AbstractMessageManager<BrowserAgentIn
         if (metadata.containsKey(MetaDataInfoEnum.MANUAL.name())) {
             this.input.setTarget(userMessage.getText());
             this.input.setSessionId((String) metadata.get(MetaDataInfoEnum.SESSION_ID.name()));
-        } else {
-            this.memoryList.add(JSON.parseObject(userMessage.getText(), BrowserAgentMemory.class));
+            this.input.setHistory(this.memoryList);
         }
-        this.input.setHistory(this.memoryList);
         this.input.setBrowser(interactiveBrowser.getBrowserStatus((String) metadata.get(MetaDataInfoEnum.SESSION_ID.name())));
         return request.mutate()
                 .prompt(
@@ -72,7 +70,8 @@ public class BrowserMessageManager extends AbstractMessageManager<BrowserAgentIn
                 browserAgentMemory.setMemory(browserAgentOutput.getMemory());
                 browserAgentMemory.setNextStep(browserAgentOutput.getNextStep());
                 browserAgentMemory.setResult(browserAgentOutput.getResult());
-                this.emit(UserMessage.builder().metadata(Map.of(MetaDataInfoEnum.SESSION_ID.name(), this.input.getSessionId(), MetaDataInfoEnum.ASSISTANT.name(), "")).text(JSON.toJSONString(browserAgentMemory)).build());
+                this.memoryList.add(browserAgentMemory);
+                this.emit(UserMessage.builder().metadata(Map.of(MetaDataInfoEnum.SESSION_ID.name(), this.input.getSessionId(), MetaDataInfoEnum.ASSISTANT.name(), "")).text("继续").build());
             }
         }
     }
