@@ -1,5 +1,6 @@
 package cn.bitloom.autiva.agentic.flow;
 
+
 import lombok.Getter;
 import lombok.Setter;
 import reactor.core.publisher.Flux;
@@ -9,6 +10,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The type Work flow context.
@@ -26,6 +28,11 @@ public class WorkFlowContext {
     private final Map<String, Object> params;
     private FluxSink<String> messageSink;
     private FluxSink<String> historySink;
+
+    /**
+     * The Running.
+     */
+    protected final AtomicBoolean running = new AtomicBoolean(true);
 
     /**
      * The type Type reference.
@@ -58,34 +65,7 @@ public class WorkFlowContext {
     public WorkFlowContext() {
         this.params = new ConcurrentHashMap<>();
         Flux<String> messageFlux = Flux.create(sink -> this.messageSink = sink);
-        // 订阅flux
-        messageFlux.subscribe(
-        );
         Flux<String> historyFlux = Flux.create(sink -> this.historySink = sink);
-        // 订阅flux
-        historyFlux.subscribe(
-                history -> {
-
-                }
-        );
-    }
-
-    /**
-     * Emit.
-     *
-     * @param response the response
-     */
-    public void emitMessage(String response) {
-        messageSink.next(response);
-    }
-
-    /**
-     * Emit history.
-     *
-     * @param history the history
-     */
-    public void emitHistory(String history) {
-        historySink.next(history);
     }
 
     /**
@@ -121,6 +101,15 @@ public class WorkFlowContext {
      */
     public <T> T getParam(String key, Class<T> clazz) {
         return clazz.cast(this.params.get(key));
+    }
+
+    /**
+     * Param as map map.
+     *
+     * @return the map
+     */
+    public Map<String, Object> paramAsMap() {
+        return this.params;
     }
 
     /**

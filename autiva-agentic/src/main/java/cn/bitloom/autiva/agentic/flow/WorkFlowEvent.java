@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * 工作流事件类，表示工作流执行过程中的事件
+ * The type Work flow event.
  */
 @Data
 @Builder
@@ -50,6 +50,11 @@ public class WorkFlowEvent {
     private Integer retryCount;
 
     /**
+     * 消息
+     */
+    private String message;
+
+    /**
      * 事件类型枚举
      */
     public enum EventType {
@@ -80,11 +85,7 @@ public class WorkFlowEvent {
         /**
          * Cancelled event type.
          */
-        CANCELLED,
-        /**
-         * Retry event type.
-         */
-        RETRY
+        CANCELLED
     }
 
     /**
@@ -105,13 +106,15 @@ public class WorkFlowEvent {
      * 创建工作流停止事件
      *
      * @param workflowName the workflow name
+     * @param message      the message
      * @return the work flow event
      */
-    public static WorkFlowEvent createStopEvent(String workflowName) {
+    public static WorkFlowEvent createStopEvent(String workflowName, String message) {
         return WorkFlowEvent.builder()
                 .workflowName(workflowName)
                 .type(EventType.STOP)
                 .timestamp(LocalDateTime.now())
+                .message(message)
                 .build();
     }
 
@@ -134,17 +137,13 @@ public class WorkFlowEvent {
     /**
      * 创建节点完成事件
      *
-     * @param nodeId   节点ID
-     * @param nodeName 节点名称
-     * @param data     节点执行结果数据
+     * @param data 节点执行结果数据
      * @return 节点完成事件
      */
-    public static WorkFlowEvent createNodeCompleteEvent(String nodeId, String nodeName, Map<String, Object> data) {
+    public static WorkFlowEvent createNodeCompleteEvent(Map<String, Object> data) {
         return WorkFlowEvent.builder()
                 .type(EventType.NODE_COMPLETE)
                 .timestamp(LocalDateTime.now())
-                .nodeId(nodeId)
-                .nodeName(nodeName)
                 .data(data)
                 .build();
     }
@@ -152,14 +151,12 @@ public class WorkFlowEvent {
     /**
      * 创建工作流完成事件
      *
-     * @param data 工作流执行结果数据
      * @return 工作流完成事件
      */
-    public static WorkFlowEvent createCompleteEvent(Map<String, Object> data) {
+    public static WorkFlowEvent createCompleteEvent() {
         return WorkFlowEvent.builder()
                 .type(EventType.COMPLETE)
                 .timestamp(LocalDateTime.now())
-                .data(data)
                 .build();
     }
 
@@ -190,27 +187,6 @@ public class WorkFlowEvent {
         return WorkFlowEvent.builder()
                 .type(EventType.CANCELLED)
                 .timestamp(LocalDateTime.now())
-                .build();
-    }
-
-    /**
-     * Create retry event work flow event.
-     *
-     * @param error    the error
-     * @param nodeId   the node id
-     * @param nodeName the node name
-     * @param attempt  the attempt
-     * @return the work flow event
-     */
-    public static WorkFlowEvent createRetryEvent(Throwable error, String nodeId, String nodeName, int attempt) {
-        return WorkFlowEvent.builder()
-                .type(EventType.RETRY)
-                .workflowName(null) // 如果需要可以传入工作流名称
-                .nodeId(nodeId)
-                .nodeName(nodeName)
-                .timestamp(LocalDateTime.now())
-                .error(error)
-                .retryCount(attempt) // 新增字段记录当前重试次数
                 .build();
     }
 

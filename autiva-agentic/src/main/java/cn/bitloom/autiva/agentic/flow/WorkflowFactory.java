@@ -1,6 +1,8 @@
 package cn.bitloom.autiva.agentic.flow;
 
 
+import cn.bitloom.autiva.agentic.flow.config.WorkflowConfig;
+import cn.bitloom.autiva.agentic.flow.config.WorkflowConfigLoader;
 import cn.bitloom.autiva.agentic.flow.graph.Graph;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,7 +27,7 @@ public class WorkflowFactory {
      * @param context the context
      * @return the workflow
      */
-    public IWorkflow createWorkFlow(String id, String name, Graph graph, WorkFlowContext context) {
+    public AbstractWorkflow createWorkFlow(String id, String name, Graph graph, WorkFlowContext context) {
         WorkflowConfig workflowConfig = WorkflowConfig.builder()
                 .id(id)
                 .name(name)
@@ -41,7 +43,7 @@ public class WorkflowFactory {
      * @param context    the context
      * @return 工作流实例
      */
-    public IWorkflow createWorkflowFromConfig(String configPath, WorkFlowContext context) {
+    public AbstractWorkflow createWorkflowFromConfig(String configPath, WorkFlowContext context) {
         WorkflowConfig workflowConfig = workflowConfigLoader.loadWorkflowConfig(configPath);
         return new GraphWorkflow(workflowConfig, context);
     }

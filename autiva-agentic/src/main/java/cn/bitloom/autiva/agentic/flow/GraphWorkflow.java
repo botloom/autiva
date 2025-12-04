@@ -1,22 +1,24 @@
 package cn.bitloom.autiva.agentic.flow;
 
-
+import cn.bitloom.autiva.agentic.enums.ModelEnum;
 import cn.bitloom.autiva.agentic.exception.WorkFlowException;
+import cn.bitloom.autiva.agentic.flow.config.WorkflowConfig;
 import cn.bitloom.autiva.agentic.flow.graph.Graph;
 import cn.bitloom.autiva.agentic.flow.graph.VertexNode;
 import cn.bitloom.autiva.agentic.flow.graph.VertexParam;
 import cn.bitloom.autiva.agentic.util.SpringContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * The type Graph workflow.
@@ -24,11 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author ningyu
  */
 @Slf4j
-public class GraphWorkflow implements IWorkflow {
-
-    private final WorkflowConfig workflowConfig;
-    private final WorkFlowContext workFlowContext;
-    private final AtomicBoolean running = new AtomicBoolean(true);
+public class GraphWorkflow extends AbstractWorkflow {
 
     /**
      * Instantiates a new Graph workflow.
@@ -37,8 +35,7 @@ public class GraphWorkflow implements IWorkflow {
      * @param workFlowContext the work flow context
      */
     public GraphWorkflow(WorkflowConfig workflowConfig, WorkFlowContext workFlowContext) {
-        this.workflowConfig = workflowConfig;
-        this.workFlowContext = workFlowContext;
+        super(workflowConfig, workFlowContext);
     }
 
     @Override
@@ -49,100 +46,102 @@ public class GraphWorkflow implements IWorkflow {
     @Override
     public Flux<WorkFlowEvent> start() {
         Graph graph = this.workflowConfig.getGraph();
-        //工作流开始事件
-        Flux<WorkFlowEvent> result = Flux.just(WorkFlowEvent.createStartEvent(this.workflowConfig.getName()));
         //找所有没有入弧的根节点
-        List<VertexNode> rootVertex = graph.getRootVertex();
-        if (rootVertex.isEmpty()) {
+        List<VertexNode> rootVertexList = graph.getRootVertex();
+        if (rootVertexList.isEmpty()) {
             return Flux.error(new WorkFlowException("未找到任何根节点（入弧为空）"));
         }
         //从根节点开始递归执行
-        List<Flux<WorkFlowEvent>> rootExecutions = rootVertex.stream()
-                .map(node -> this.exec(graph, node, new ConcurrentSkipListSet<>()))
+        CopyOnWriteArraySet<String> executedNodeSet = new CopyOnWriteArraySet<>();
+        List<Flux<WorkFlowEvent>> rootExecFluxList = rootVertexList.stream()
+                .map(node -> this.exec(graph, node, executedNodeSet))
                 .toList();
-        return result
-                .concatWith(Flux.merge(rootExecutions))
-                .concatWith(Mono.defer(() -> Mono.just(WorkFlowEvent.createStopEvent(workflowConfig.getName()))))
-                .onErrorResume(error -> Flux.just(WorkFlowEvent.createErrorEvent(error, null, null)))
+        return Flux
+                .just(WorkFlowEvent.createStartEvent(this.getName()))
+                .concatWith(Flux.merge(rootExecFluxList))
+                .concatWith(Mono.just(WorkFlowEvent.createCompleteEvent()))
                 .doFinally(signalType -> this.workFlowContext.clear());
     }
 
-    private Flux<WorkFlowEvent> exec(Graph graph, VertexNode vertex, Set<String> executedNodes) {
-        if (!this.running.get()) {
-            return Flux.just(WorkFlowEvent.createStopEvent(this.workflowConfig.getName()));
-        }
-
-        // 避免重复执行节点
-        if (!executedNodes.add(vertex.getId())) {
-            return Flux.empty();
-        }
-
-        // 先执行所有前驱
-        List<Flux<WorkFlowEvent>> preFlows = graph.getInArc(vertex.getId()).stream()
-                .map(arc -> {
-                    VertexNode prev = graph.getVertex(arc.getTailVexId());
-                    return exec(graph, prev, executedNodes);
-                })
-                .toList();
-        Flux<WorkFlowEvent> preFlux = preFlows.isEmpty() ? Flux.empty() : Flux.merge(preFlows);
-
-        // 当前节点执行逻辑
-        Flux<WorkFlowEvent> currFlux = Flux.defer(() -> {
-            VertexParam param = vertex.getParams();
-            boolean enabled = param == null || param.getEnabled() == null || param.getEnabled();
-            if (!enabled) {
+    private Flux<WorkFlowEvent> exec(Graph graph, VertexNode vertex, Set<String> executedNodeSet) {
+        return Flux.defer(() -> {
+            // 避免重复执行节点
+            if (!executedNodeSet.add(vertex.getId())) {
                 return Flux.empty();
             }
 
-            if (!this.running.get()) {
-                return Flux.just(WorkFlowEvent.createStopEvent(this.workflowConfig.getName()));
+            if (!this.workFlowContext.running.get()) {
+                return Flux.empty();
             }
 
-            List<WorkFlowEvent> startEvent = List.of(
-                    WorkFlowEvent.createNodeStartEvent(vertex.getId(), vertex.getName())
-            );
-            AbstractNode node = SpringContextHolder.getBean(vertex.getType(), AbstractNode.class);
+            // 先执行所有前驱
+            List<Flux<WorkFlowEvent>> preExecFluxList = graph.getInArc(vertex.getId()).stream()
+                    .map(arc -> this.exec(graph, graph.getVertex(arc.getTailVexId()), executedNodeSet))
+                    .toList();
+            Flux<WorkFlowEvent> preExecFlux = preExecFluxList.isEmpty() ? Flux.empty() : Flux.merge(preExecFluxList);
 
-            int retryCount = param == null || param.getRetryCount() == null ? 0 : param.getRetryCount();
-            long timeoutMillis = param == null || param.getTimeout() == null ? 0L : param.getTimeout();
+            // 当前节点执行逻辑
+            Flux<WorkFlowEvent> currExecFlux;
 
-            Mono<Map<String, Object>> nodeMono = Mono.fromCallable(() -> node.run(param, workFlowContext));
-
-            if (timeoutMillis > 0) {
-                nodeMono = nodeMono.timeout(Duration.ofMillis(timeoutMillis));
+            VertexParam param = vertex.getParams();
+            //判断当前节点是否满足用户自定义执行脚本条件
+            boolean enableRun = graph.getInArc(vertex.getId()).stream()
+                    .allMatch(arc -> {
+                        if (Objects.isNull(arc.getParms())) {
+                            return true;
+                        }
+                        if (StringUtils.isBlank(arc.getParms().getScript())) {
+                            return true;
+                        }
+                        return this.eval(arc.getParms().getScript());
+                    });
+            if (!enableRun) {
+                this.workFlowContext.running.set(false);
+                currExecFlux = Flux.just(WorkFlowEvent.createStopEvent(this.workflowConfig.getName(), String.format("%s不满足用户自定义执行脚本条件", vertex.getName())));
+                // 返回完整节点 Flux：前驱 -> 当前节点 -> empty
+                return Flux.concat(preExecFlux, currExecFlux, Flux.empty());
             }
 
-            if (retryCount > 0) {
-                nodeMono = nodeMono.retryWhen(
-                        reactor.util.retry.Retry.fixedDelay(retryCount, Duration.ofMillis(100))
-                                .doBeforeRetry(retrySignal -> log.error("节点重试:node:{},attempt:{}", vertex.getName(), (int) (retrySignal.totalRetriesInARow() + 1), retrySignal.failure()))
-                );
-            }
+            currExecFlux = Flux.concat(
+                            Mono.just(WorkFlowEvent.createNodeStartEvent(vertex.getId(), vertex.getName())),
+                            Mono.defer(() -> SpringContextHolder.getBean(vertex.getType(), AbstractNode.class).run(param, workFlowContext))
+                    )
+                    .retryWhen(
+                            Retry.fixedDelay(param.getRetryCount(), Duration.ofMillis(100))
+                                    .doBeforeRetry(retrySignal -> {
+                                        this.workFlowContext.putParam("model", ModelEnum.QWEN);
+                                        log.error("节点重试:node:{},attempt:{}", vertex.getName(), (int) (retrySignal.totalRetriesInARow() + 1), retrySignal.failure());
+                                    })
+                    )
+                    .onErrorResume(e -> {
+                        this.workFlowContext.running.set(false);
+                        //如果有重试且重试不成功，则取cause
+                        if (Exceptions.isRetryExhausted(e)) {
+                            e = e.getCause();
+                        }
+                        //根据不同的错误发送不同的错误提示语
+                        if (e instanceof WorkFlowException) {
 
-            return Flux.concat(
-                    Flux.fromIterable(startEvent),
-                    nodeMono
-                            .map(result -> WorkFlowEvent.createNodeCompleteEvent(vertex.getId(), vertex.getName(), result))
-                            .onErrorResume(e -> {
-                                this.running.set(false);
-                                return Mono.just(WorkFlowEvent.createErrorEvent(e, vertex.getId(), vertex.getName()));
-                            })
-                            .flux()
-            );
+                            this.workFlowContext.running.set(false);
+                            return Mono.just(WorkFlowEvent.createErrorEvent(e, vertex.getId(), vertex.getName()));
+                        } else {
+                            this.workFlowContext.clear();
+
+                            this.workFlowContext.running.set(false);
+                            return Mono.error(e);
+                        }
+                    });
+
+            // 后继节点
+            List<Flux<WorkFlowEvent>> nextExecFluxList = graph.getOutArc(vertex.getId()).stream()
+                    .map(arc -> this.exec(graph, graph.getVertex(arc.getHeadVexId()), executedNodeSet))
+                    .toList();
+            Flux<WorkFlowEvent> nextExecFlux = nextExecFluxList.isEmpty() ? Flux.empty() : reactor.core.publisher.Flux.merge(nextExecFluxList);
+
+            // 返回完整节点 Flux：前驱 -> 当前节点 -> 后继
+            return Flux.concat(preExecFlux, currExecFlux, nextExecFlux);
         });
-
-        // 后继节点
-        List<Flux<WorkFlowEvent>> nextFlows = graph.getOutArc(vertex.getId()).stream()
-                .map(arc -> {
-                    VertexNode next = graph.getVertex(arc.getHeadVexId());
-                    return exec(graph, next, executedNodes);
-                })
-                .toList();
-        Flux<WorkFlowEvent> nextFlux = nextFlows.isEmpty() ? Flux.empty() : Flux.merge(nextFlows);
-
-        // 返回完整节点 Flux：前驱 -> 当前节点 -> 后继
-        return Flux.concat(preFlux, currFlux, nextFlux);
     }
 
-
 }
+
