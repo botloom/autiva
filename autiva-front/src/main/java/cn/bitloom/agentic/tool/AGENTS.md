@@ -80,23 +80,36 @@ public ToolResult myTool(String param) {
 ## 工具分类
 
 ### System Tools (`cn.bitloom.agentic.tool.system`)
-系统级工具，提供文件操作、命令执行等基础能力。详细文档见 [system/AGENTS.md](system/AGENTS.md)
+系统级工具，提供文件操作、命令执行、文件搜索等基础能力。详细文档见 [system/AGENTS.md](system/AGENTS.md)
 
-**工具列表：**
-- `read`: 读取文件内容
+**文件操作工具：**
+- `read`: 读取文件内容（支持分页、行号显示）
 - `write`: 写入/创建文件
-- `edit`: 精确编辑文件
-- `exec`: 执行 shell 命令
+- `edit`: 精确编辑文件（支持 replace_all）
+
+**命令执行工具：**
+- `exec`: 执行 shell 命令（支持后台运行、工作目录设置）
 - `process_list`: 列出后台进程
+- `process_status`: 查看进程详细状态
+- `process_log`: 获取进程输出日志
 - `process_kill`: 终止进程
-- `process_log`: 获取进程日志
-- `process_status`: 查看进程状态
+
+**文件搜索工具：**
+- `glob`: 使用通配符模式搜索文件（如 `**/*.java`）
+- `grep`: 在文件内容中搜索正则表达式
+
+**定时任务工具：**
 - `cron_create`: 创建定时任务
 - `cron_list`: 列出定时任务
 - `cron_delete`: 删除定时任务
 - `cron_trigger`: 手动触发定时任务
-- `web_search`: 网页搜索
-- `web_fetch`: 抓取网页内容
+
+**网络工具：**
+- `web_search`: 网页搜索（支持域名过滤）
+- `web_fetch`: 抓取网页内容（支持重定向检测）
+
+**交互工具：**
+- `ask_user`: 向用户提问并等待回答
 
 ### SkillTool
 技能管理工具。

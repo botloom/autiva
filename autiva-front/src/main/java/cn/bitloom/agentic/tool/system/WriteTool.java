@@ -58,8 +58,9 @@ public class WriteTool implements cn.bitloom.agentic.tool.ITool {
     }
 
     private Path resolvePath(String filePath) {
-        if (Paths.get(filePath).isAbsolute()) {
-            return Paths.get(filePath);
+        Path path = Paths.get(filePath);
+        if (path.isAbsolute()) {
+            return path;
         }
         return Paths.get(System.getProperty("user.dir"), filePath);
     }
