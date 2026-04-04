@@ -22,6 +22,7 @@ WebSocket 处理器，处理客户端连接和消息。
 - `sendToClient(clientId, message)`: 向指定客户端发送消息
 - `broadcast(message)`: 向所有客户端广播消息
 - `isOnline(clientId)`: 检查客户端是否在线
+- `getOnlineCount()`: 获取在线客户端数量
 
 ### MessageDispatcher
 消息分发器，根据消息类型路由到对应的处理器。

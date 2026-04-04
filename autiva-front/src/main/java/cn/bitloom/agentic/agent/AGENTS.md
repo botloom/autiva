@@ -13,32 +13,28 @@
 - 集成 ChatMemory 实现对话记忆
 - 集成 LoggingAdvisor 实现日志记录
 - 自动注册到 AgentManager
+- 支持多模型切换（DeepSeek、智谱AI）
 
 **依赖注入：**
 - `WorkspaceManager`: 工作目录管理器
-- `EventBus`: 事件总线
 - `ToolManager`: 工具管理器
 - `SkillManager`: 技能管理器
 - `AgentManager`: 智能体管理器
-- `ChatModel`: 聊天模型
+- `ChatModel`: 聊天模型（deepSeekChatModel、zhiPuAiChatModel）
 - `ChatMemory`: 对话记忆
 - `LoggingAdvisor`: 日志记录器
+- `ToolCallingManager`: 工具调用管理器
 - `ConfigManager`: 配置管理器
+- `SessionManager`: 会话管理器
 
 **关键方法：**
 - `run()`: 抽象方法，子类实现具体的运行逻辑
-- `getName()`: 返回智能体名称
-- `getToolSet()`: 返回智能体可用的工具集
+- `getIdentity()`: 抽象方法，返回智能体身份标识
 - `model(ModelEnum)`: 获取指定模型的 ChatClient
-- `getBoundSessionId()`: 获取智能体绑定的会话ID
+- `getSystemPrompt()`: 获取系统提示词
 
 **系统提示词结构：**
 ```
-## 工具
-[工具列表]
-
----
-
 ## 技能
 [技能描述]
 
@@ -115,8 +111,13 @@ public static class AgentFile {
 **功能：**
 - 订阅 EventBus Inbox
 - 处理用户请求并通过 Outbox 返回响应
-- 使用流式响应
+- 支持流式响应和非流式响应两种模式
 - 工具列表可通过配置文件动态配置
+- 默认使用智谱AI模型（ModelEnum.Z）
+
+**响应模式：**
+- `STREAM`: 流式响应，逐字返回
+- `BLOCK`: 阻塞响应，一次性返回完整结果
 
 **工具集：**
 工具列表通过 `ConfigManager.getAgentToolList(agentName)` 获取，可在智能体配置页面为每个智能体配置。
@@ -125,30 +126,10 @@ public static class AgentFile {
 - `web_search`, `web_fetch`: 网络操作
 - `cron_create`, `cron_list`, `cron_delete`, `cron_trigger`: 定时任务
 
-### DoctorAgent
-自修改智能体，负责在运行时动态修改系统自身的行为。
-
-**功能：**
-- 订阅 EventBus Inbox，过滤绑定到自己的会话
-- 通过字节码操作修改 UI 组件属性
-- 支持添加字段、修改方法、重新加载类
-- 实现系统的自我演化能力
-
-**工具集：**
-- `hotswap_modify_ui`: 修改 UI 组件属性
-- `hotswap_add_field`: 添加新字段
-- `hotswap_reload`: 重新加载类
-- `read`, `write`, `edit`: 文件操作
-
-**使用场景：**
-- 用户说"把发送按钮往上移一点"
-- 用户说"按钮改成红色"
-- 用户说"这个输入框太窄了"
-
 ### 枚举类
 - `AgentStatusEnum`: 智能体状态 (IDLE, WORKING, SHUTDOWN)
 - `AgentIdentityEnum`: 智能体身份标识 (MAIN, DOCTOR)
-- `ModelEnum`: 支持的模型 (目前支持 DEEPSEEK)
+- `ModelEnum`: 支持的模型 (DEEPSEEK, Z)
 
 ## 消息流程
 
@@ -175,32 +156,27 @@ public class MyAgent extends AbstractAgent {
     
     @Override
     protected void run() {
-        this.eventBus.inBoxSubscribe()
-            .filter(event -> getBoundSessionId() != null 
-                && getBoundSessionId().equals(event.getSessionId()))
+        EventBus.inBoxSubscribe()
             .concatMap(event -> {
                 this.status = AgentStatusEnum.WORKING;
-                return this.model(ModelEnum.DEEPSEEK)
+                Session session = sessionManager.getById(event.getSessionId());
+                return this.model(ModelEnum.Z)
                     .prompt()
                     .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, event.getSessionId()))
+                    .toolContext(Map.of("sessionId", event.getSessionId()))
                     .messages(event.getMessage())
                     .stream()
                     .chatResponse()
                     .doOnNext(response -> 
-                        this.eventBus.outBoxPublish(event.getSessionId(), response.getResult().getOutput()))
+                        EventBus.outBoxPublish(event.getSessionId(), response.getResult().getOutput()))
                     .doOnComplete(() -> this.status = AgentStatusEnum.IDLE);
             })
             .subscribe();
     }
     
     @Override
-    protected String getName() {
-        return "my-agent";
-    }
-    
-    @Override
-    protected List<String> getToolSet() {
-        return List.of("read", "write");
+    protected AgentIdentityEnum getIdentity() {
+        return AgentIdentityEnum.MAIN;
     }
 }
 ```

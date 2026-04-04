@@ -12,6 +12,7 @@
 - `id`: 会话唯一标识（格式：{agentId}-{type}-{source}-{target}）
 - `agentId`: 智能体身份标识（AgentIdentityEnum）
 - `type`: 会话类型（DM/GROUP）
+- `respType`: 响应类型（STREAM/BLOCK）
 - `source`: 消息来源标识
 - `target`: 消息目标标识
 - `parentId`: 父会话ID
@@ -28,6 +29,11 @@ DOCTOR-GROUP-telegram-group456
 - `DM`: 私聊
 - `GROUP`: 群聊
 
+### SessionRespTypeEnum
+响应类型枚举：
+- `STREAM`: 流式响应
+- `BLOCK`: 阻塞响应
+
 ### SessionIsolationEnum
 会话隔离策略枚举：
 - `PER_PEER`: 按用户隔离
@@ -41,10 +47,11 @@ DOCTOR-GROUP-telegram-group456
 
 **核心方法：**
 - `init()`: 初始化，加载所有会话
-- `getOrCreate(source, type, target)`: 获取或创建会话
+- `getOrCreate(source, type, respType, target)`: 获取或创建会话
 - `getById(sessionId)`: 获取会话
 - `getByTarget(target)`: 根据目标获取会话列表
 - `appendMessage(sessionId, messages)`: 追加消息到 messages.jsonl
+- `clearSessionMessages(sessionId)`: 清空会话消息记录
 
 **Message 反序列化：**
 由于 `Message` 是接口，有多个子类（`UserMessage`、`AssistantMessage`、`ToolResponseMessage`），反序列化时需要根据 `messageType` 字段判断具体类型：
@@ -99,9 +106,10 @@ private Message deserializeMessage(String json) {
 ### 获取或创建会话
 ```java
 Session session = sessionManager.getOrCreate(
-    "wechat",           // source
-    SessionTypeEnum.DM, // type
-    "user123"           // target
+    "wechat",               // source
+    SessionTypeEnum.DM,     // type
+    SessionRespTypeEnum.STREAM, // respType
+    "user123"               // target
 );
 ```
 
@@ -117,6 +125,11 @@ sessionManager.appendMessage(sessionId, List.of(
 ```java
 Session session = sessionManager.getById(sessionId);
 List<Message> messages = session.getMessages();
+```
+
+### 清空会话消息
+```java
+sessionManager.clearSessionMessages(sessionId);
 ```
 
 ## 会话隔离策略

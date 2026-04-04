@@ -10,6 +10,7 @@
 
 **端点：**
 - `GET /api/sandbox/{subdomain}`: 根据子域名查询沙箱信息
+- `GET /api/sandbox/{subdomain}/details`: 获取沙箱及其BaaS资源详情
 
 ### GatewayController
 网关路由控制器，提供子域名解析接口。
@@ -32,6 +33,22 @@ curl http://localhost:9527/api/sandbox/user-123-my-app
     "runtime": "node",
     "subdomain": "user-123-my-app",
     "status": "running"
+}
+```
+
+### 查询沙箱详情（含BaaS资源）
+```bash
+curl http://localhost:9527/api/sandbox/user-123-my-app/details
+```
+
+### 详情响应
+```json
+{
+    "service": { ... },
+    "resources": [
+        { "resourceType": "mysql", "resourceName": "db_xxx", ... },
+        { "resourceType": "redis", "resourceName": "ns_xxx", ... }
+    ]
 }
 ```
 

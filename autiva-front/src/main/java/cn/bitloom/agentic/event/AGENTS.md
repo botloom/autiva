@@ -9,9 +9,7 @@
 事件实体类，封装事件的所有信息。
 
 **字段：**
-- `eventId`: 事件唯一标识（UUID）
 - `timestamp`: 事件时间戳
-- `from`: 发送者名称
 - `sessionId`: 会话ID
 - `message`: Spring AI Message 对象
 - `metadata`: 元数据（可选）
@@ -19,47 +17,34 @@
 **构建方式：**
 ```java
 Event event = Event.builder()
-    .from("main")
     .sessionId("session-uuid")
     .message(new UserMessage("用户消息"))
     .build();
 ```
 
 ### EventBus
-事件总线，Spring Bean，提供 Inbox/Outbox 双通道消息传递。
+事件总线，提供静态方法实现 Inbox/Outbox 双通道消息传递。
 
-**依赖注入：**
-- `ConfigManager`: 配置管理器
-- `SessionManager`: 会话管理器
-
-**核心方法：**
-- `inBoxPublish(Event)`: 发布事件到 Inbox（智能体接收消息）
+**核心方法（静态方法）：**
+- `inBoxPublish(sessionId, message)`: 发布事件到 Inbox（智能体接收消息）
 - `inBoxSubscribe()`: 订阅 Inbox 事件流
 - `outBoxPublish(sessionId, message)`: 发布消息到 Outbox（返回给用户）
 - `outBoxSubscribe()`: 订阅 Outbox 消息流
 
-**会话隔离策略：**
-- `PER_PEER`: 按用户隔离，同一用户的所有会话共享
-- `PER_CHANNEL_PEER`: 按通道+用户隔离，每个会话独立
-
 **实现原理：**
 - 使用 Reactor 的 Sinks.Many 实现多播
-- `directBestEffort()`: 直接尽力投递模式
+- `multicast().onBackpressureBuffer()`: 多播模式，带背压缓冲
 
 ## 使用示例
 
 ### 发布事件到 Inbox
 ```java
-eventBus.inBoxPublish(Event.builder()
-    .from("user")
-    .sessionId("session-uuid")
-    .message(new UserMessage("用户请求内容"))
-    .build());
+EventBus.inBoxPublish(sessionId, new UserMessage("用户请求内容"));
 ```
 
 ### 订阅 Inbox 事件
 ```java
-eventBus.inBoxSubscribe()
+EventBus.inBoxSubscribe()
     .filter(event -> event.getSessionId().equals("my-session"))
     .concatMap(event -> processEvent(event))
     .subscribe();
@@ -67,12 +52,12 @@ eventBus.inBoxSubscribe()
 
 ### 发布消息到 Outbox
 ```java
-eventBus.outBoxPublish(sessionId, responseMessage);
+EventBus.outBoxPublish(sessionId, responseMessage);
 ```
 
 ### 订阅 Outbox 消息
 ```java
-eventBus.outBoxSubscribe()
+EventBus.outBoxSubscribe()
     .filter(event -> event.getSessionId().equals(currentSessionId))
     .subscribe(event -> sendToUser(event.getMessage()));
 ```
@@ -83,7 +68,7 @@ eventBus.outBoxSubscribe()
 - 双通道架构：Inbox 处理输入，Outbox 处理输出
 
 ## 注意事项
-1. EventBus 是 Spring Bean，通过依赖注入使用
+1. EventBus 使用静态方法，无需依赖注入
 2. 使用 filter 进行精确的会话路由
 3. 注意处理异常，避免中断事件流
 4. message 使用 Spring AI 的 Message 类型
