@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:id="agentPage" styleClass="agent-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.AgentPageController"
+      stylesheets="@../style/agent-page.css"
+>
+    <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="agent-page__scroll-pane">
+        <VBox fx:id="agentListContainer" styleClass="agent-page__list"/>
+    </ScrollPane>
+</VBox>

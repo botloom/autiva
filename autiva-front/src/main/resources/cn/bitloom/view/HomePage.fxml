@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.web.WebView?>
+<?import cn.bitloom.node.SvgImageView?>
+
+<VBox fx:id="homePage" styleClass="home-page" xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.HomePageController"
+      alignment="CENTER"
+      VBox.vgrow="ALWAYS"
+      spacing="20"
+      stylesheets="@../style/home-page.css"
+>
+
+    <VBox fx:id="icon" styleClass="home-page__icon" alignment="CENTER">
+        <SvgImageView fitWidth="100" fitHeight="100" svgPath="/cn/bitloom/images/icon.svg"/>
+    </VBox>
+
+    <WebView fx:id="webView"
+             visible="false" managed="false" VBox.vgrow="ALWAYS"
+             maxWidth="1000" prefWidth="600" minWidth="300"
+    />
+
+    <VBox fx:id="searchBox"
+          styleClass="home-page__search-box"
+          alignment="TOP_CENTER"
+          prefWidth="600" maxWidth="1000" minWidth="300"
+          prefHeight="110" minHeight="110" maxHeight="110"
+    >
+        <TextField fx:id="searchField" promptText="输入消息与智能体对话..." styleClass="home-page__search-field"
+                   prefHeight="56" maxWidth="1000" minWidth="300" prefWidth="600"/>
+        <HBox alignment="BOTTOM_RIGHT" spacing="8">
+            <Button styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+                <graphic>
+                    <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/plus.svg"/>
+                </graphic>
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </Button>
+            <Button styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+                <graphic>
+                    <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/voice.svg"/>
+                </graphic>
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </Button>
+            <ComboBox fx:id="modelSelector" styleClass="home-page__model-selector" prefHeight="37">
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </ComboBox>
+            <Button fx:id="searchButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+                <graphic>
+                    <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/arrow-up.svg"/>
+                </graphic>
+                <HBox.margin>
+                    <Insets right="8" bottom="8"/>
+                </HBox.margin>
+            </Button>
+        </HBox>
+    </VBox>
+
+</VBox>

@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: autiva-backend
+  r2dbc:
+    url: r2dbc:mysql://mysql:3306/autiva
+    username: autiva
+    password: autiva_2024
+    pool:
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+
+baas:
+  mysql:
+    host: mysql
+    port: 3306
+  redis:
+    host: redis
+    port: 6379
+    password: autiva_redis_2024
+  mongodb:
+    host: mongodb
+    port: 27017
+  minio:
+    endpoint: http://minio:9000
+    access-key: autiva_admin
+    secret-key: autiva_minio_2024
+
+gateway:
+  base-domain: autiva.dev
+
+logging:
+  level:
+    root: info
+    cn.bitloom: debug
+
+server:
+  port: 9527

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:id="skillPage" styleClass="skill-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.SkillPageController"
+      stylesheets="@../style/skill-page.css"
+>
+    <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="skill-page__scroll-pane">
+        <VBox fx:id="skillListContainer" styleClass="skill-page__list"/>
+    </ScrollPane>
+</VBox>

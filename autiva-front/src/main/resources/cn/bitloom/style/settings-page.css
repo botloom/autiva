@@ -1,0 +1,233 @@
+.settings-page {
+    -fx-background-color: #ffffff;
+    -fx-padding: 24;
+    -fx-alignment: top-center;
+    -fx-vgrow: always;
+}
+
+.settings-page__scroll-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-pref-width: 600;
+    -fx-max-width: 700;
+    -fx-hbar-policy: never;
+    -fx-fit-to-width: true;
+    -fx-fit-to-height: true;
+}
+
+.settings-page__scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.settings-page__scroll-pane .scroll-bar {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6;
+    -fx-pref-height: 6;
+}
+
+.settings-page__scroll-pane .scroll-bar .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+    -fx-background-radius: 3;
+}
+
+.settings-page__scroll-pane .scroll-bar .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.25);
+}
+
+.settings-page__scroll-pane .scroll-bar .thumb:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.4);
+}
+
+.settings-page__scroll-pane .scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+.settings-page__scroll-pane .scroll-bar .increment-button,
+.settings-page__scroll-pane .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.settings-page__scroll-pane .scroll-bar .increment-arrow,
+.settings-page__scroll-pane .scroll-bar .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.settings-page__scroll-pane .corner {
+    -fx-background-color: transparent;
+}
+
+.settings-page__content {
+    -fx-spacing: 32;
+    -fx-padding: 0 32 32 32;
+}
+
+.settings-page__section-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+    -fx-padding: 0 0 4 0;
+}
+
+.settings-page__card {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12px;
+    -fx-background-insets: 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.04), 12, 0, 0, 2);
+    -fx-border-color: rgba(0, 0, 0, 0.08);
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+    -fx-border-insets: 0;
+    -fx-padding: 16;
+    -fx-spacing: 12;
+}
+
+.settings-page__row {
+    -fx-padding: 16 20;
+    -fx-spacing: 6;
+}
+
+.settings-page__row-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.settings-page__row-subtitle {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+    -fx-wrap-text: true;
+    -fx-padding: 0 0 0 0;
+}
+
+.settings-page__path-row {
+    -fx-padding: 8 0 0 0;
+    -fx-spacing: 12;
+    -fx-alignment: center-left;
+}
+
+.settings-page__path-field {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.03);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-prompt-text-fill: #86868b;
+    -fx-text-fill: #1d1d1f;
+    -fx-pref-height: 32px;
+    -fx-padding: 6 12;
+    -fx-hgrow: always;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.settings-page__path-field:focused {
+    -fx-background-color: rgba(0, 0, 0, 0.03);
+    -fx-border-color: transparent;
+}
+
+.settings-page__path-field:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.06);
+}
+
+.settings-page__secondary-btn {
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: #f5f5f7;
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 32px;
+    -fx-padding: 0 14px;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.settings-page__secondary-btn:hover {
+    -fx-background-color: #e8e8ed;
+}
+
+.settings-page__secondary-btn:pressed {
+    -fx-background-color: #d1d5db;
+}
+
+.settings-page__about-content {
+    -fx-padding: 24 20;
+    -fx-alignment: center;
+    -fx-spacing: 4;
+}
+
+.settings-page__app-name {
+    -fx-font-size: 22px;
+    -fx-font-weight: 700;
+    -fx-font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.settings-page__app-version {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+    -fx-padding: 2 0 0 0;
+}
+
+.settings-page__app-desc {
+    -fx-font-size: 14px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #6e6e73;
+    -fx-padding: 8 0 0 0;
+}
+
+.settings-page__app-copyright {
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+    -fx-padding: 16 0 0 0;
+}
+
+.settings-page__spacer {
+    -fx-min-height: 40;
+}
+
+.settings-page__checkbox-container {
+    -fx-padding: 8 0 0 0;
+    -fx-spacing: 8;
+}
+
+.settings-page__tool-checkbox {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+    -fx-padding: 4 0;
+}
+
+.settings-page__tool-checkbox .box {
+    -fx-background-color: rgba(0, 0, 0, 0.03);
+    -fx-background-radius: 4px;
+    -fx-border-color: rgba(0, 0, 0, 0.15);
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+}
+
+.settings-page__tool-checkbox:hover .box {
+    -fx-background-color: rgba(0, 0, 0, 0.06);
+    -fx-border-color: rgba(0, 0, 0, 0.25);
+}
+
+.settings-page__tool-checkbox:selected .box {
+    -fx-background-color: #0071e3;
+    -fx-border-color: #0071e3;
+}
+
+.settings-page__tool-checkbox:selected .mark {
+    -fx-background-color: white;
+}

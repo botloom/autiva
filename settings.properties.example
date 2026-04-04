@@ -1,0 +1,9 @@
+# 钉钉配置
+dingtalk.app.client-id=your-client-id
+dingtalk.app.client-secret=your-client-secret
+
+# DeepSeek API Key
+spring.ai.deepseek.api-key=your-deepseek-api-key
+
+# 智谱 AI API Key
+spring.ai.zhipuai.api-key=your-zhipuai-api-key

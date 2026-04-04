@@ -1,0 +1,62 @@
+.button-bar {
+    -fx-background-color: transparent;
+    -fx-padding: 8px 20px 8px 20px;
+    -fx-spacing: 8;
+    -fx-alignment: center-left;
+    -fx-pref-height: 50;
+    -fx-min-height: 50;
+    -fx-max-height: 50;
+}
+
+.button-bar__toggle-btn {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 26;
+    -fx-padding: 4 10;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.button-bar__toggle-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}
+
+.button-bar__status {
+    -fx-font-size: 11px;
+    -fx-font-weight: 400;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: transparent;
+    -fx-text-fill: #86868b;
+    -fx-padding: 4 8;
+    -fx-alignment: center-left;
+    -fx-cursor: default;
+}
+
+.button-bar__status:hover {
+    -fx-text-fill: #1d1d1f;
+}
+
+.dynamic-btn {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 26;
+    -fx-padding: 4 10;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.dynamic-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}

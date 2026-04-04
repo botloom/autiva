@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.web.*?>
+
+<VBox prefHeight="700" prefWidth="900"
+      stylesheets="@../style/scroll-bar.css,@../style/md-editor.css"
+      xmlns="http://javafx.com/javafx/17.0.12"
+      xmlns:fx="http://javafx.com/fxml/1" fx:controller="cn.bitloom.controller.MdEditorController"
+      styleClass="md-editor"
+>
+
+    <HBox alignment="CENTER_LEFT" spacing="12" styleClass="md-editor__header">
+        <TextField fx:id="nameField" promptText="输入名称" styleClass="md-editor__name-field"
+                   HBox.hgrow="ALWAYS"/>
+        <Button onAction="#togglePreview" styleClass="md-editor__btn" text="预览"/>
+        <Button onAction="#save" styleClass="md-editor__btn" text="保存"/>
+        <Button onAction="#cancel" styleClass="md-editor__btn" text="取消"/>
+    </HBox>
+
+    <SplitPane fx:id="editorSplitPane" dividerPositions="0.5"
+               styleClass="md-editor__split-pane" VBox.vgrow="ALWAYS">
+        <TextArea fx:id="contentArea" prefWidth="450" promptText="在这里输入 Markdown 内容..."
+                  styleClass="md-editor__textarea" wrapText="true"/>
+        <WebView fx:id="previewWebView" VBox.vgrow="ALWAYS"/>
+    </SplitPane>
+
+    <HBox alignment="CENTER_LEFT" spacing="16" styleClass="md-editor__footer">
+        <Label fx:id="wordCountLabel"
+               styleClass="md-editor__word-count"
+               text="字数: 0"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Label fx:id="statusLabel"
+               styleClass="md-editor__status"
+               text="就绪"/>
+    </HBox>
+
+</VBox>

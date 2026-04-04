@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:id="taskPage" styleClass="task-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.TaskPageController"
+      stylesheets="@../style/task-page.css"
+>
+    <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="task-page__scroll-pane">
+        <VBox fx:id="taskListContainer" styleClass="task-page__list"/>
+    </ScrollPane>
+</VBox>

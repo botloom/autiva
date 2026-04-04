@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<HBox fx:id="rootContainer" stylesheets="@style/index.css" styleClass="window-container" xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.IndexController">
+    <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
+    <VBox HBox.hgrow="ALWAYS">
+        <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
+        <fx:include source="view/HomePage.fxml" fx:id="homePage"/>
+        <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
+        <fx:include source="view/SettingsPage.fxml" fx:id="settingsPage"/>
+        <fx:include source="view/SkillPage.fxml" fx:id="skillPage"/>
+        <fx:include source="view/McpPage.fxml" fx:id="mcpPage"/>
+        <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
+    </VBox>
+</HBox>

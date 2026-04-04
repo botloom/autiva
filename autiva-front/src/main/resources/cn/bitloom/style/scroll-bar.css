@@ -1,0 +1,62 @@
+.scroll-bar {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
+    -fx-pref-height: 8;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.2);
+    -fx-background-radius: 4;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+
+.scroll-bar .thumb:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.5);
+}
+
+.scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar .increment-button,
+.scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.scroll-bar .increment-arrow,
+.scroll-bar .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.custom-text-area .scroll-bar {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
+    -fx-pref-height: 8;
+}
+
+.custom-text-area .scroll-bar .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+    -fx-background-radius: 4;
+}
+
+.custom-text-area .scroll-bar .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.3);
+}
+
+.browser-nav-button {
+    -fx-background-color: transparent;
+}
+
+.browser-nav-button:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.08);
+}
+
+.browser-nav-button:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+}

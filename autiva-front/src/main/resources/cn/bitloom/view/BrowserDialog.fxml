@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import cn.bitloom.node.SvgImageView?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.web.WebView?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.BrowserDialogController"
+      styleClass="browser-dialog"
+      stylesheets="@../style/scroll-bar.css,@../style/browser-dialog.css"
+>
+
+    <HBox styleClass="browser-dialog__toolbar"
+          alignment="CENTER_LEFT" spacing="6">
+        <Button onAction="#goBack"
+                styleClass="browser-dialog__nav-btn">
+            <graphic>
+                <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/left.svg"/>
+            </graphic>
+        </Button>
+        <Button onAction="#goForward"
+                styleClass="browser-dialog__nav-btn">
+            <graphic>
+                <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/right.svg"/>
+            </graphic>
+        </Button>
+        <Button onAction="#refresh"
+                styleClass="browser-dialog__nav-btn">
+            <graphic>
+                <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/reload.svg"/>
+            </graphic>
+        </Button>
+        <TextField fx:id="urlField" promptText="搜索或输入网址"
+                   onAction="#loadUrl"
+                   HBox.hgrow="ALWAYS"
+                   styleClass="browser-dialog__url-field"/>
+    </HBox>
+
+    <WebView fx:id="browserWebView" VBox.vgrow="ALWAYS" styleClass="browser-dialog__webview"/>
+
+    <HBox styleClass="browser-dialog__status-bar"
+          alignment="CENTER_LEFT">
+        <Label fx:id="statusLabel" styleClass="browser-dialog__status"/>
+    </HBox>
+
+</VBox>

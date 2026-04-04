@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: autiva-backend
+  r2dbc:
+    url: r2dbc:mysql://localhost:3306/autiva
+    username: autiva
+    password: autiva_2024
+    pool:
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+
+baas:
+  mysql:
+    host: localhost
+    port: 3306
+  redis:
+    host: localhost
+    port: 6379
+    password: autiva_redis_2024
+  mongodb:
+    host: localhost
+    port: 27017
+  minio:
+    endpoint: http://localhost:9000
+    access-key: autiva_admin
+    secret-key: autiva_minio_2024
+
+gateway:
+  base-domain: autiva.dev
+  default-target: http://localhost:3000
+
+logging:
+  level:
+    root: info
+    cn.bitloom: debug
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${user.home}/.autiva/logs/autiva-backend.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${user.home}/.autiva/logs/autiva-backend.%d{yyyy-MM-dd}.log
+      max-history: 30
+
+server:
+  port: 9527

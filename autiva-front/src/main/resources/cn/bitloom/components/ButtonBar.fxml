@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<HBox styleClass="button-bar" alignment="CENTER_LEFT" prefHeight="50.0" minHeight="50.0" maxHeight="50.0" xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.ButtonBarController"
+      stylesheets="@../style/button-bar.css"
+>
+    <Button fx:id="sidebarButton" text="☰" styleClass="button-bar__toggle-btn"/>
+    <HBox fx:id="dynamicButtonContainer" HBox.hgrow="ALWAYS" alignment="CENTER_LEFT" spacing="8"/>
+    <Label fx:id="statusBarLabel" text="就绪" styleClass="button-bar__status"/>
+</HBox>

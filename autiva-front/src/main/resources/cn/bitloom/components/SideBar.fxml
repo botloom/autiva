@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import cn.bitloom.node.SvgImageView?>
+
+<VBox fx:id="sideBar" styleClass="sidebar" xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.SideBarController"
+      stylesheets="@../style/side-bar.css"
+>
+
+    <VBox styleClass="sidebar__content">
+        <HBox fx:id="homeOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
+                          svgPath="/cn/bitloom/images/home.svg"/>
+            <Label text="首页" styleClass="sidebar__label"/>
+        </HBox>
+
+        <HBox fx:id="agentOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
+                          svgPath="/cn/bitloom/images/robot.svg"/>
+            <Label text="智能体" styleClass="sidebar__label"/>
+        </HBox>
+
+        <HBox fx:id="skillOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
+                          svgPath="/cn/bitloom/images/lightning.svg"/>
+            <Label text="SKILL" styleClass="sidebar__label"/>
+        </HBox>
+
+        <HBox fx:id="mcpOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
+                          svgPath="/cn/bitloom/images/plug.svg"/>
+            <Label text="MCP" styleClass="sidebar__label"/>
+        </HBox>
+
+        <HBox fx:id="taskOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
+                          svgPath="/cn/bitloom/images/list.svg"/>
+            <Label text="任务" styleClass="sidebar__label"/>
+        </HBox>
+
+        <Region styleClass="sidebar__spacer" VBox.vgrow="ALWAYS"/>
+
+        <HBox fx:id="settingsOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
+                          svgPath="/cn/bitloom/images/setting.svg"/>
+            <Label text="设置" styleClass="sidebar__label"/>
+        </HBox>
+
+    </VBox>
+</VBox>
