@@ -1,6 +1,5 @@
-package cn.bitloom.agentic.tool.system;
+package cn.bitloom.agentic.tool;
 
-import cn.bitloom.agentic.tool.ToolResult;
 import cn.bitloom.cron.CronManager;
 import cn.bitloom.cron.CronManager.CronTaskInfo;
 import lombok.RequiredArgsConstructor;

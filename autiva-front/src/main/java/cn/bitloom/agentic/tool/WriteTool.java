@@ -1,6 +1,5 @@
-package cn.bitloom.agentic.tool.system;
+package cn.bitloom.agentic.tool;
 
-import cn.bitloom.agentic.tool.ToolResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;

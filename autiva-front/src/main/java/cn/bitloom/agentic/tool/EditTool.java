@@ -1,6 +1,5 @@
-package cn.bitloom.agentic.tool.system;
+package cn.bitloom.agentic.tool;
 
-import cn.bitloom.agentic.tool.ToolResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -15,7 +14,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Component
