@@ -11,6 +11,7 @@ import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -74,18 +75,6 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
             String sessionId = entry.getKey();
             List<CronTaskInfo> sessionTasks = entry.getValue();
 
-            VBox sessionCard = new VBox();
-            sessionCard.getStyleClass().add("task-page__session-card");
-
-            HBox sessionHeader = new HBox();
-            sessionHeader.getStyleClass().add("task-page__session-header");
-            sessionHeader.setAlignment(Pos.CENTER_LEFT);
-
-            Label sessionLabel = new Label(String.format("Session: %s (%d 个任务)", sessionId, sessionTasks.size()));
-            sessionLabel.getStyleClass().add("task-page__session-title");
-            sessionHeader.getChildren().add(sessionLabel);
-            sessionCard.getChildren().add(sessionHeader);
-
             VBox sessionTaskList = new VBox();
             sessionTaskList.setSpacing(12);
             sessionTaskList.getStyleClass().add("task-page__session-list");
@@ -95,7 +84,13 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
                 sessionTaskList.getChildren().add(card);
             }
 
-            sessionCard.getChildren().add(sessionTaskList);
+            TitledPane sessionCard = new TitledPane();
+            sessionCard.setText(String.format("Session: %s (%d 个任务)", sessionId, sessionTasks.size()));
+            sessionCard.setContent(sessionTaskList);
+            sessionCard.getStyleClass().add("task-page__session-card");
+            sessionCard.setExpanded(false);
+            sessionCard.setAnimated(true);
+
             cardsContainer.getChildren().add(sessionCard);
         }
 

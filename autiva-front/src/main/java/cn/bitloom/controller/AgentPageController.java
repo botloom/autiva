@@ -14,6 +14,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -91,33 +92,32 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
         cardsContainer.setSpacing(16);
         
         for (AgentManager.AgentFolder agent : agents) {
-            VBox card = createAgentCard(agent);
+            TitledPane card = createAgentCard(agent);
             cardsContainer.getChildren().add(card);
         }
         
         agentListContainer.getChildren().add(cardsContainer);
     }
 
-    private VBox createAgentCard(AgentManager.AgentFolder agent) {
-        VBox card = new VBox();
-        card.getStyleClass().add("agent-page__agent-card");
-        
-        HBox header = new HBox();
-        header.getStyleClass().add("agent-page__agent-header");
-        header.setAlignment(Pos.CENTER_LEFT);
-        
-        Label nameLabel = new Label(agent.getName());
-        nameLabel.getStyleClass().add("agent-page__agent-title");
-        header.getChildren().add(nameLabel);
-        card.getChildren().add(header);
+    private TitledPane createAgentCard(AgentManager.AgentFolder agent) {
+        VBox content = new VBox();
+        content.getStyleClass().add("agent-page__agent-card-content");
+        content.setSpacing(16);
         
         VBox workspaceSection = createWorkspaceSection(agent);
-        card.getChildren().add(workspaceSection);
+        content.getChildren().add(workspaceSection);
         
         VBox toolSection = createToolSection(agent);
-        card.getChildren().add(toolSection);
+        content.getChildren().add(toolSection);
         
-        return card;
+        TitledPane titledPane = new TitledPane();
+        titledPane.setText(agent.getName());
+        titledPane.setContent(content);
+        titledPane.getStyleClass().add("agent-page__agent-card");
+        titledPane.setExpanded(false);
+        titledPane.setAnimated(true);
+        
+        return titledPane;
     }
     
     private VBox createWorkspaceSection(AgentManager.AgentFolder agent) {
