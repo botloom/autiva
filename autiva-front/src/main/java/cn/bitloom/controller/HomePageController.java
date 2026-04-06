@@ -3,6 +3,8 @@ package cn.bitloom.controller;
 import cn.bitloom.agentic.agent.ModelEnum;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
+import cn.bitloom.node.SvgImageView;
+import cn.bitloom.service.SpeechRecognitionService;
 import cn.bitloom.store.Store;
 import cn.bitloom.util.MarkdownUtil;
 import cn.bitloom.vm.HomePageViewModel;
@@ -61,6 +63,10 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private Button searchButton;
     @FXML
+    private Button voiceButton;
+    @FXML
+    private SvgImageView voiceIcon;
+    @FXML
     private VBox icon;
     @FXML
     private WebView webView;
@@ -69,6 +75,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
     @Getter
     private final HomePageViewModel viewModel;
+    @Getter
+    private final SpeechRecognitionService speechRecognitionService;
 
     @Getter
     @Setter
@@ -80,6 +88,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     public void initialize(URL location, ResourceBundle resources) {
         this.searchButton.setOnAction(event -> this.handleSendMessage());
         this.searchField.setOnAction(event -> this.handleSendMessage());
+        this.voiceButton.setOnAction(event -> this.handleVoiceButton());
 
         this.modelSelector.getItems().addAll(ModelEnum.values());
         this.modelSelector.setValue(Store.selectedModel.get());
@@ -133,6 +142,25 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                 });
             }
         });
+    }
+
+    private void handleVoiceButton() {
+        if (this.speechRecognitionService.isRecording()) {
+            this.voiceButton.getStyleClass().remove("home-page__icon-btn--active");
+            this.speechRecognitionService.stopRecordingAndTranscribe()
+                    .thenAccept(text -> {
+                        if (StringUtils.isNotBlank(text)) {
+                            Platform.runLater(() -> {
+                                this.searchField.setText(text);
+                                this.searchField.requestFocus();
+                                this.searchField.end();
+                            });
+                        }
+                    });
+        } else {
+            this.voiceButton.getStyleClass().add("home-page__icon-btn--active");
+            this.speechRecognitionService.startRecording();
+        }
     }
 
     private String loadChatHtmlTemplate() {

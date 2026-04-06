@@ -31,12 +31,27 @@
 ### HomePageController
 主页控制器，实现聊天交互界面。
 
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `HomePageViewModel`: 视图模型
+- `SpeechRecognitionService`: 语音识别服务
+
 **职责：**
 - 管理搜索输入框
 - 加载和显示聊天页面（WebView）
 - 处理消息发送
 - 渲染 Markdown 响应
 - 管理模型选择（通过 MenuButton）
+- 处理语音输入（语音转文字）
+
+**语音输入功能：**
+- 点击语音按钮开始录音，按钮变为红色表示录音中
+- 再次点击停止录音并调用本地 Whisper medium 模型进行语音识别
+- 识别结果自动填入输入框
+- 状态栏显示录音和识别状态
+- 首次使用需要下载 Whisper 模型文件到 ~/.autiva/models/
+- 识别结果自动从繁体转换为简体中文
 
 **聊天 UI 设计：**
 

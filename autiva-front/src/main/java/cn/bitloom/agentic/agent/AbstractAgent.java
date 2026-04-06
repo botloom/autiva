@@ -115,7 +115,7 @@ public abstract class AbstractAgent {
                         )
                 )
                 .build();
-        this.chatClientMap.put(ModelEnum.Z, zChatClient);
+        this.chatClientMap.put(ModelEnum.GLM, zChatClient);
         this.run();
     }
 

@@ -41,9 +41,9 @@
                     <Insets bottom="8"/>
                 </HBox.margin>
             </Button>
-            <Button styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+            <Button fx:id="voiceButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
-                    <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/voice.svg"/>
+                    <SvgImageView fx:id="voiceIcon" fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/voice.svg"/>
                 </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>

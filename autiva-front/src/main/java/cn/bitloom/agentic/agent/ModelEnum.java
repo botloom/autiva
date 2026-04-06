@@ -7,5 +7,5 @@ package cn.bitloom.agentic.agent;
  */
 public enum ModelEnum {
     DEEPSEEK,
-    Z,
+    GLM,
 }

@@ -23,7 +23,7 @@ public class MainAgent extends AbstractAgent {
                     this.status = AgentStatusEnum.WORKING;
                     Session session = sessionManager.getById(event.getSessionId());
                     if (session.getRespType().equals(SessionRespTypeEnum.STREAM)) {
-                        return this.model(ModelEnum.Z)
+                        return this.model(ModelEnum.GLM)
                                 .prompt()
                                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, event.getSessionId()))
                                 .toolContext(Map.of("sessionId", event.getSessionId()))
@@ -34,7 +34,7 @@ public class MainAgent extends AbstractAgent {
                                 .doOnNext(message -> EventBus.outBoxPublish(event.getSessionId(), message.getResult().getOutput()))
                                 .doOnComplete(() -> this.status = AgentStatusEnum.IDLE);
                     } else {
-                        ChatResponse chatResponse = this.model(ModelEnum.Z)
+                        ChatResponse chatResponse = this.model(ModelEnum.GLM)
                                 .prompt()
                                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, event.getSessionId()))
                                 .toolContext(Map.of("sessionId", event.getSessionId()))

@@ -88,6 +88,8 @@
 - `.home-page__search-box`: 搜索框容器
 - `.home-page__search-field`: 搜索输入框
 - `.home-page__icon-btn`: 图标按钮
+- `.home-page__icon-btn--active`: 图标按钮激活状态（红色背景，用于录音状态）
+- `.home-page__model-selector`: 模型选择器
 
 ### settings-page.css
 设置页面样式。

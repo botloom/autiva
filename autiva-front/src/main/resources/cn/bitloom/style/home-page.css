@@ -75,6 +75,20 @@
     -fx-background-color: #e5e5ea;
 }
 
+.home-page__icon-btn--active {
+    -fx-background-color: #ff3b30;
+    -fx-border-color: #ff3b30;
+}
+
+.home-page__icon-btn--active:hover {
+    -fx-background-color: #ff453a;
+    -fx-border-color: #ff453a;
+}
+
+.home-page__icon-btn--active .svg-image-view {
+    -fx-effect: innershadow(gaussian, rgba(255, 255, 255, 0.3), 2, 0, 0, 0);
+}
+
 .home-page__model-selector {
     -fx-font-size: 13px;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
