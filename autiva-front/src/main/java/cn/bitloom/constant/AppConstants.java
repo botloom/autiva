@@ -23,9 +23,11 @@ public class AppConstants {
         public static final Path SKILL_DIR = APP_DIR.resolve("skills");
         public static final Path MCP_DIR = APP_DIR.resolve("mcp");
         public static final Path WORKSPACE_DIR = APP_DIR.resolve("workspace");
+        public static final Path SUBAGENT_DIR = WORKSPACE_DIR.resolve("subagents");
         public static final Path SESSION_DIR = APP_DIR.resolve("sessions");
         public static final Path MCP_CONFIG_FILE = MCP_DIR.resolve("mcp-servers.json");
         public static final Path CONFIG_FILE = APP_DIR.resolve("settings.properties");
+        public static final Path CODE_PROJECT_DIR = APP_DIR.resolve("project");
     }
 
     /**

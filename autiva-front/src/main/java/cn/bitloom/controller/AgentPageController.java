@@ -1,8 +1,6 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.agent.AgentManager;
-import cn.bitloom.agentic.tool.ToolManager;
-import cn.bitloom.config.ConfigManager;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.store.Store;
@@ -12,7 +10,6 @@ import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
@@ -22,7 +19,6 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -44,137 +40,168 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
     @Getter
     @Setter
     private IndexController indexController;
-    
+
     private final WindowManager windowManager;
-    private final ConfigManager configManager;
-    private final ToolManager toolManager;
     private final AgentManager agentManager;
-    
-    private final Map<String, List<CheckBox>> agentToolCheckBoxesMap = new HashMap<>();
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         loadAgents();
     }
-    
-    public void saveAllToolConfigs() {
-        for (Map.Entry<String, List<CheckBox>> entry : agentToolCheckBoxesMap.entrySet()) {
-            String agentName = entry.getKey();
-            List<CheckBox> checkBoxes = entry.getValue();
-            
-            List<String> selectedTools = checkBoxes.stream()
-                    .filter(CheckBox::isSelected)
-                    .map(cb -> (String) cb.getUserData())
-                    .toList();
-            
-            configManager.setAgentTools(agentName, selectedTools);
-        }
-        configManager.save();
-        Store.statusText.set("所有智能体工具配置已保存");
-    }
 
     private void loadAgents() {
         agentListContainer.getChildren().clear();
-        agentToolCheckBoxesMap.clear();
-        
-        List<AgentManager.AgentFolder> agents = agentManager.loadAgentFolders();
-        
-        if (agents.isEmpty()) {
-            Label emptyLabel = new Label("暂无智能体配置");
-            emptyLabel.getStyleClass().add("agent-page__empty");
-            VBox.setMargin(emptyLabel, new Insets(40, 0, 0, 0));
-            agentListContainer.getChildren().add(emptyLabel);
-            return;
-        }
-        
+
         VBox cardsContainer = new VBox();
         cardsContainer.getStyleClass().add("agent-page__cards-container");
         cardsContainer.setSpacing(16);
-        
-        for (AgentManager.AgentFolder agent : agents) {
-            TitledPane card = createAgentCard(agent);
-            cardsContainer.getChildren().add(card);
+
+        Label mainAgentLabel = new Label("主智能体");
+        mainAgentLabel.getStyleClass().add("agent-page__section-title");
+        cardsContainer.getChildren().add(mainAgentLabel);
+
+        List<AgentManager.AgentFolder> mainAgents = agentManager.loadAgentFolders();
+        if (mainAgents.isEmpty()) {
+            Label emptyLabel = new Label("暂无主智能体配置");
+            emptyLabel.getStyleClass().add("agent-page__empty-text");
+            VBox.setMargin(emptyLabel, new Insets(0, 0, 16, 0));
+            cardsContainer.getChildren().add(emptyLabel);
+        } else {
+            for (AgentManager.AgentFolder agent : mainAgents) {
+                TitledPane card = createMainAgentCard(agent);
+                cardsContainer.getChildren().add(card);
+            }
         }
-        
+
+        Label subagentLabel = new Label("子智能体");
+        subagentLabel.getStyleClass().add("agent-page__section-title");
+        VBox.setMargin(subagentLabel, new Insets(24, 0, 0, 0));
+        cardsContainer.getChildren().add(subagentLabel);
+
+        List<AgentManager.SubagentFolder> subagents = agentManager.loadSubagentFolders();
+        if (subagents.isEmpty()) {
+            Label emptyLabel = new Label("暂无子智能体配置");
+            emptyLabel.getStyleClass().add("agent-page__empty-text");
+            cardsContainer.getChildren().add(emptyLabel);
+        } else {
+            for (AgentManager.SubagentFolder subagent : subagents) {
+                TitledPane card = createSubagentCard(subagent);
+                cardsContainer.getChildren().add(card);
+            }
+        }
+
         agentListContainer.getChildren().add(cardsContainer);
     }
 
-    private TitledPane createAgentCard(AgentManager.AgentFolder agent) {
+    private TitledPane createMainAgentCard(AgentManager.AgentFolder agent) {
         VBox content = new VBox();
         content.getStyleClass().add("agent-page__agent-card-content");
         content.setSpacing(16);
-        
+
         VBox workspaceSection = createWorkspaceSection(agent);
         content.getChildren().add(workspaceSection);
-        
-        VBox toolSection = createToolSection(agent);
-        content.getChildren().add(toolSection);
-        
+
         TitledPane titledPane = new TitledPane();
         titledPane.setText(agent.getName());
         titledPane.setContent(content);
         titledPane.getStyleClass().add("agent-page__agent-card");
         titledPane.setExpanded(false);
         titledPane.setAnimated(true);
-        
+
         return titledPane;
     }
-    
+
+    private TitledPane createSubagentCard(AgentManager.SubagentFolder subagent) {
+        VBox content = new VBox();
+        content.getStyleClass().add("agent-page__agent-card-content");
+        content.setSpacing(16);
+
+        HBox fileRow = new HBox();
+        fileRow.getStyleClass().add("agent-page__file-card");
+        fileRow.setAlignment(Pos.CENTER_LEFT);
+        fileRow.setSpacing(8);
+
+        Label iconLabel = new Label("📄");
+        iconLabel.getStyleClass().add("agent-page__file-icon");
+
+        Label nameLabel = new Label(subagent.getPath().getFileName().toString());
+        nameLabel.getStyleClass().add("agent-page__file-name");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+
+        Button editBtn = new Button("编辑");
+        editBtn.getStyleClass().add("agent-page__file-btn");
+        editBtn.setOnAction(e -> openSubagentEditor(subagent));
+
+        Button deleteBtn = new Button("删除");
+        deleteBtn.getStyleClass().add("agent-page__file-btn");
+        deleteBtn.setOnAction(e -> deleteSubagent(subagent));
+
+        fileRow.getChildren().addAll(iconLabel, nameLabel, spacer, editBtn, deleteBtn);
+        content.getChildren().add(fileRow);
+
+        TitledPane titledPane = new TitledPane();
+        titledPane.setText(subagent.getName());
+        titledPane.setContent(content);
+        titledPane.getStyleClass().add("agent-page__agent-card");
+        titledPane.setExpanded(false);
+        titledPane.setAnimated(true);
+
+        return titledPane;
+    }
+
     private VBox createWorkspaceSection(AgentManager.AgentFolder agent) {
         VBox section = new VBox();
         section.getStyleClass().add("agent-page__section");
         section.setSpacing(12);
-        
-        Label sectionLabel = new Label("工作区配置");
-        sectionLabel.getStyleClass().add("agent-page__section-title");
-        section.getChildren().add(sectionLabel);
-        
+
         if (agent.getFiles().isEmpty()) {
             Label emptyLabel = new Label("暂无配置文件");
             emptyLabel.getStyleClass().add("agent-page__empty-text");
             section.getChildren().add(emptyLabel);
             return section;
         }
-        
+
         VBox fileList = new VBox();
         fileList.getStyleClass().add("agent-page__file-list");
         fileList.setSpacing(8);
-        
+
         for (AgentManager.AgentFile file : agent.getFiles()) {
             VBox fileCard = createFileCard(file, agent);
             fileList.getChildren().add(fileCard);
         }
-        
+
         section.getChildren().add(fileList);
         return section;
     }
-    
+
     private VBox createFileCard(AgentManager.AgentFile file, AgentManager.AgentFolder agent) {
         VBox card = new VBox();
         card.getStyleClass().add("agent-page__file-card");
         card.setAlignment(Pos.TOP_LEFT);
-        
+
         HBox header = new HBox();
         header.getStyleClass().add("agent-page__file-card-header");
         header.setAlignment(Pos.CENTER_LEFT);
         header.setSpacing(8);
-        
+
         Label iconLabel = new Label("📄");
         iconLabel.getStyleClass().add("agent-page__file-icon");
-        
+
         Label nameLabel = new Label(file.getDisplayName());
         nameLabel.getStyleClass().add("agent-page__file-name");
-        
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
-        
+
         Button editBtn = new Button("编辑");
         editBtn.getStyleClass().add("agent-page__file-btn");
         editBtn.setOnAction(e -> openEditor(file, agent));
-        
+
         header.getChildren().addAll(iconLabel, nameLabel, spacer, editBtn);
         card.getChildren().add(header);
-        
+
         card.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
                 openEditor(file, agent);
@@ -184,99 +211,11 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
 
         return card;
     }
-    
-    private VBox createToolSection(AgentManager.AgentFolder agent) {
-        VBox section = new VBox();
-        section.getStyleClass().add("agent-page__section");
-        section.setSpacing(12);
-        
-        Label sectionLabel = new Label("工具配置");
-        sectionLabel.getStyleClass().add("agent-page__section-title");
-        section.getChildren().add(sectionLabel);
-        
-        List<ToolDefinition> allTools = toolManager.getToolDefinitions();
-        if (allTools.isEmpty()) {
-            Label emptyLabel = new Label("暂无可用工具");
-            emptyLabel.getStyleClass().add("agent-page__empty-text");
-            section.getChildren().add(emptyLabel);
-            return section;
-        }
-        
-        VBox toolList = new VBox();
-        toolList.getStyleClass().add("agent-page__tool-list");
-        toolList.setSpacing(8);
-        
-        List<String> enabledTools = configManager.getAgentToolList(agent.getName());
-        List<CheckBox> agentCheckBoxes = new ArrayList<>();
-        
-        for (ToolDefinition tool : allTools) {
-            VBox toolCard = createToolCard(tool, enabledTools, agentCheckBoxes);
-            toolList.getChildren().add(toolCard);
-        }
-        
-        agentToolCheckBoxesMap.put(agent.getName(), agentCheckBoxes);
-        section.getChildren().add(toolList);
-        
-        return section;
-    }
-    
-    private VBox createToolCard(ToolDefinition tool, List<String> enabledTools, List<CheckBox> checkBoxes) {
-        VBox card = new VBox();
-        card.getStyleClass().add("agent-page__tool-card");
-        
-        HBox header = new HBox();
-        header.getStyleClass().add("agent-page__tool-card-header");
-        header.setAlignment(Pos.TOP_LEFT);
-        header.setSpacing(12);
-        
-        VBox infoBox = new VBox();
-        infoBox.setSpacing(4);
-        infoBox.setFillWidth(true);
-        HBox.setHgrow(infoBox, javafx.scene.layout.Priority.ALWAYS);
-        
-        Label nameLabel = new Label(tool.name());
-        nameLabel.getStyleClass().add("agent-page__tool-name");
-        
-        String description = tool.description();
-        if (description != null && !description.isEmpty()) {
-            Label descLabel = new Label(description);
-            descLabel.getStyleClass().add("agent-page__tool-desc");
-            descLabel.setWrapText(true);
-            descLabel.setMaxWidth(Double.MAX_VALUE);
-            infoBox.getChildren().addAll(nameLabel, descLabel);
-        } else {
-            infoBox.getChildren().add(nameLabel);
-        }
-        
-        CheckBox toggleSwitch = new CheckBox();
-        toggleSwitch.getStyleClass().add("agent-page__tool-switch");
-        toggleSwitch.setSelected(enabledTools.contains(tool.name()));
-        toggleSwitch.setUserData(tool.name());
-        toggleSwitch.setMinWidth(51);
-        toggleSwitch.setMinHeight(31);
-        
-        header.getChildren().addAll(infoBox, toggleSwitch);
-        card.getChildren().add(header);
-        
-        checkBoxes.add(toggleSwitch);
-        
-        return card;
-    }
-    
-    private String truncateText(String text, int maxLength) {
-        if (text == null) {
-            return "";
-        }
-        if (text.length() <= maxLength) {
-            return text;
-        }
-        return text.substring(0, maxLength) + "...";
-    }
 
     private void openEditor(AgentManager.AgentFile file, AgentManager.AgentFolder agent) {
         try {
             String content = Files.readString(file.getPath());
-            
+
             WindowManager.WindowConfig<MdEditorController> config = windowManager.<MdEditorController>configBuilder()
                 .fxmlPath("cn/bitloom/components/MdEditor.fxml")
                 .title(agent.getName() + " - " + file.getDisplayName())
@@ -296,11 +235,62 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
                     });
                 })
                 .build();
-            
+
             windowManager.showDialog(config);
         } catch (Exception e) {
             log.error("Failed to open agent editor", e);
             showAlert("打开编辑器失败: " + e.getMessage());
+        }
+    }
+
+    private void openSubagentEditor(AgentManager.SubagentFolder subagent) {
+        try {
+            String content = Files.readString(subagent.getPath());
+
+            WindowManager.WindowConfig<MdEditorController> config = windowManager.<MdEditorController>configBuilder()
+                .fxmlPath("cn/bitloom/components/MdEditor.fxml")
+                .title("子智能体 - " + subagent.getName())
+                .owner(agentPage.getScene().getWindow())
+                .controllerInitializer(controller -> {
+                    controller.setTitle(subagent.getName());
+                    controller.setContent(content);
+                    controller.setOnSaveCallback(data -> {
+                        try {
+                            agentManager.saveSubagentConfig(subagent.getName(), data.content());
+                            controller.setStatus("已保存: " + LocalDateTime.now().toString());
+                            loadAgents();
+                        } catch (Exception e) {
+                            log.error("Failed to save subagent config: {}", subagent.getName(), e);
+                            controller.setStatus("保存失败: " + e.getMessage());
+                        }
+                    });
+                })
+                .build();
+
+            windowManager.showDialog(config);
+        } catch (Exception e) {
+            log.error("Failed to open subagent editor", e);
+            showAlert("打开编辑器失败: " + e.getMessage());
+        }
+    }
+
+    private void deleteSubagent(AgentManager.SubagentFolder subagent) {
+        javafx.scene.control.Alert confirm = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("确认删除");
+        confirm.setHeaderText(null);
+        confirm.setContentText("确定要删除子智能体 \"" + subagent.getName() + "\" 吗？此操作不可撤销。");
+        confirm.initOwner(agentPage.getScene().getWindow());
+
+        Optional<javafx.scene.control.ButtonType> result = confirm.showAndWait();
+        if (result.isPresent() && result.get() == javafx.scene.control.ButtonType.OK) {
+            try {
+                agentManager.deleteSubagentConfig(subagent.getName());
+                loadAgents();
+                Store.statusText.set("子智能体已删除: " + subagent.getName());
+            } catch (Exception e) {
+                log.error("Failed to delete subagent: {}", subagent.getName(), e);
+                showAlert("删除失败: " + e.getMessage());
+            }
         }
     }
 
@@ -315,7 +305,6 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
     public void show() {
         this.agentPage.setVisible(true);
         this.agentPage.setManaged(true);
-        agentToolCheckBoxesMap.clear();
         loadAgents();
     }
 
@@ -332,16 +321,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
                 "refreshAgentButton",
                 "刷新",
                 "dynamic-btn",
-                event -> {
-                    agentToolCheckBoxesMap.clear();
-                    loadAgents();
-                }
-            ),
-            new ButtonBarHolder.ButtonConfig(
-                "saveToolConfigButton",
-                "保存配置",
-                "dynamic-btn",
-                event -> saveAllToolConfigs()
+                event -> loadAgents()
             )
         );
     }

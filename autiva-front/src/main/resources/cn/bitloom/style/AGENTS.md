@@ -158,6 +158,36 @@ MCP 页面样式。
 - `.agent-page__file-name`: 文件名
 - `.agent-page__file-btn`: 文件按钮
 
+### file-editor.css
+通用文件编辑器对话框样式，IDEA风格，毛玻璃效果。
+
+**样式类：**
+- `.file-editor`: 根容器，浅灰背景 #f5f5f7
+- `.file-editor__toolbar`: 顶部工具栏（毛玻璃 rgba(255,255,255,0.72)）
+- `.file-editor__toolbar-btn`: 工具栏按钮（系统风格：蓝色文字、8px圆角、浅灰背景）
+- `.file-editor__content-area`: 主内容区容器
+- `.file-editor__left-bar`: 左侧按钮栏（毛玻璃样式，40px宽）
+- `.file-editor__right-bar`: 右侧按钮栏（毛玻璃样式，40px宽）
+- `.file-editor__side-btn`: 侧边栏图标按钮（8px圆角，与sidebar__option风格一致）
+- `.file-editor__split-pane`: 分割面板（毛玻璃背景）
+- `.file-editor__tree-panel`: 文件树面板（浅色背景，8px圆角，微阴影）
+- `.file-editor__tree`: 文件树
+- `.file-editor__editor-panel`: 编辑器面板（深色背景 #1e1e1e，8px圆角，微阴影）
+- `.file-editor__tab-pane`: Tab面板（深色背景 #2d2d30，上方圆角）
+- `.file-editor__editor-box`: 编辑器内容容器（下方圆角）
+- `.file-editor__line-numbers`: 行号区域（深色背景，灰色文字 #858585）
+- `.file-editor__code-editor`: 代码编辑器（深色背景 #1e1e1e，浅色文字 #d4d4d4）
+- `.file-editor__empty`: 空状态（下方圆角）
+- `.file-editor__footer`: 底部状态栏（蓝色背景 #0071e3）
+- `.file-editor__status`: 状态文字（白色）
+- `.file-editor__context-menu`: 右键菜单
+- `.file-editor__dialog`: 自定义弹窗
+- `.file-editor__dialog-title`: 弹窗标题
+- `.file-editor__dialog-input`: 弹窗输入框
+- `.file-editor__dialog-btn`: 弹窗按钮
+- `.file-editor__dialog-btn--primary`: 主要按钮（蓝色）
+- `.file-editor__dialog-btn--danger`: 危险按钮（红色）
+
 ### md-editor-dialog.css
 Markdown 编辑器对话框样式。
 

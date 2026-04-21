@@ -16,16 +16,11 @@
 - `dingTalkClientSecret`: 钉钉应用 Client Secret
 - `deepseekApiKey`: DeepSeek API Key
 - `zApiKey`: 智谱 AI API Key
-- `mainAgentTools`: 主智能体工具列表（逗号分隔）
-- `agentToolsMap`: 每个智能体的工具配置映射
 
 **核心方法：**
 - `save()`: 保存配置到文件
 - `getBrowserPath()`: 获取浏览器路径
 - `getSavePath()`: 获取保存路径
-- `getMainAgentToolList()`: 获取主智能体工具列表
-- `getAgentToolList(agentName)`: 获取指定智能体的工具列表
-- `setAgentTools(agentName, tools)`: 设置指定智能体的工具列表
 
 ## 配置文件
 
@@ -36,9 +31,6 @@ app:
   save-path: ${user.home}/.autiva/output
   session:
     isolation: PER_PEER
-  agent:
-    main:
-      tools: read,write,edit,exec,web_search,web_fetch,cron_create,cron_list,cron_delete,cron_trigger
 
 dingtalk:
   app:
@@ -70,9 +62,6 @@ dingtalk.app.client-secret=your-client-secret
 # AI API Keys
 spring.ai.deepseek.api-key=your-deepseek-api-key
 spring.ai.zhipuai.api-key=your-zhipuai-api-key
-
-# Agent Configuration
-app.agent.main.tools=read,write,edit,exec,web_search,web_fetch,cron_create,cron_list,cron_delete,cron_trigger
 ```
 
 ## 使用示例
@@ -97,14 +86,7 @@ public class MyComponent {
 configManager.setBrowserPath("new/path/to/browser");
 configManager.setSavePath("new/save/path");
 configManager.setDingTalkClientId("your-client-id");
-configManager.setMainAgentTools("read,write,edit,exec");
 configManager.save();
-```
-
-### 获取智能体工具列表
-```java
-List<String> tools = configManager.getMainAgentToolList();
-// 返回: ["read", "write", "edit", "exec", ...]
 ```
 
 ## 设计模式

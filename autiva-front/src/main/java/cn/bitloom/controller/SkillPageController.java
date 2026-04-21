@@ -4,13 +4,13 @@ import cn.bitloom.agentic.skill.Skill;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
+import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -35,6 +35,7 @@ import java.util.ResourceBundle;
 public class SkillPageController implements Initializable, ButtonBarHolder, PageHolder {
 
     private final SkillManager skillManager;
+    private final WindowManager windowManager;
 
     @FXML
     private VBox skillPage;
@@ -79,19 +80,24 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         header.setAlignment(Pos.CENTER_LEFT);
         header.setSpacing(12);
 
-        Label nameLabel = new Label(skill.getName());
+        Label nameLabel = new Label(skill.name());
         nameLabel.getStyleClass().add("skill-page__card-title");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
 
+        Button editButton = new Button("编辑");
+        editButton.getStyleClass().add("skill-page__card-btn");
+        editButton.setOnAction(event -> openFileEditor(skill));
+
         Button deleteButton = new Button("删除");
         deleteButton.getStyleClass().add("skill-page__card-btn");
+        deleteButton.setStyle("-fx-text-fill: #ff3b30;");
         deleteButton.setOnAction(event -> deleteSkill(skill));
 
-        header.getChildren().addAll(nameLabel, spacer, deleteButton);
+        header.getChildren().addAll(nameLabel, spacer, editButton, deleteButton);
 
-        String description = skill.getDescription() != null ? skill.getDescription() : "";
+        String description = skill.description() != null ? skill.description() : "";
         Label descLabel = new Label(description);
         descLabel.getStyleClass().add("skill-page__card-description");
         descLabel.setWrapText(true);
@@ -99,6 +105,25 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         card.getChildren().addAll(header, descLabel);
 
         return card;
+    }
+
+    private void openFileEditor(Skill skill) {
+        try {
+            Path skillPath = Path.of(skill.basePath());
+            WindowManager.WindowConfig<FileEditorController> config = windowManager.<FileEditorController>configBuilder()
+                    .fxmlPath("cn/bitloom/view/FileEditorDialog.fxml")
+                    .owner(skillPage.getScene().getWindow())
+                    .resizable(true)
+                    .controllerInitializer(controller -> {
+                        controller.initRootPath(skillPath);
+                    })
+                    .build();
+
+            windowManager.showDialog(config);
+        } catch (Exception e) {
+            log.error("Failed to open file editor", e);
+            showAlert(Alert.AlertType.ERROR, "打开编辑器失败", e.getMessage());
+        }
     }
 
     private void importSkillFromZip() {
@@ -120,7 +145,7 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
             loadSkills();
             
             showAlert(Alert.AlertType.INFORMATION, "导入成功", 
-                    "技能 \"" + importedSkill.getName() + "\" 已成功导入");
+                    "技能 \"" + importedSkill.name() + "\" 已成功导入");
         } catch (IOException e) {
             log.error("Failed to import skill from zip", e);
             showAlert(Alert.AlertType.ERROR, "导入失败", e.getMessage());
@@ -128,7 +153,7 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
     }
 
     private void deleteSkill(Skill skill) {
-        skillManager.deleteSkill(skill.getName());
+        skillManager.deleteSkill(skill.name());
         skillManager.loadSkills();
         loadSkills();
     }

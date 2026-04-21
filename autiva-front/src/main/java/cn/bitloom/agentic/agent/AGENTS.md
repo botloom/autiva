@@ -1,109 +1,72 @@
 # Agent 包
 
 ## 概述
-本包实现了智能体核心系统，所有智能体继承自 AbstractAgent，通过 AgentManager 进行统一管理。智能体通过 EventBus 的 Inbox/Outbox 双通道进行消息收发。
+本包实现了智能体核心系统，通过 AgentManager 进行统一管理。智能体分为两种类型：
+
+1. **主智能体（MAIN）**：长期记忆，有独立工作目录，通用型 AI 助手
+2. **子智能体（SUBAGENT）**：无记忆，用于完成子任务，配置存放在 workspace/subagents/ 目录
+
+智能体通过 EventBus 的 Inbox/Outbox 双通道进行消息收发。
+
+## 目录结构
+
+```
+~/.autiva/workspace/
+  MAIN/                    # 主智能体工作目录
+    IDENTITY.md            # 身份定义
+    SOUL.md                # 行为准则
+    MEMORY.md              # 长期记忆
+    TOOLS.md               # 工具笔记
+    USER.md                # 用户偏好
+  DOCTOR/                  # 另一个主智能体
+    ...
+  subagents/               # 子智能体配置目录
+    GENERAL_PURPOSE_SUBAGENT.md
+    EXPLORE_SUBAGENT.md
+    PLAN_SUBAGENT.md
+    BASH_SUBAGENT.md
+```
 
 ## 核心类
 
-### AbstractAgent
-抽象基类，所有智能体的父类。
-
-**核心功能：**
-- 提供统一的 ChatClient 初始化和配置
-- 集成 ChatMemory 实现对话记忆
-- 集成 LoggingAdvisor 实现日志记录
-- 自动注册到 AgentManager
-- 支持多模型切换（DeepSeek、智谱AI）
-
-**依赖注入：**
-- `WorkspaceManager`: 工作目录管理器
-- `ToolManager`: 工具管理器
-- `SkillManager`: 技能管理器
-- `AgentManager`: 智能体管理器
-- `ChatModel`: 聊天模型（deepSeekChatModel、zhiPuAiChatModel）
-- `ChatMemory`: 对话记忆
-- `LoggingAdvisor`: 日志记录器
-- `ToolCallingManager`: 工具调用管理器
-- `ConfigManager`: 配置管理器
-- `SessionManager`: 会话管理器
-
-**关键方法：**
-- `run()`: 抽象方法，子类实现具体的运行逻辑
-- `getIdentity()`: 抽象方法，返回智能体身份标识
-- `model(ModelEnum)`: 获取指定模型的 ChatClient
-- `getSystemPrompt()`: 获取系统提示词
-
-**系统提示词结构：**
-```
-## 技能
-[技能描述]
-
----
-
-## 工作目录
-Working directory: ~/.autiva/workspace/{agentName}
-
----
-
-## 项目上下文
-[工作目录下的 .md 文件内容]
-
----
-
-## 时间
-[当前时间]
-
----
-
-## 运行时
-agent:{agentName}
-```
-
 ### AgentManager
-智能体管理器，管理所有注册的智能体实例、会话绑定关系和工作目录。
+智能体管理器，统一管理主智能体和子智能体的配置、会话绑定关系和工作目录。
 
-**核心属性：**
-- `agents`: Map<String, AbstractAgent> - 智能体实例映射
-- `agentSessionMap`: Map<String, String> - 智能体与会话的绑定关系
-- `currentSubAgentMap`: Map<String, String> - 当前子智能体映射
+**初始化方法：**
+- `init()`: 初始化工作目录（主智能体目录 + 子智能体目录 + 默认模板）
+- `initAgentWorkspaces()`: 创建主智能体工作目录和默认模板文件
+- `initSubagentWorkspace()`: 创建子智能体目录并从 classpath 复制默认配置
+- `registerAgents()`: 注册所有主智能体和子智能体到 agents Map
 
-**核心方法：**
-- `init()`: 初始化智能体工作目录
-- `register(name, agent)`: 注册智能体
-- `unregister(name)`: 注销智能体
-- `getAgent(name)`: 获取指定智能体
+**主智能体方法：**
+- `listMainAgents()`: 列出所有主智能体
+- `getDescription(agentName)`: 获取主智能体描述（读取工作目录下的.md文件）
+- `loadAgentFolders()`: 加载主智能体文件夹列表（排除 subagents 目录）
+
+**子智能体方法：**
+- `listSubagents()`: 列出所有子智能体
+- `loadSubagentFolders()`: 加载子智能体配置列表（解析 YAML frontmatter）
+- `getSubagentContent(name)`: 读取子智能体配置内容
+- `saveSubagentConfig(name, content)`: 保存子智能体配置
+- `createSubagentConfig(name, description, content)`: 创建新的子智能体配置
+- `deleteSubagentConfig(name)`: 删除子智能体配置
+- `reloadSubagents()`: 重新加载子智能体配置
+
+**通用方法：**
 - `bindSession(agentName, sessionId)`: 绑定智能体与会话
 - `getSessionByAgent(agentName)`: 获取智能体绑定的会话ID
-- `getAgentBySession(sessionId)`: 根据会话ID获取智能体
-- `listAgents()`: 列出所有智能体及其状态
-- `getDescription(agentName)`: 获取智能体描述（读取工作目录下的.md文件）
+- `listAgents()`: 列出所有智能体（主智能体 + 子智能体）
 - `exists(name)`: 检查智能体是否存在
-- `count()`: 获取智能体数量
-- `loadAgentFolders()`: 加载智能体文件夹列表
+- `count()`: 获取智能体总数
+- `getAgentType(name)`: 获取智能体类型
 
-**AgentInfo 记录类：**
-```java
-public record AgentInfo(String name, AgentStatusEnum status, String sessionId) {}
-```
-
-**AgentFolder 类：**
-```java
-public static class AgentFolder {
-    private final String name;
-    private final Path path;
-    private final List<AgentFile> files;
-    // getter methods...
-}
-```
-
-**AgentFile 类：**
-```java
-public static class AgentFile {
-    private final Path path;
-    private final String displayName;
-    // getter methods...
-}
-```
+**内部类：**
+- `AgentType`: 智能体类型枚举 (MAIN, SUBAGENT)
+- `AgentConfig`: 智能体配置（name, type, path, description）
+- `AgentInfo`: 智能体信息 record (name, type, sessionId)
+- `AgentFolder`: 主智能体文件夹（name, path, files）
+- `AgentFile`: 主智能体文件（path, displayName）
+- `SubagentFolder`: 子智能体配置（name, description, path）
 
 ### MainAgent
 主智能体，处理用户的主要对话。
@@ -112,24 +75,29 @@ public static class AgentFile {
 - 订阅 EventBus Inbox
 - 处理用户请求并通过 Outbox 返回响应
 - 支持流式响应和非流式响应两种模式
-- 工具列表可通过配置文件动态配置
-- 默认使用智谱AI模型（ModelEnum.Z）
+- 系统提示词由工作目录中的 .md 文件 + 技能描述 + 运行时信息组成
 
-**响应模式：**
-- `STREAM`: 流式响应，逐字返回
-- `BLOCK`: 阻塞响应，一次性返回完整结果
+**系统提示词结构：**
+1. 工作目录上下文（IDENTITY.md, SOUL.md, MEMORY.md, USER.md, TOOLS.md 按文件名排序拼接）
+2. 运行环境（工作目录路径、当前时间、智能体标识）
+3. 可用技能列表（如有）
 
-**工具集：**
-工具列表通过 `ConfigManager.getAgentToolList(agentName)` 获取，可在智能体配置页面为每个智能体配置。
-默认工具包括：
-- `read`, `write`, `edit`, `exec`: 文件和命令操作
-- `web_search`, `web_fetch`: 网络操作
-- `cron_create`, `cron_list`, `cron_delete`, `cron_trigger`: 定时任务
+**工具集（统一Builder模式注册）：**
+- `FileSystemTools`: 文件操作（Read/Write/Edit）— `FileSystemTools.builder().build()`
+- `ShellTools`: Shell 命令执行（Bash/BashOutput/KillShell）— `ShellTools.builder().build()`
+- `WebFetchTool`: 智能网页获取+AI摘要 — `WebFetchTool.builder(chatClient).build()`
+- `AskUserQuestionTool`: 向用户提问 — `AskUserQuestionTool.builder().questionHandler(handler).build()`
+- `TodoWriteTool`: 任务列表管理 — `TodoWriteTool.builder().todoEventHandler(handler).build()`
+- `CronTool`: 定时任务管理 — `CronTool.builder(cronManager).build()`
+- `Task/TaskOutput`: 子代理任务工具 — `taskManager.buildToolCallbacks()`（ToolCallbacks模式）
+
+**ChatClient 配置：**
+- 支持 DeepSeek 和智谱AI 两个模型
+- 使用 StTemplateRenderer 模板渲染
+- 集成 MessageChatMemoryAdvisor、LoggingAdvisor、ToolCallAdvisor
 
 ### 枚举类
-- `AgentStatusEnum`: 智能体状态 (IDLE, WORKING, SHUTDOWN)
-- `AgentIdentityEnum`: 智能体身份标识 (MAIN, DOCTOR)
-- `ModelEnum`: 支持的模型 (DEEPSEEK, Z)
+- `AgentIdentityEnum`: 主智能体身份标识 (MAIN, DOCTOR)
 
 ## 消息流程
 
@@ -137,7 +105,7 @@ public static class AgentFile {
 用户消息 -> EventBus.inBoxPublish()
                     │
                     ▼
-            MainAgent/DoctorAgent
+            MainAgent
             (订阅 Inbox，处理消息)
                     │
                     ▼
@@ -147,47 +115,27 @@ public static class AgentFile {
             用户接收响应
 ```
 
-## 使用示例
+## 子智能体加载流程
 
-### 创建自定义智能体
-```java
-@Component
-public class MyAgent extends AbstractAgent {
-    
-    @Override
-    protected void run() {
-        EventBus.inBoxSubscribe()
-            .concatMap(event -> {
-                this.status = AgentStatusEnum.WORKING;
-                Session session = sessionManager.getById(event.getSessionId());
-                return this.model(ModelEnum.Z)
-                    .prompt()
-                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, event.getSessionId()))
-                    .toolContext(Map.of("sessionId", event.getSessionId()))
-                    .messages(event.getMessage())
-                    .stream()
-                    .chatResponse()
-                    .doOnNext(response -> 
-                        EventBus.outBoxPublish(event.getSessionId(), response.getResult().getOutput()))
-                    .doOnComplete(() -> this.status = AgentStatusEnum.IDLE);
-            })
-            .subscribe();
-    }
-    
-    @Override
-    protected AgentIdentityEnum getIdentity() {
-        return AgentIdentityEnum.MAIN;
-    }
-}
+```
+AgentManager.init()
+    │
+    ├── initAgentWorkspaces()     # 创建主智能体目录和默认模板
+    ├── initSubagentWorkspace()   # 创建 subagents/ 目录，复制默认 .md 配置
+    └── registerAgents()          # 注册所有智能体到 agents Map
+            │
+            ▼
+MainAgent.init()
+    │
+    └── TaskManager.registerSubagentTypes()
+            │
+            └── resolveAndIndex()
+                    │
+                    └── loadWorkspaceSubagentReferences()  # 从 workspace/subagents/ 加载 .md 文件
 ```
 
 ## 设计模式
-- 模板方法模式：AbstractAgent 定义骨架
 - 观察者模式：通过 EventBus 订阅消息
 - 响应式编程：基于 Project Reactor
-
-## 注意事项
-1. 智能体在 @PostConstruct 时自动注册到 AgentManager
-2. 使用 EventBus 的 Inbox/Outbox 双通道进行消息收发
-3. ChatMemory 的 CONVERSATION_ID 使用 sessionId
-4. 状态变更需要注意线程安全
+- Builder模式：所有工具使用 Builder 创建，不依赖 Spring 管理
+- 策略模式：不同子智能体类型通过统一的接口执行

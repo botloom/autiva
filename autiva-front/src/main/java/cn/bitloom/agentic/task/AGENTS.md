@@ -1,91 +1,50 @@
 # Task 包
 
 ## 概述
-本包实现了任务管理系统，支持任务的创建、更新、依赖管理和状态跟踪。
+子代理任务管理，支持同步和后台执行模式。核心逻辑在 TaskManager 中，TaskTool 和 TaskOutputTool 保留为底层实现。
 
 ## 核心类
 
-### Task
-任务实体类。
-
-**字段：**
-- `id`: 任务 ID（自增）
-- `subject`: 任务主题
-- `description`: 任务描述
-- `status`: 任务状态（pending/in_progress/completed）
-- `blockedBy`: 阻塞此任务的任务 ID 列表
-- `blocks`: 此任务阻塞的任务 ID 列表
-- `owner`: 任务所有者
-- `createdAt`: 创建时间
-- `updatedAt`: 更新时间
-
-### TaskStatusEnum
-任务状态枚举，定义任务在智能体系统中的完整生命周期：
-- `PENDING`: 待处理
-- `ZHONGSHU_PLANNING`: 中书省规划中
-- `ZHONGSHU_PLANNED`: 中书省规划完成
-- `MENXIA_REVIEWING`: 门下省审核中
-- `MENXIA_APPROVED`: 门下省批准
-- `MENXIA_REJECTED`: 门下省驳回
-- `SHANGSHU_DISPATCHED`: 尚书省已派发
-- `DOING`: 执行中
-- `PENDING_REVIEW`: 待审核
-- `BLOCKED`: 被阻塞
-- `DONE`: 完成
-- `FAILED`: 失败
-
 ### TaskManager
-任务管理器。
+任务管理器，统一负责子代理注册、任务执行、后台任务管理和 AI 工具回调构建。Spring Bean。
 
-**核心方法：**
-- `create(subject, description)`: 创建任务
-- `update(taskId, status, addBlockedBy, addBlocks)`: 更新任务
-- `list()`: 列出所有任务
-- `getTask(taskId)`: 获取任务详情
-- `scanUnclaimed()`: 扫描未认领的任务
-- `claim(taskId)`: 认领任务
+**注册方法：**
+- `registerSubagentTypes(List<SubagentType>)`: 注册子代理类型
+- `registerSubagentTypes(SubagentType...)`: 注册子代理类型
+- `registerSubagentReferences(List<SubagentReference>)`: 注册子代理引用
+- `registerSubagentReferences(SubagentReference...)`: 注册子代理引用
 
-## 使用示例
+**执行方法：**
+- `executeTask(TaskCall)`: 执行任务（同步或后台）
+- `getTaskOutput(taskId, block, timeout)`: 获取后台任务输出
 
-### 创建任务
-```java
-String taskJson = taskManager.create("实现登录功能", "实现用户登录功能，包括表单验证和后端接口");
-// 返回 JSON 格式的任务信息
-```
+**AI 工具方法：**
+- `buildTaskToolCallback()`: 构建 Task 工具回调
+- `buildTaskOutputToolCallback()`: 构建 TaskOutput 工具回调
+- `buildToolCallbacks()`: 构建所有工具回调
 
-### 更新任务状态
-```java
-taskManager.update(taskId, "in_progress", null, null);
-```
+**内置 Claude 子代理引用：**
+当注册 Claude 类型的子代理时，自动注册以下引用：
+- `classpath:/agent/GENERAL_PURPOSE_SUBAGENT.md`
+- `classpath:/agent/EXPLORE_SUBAGENT.md`
+- `classpath:/agent/PLAN_SUBAGENT.md`
+- `classpath:/agent/BASH_SUBAGENT.md`
 
-### 添加依赖关系
-```java
-// 任务 2 依赖任务 1
-taskManager.update(2L, null, List.of(1L), null);
-```
+**内部类：**
+- `TaskFunction`: 实现 Function<TaskCall, String>，委托 TaskManager
+- `TaskOutputFunction`: 实现 Function<TaskOutputCall, String>，委托 TaskManager
+- `TaskOutputCall`: 后台任务输出查询 record
 
-### 认领任务
-```java
-String result = taskManager.claim(taskId);
-```
+### TaskTool
+底层任务工具实现，保留原始 Builder 模式供 TaskManager 内部使用。
 
-## 依赖管理
-任务之间可以建立依赖关系：
-- `blockedBy`: 此任务依赖的其他任务
-- `blocks`: 此任务阻塞的其他任务
-- 任务完成时自动清除依赖关系
+### TaskOutputTool
+底层后台任务输出工具，保留原始 Builder 模式供 TaskManager 内部使用。
 
-## 工具集成
-通过 TaskTool 暴露给智能体：
-- `taskCreate`: 创建任务
-- `taskUpdate`: 更新任务
-- `taskList`: 列出任务
-- `taskGet`: 获取任务详情
-- `scanUnclaimedTasks`: 扫描未认领任务
-- `claimTask`: 认领任务
+## 子包
 
-## 注意事项
-1. 任务 ID 自动生成，从 1 开始递增
-2. 依赖关系是双向维护的
-3. 完成任务会自动清除相关依赖
-4. 使用 ConcurrentHashMap 保证线程安全
+### claude 包 (`cn.bitloom.agentic.tool.task.claude`)
+Claude 风格子代理实现，详见 [claude/AGENTS.md](claude/AGENTS.md)
+
+### repository 包 (`cn.bitloom.agentic.tool.task.repository`)
+后台任务仓库，详见 [repository/AGENTS.md](../../task/repository/AGENTS.md)

@@ -12,13 +12,21 @@
 - 加载 SVG 资源文件
 - 自动转换为 PNG 格式显示
 - 支持指定尺寸
+- 延迟加载：先设置尺寸再加载 SVG，避免尺寸为0时渲染失败
 
 **字段：**
 - `svgPath`: SVG 文件路径
+- `loaded`: 是否已加载完成
 
 **方法：**
-- `setSvgPath(String)`: 设置 SVG 路径并加载
+- `setSvgPath(String)`: 设置 SVG 路径并加载（如果尺寸已设置）
 - `loadSvg()`: 内部方法，加载并转换 SVG
+
+**加载机制：**
+- 构造函数中注册 fitWidth/fitHeight 属性监听器
+- 当尺寸从0变为正值且 svgPath 已设置时，自动触发加载
+- `setSvgPath()` 在尺寸已设置时立即加载，否则等待尺寸设置后自动加载
+- `loaded` 标志防止重复加载
 
 ## 使用示例
 
@@ -60,5 +68,6 @@ imageView.setSvgPath("/cn/bitloom/images/icon.svg");
 ## 注意事项
 1. SVG 路径是类路径资源路径
 2. 尺寸通过 fitWidth/fitHeight 设置
-3. 转换过程在对象创建时执行
+3. **必须先设置尺寸（fitWidth/fitHeight），再设置 svgPath**，否则 SVG 无法正确渲染
 4. 修改尺寸后需要重新设置 svgPath
+5. loaded 标志确保 SVG 只加载一次

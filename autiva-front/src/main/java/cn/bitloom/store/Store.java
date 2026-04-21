@@ -1,6 +1,6 @@
 package cn.bitloom.store;
 
-import cn.bitloom.agentic.agent.ModelEnum;
+import cn.bitloom.agentic.model.ModelTypeEnum;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -12,5 +12,5 @@ import java.nio.file.Paths;
 public class Store {
     public static final StringProperty statusText = new SimpleStringProperty();
     public static final ObjectProperty<Path> browserPath = new SimpleObjectProperty<>(Paths.get("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"));
-    public static final ObjectProperty<ModelEnum> selectedModel = new SimpleObjectProperty<>(ModelEnum.DEEPSEEK);
+    public static final ObjectProperty<ModelTypeEnum> selectedModel = new SimpleObjectProperty<>(ModelTypeEnum.DEEPSEEK);
 }

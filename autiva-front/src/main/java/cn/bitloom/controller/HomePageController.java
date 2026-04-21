@@ -1,11 +1,12 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.agent.ModelEnum;
+import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.SvgImageView;
 import cn.bitloom.service.SpeechRecognitionService;
 import cn.bitloom.store.Store;
+import cn.bitloom.store.ToolUIBridge;
 import cn.bitloom.util.MarkdownUtil;
 import cn.bitloom.vm.HomePageViewModel;
 import com.alibaba.fastjson2.JSON;
@@ -33,6 +34,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import netscape.javascript.JSObject;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
@@ -71,12 +73,14 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private WebView webView;
     @FXML
-    private ComboBox<ModelEnum> modelSelector;
+    private ComboBox<ModelTypeEnum> modelSelector;
 
     @Getter
     private final HomePageViewModel viewModel;
     @Getter
     private final SpeechRecognitionService speechRecognitionService;
+    @Getter
+    private final ToolUIBridge toolUIBridge;
 
     @Getter
     @Setter
@@ -90,7 +94,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         this.searchField.setOnAction(event -> this.handleSendMessage());
         this.voiceButton.setOnAction(event -> this.handleVoiceButton());
 
-        this.modelSelector.getItems().addAll(ModelEnum.values());
+        this.modelSelector.getItems().addAll(ModelTypeEnum.values());
         this.modelSelector.setValue(Store.selectedModel.get());
         this.updateModelSelectorWidth();
         this.modelSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -107,6 +111,10 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
         this.webEngine.getLoadWorker().stateProperty().addListener((obState, oldState, newState) -> {
             if (newState == Worker.State.SUCCEEDED) {
+                JSObject window = (JSObject) this.webEngine.executeScript("window");
+                window.setMember("toolUIBridge", this.toolUIBridge);
+                this.toolUIBridge.setWebEngine(this.webEngine);
+
                 List<Message> messages = this.viewModel.getHistoricalMessages();
                 if (!messages.isEmpty()) {
                     this.animateToChatState();
@@ -220,7 +228,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     }
 
     private void updateModelSelectorWidth() {
-        ModelEnum selectedModel = this.modelSelector.getValue();
+        ModelTypeEnum selectedModel = this.modelSelector.getValue();
         if (selectedModel == null) {
             return;
         }

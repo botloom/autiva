@@ -13,6 +13,23 @@
 - `browserPath`: 浏览器路径（ObjectProperty<Path>）
 - `selectedModel`: 当前选择的模型（ObjectProperty<ModelEnum>，默认值：DEEPSEEK）
 
+### ToolUIBridge
+工具UI桥接组件，实现工具处理器与 WebView 之间的 Java-JavaScript 双向通信。
+
+**功能：**
+- `setWebEngine(WebEngine)`: 注册 WebEngine 引用（由 HomePageController 调用）
+- `showQuestions(questionsJson, answerFuture)`: 在 WebView 中显示问题，阻塞等待用户回答
+- `onQuestionAnswered(questionId, answersJson)`: JavaScript 回调，用户回答问题时触发
+- `showTodos(todosJson)`: 在 WebView 中显示待办事项列表
+
+**通信机制：**
+- Java → JavaScript: 通过 `webEngine.executeScript()` 调用 JavaScript 函数
+- JavaScript → Java: 通过 `JSObject.setMember()` 暴露 Java 对象给 JavaScript
+
+**线程安全：**
+- JavaScript 执行通过 `Platform.runLater()` 确保在 JavaFX 应用线程执行
+- 使用 `CompletableFuture` 实现跨线程等待
+
 ## 使用示例
 
 ### 设置状态

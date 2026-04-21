@@ -11,6 +11,11 @@ spring:
   main:
     web-application-type: none
   ai:
+    zhipuai:
+      chat:
+        options:
+          model: glm-4.7
+          thinking: disabled
     chat:
       client:
         enabled: false

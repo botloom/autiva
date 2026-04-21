@@ -1,6 +1,7 @@
 package cn.bitloom.agentic.session;
 
 import cn.bitloom.agentic.agent.AgentIdentityEnum;
+import cn.bitloom.agentic.model.ModelTypeEnum;
 import com.alibaba.fastjson2.annotation.JSONField;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ public class Session {
     private AgentIdentityEnum agentId;
     private SessionTypeEnum type;
     private SessionRespTypeEnum respType;
+    private ModelTypeEnum model;
     private String source;
     private String target;
     private String parentId;

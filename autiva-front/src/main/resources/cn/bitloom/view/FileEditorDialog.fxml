@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane fx:id="root" prefHeight="700" prefWidth="1000"
+      stylesheets="@../style/scroll-bar.css,@../style/file-editor.css"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.FileEditorController"
+      styleClass="file-editor"
+>
+
+    <top>
+        <HBox alignment="CENTER_LEFT" spacing="2" styleClass="file-editor__toolbar">
+            <Button onAction="#handleNewFile" styleClass="file-editor__toolbar-btn" text="新建文件"/>
+            <Button onAction="#handleNewFolder" styleClass="file-editor__toolbar-btn" text="新建文件夹"/>
+        </HBox>
+    </top>
+
+    <center>
+        <HBox styleClass="file-editor__content-area">
+            <VBox fx:id="leftBar" alignment="TOP_CENTER" spacing="4" styleClass="file-editor__left-bar">
+                <ToggleButton fx:id="treeToggleBtn" onAction="#toggleFileTree"
+                              styleClass="file-editor__side-btn" text="📁" selected="true"/>
+            </VBox>
+
+            <SplitPane fx:id="splitPane" dividerPositions="0.2"
+                       styleClass="file-editor__split-pane" HBox.hgrow="ALWAYS">
+
+                <VBox fx:id="treePanel" styleClass="file-editor__tree-panel">
+                    <TreeView fx:id="fileTree" VBox.vgrow="ALWAYS" styleClass="file-editor__tree"/>
+                </VBox>
+
+                <VBox fx:id="editorPanel" styleClass="file-editor__editor-panel">
+                    <TabPane fx:id="tabPane" styleClass="file-editor__tab-pane" VBox.vgrow="ALWAYS"
+                             tabClosingPolicy="ALL_TABS"/>
+                    <VBox fx:id="emptyState" styleClass="file-editor__empty" alignment="CENTER"
+                          VBox.vgrow="ALWAYS">
+                        <Label text="📂" styleClass="file-editor__empty-icon"/>
+                        <Label text="选择左侧文件进行编辑" styleClass="file-editor__empty-text"/>
+                        <Label text="双击文件打开 · 右键查看更多操作" styleClass="file-editor__empty-hint"/>
+                    </VBox>
+                </VBox>
+
+            </SplitPane>
+
+            <VBox fx:id="rightBar" alignment="TOP_CENTER" spacing="4" styleClass="file-editor__right-bar">
+            </VBox>
+        </HBox>
+    </center>
+
+    <bottom>
+        <HBox alignment="CENTER_LEFT" spacing="16" styleClass="file-editor__footer">
+            <Label fx:id="filePathLabel" styleClass="file-editor__status" text="就绪"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="encodingLabel" styleClass="file-editor__status" text="UTF-8"/>
+            <Label fx:id="lineColLabel" styleClass="file-editor__status" text="行 1, 列 1"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

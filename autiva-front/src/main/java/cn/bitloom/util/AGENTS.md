@@ -72,6 +72,47 @@ MyService service2 = SpringContextUtil.getBean("myService", MyService.class);
 - Spring 自动注入 ApplicationContext
 - 提供静态方法访问
 
+### SyntaxHighlighter
+语法高亮工具类，基于正则表达式实现代码语法高亮。
+
+**功能：**
+- 根据文件名自动识别语言类型
+- 计算文本的语法高亮样式范围（StyleSpans）
+- 支持 Java/Python/JS/TS/Go/Rust/SQL/Shell/Bash/YAML/JSON/Markdown/XML/HTML 等语言
+
+**核心方法：**
+- `computeHighlighting(String fileName, String text)`: 计算语法高亮，返回 StyleSpans<Collection<String>>
+
+**高亮类型：**
+- `syntax-text`: 默认文本（浅灰 #abb2bf，所有未被其他规则匹配的文本都带此类）
+- `syntax-keyword`: 关键字（紫色 #c678dd，加粗）
+- `syntax-string`: 字符串（绿色 #98c379）
+- `syntax-number`: 数字（橙色 #d19a66）
+- `syntax-comment`: 注释（灰色 #5c6370，斜体）
+- `syntax-annotation`: 注解（黄色 #e5c07b）
+- `syntax-bracket`: 括号（浅灰 #abb2bf）
+- `syntax-operator`: 运算符（青色 #56b6c2）
+- `syntax-md-header`: Markdown标题（蓝色 #61afef，加粗）
+- `syntax-md-bold`: Markdown粗体（黄色 #e5c07b，加粗）
+- `syntax-md-italic`: Markdown斜体（紫色 #c678dd，斜体）
+- `syntax-md-link`: Markdown链接（蓝色 #61afef，下划线）
+- `syntax-md-codeblock`: Markdown代码块（绿色 #98c379）
+- `syntax-md-list`: Markdown列表（橙色 #d19a66）
+- `syntax-md-blockquote`: Markdown引用（灰色 #5c6370，斜体）
+
+**实现原理：**
+- 使用正则表达式匹配不同语法元素
+- 每种语言有独立的正则模式（关键字、字符串、注释等）
+- Python/JS/Go 等语言支持三引号字符串（`"""..."""` 和 `'''...'''`），三引号正则优先于单引号/双引号匹配
+- `#` 注释（HASHCOMMENT）仅在 Python/Shell/YAML 类型中应用注释样式
+- Markdown 使用独立的 `computeMarkdownHighlighting` 方法处理，避免访问不存在的正则组
+- 所有未被语法规则匹配的文本都带有 `syntax-text` 默认样式类，确保在深色背景上文本可见（#abb2bf）
+- 返回 StyleSpans 对象，可直接应用到 RichTextFX StyleClassedTextArea
+- 不支持的语言返回空样式
+
+**依赖：**
+- RichTextFX: org.fxmisc.richtext
+
 ## 设计模式
 - 工具类模式：静态方法，无需实例化
 - 单例模式：ApplicationContext 全局唯一

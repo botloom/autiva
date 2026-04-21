@@ -169,6 +169,48 @@ VBox (workflowPage)
 
 ## 对话框视图
 
+### FileEditorDialog.fxml
+通用文件编辑器对话框，IDEA风格布局。
+
+**控制器：** FileEditorController
+
+**结构：**
+```
+BorderPane (file-editor)
+├── HBox (toolbar) - 顶部工具栏
+│   ├── Button - 新建文件
+│   ├── Button - 新建文件夹
+│   ├── Region - 弹性空间
+│   ├── Button - 保存
+│   └── Button - 关闭
+├── HBox (center) - 主内容区
+│   ├── VBox (leftBar) - 左侧按钮栏（窄条形）
+│   │   └── ToggleButton (treeToggleBtn) - 文件树切换
+│   ├── SplitPane (splitPane) - 分割面板
+│   │   ├── VBox (treePanel) - 文件树面板（浅色背景，右侧圆角）
+│   │   │   └── TreeView (fileTree) - 文件树
+│   │   └── VBox (editorPanel) - 编辑器面板（深色背景 #1e1e1e，左侧圆角）
+│   │       ├── TabPane (tabPane) - 文件Tab页
+│   │       └── VBox (emptyState) - 空状态提示
+│   └── VBox (rightBar) - 右侧按钮栏（窄条形）
+└── HBox (footer) - 底部状态栏（蓝色背景）
+    ├── Label (filePathLabel) - 文件路径
+    ├── Region - 弹性空间
+    ├── Label (encodingLabel) - 编码
+    └── Label (lineColLabel) - 行号列号
+```
+
+**特性：**
+- IDEA风格布局，左侧/右侧/顶部有毛玻璃样式按钮栏
+- 编辑器区域深色背景，其他区域浅色
+- 左侧目录树和右侧编辑器都是圆角卡片
+- 中间分割区域为毛玻璃样式
+- Tab多文件编辑，Tab有图标、文件名、关闭按钮
+- 代码编辑器带行号显示
+- 窗口无标题
+- 自定义新建/重命名/删除弹窗（非原生弹窗）
+- 工具栏按钮与系统风格一致（蓝色文字、8px圆角、浅灰背景）
+
 ### MdEditorDialog.fxml
 Markdown 编辑器对话框。
 

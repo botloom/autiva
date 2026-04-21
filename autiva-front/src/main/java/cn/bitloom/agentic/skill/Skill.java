@@ -1,25 +1,28 @@
 package cn.bitloom.agentic.skill;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.nio.file.Path;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class Skill {
+public record Skill(String basePath, Map<String, Object> frontMatter, String content) {
 
-    private String name;
-    private String description;
-    private String license;
-    private String compatibility;
-    private Map<String, String> metadata;
-    private String content;
-    private Path filePath;
+    public String name() {
+        Object name = this.frontMatter.get("name");
+        return name != null ? name.toString() : null;
+    }
+
+    public String description() {
+        Object desc = this.frontMatter.get("description");
+        return desc != null ? desc.toString() : null;
+    }
+
+    public String toXml() {
+        String frontMatterXml = this.frontMatter
+                .entrySet()
+                .stream()
+                .map(e -> "  <%s>%s</%s>".formatted(e.getKey(), e.getValue(), e.getKey()))
+                .collect(Collectors.joining("\n"));
+
+        return "<skill>\n%s\n</skill>".formatted(frontMatterXml);
+    }
 
 }

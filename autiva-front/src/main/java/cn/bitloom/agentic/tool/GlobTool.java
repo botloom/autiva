@@ -1,136 +1,219 @@
+/*
+* Copyright 2025 - 2025 the original author or authors.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* https://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 package cn.bitloom.agentic.tool;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
-@Slf4j
-@Component
-public class GlobTool implements ITool {
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
-    private static final int DEFAULT_LIMIT = 100;
-    private static final int MAX_RESULTS = 1000;
+/**
+ * 纯Java glob实现，不需要外部工具。使用Java NIO.2进行文件模式匹配和遍历。
+ *
+ * 由Claude Code AI助手生成。
+ *
+ * @author Christian Tzolov
+ * @author Claude Code
+ */
+public class GlobTool {
 
-    @Tool(name = "glob", description = "使用通配符模式搜索文件。支持 **、*、? 等通配符。按修改时间排序结果。")
-    public ToolResult glob(
-            @ToolParam(description = "通配符模式，如 **/*.java、src/**/*.ts") String pattern,
-            @ToolParam(description = "搜索目录，默认当前工作目录", required = false) String path,
-            @ToolParam(description = "最大结果数，默认100", required = false) Integer limit) {
+	private final int maxDepth;
 
-        log.info("[ToolCall] glob - 搜索文件: pattern={}, path={}, limit={}", pattern, path, limit);
+	private final int maxResults;
 
-        if (pattern == null || pattern.trim().isEmpty()) {
-            return ToolResult.failure("错误：搜索模式不能为空");
-        }
+	private final Path workingDirectory;
 
-        Path searchPath = resolvePath(path);
-        int maxResults = limit != null && limit > 0 ? Math.min(limit, MAX_RESULTS) : DEFAULT_LIMIT;
+	/**
+	 * 带可配置参数的构造函数。
+	 * @param maxDepth 最大目录遍历深度，防止无限递归（默认：100）
+	 * @param maxResults 返回的最大结果数（默认：1000）
+	 * @param workingDirectory 未指定路径时使用的工作目录。如果为null，默认为当前JVM工作目录。
+	 */
+	protected GlobTool(int maxDepth, int maxResults, Path workingDirectory) {
+		this.maxDepth = maxDepth;
+		this.maxResults = maxResults;
+		this.workingDirectory = workingDirectory;
+	}
 
-        if (!Files.exists(searchPath)) {
-            return ToolResult.failure("错误：目录不存在: " + searchPath);
-        }
+	// @formatter:off
+	@Tool(name = "Glob", description = """
+        - 快速文件模式匹配工具，适用于任何大小的代码库
+        - 支持glob模式，如"**/*.js"或"src/**/*.ts"
+        - 返回按修改时间排序的匹配文件路径
+        - 当你需要按名称模式查找文件时使用此工具
+        - 当你进行可能需要多轮glob和grep的开放式搜索时，请使用Agent工具代替
+        - 你可以在一次响应中调用多个工具。如果多个搜索可能有用，推测性地并行执行多个搜索总是更好的做法。
+		""")
+	public String glob(
+		@ToolParam(description = "用于匹配文件的glob模式") String pattern,
+		@ToolParam(description = "要搜索的目录。如果未指定，将使用当前工作目录。重要提示：省略此字段以使用默认目录。不要输入\\\"undefined\\\"或\\\"null\\\" —— 直接省略即可使用默认行为。如果提供，必须是有效的目录路径。", required = false) String path) { // @formatter:on
 
-        if (!Files.isDirectory(searchPath)) {
-            return ToolResult.failure("错误：路径不是目录: " + searchPath);
-        }
+		Assert.hasText(pattern, "	glob模式不能为空");
 
-        try {
-            long startTime = System.currentTimeMillis();
-            List<SearchResult> results = searchFiles(searchPath, pattern, maxResults);
-            long duration = System.currentTimeMillis() - startTime;
+		try {
+			Path searchPath;
+			if (StringUtils.hasText(path)) {
+				searchPath = Paths.get(path);
+			}
+			else if (this.workingDirectory != null) {
+				searchPath = this.workingDirectory;
+			}
+			else {
+				searchPath = Paths.get(".");
+			}
 
-            boolean truncated = results.size() >= maxResults;
-            List<SearchResult> limitedResults = results.stream()
-                    .limit(maxResults)
-                    .toList();
+			if (!Files.exists(searchPath)) {
+				return "错误：路径不存在: " + searchPath.toAbsolutePath();
+			}
 
-            StringBuilder output = new StringBuilder();
-            output.append(String.format("搜索模式: %s\n", pattern));
-            output.append(String.format("搜索目录: %s\n", searchPath.toAbsolutePath()));
-            output.append(String.format("找到文件: %d 个\n", limitedResults.size()));
-            output.append(String.format("搜索耗时: %dms\n\n", duration));
+			if (!Files.isDirectory(searchPath)) {
+				return "错误：路径不是目录: " + searchPath.toAbsolutePath();
+			}
 
-            if (limitedResults.isEmpty()) {
-                output.append("未找到匹配的文件");
-            } else {
-                output.append("文件列表:\n");
-                for (SearchResult result : limitedResults) {
-                    String relativePath = searchPath.toAbsolutePath().relativize(result.path).toString();
-                    output.append(String.format("  %s\n", relativePath));
-                }
+			PathMatcher matcher = this.buildGlobMatcher(pattern);
 
-                if (truncated) {
-                    output.append(String.format("\n... [结果已截断，显示前 %d 个] ...", maxResults));
-                }
-            }
+			List<FileInfo> matchingFiles = new ArrayList<>();
 
-            log.info("[ToolCall] glob - 搜索完成: 找到 {} 个文件, 耗时 {}ms", limitedResults.size(), duration);
-            return ToolResult.success("搜索完成", output.toString());
+			try (Stream<Path> paths = Files.walk(searchPath, this.maxDepth, FileVisitOption.FOLLOW_LINKS)) {
+				paths.filter(Files::isRegularFile)
+					.filter(p -> !this.isIgnoredPath(p))
+					.filter(p -> this.matchesPattern(p, searchPath, matcher))
+					.limit(this.maxResults)
+					.forEach(file -> {
+						try {
+							BasicFileAttributes attrs = Files.readAttributes(file, BasicFileAttributes.class);
+							matchingFiles.add(new FileInfo(file, attrs.lastModifiedTime().toMillis()));
+						}
+						catch (IOException e) {
+							matchingFiles.add(new FileInfo(file, 0));
+						}
+					});
+			}
 
-        } catch (IOException e) {
-            log.error("[ToolCall] glob - 搜索失败: pattern={}", pattern, e);
-            return ToolResult.failure("搜索失败: " + e.getMessage());
-        }
-    }
+			if (matchingFiles.isEmpty()) {
+				return "未找到匹配模式的文件: " + pattern;
+			}
 
-    private List<SearchResult> searchFiles(Path searchPath, String pattern, int maxResults) throws IOException {
-        List<SearchResult> results = new ArrayList<>();
-        PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
+			matchingFiles.sort(Comparator.comparingLong(FileInfo::modificationTime).reversed());
 
-        Files.walkFileTree(searchPath, new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                Path relativePath = searchPath.toAbsolutePath().relativize(file.toAbsolutePath());
-                if (matcher.matches(relativePath) || matcher.matches(file.getFileName())) {
-                    results.add(new SearchResult(file, attrs.lastModifiedTime().toMillis()));
-                }
-                return results.size() >= maxResults * 2 ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
-            }
+			StringBuilder result = new StringBuilder();
+			for (FileInfo fileInfo : matchingFiles) {
+				result.append(fileInfo.path().toString()).append("\n");
+			}
 
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                String dirName = dir.getFileName() != null ? dir.getFileName().toString() : "";
-                if (dirName.startsWith(".") && !dirName.equals(".") && !dirName.equals("..")) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
+			return result.toString().trim();
 
-        results.sort(Comparator.comparingLong(SearchResult::getLastModified).reversed());
-        return results;
-    }
+		}
+		catch (Exception e) {
+			return "执行glob时出错: " + e.getMessage();
+		}
+	}
 
-    private Path resolvePath(String path) {
-        if (path == null || path.trim().isEmpty()) {
-            return Paths.get(System.getProperty("user.dir"));
-        }
-        Path p = Paths.get(path);
-        if (p.isAbsolute()) {
-            return p;
-        }
-        return Paths.get(System.getProperty("user.dir"), path);
-    }
+	private PathMatcher buildGlobMatcher(String pattern) {
+		String globPattern = pattern.startsWith("**/") ? pattern : "**/" + pattern;
+		return FileSystems.getDefault().getPathMatcher("glob:" + globPattern);
+	}
 
-    private static class SearchResult {
-        final Path path;
-        final long lastModified;
+	private boolean matchesPattern(Path file, Path searchPath, PathMatcher matcher) {
+		if (matcher.matches(file)) {
+			return true;
+		}
 
-        SearchResult(Path path, long lastModified) {
-            this.path = path;
-            this.lastModified = lastModified;
-        }
+		try {
+			Path relativePath = searchPath.relativize(file);
+			return matcher.matches(relativePath);
+		}
+		catch (IllegalArgumentException e) {
+			return false;
+		}
+	}
 
-        long getLastModified() {
-            return lastModified;
-        }
-    }
+	private boolean isIgnoredPath(Path path) {
+		String pathStr = path.toString();
+		return pathStr.contains("/.git/") || pathStr.contains("/node_modules/") || pathStr.contains("/target/")
+				|| pathStr.contains("/build/") || pathStr.contains("/.idea/") || pathStr.contains("/.vscode/")
+				|| pathStr.contains("/dist/") || pathStr.contains("/__pycache__/");
+	}
+
+	private record FileInfo(Path path, long modificationTime) {
+	}
+
+	public static Builder builder() {
+		return new Builder();
+	}
+
+	public static class Builder {
+
+		private int maxDepth = 100;
+
+		private int maxResults = 1000;
+
+		private Path workingDirectory = null;
+
+		private Builder() {
+		}
+
+		public Builder maxDepth(int maxDepth) {
+			this.maxDepth = maxDepth;
+			return this;
+		}
+
+		public Builder maxResults(int maxResults) {
+			this.maxResults = maxResults;
+			return this;
+		}
+
+		/**
+		 * 设置当智能体未指定路径时使用的工作目录。
+		 * 这允许工具在沙箱/工作区上下文中操作。
+		 * @param workingDirectory 工作目录路径
+		 * @return 此构建器
+		 */
+		public Builder workingDirectory(Path workingDirectory) {
+			this.workingDirectory = workingDirectory;
+			return this;
+		}
+
+		/**
+		 * 使用字符串路径设置工作目录。
+		 * @param workingDirectory 工作目录路径字符串
+		 * @return 此构建器
+		 */
+		public Builder workingDirectory(String workingDirectory) {
+			this.workingDirectory = workingDirectory != null ? Paths.get(workingDirectory) : null;
+			return this;
+		}
+
+		public GlobTool build() {
+			return new GlobTool(maxDepth, maxResults, workingDirectory);
+		}
+
+	}
+
 }

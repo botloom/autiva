@@ -1,248 +1,514 @@
+/*
+* Copyright 2025 - 2025 the original author or authors.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* https://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 package cn.bitloom.agentic.tool;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.stereotype.Component;
-
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-@Slf4j
-@Component
-public class GrepTool implements ITool {
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.util.StringUtils;
 
-    private static final int DEFAULT_HEAD_LIMIT = 250;
-    private static final int MAX_RESULTS = 1000;
-    private static final int MAX_LINE_LENGTH = 500;
-    private static final int MAX_FILE_SIZE = 10 * 1024 * 1024;
+/**
+ * 纯Java grep实现，不需要安装外部ripgrep。使用Java NIO.2进行文件遍历，
+ * 使用regex Pattern/Matcher进行搜索。
+ *
+ * 由Claude Code AI助手生成。
+ *
+ * @author Christian Tzolov
+ * @author Claude Code
+ */
+public class GrepTool {
 
-    private static final List<String> VCS_DIRS = List.of(".git", ".svn", ".hg", ".bzr", ".jj", ".sl");
-    private static final List<String> BINARY_EXTENSIONS = List.of(
-        ".exe", ".dll", ".so", ".dylib", ".class", ".jar", ".zip", ".tar", ".gz", ".rar", ".7z",
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".pdf", ".doc", ".docx"
-    );
+	private final int maxOutputLength;
 
-    @Tool(name = "grep", description = "在文件内容中搜索正则表达式模式。支持多种输出模式：内容、文件列表、计数。")
-    public ToolResult grep(
-            @ToolParam(description = "要搜索的正则表达式模式") String pattern,
-            @ToolParam(description = "搜索路径，默认当前工作目录", required = false) String path,
-            @ToolParam(description = "文件类型过滤，如 *.java、*.ts", required = false) String glob,
-            @ToolParam(description = "输出模式：content(显示匹配行)、files(仅文件名)、count(计数)，默认files", required = false) String outputMode,
-            @ToolParam(description = "是否忽略大小写，默认false", required = false) Boolean ignoreCase,
-            @ToolParam(description = "显示匹配行前后的上下文行数", required = false) Integer context,
-            @ToolParam(description = "限制输出行数/文件数，默认250", required = false) Integer headLimit) {
+	private final int maxDepth;
 
-        log.info("[ToolCall] grep - 搜索内容: pattern={}, path={}, outputMode={}", pattern, path, outputMode);
+	private final int maxLineLength;
 
-        if (pattern == null || pattern.trim().isEmpty()) {
-            return ToolResult.failure("错误：搜索模式不能为空");
-        }
+	private final Path workingDirectory;
 
-        Path searchPath = resolvePath(path);
-        String mode = parseOutputMode(outputMode);
-        boolean caseInsensitive = Boolean.TRUE.equals(ignoreCase);
-        int contextLines = context != null && context > 0 ? context : 0;
-        int maxResults = headLimit != null && headLimit > 0 ? Math.min(headLimit, MAX_RESULTS) : DEFAULT_HEAD_LIMIT;
+	private static final Map<String, String[]> FILE_TYPE_EXTENSIONS = new HashMap<>();
+	static {
+		FILE_TYPE_EXTENSIONS.put("java", new String[] { "*.java" });
+		FILE_TYPE_EXTENSIONS.put("js", new String[] { "*.js", "*.jsx" });
+		FILE_TYPE_EXTENSIONS.put("ts", new String[] { "*.ts", "*.tsx" });
+		FILE_TYPE_EXTENSIONS.put("py", new String[] { "*.py" });
+		FILE_TYPE_EXTENSIONS.put("rust", new String[] { "*.rs" });
+		FILE_TYPE_EXTENSIONS.put("go", new String[] { "*.go" });
+		FILE_TYPE_EXTENSIONS.put("cpp", new String[] { "*.cpp", "*.cc", "*.cxx", "*.hpp", "*.h" });
+		FILE_TYPE_EXTENSIONS.put("c", new String[] { "*.c", "*.h" });
+		FILE_TYPE_EXTENSIONS.put("rb", new String[] { "*.rb" });
+		FILE_TYPE_EXTENSIONS.put("php", new String[] { "*.php" });
+		FILE_TYPE_EXTENSIONS.put("cs", new String[] { "*.cs" });
+		FILE_TYPE_EXTENSIONS.put("xml", new String[] { "*.xml" });
+		FILE_TYPE_EXTENSIONS.put("json", new String[] { "*.json" });
+		FILE_TYPE_EXTENSIONS.put("yaml", new String[] { "*.yaml", "*.yml" });
+		FILE_TYPE_EXTENSIONS.put("md", new String[] { "*.md", "*.markdown" });
+		FILE_TYPE_EXTENSIONS.put("txt", new String[] { "*.txt" });
+		FILE_TYPE_EXTENSIONS.put("sh", new String[] { "*.sh", "*.bash" });
+	}
 
-        if (!Files.exists(searchPath)) {
-            return ToolResult.failure("错误：路径不存在: " + searchPath);
-        }
+	/**
+	 * 使用所有配置参数默认值的默认构造函数。
+	 * @deprecated 请使用{@link #builder()}代替。
+	 */
+	@Deprecated
+	public GrepTool() {
+		this(100000, 100, 10000, null);
+	}
 
-        Pattern regex;
-        try {
-            int flags = caseInsensitive ? Pattern.CASE_INSENSITIVE : 0;
-            regex = Pattern.compile(pattern, flags);
-        } catch (PatternSyntaxException e) {
-            return ToolResult.failure("错误：无效的正则表达式: " + e.getMessage());
-        }
+	/**
+	 * 带可配置参数的构造函数。
+	 * @param maxOutputLength 截断前的最大输出长度（默认：100000）
+	 * @param maxDepth 最大目录遍历深度，防止无限递归（默认：100）
+	 * @param maxLineLength 要处理的最大行长度，超过的行将被跳过（默认：10000）
+	 * @param workingDirectory 未指定路径时使用的工作目录。如果为null，默认为当前JVM工作目录。
+	 */
+	private GrepTool(int maxOutputLength, int maxDepth, int maxLineLength, Path workingDirectory) {
+		this.maxOutputLength = maxOutputLength;
+		this.maxDepth = maxDepth;
+		this.maxLineLength = maxLineLength;
+		this.workingDirectory = workingDirectory;
+	}
 
-        try {
-            long startTime = System.currentTimeMillis();
-            List<SearchResult> results = searchContent(searchPath, regex, glob, mode, contextLines, maxResults);
-            long duration = System.currentTimeMillis() - startTime;
+	/**
+	 * grep的输出模式
+	 */
+	public enum OutputMode {// @formatter:off
+		files_with_matches,
+		count,
+		content
 
-            String output = formatOutput(results, mode, searchPath, duration, maxResults);
-            log.info("[ToolCall] grep - 搜索完成: 找到 {} 个结果, 耗时 {}ms", results.size(), duration);
-            return ToolResult.success("搜索完成", output);
+	}// @formatter:on
 
-        } catch (IOException e) {
-            log.error("[ToolCall] grep - 搜索失败: pattern={}", pattern, e);
-            return ToolResult.failure("搜索失败: " + e.getMessage());
-        }
-    }
+	// @formatter:off
+	@Tool(name = "Grep", description = """
+		基于纯Java构建的强大搜索工具（无需外部依赖）
 
-    private String parseOutputMode(String outputMode) {
-        if (outputMode == null) return "files";
-        return switch (outputMode.toLowerCase()) {
-            case "content" -> "content";
-            case "count" -> "count";
-            case "files", "files_with_matches" -> "files";
-            default -> "files";
-        };
-    }
+		用法：
+		- 始终使用Grep进行搜索任务。永远不要将`grep`或`rg`作为Bash命令调用。Grep工具已针对正确的权限和访问进行了优化。
+		- 支持完整的正则表达式语法（例如，"log.*Error"、"function\\s+\\w+"）
+		- 使用glob参数过滤文件（例如，"*.js"、"**/*.tsx"）或type参数（例如，"js"、"py"、"rust"）
+		- 输出模式："content"显示匹配行，"files_with_matches"仅显示文件路径（默认），"count"显示匹配计数
+		- 对于需要多轮的开放式搜索，请使用Task工具
+		- 模式语法：Java正则表达式 - 使用标准Java正则表达式转义
+		- 多行匹配：默认情况下模式仅在单行内匹配。对于跨行模式，使用`multiline: true`
 
-    private List<SearchResult> searchContent(Path searchPath, Pattern pattern, String glob, 
-                                              String mode, int contextLines, int maxResults) throws IOException {
-        List<SearchResult> results = new ArrayList<>();
-        PathMatcher pathMatcher = glob != null ? FileSystems.getDefault().getPathMatcher("glob:" + glob) : null;
+		注意：这是纯Java实现，不需要安装ripgrep，但提供类似的功能。
+		""")
+	public String grep(
+		@ToolParam(description = "要在文件内容中搜索的正则表达式模式") String pattern,
+		@ToolParam(description = "要搜索的文件或目录。默认为当前工作目录。", required = false) String path,
+		@ToolParam(description = "用于过滤文件的glob模式（例如\"*.js\"、\"**/*.tsx\"）", required = false) String glob,
+		@ToolParam(description = "输出模式：\"content\"显示匹配行（支持-A/-B/-C上下文、-n行号、head_limit），\"files_with_matches\"显示文件路径（支持head_limit），\"count\"显示匹配计数（支持head_limit）。默认为\"files_with_matches\"。", required = false) OutputMode outputMode,
+		@ToolParam(description = "每个匹配前显示的行数。需要output_mode: \"content\"，否则忽略。", required = false) Integer contextBefore,
+		@ToolParam(description = "每个匹配后显示的行数。需要output_mode: \"content\"，否则忽略。", required = false) Integer contextAfter,
+		@ToolParam(description = "每个匹配前后显示的行数。需要output_mode: \"content\"，否则忽略。", required = false) Integer context,
+		@ToolParam(description = "在输出中显示行号。需要output_mode: \"content\"，否则忽略。默认为true。", required = false) Boolean showLineNumbers,
+		@ToolParam(description = "不区分大小写搜索", required = false) Boolean caseInsensitive,
+		@ToolParam(description = "要搜索的文件类型。常见类型：js、py、rust、go、java等。比glob更高效。", required = false) String type,
+		@ToolParam(description = "限制输出为前N行/条目。适用于所有输出模式：content（限制输出行数）、files_with_matches（限制文件路径数）、count（限制计数条目数）。默认为0（无限制）。", required = false) Integer headLimit,
+		@ToolParam(description = "在应用head_limit之前跳过前N行/条目。适用于所有输出模式。默认为0。", required = false) Integer offset,
+		@ToolParam(description = "启用多行模式，其中.匹配换行符且模式可以跨行。默认：false。", required = false) Boolean multiline) { // @formatter:on
 
-        Files.walkFileTree(searchPath, new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                if (results.size() >= maxResults * 2) {
-                    return FileVisitResult.TERMINATE;
-                }
+		try {
+			Path searchPath;
+			if (StringUtils.hasText(path)) {
+				searchPath = Paths.get(path);
+			}
+			else if (this.workingDirectory != null) {
+				searchPath = this.workingDirectory;
+			}
+			else {
+				searchPath = Paths.get(".");
+			}
 
-                if (pathMatcher != null && !pathMatcher.matches(file.getFileName())) {
-                    return FileVisitResult.CONTINUE;
-                }
+			if (!Files.exists(searchPath)) {
+				return "错误：路径不存在: " + searchPath.toAbsolutePath();
+			}
 
-                if (isBinaryFile(file) || attrs.size() > MAX_FILE_SIZE) {
-                    return FileVisitResult.CONTINUE;
-                }
+			int flags = Pattern.MULTILINE;
+			if (Boolean.TRUE.equals(caseInsensitive)) {
+				flags |= Pattern.CASE_INSENSITIVE;
+			}
+			if (Boolean.TRUE.equals(multiline)) {
+				flags |= Pattern.DOTALL;
+			}
 
-                try {
-                    SearchResult result = searchInFile(file, pattern, mode, contextLines, maxResults - results.size());
-                    if (result != null) {
-                        results.add(result);
-                    }
-                } catch (IOException e) {
-                    log.debug("[ToolCall] grep - 无法读取文件: {}", file);
-                }
+			Pattern searchPattern;
+			try {
+				searchPattern = Pattern.compile(pattern, flags);
+			}
+			catch (Exception e) {
+				return "错误：无效的正则表达式模式: " + e.getMessage();
+			}
 
-                return FileVisitResult.CONTINUE;
-            }
+			outputMode = outputMode != null ? outputMode : OutputMode.files_with_matches;
 
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                String dirName = dir.getFileName() != null ? dir.getFileName().toString() : "";
-                if (VCS_DIRS.contains(dirName)) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
+			List<PathMatcher> globMatchers = this.buildGlobMatchers(glob, type);
 
-        results.sort(Comparator.comparingLong(SearchResult::lastModified).reversed());
-        return results.stream().limit(maxResults).collect(Collectors.toList());
-    }
+			String result;
+			switch (outputMode) {
+				case files_with_matches:
+					result = this.searchFilesWithMatches(searchPath, searchPattern, globMatchers, headLimit, offset);
+					break;
+				case count:
+					result = this.searchCount(searchPath, searchPattern, globMatchers, headLimit, offset);
+					break;
+				case content:
+					int beforeContext = context != null ? context : (contextBefore != null ? contextBefore : 0);
+					int afterContext = context != null ? context : (contextAfter != null ? contextAfter : 0);
+					boolean lineNumbers = showLineNumbers == null || showLineNumbers;
+					result = this.searchContent(searchPath, searchPattern, globMatchers, beforeContext, afterContext,
+							lineNumbers, headLimit, offset);
+					break;
+				default:
+					result = this.searchFilesWithMatches(searchPath, searchPattern, globMatchers, headLimit, offset);
+			}
 
-    private SearchResult searchInFile(Path file, Pattern pattern, String mode, int contextLines, int remaining) throws IOException {
-        List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-        List<MatchResult> matches = new ArrayList<>();
-        int matchCount = 0;
+			if (result.length() > this.maxOutputLength) {
+				result = result.substring(0, this.maxOutputLength) + "\n... （输出已截断，"
+						+ (result.length() - this.maxOutputLength) + " 个字符已省略）";
+			}
 
-        for (int lineNum = 0; lineNum < lines.size() && matches.size() < remaining; lineNum++) {
-            String line = lines.get(lineNum);
-            if (pattern.matcher(line).find()) {
-                matchCount++;
-                if ("content".equals(mode)) {
-                    int start = Math.max(0, lineNum - contextLines);
-                    int end = Math.min(lines.size(), lineNum + contextLines + 1);
-                    List<String> contextLinesList = new ArrayList<>();
-                    for (int i = start; i < end; i++) {
-                        String ctxLine = lines.get(i);
-                        if (ctxLine.length() > MAX_LINE_LENGTH) {
-                            ctxLine = ctxLine.substring(0, MAX_LINE_LENGTH) + "...";
-                        }
-                        contextLinesList.add((i + 1) + ":" + ctxLine);
-                    }
-                    matches.add(new MatchResult(lineNum + 1, line, contextLinesList));
-                } else if ("count".equals(mode)) {
-                    matches.add(new MatchResult(lineNum + 1, line, null));
-                } else {
-                    return new SearchResult(file, matchCount, List.of(), System.currentTimeMillis());
-                }
-            }
-        }
+			return result;
 
-        if (matches.isEmpty()) {
-            return null;
-        }
+		}
+		catch (Exception e) {
+			return "执行grep时出错: " + e.getMessage();
+		}
+	}
 
-        return new SearchResult(file, matchCount, matches, System.currentTimeMillis());
-    }
+	private List<PathMatcher> buildGlobMatchers(String glob, String type) {
+		List<PathMatcher> matchers = new ArrayList<>();
 
-    private boolean isBinaryFile(Path file) {
-        String fileName = file.getFileName().toString().toLowerCase();
-        return BINARY_EXTENSIONS.stream().anyMatch(fileName::endsWith);
-    }
+		if (StringUtils.hasText(type)) {
+			String[] extensions = FILE_TYPE_EXTENSIONS.get(type.toLowerCase());
+			if (extensions != null) {
+				for (String ext : extensions) {
+					matchers.add(FileSystems.getDefault().getPathMatcher("glob:" + ext));
+				}
+			}
+		}
 
-    private String formatOutput(List<SearchResult> results, String mode, Path searchPath, long duration, int maxResults) {
-        StringBuilder output = new StringBuilder();
+		if (StringUtils.hasText(glob)) {
+			String globPattern = glob.startsWith("**/") ? glob : "**/" + glob;
+			matchers.add(FileSystems.getDefault().getPathMatcher("glob:" + globPattern));
+		}
 
-        if (results.isEmpty()) {
-            output.append("未找到匹配的内容\n");
-            output.append(String.format("搜索耗时: %dms", duration));
-            return output.toString();
-        }
+		return matchers;
+	}
 
-        switch (mode) {
-            case "content":
-                output.append(String.format("找到 %d 处匹配\n", results.stream().mapToInt(r -> r.matches.size()).sum()));
-                output.append(String.format("搜索耗时: %dms\n\n", duration));
-                for (SearchResult result : results) {
-                    String relativePath = searchPath.toAbsolutePath().relativize(result.file).toString();
-                    output.append(String.format("文件: %s\n", relativePath));
-                    for (MatchResult match : result.matches) {
-                        for (String ctxLine : match.contextLines) {
-                            output.append("  ").append(ctxLine).append("\n");
-                        }
-                        output.append("\n");
-                    }
-                }
-                break;
+	private boolean matchesGlob(Path file, List<PathMatcher> matchers) {
+		if (matchers.isEmpty()) {
+			return true;
+		}
 
-            case "count":
-                output.append(String.format("找到 %d 处匹配\n", results.stream().mapToInt(r -> r.matchCount).sum()));
-                output.append(String.format("搜索耗时: %dms\n\n", duration));
-                for (SearchResult result : results) {
-                    String relativePath = searchPath.toAbsolutePath().relativize(result.file).toString();
-                    output.append(String.format("%s: %d\n", relativePath, result.matchCount));
-                }
-                break;
+		for (PathMatcher matcher : matchers) {
+			if (matcher.matches(file)) {
+				return true;
+			}
+		}
+		return false;
+	}
 
-            case "files":
-            default:
-                output.append(String.format("找到 %d 个文件\n", results.size()));
-                output.append(String.format("搜索耗时: %dms\n\n", duration));
-                for (SearchResult result : results) {
-                    String relativePath = searchPath.toAbsolutePath().relativize(result.file).toString();
-                    output.append(relativePath).append("\n");
-                }
-                break;
-        }
+	private String searchFilesWithMatches(Path searchPath, Pattern pattern, List<PathMatcher> matchers,
+			Integer headLimit, Integer offset) throws IOException {
 
-        if (results.size() >= maxResults) {
-            output.append(String.format("\n... [结果已截断，显示前 %d 个] ...", maxResults));
-        }
+		List<String> matchingFiles = new ArrayList<>();
+		AtomicInteger count = new AtomicInteger(0);
+		int skip = offset != null ? offset : 0;
+		int limit = headLimit != null && headLimit > 0 ? headLimit : Integer.MAX_VALUE;
 
-        return output.toString();
-    }
+		this.processFiles(searchPath, matchers, file -> {
+			if (count.get() >= skip + limit) {
+				return false;
+			}
 
-    private Path resolvePath(String path) {
-        if (path == null || path.trim().isEmpty()) {
-            return Paths.get(System.getProperty("user.dir"));
-        }
-        Path p = Paths.get(path);
-        if (p.isAbsolute()) {
-            return p;
-        }
-        return Paths.get(System.getProperty("user.dir"), path);
-    }
+			if (this.fileContainsPattern(file, pattern)) {
+				if (count.getAndIncrement() >= skip) {
+					matchingFiles.add(file.toString());
+				}
+			}
+			return true;
+		});
 
-    private record SearchResult(Path file, int matchCount, List<MatchResult> matches, long lastModified) {
-    }
+		if (matchingFiles.isEmpty()) {
+			return "未找到匹配模式的文件: " + pattern.pattern();
+		}
 
-    private record MatchResult(int lineNumber, String line, List<String> contextLines) {
-    }
+		return String.join("\n", matchingFiles);
+	}
+
+	private String searchCount(Path searchPath, Pattern pattern, List<PathMatcher> matchers, Integer headLimit,
+			Integer offset) throws IOException {
+
+		Map<String, Integer> fileCounts = new LinkedHashMap<>();
+		AtomicInteger fileCount = new AtomicInteger(0);
+		int skip = offset != null ? offset : 0;
+		int limit = headLimit != null && headLimit > 0 ? headLimit : Integer.MAX_VALUE;
+
+		this.processFiles(searchPath, matchers, file -> {
+			if (fileCount.get() >= skip + limit) {
+				return false;
+			}
+
+			int matches = this.countMatchesInFile(file, pattern);
+			if (matches > 0) {
+				if (fileCount.getAndIncrement() >= skip) {
+					fileCounts.put(file.toString(), matches);
+				}
+			}
+			return true;
+		});
+
+		if (fileCounts.isEmpty()) {
+			return "未找到匹配模式的文件: " + pattern.pattern();
+		}
+
+		StringBuilder result = new StringBuilder();
+		for (Map.Entry<String, Integer> entry : fileCounts.entrySet()) {
+			result.append(entry.getKey()).append(":").append(entry.getValue()).append("\n");
+		}
+
+		return result.toString().trim();
+	}
+
+	private String searchContent(Path searchPath, Pattern pattern, List<PathMatcher> matchers, int beforeContext,
+			int afterContext, boolean lineNumbers, Integer headLimit, Integer offset) throws IOException {
+
+		StringBuilder result = new StringBuilder();
+		AtomicInteger lineCount = new AtomicInteger(0);
+		int skip = offset != null ? offset : 0;
+		int limit = headLimit != null && headLimit > 0 ? headLimit : Integer.MAX_VALUE;
+
+		this.processFiles(searchPath, matchers, file -> {
+			if (lineCount.get() >= skip + limit) {
+				return false;
+			}
+
+			List<String> matches = this.findMatchesWithContext(file, pattern, beforeContext, afterContext, lineNumbers);
+			if (!matches.isEmpty()) {
+				result.append(file.toString()).append("\n");
+
+				for (String match : matches) {
+					if (lineCount.get() >= skip + limit) {
+						break;
+					}
+					if (lineCount.getAndIncrement() >= skip) {
+						result.append(match).append("\n");
+					}
+				}
+				result.append("\n");
+			}
+			return lineCount.get() < skip + limit;
+		});
+
+		if (result.length() == 0) {
+			return "未找到匹配模式的文件: " + pattern.pattern();
+		}
+
+		return result.toString().trim();
+	}
+
+	private void processFiles(Path searchPath, List<PathMatcher> matchers, FileProcessor processor) throws IOException {
+		if (Files.isRegularFile(searchPath)) {
+			if (this.matchesGlob(searchPath, matchers)) {
+				processor.process(searchPath);
+			}
+		}
+		else if (Files.isDirectory(searchPath)) {
+			try (Stream<Path> paths = Files.walk(searchPath, this.maxDepth, FileVisitOption.FOLLOW_LINKS)) {
+				paths.filter(Files::isRegularFile)
+					.filter(p -> this.matchesGlob(p, matchers))
+					.filter(p -> !this.isIgnoredPath(p))
+					.anyMatch(file -> !processor.process(file));
+			}
+		}
+	}
+
+	private boolean isIgnoredPath(Path path) {
+		String pathStr = path.toString();
+		return pathStr.contains("/.git/") || pathStr.contains("/node_modules/") || pathStr.contains("/target/")
+				|| pathStr.contains("/build/") || pathStr.contains("/.idea/") || pathStr.contains("/.vscode/")
+				|| pathStr.contains("/dist/") || pathStr.contains("/__pycache__/");
+	}
+
+	private boolean fileContainsPattern(Path file, Pattern pattern) {
+		try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+			String line;
+			while ((line = reader.readLine()) != null) {
+				if (line.length() > this.maxLineLength)
+					continue;
+				if (pattern.matcher(line).find()) {
+					return true;
+				}
+			}
+		}
+		catch (IOException e) {
+		}
+		return false;
+	}
+
+	private int countMatchesInFile(Path file, Pattern pattern) {
+		int count = 0;
+		try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+			String line;
+			while ((line = reader.readLine()) != null) {
+				if (line.length() > this.maxLineLength)
+					continue;
+				Matcher matcher = pattern.matcher(line);
+				while (matcher.find()) {
+					count++;
+				}
+			}
+		}
+		catch (IOException e) {
+		}
+		return count;
+	}
+
+	private List<String> findMatchesWithContext(Path file, Pattern pattern, int beforeContext, int afterContext,
+			boolean lineNumbers) {
+		List<String> results = new ArrayList<>();
+
+		try {
+			List<String> allLines = Files.readAllLines(file, StandardCharsets.UTF_8);
+			List<Integer> matchingLineNumbers = new ArrayList<>();
+
+			for (int i = 0; i < allLines.size(); i++) {
+				String line = allLines.get(i);
+				if (line.length() > this.maxLineLength)
+					continue;
+				if (pattern.matcher(line).find()) {
+					matchingLineNumbers.add(i);
+				}
+			}
+
+			for (int matchLineNum : matchingLineNumbers) {
+				int start = Math.max(0, matchLineNum - beforeContext);
+				int end = Math.min(allLines.size() - 1, matchLineNum + afterContext);
+
+				for (int i = start; i <= end; i++) {
+					String prefix = "";
+					if (lineNumbers) {
+						prefix = (i + 1) + ":";
+					}
+					if (i == matchLineNum) {
+						prefix += "  ";
+					}
+					else {
+						prefix += "- ";
+					}
+					results.add(prefix + allLines.get(i));
+				}
+
+				if (!matchingLineNumbers.isEmpty()) {
+					results.add("--");
+				}
+			}
+
+			if (!results.isEmpty() && results.get(results.size() - 1).equals("--")) {
+				results.remove(results.size() - 1);
+			}
+
+		}
+		catch (IOException e) {
+		}
+
+		return results;
+	}
+
+	@FunctionalInterface
+	private interface FileProcessor {
+
+		boolean process(Path file);
+
+	}
+
+	public static Builder builder() {
+		return new Builder();
+	}
+
+	public static class Builder {
+
+		private int maxOutputLength = 100000;
+
+		private int maxDepth = 100;
+
+		private int maxLineLength = 10000;
+
+		private Path workingDirectory = null;
+
+		public Builder maxOutputLength(int maxOutputLength) {
+			this.maxOutputLength = maxOutputLength;
+			return this;
+		}
+
+		public Builder maxDepth(int maxDepth) {
+			this.maxDepth = maxDepth;
+			return this;
+		}
+
+		public Builder maxLineLength(int maxLineLength) {
+			this.maxLineLength = maxLineLength;
+			return this;
+		}
+
+		/**
+		 * 设置当智能体未指定路径时使用的工作目录。这允许工具在沙箱/工作区上下文中操作。
+		 * @param workingDirectory 工作目录路径
+		 * @return 此构建器
+		 */
+		public Builder workingDirectory(Path workingDirectory) {
+			this.workingDirectory = workingDirectory;
+			return this;
+		}
+
+		/**
+		 * 使用字符串路径设置工作目录。
+		 * @param workingDirectory 工作目录路径字符串
+		 * @return 此构建器
+		 */
+		public Builder workingDirectory(String workingDirectory) {
+			this.workingDirectory = workingDirectory != null ? Paths.get(workingDirectory) : null;
+			return this;
+		}
+
+		public GrepTool build() {
+			return new GrepTool(this.maxOutputLength, this.maxDepth, this.maxLineLength, this.workingDirectory);
+		}
+
+	}
+
 }
