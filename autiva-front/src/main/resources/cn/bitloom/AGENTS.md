@@ -6,26 +6,34 @@
 ## 文件列表
 
 ### index.fxml
-应用主布局文件。
+应用主布局文件，无系统标题栏设计。
 
 **控制器：** IndexController
 
 **结构：**
 ```
-HBox (rootContainer)
-├── fx:include (SideBar.fxml) - 侧边栏
-└── VBox
-    ├── fx:include (ButtonBar.fxml) - 底部按钮栏
-    ├── fx:include (HomePage.fxml) - 主页
-    ├── fx:include (SettingsPage.fxml) - 设置页
-    ├── fx:include (SkillPage.fxml) - 技能页
-    ├── fx:include (McpPage.fxml) - MCP 页
-    └── fx:include (TaskPage.fxml) - 任务页
+StackPane (window-chrome) - 透明窗口容器
+└── BorderPane (rootContainer, window-chrome__content) - 主内容区
+    ├── HBox (top) - 工具栏
+    │   ├── HBox (iconArea) - 应用图标区域
+    │   ├── Region (spacer) - 弹性空间
+    │   └── HBox (windowControls) - 窗口控制按钮
+    └── HBox (center) - 内容区
+        ├── fx:include (SideBar.fxml) - 侧边栏
+        └── VBox
+            ├── fx:include (ButtonBar.fxml) - 底部按钮栏
+            ├── fx:include (HomePage.fxml) - 主页
+            ├── fx:include (SettingsPage.fxml) - 设置页
+            ├── fx:include (SkillPage.fxml) - 技能页
+            ├── fx:include (McpPage.fxml) - MCP 页
+            └── fx:include (TaskPage.fxml) - 任务页
 ```
 
-**样式表：** `@./css/index.css`
+**样式表：** `@style/window-chrome.css,@style/index.css`
 
 **特点：**
+- 使用 StageStyle.TRANSPARENT 无系统标题栏
+- 使用 WindowChromeHelper 封装拖拽移动、边缘缩放、窗口控制
 - 使用 fx:include 引入子组件
 - 水平布局：侧边栏 + 主内容区
 - 所有页面默认只显示主页
@@ -46,7 +54,8 @@ cn/bitloom/
 ├── components/          # 可复用组件
 │   ├── ButtonBar.fxml
 │   └── SideBar.fxml
-├── css/                 # 样式文件
+├── style/                 # 样式文件
+│   ├── window-chrome.css  # 无系统栏窗口公共样式
 │   ├── index.css
 │   ├── button-bar.css
 │   ├── side-bar.css
@@ -58,7 +67,6 @@ cn/bitloom/
 │   ├── md-editor-dialog.css
 │   ├── browser-dialog.css
 │   ├── skill-editor-dialog.css
-│   ├── mcp-editor-dialog.css
 │   └── scroll-bar.css
 ├── images/              # 图像资源
 │   ├── icon.png
@@ -76,10 +84,8 @@ cn/bitloom/
 │   ├── SkillPage.fxml
 │   ├── McpPage.fxml
 │   ├── TaskPage.fxml
-│   ├── MdEditorDialog.fxml
 │   ├── BrowserDialog.fxml
 │   ├── SkillEditorDialog.fxml
-│   ├── McpEditorDialog.fxml
 │   └── chat.html
 └── index.fxml           # 主布局
 ```

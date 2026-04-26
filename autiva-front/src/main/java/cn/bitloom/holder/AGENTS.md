@@ -1,7 +1,7 @@
 # Holder 包
 
 ## 概述
-本包定义了控制器行为接口，用于规范页面的显示/隐藏行为和按钮配置。
+本包定义了控制器行为接口，用于规范页面的显示/隐藏行为、按钮配置和对话框窗口配置。
 
 ## 接口
 
@@ -67,6 +67,34 @@ public class SettingsPageController implements ButtonBarHolder {
 }
 ```
 
+### DialogHolder
+对话框持有者接口，定义对话框控制器的窗口配置。
+
+**核心理念：** 对话框控制器自己声明窗口配置（宽度、高度、是否可调整大小、窗口样式），WindowManager 从控制器读取配置，而非由调用方指定。这与 ButtonBarHolder 的设计哲学一致——**拥有 UI 的组件自己声明配置，框架只是读取配置**。
+
+**方法（均提供默认值）：**
+- `getWidth()`: 窗口宽度（默认：AppConstants.Stage.WIDTH）
+- `getHeight()`: 窗口高度（默认：AppConstants.Stage.HEIGHT）
+- `isResizable()`: 是否可调整大小（默认：false）
+- `getStageStyle()`: 窗口样式（默认：StageStyle.UNIFIED）
+
+**实现示例：**
+```java
+@Component
+public class FileEditorController implements WindowManager.StageAware, DialogHolder {
+    
+    @Override
+    public boolean isResizable() {
+        return true;
+    }
+    
+    @Override
+    public StageStyle getStageStyle() {
+        return StageStyle.TRANSPARENT;
+    }
+}
+```
+
 ## 使用场景
 
 ### 页面导航
@@ -102,12 +130,38 @@ public void updateButtons(ButtonBarHolder holder) {
 }
 ```
 
+### 对话框窗口配置
+WindowManager 使用 DialogHolder 接口读取对话框的窗口配置：
+```java
+public <T> void showDialog(String fxmlPath, Window owner, Consumer<T> controllerInitializer) {
+    FXMLLoader loader = new FXMLLoader(new ClassPathResource(fxmlPath).getURL());
+    Parent root = loader.load();
+    T controller = loader.getController();
+
+    double width = AppConstants.Stage.WIDTH;
+    double height = AppConstants.Stage.HEIGHT;
+    boolean resizable = false;
+    StageStyle stageStyle = StageStyle.UNIFIED;
+
+    if (controller instanceof DialogHolder holder) {
+        width = holder.getWidth();
+        height = holder.getHeight();
+        resizable = holder.isResizable();
+        stageStyle = holder.getStageStyle();
+    }
+    // ... 使用配置创建窗口
+}
+```
+
 ## 设计模式
 - 策略模式：不同页面有不同的按钮配置
-- 接口隔离：分离页面行为和按钮配置
+- 接口隔离：分离页面行为、按钮配置和窗口配置
+- 声明式配置：控制器声明自己的 UI 配置，框架读取并应用
 
 ## 注意事项
 1. 所有页面控制器应实现 PageHolder
 2. 需要自定义按钮的页面应实现 ButtonBarHolder
-3. 按钮配置在页面切换时更新
-4. 使用 record 简化 ButtonConfig 定义
+3. 对话框控制器应实现 DialogHolder 来声明窗口配置
+4. 按钮配置在页面切换时更新
+5. 使用 record 简化 ButtonConfig 定义
+6. DialogHolder 的所有方法提供默认值，控制器只需覆盖需要自定义的配置

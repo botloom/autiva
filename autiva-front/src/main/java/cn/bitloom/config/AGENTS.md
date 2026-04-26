@@ -14,6 +14,7 @@
 - `isolation`: 会话隔离模式
 - `dingTalkClientId`: 钉钉应用 Client ID
 - `dingTalkClientSecret`: 钉钉应用 Client Secret
+- `weixinILinkEnabled`: 是否启用微信 iLink 接入
 - `deepseekApiKey`: DeepSeek API Key
 - `zApiKey`: 智谱 AI API Key
 

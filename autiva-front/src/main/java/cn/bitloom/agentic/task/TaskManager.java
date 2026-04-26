@@ -8,7 +8,6 @@ import cn.bitloom.agentic.task.repository.TaskRepository;
 import cn.bitloom.constant.AppConstants;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -32,21 +31,26 @@ public class TaskManager {
 
     private static final String TASK_DESCRIPTION_TEMPLATE = """
             启动新的代理来自主处理复杂的多步骤任务。
-
+            
             Task工具启动专门的代理（子进程），它们自主处理复杂任务。每种代理类型都有特定的能力和可用的工具。
-
-            可用的代理类型及其可访问的工具：
+            
+            可用的代理类型及其能力：
             %s
-
+            
             使用Task工具时，必须指定subagent_type参数来选择使用哪种代理类型。
-
+            
+            如何选择子智能体：
+            - 编写/修改代码、创建文件、修复bug → 使用 Code 子智能体
+            - 搜索代码、探索代码库结构 → 使用 Explore 子智能体
+            - 制定实现计划、设计架构 → 使用 Plan 子智能体
+            - 执行Shell命令、构建、部署 → 使用 Bash 子智能体
+            - 复杂多步骤研究任务 → 使用 General Purpose 子智能体
+            
             何时不应使用Task工具：
-            - 如果你想读取特定的文件路径，使用Read或Glob工具而不是Task工具，可以更快找到匹配项
-            - 如果你正在搜索特定的类定义如"class Foo"，使用Glob工具，可以更快找到匹配项
-            - 如果你正在搜索特定文件或2-3个文件集合中的代码，使用Read工具而不是Task工具，可以更快找到匹配项
-            - 其他与上述代理描述无关的任务
-
-
+            - 简单的网页内容获取，可以直接使用WebFetch工具
+            - 管理任务列表，使用TodoWrite工具
+            - 向用户提问，使用AskUserQuestion工具
+            
             使用说明：
             - 始终包含简短描述（3-5个词）总结代理将要做什么
             - 尽可能并发启动多个代理，以最大化性能；为此，使用包含多个工具使用的单条消息
@@ -61,41 +65,25 @@ public class TaskManager {
             - 明确告诉代理你期望它编写代码还是仅进行研究（搜索、文件读取、网络获取等），因为它不知道用户的意图
             - 如果代理描述提到应该主动使用它，那么你应该尽最大努力使用它，而不需要用户先请求。使用你的判断力。
             - 如果用户指定他们希望你"并行"运行代理，你必须发送包含多个Task工具使用内容块的单条消息。例如，如果你需要并行启动code-reviewer代理和test-runner代理，发送包含两个工具调用的单条消息。
-
+            
             示例用法：
-
-            <example_agent_descriptions>
-            "code-reviewer": 在你完成编写重要代码后使用此代理
-            "greeting-responder": 使用此代理以友好的笑话回应用户问候
-            </example_agent_description>
-
+            
             <example>
             user: "请编写一个检查数字是否为质数的函数"
-            assistant: 好的，让我编写一个检查数字是否为质数的函数
-            assistant: 首先让我使用Write工具编写一个检查数字是否为质数的函数
-            assistant: 我将使用Write工具编写以下代码：
-            <code>
-            function isPrime(n) {
-            if (n <= 1) return false
-            for (let i = 2; i * i <= n; i++) {
-                if (n %% i === 0) return false
-            }
-            return true
-            }
-            </code>
-            <commentary>
-            由于编写了重要的代码片段且任务已完成，现在使用code-reviewer代理审查代码
-            </commentary>
-            assistant: 现在让我使用code-reviewer代理审查代码
-            assistant: 使用Task工具启动code-reviewer代理
+            assistant: 好的，我将使用 Code 子智能体来编写这个函数
+            assistant: 使用Task工具，subagent_type="Code"，prompt="编写一个检查数字是否为质数的函数"
             </example>
-
+            
             <example>
-            user: "你好"
-            <commentary>
-            由于用户正在问候，使用greeting-responder代理以友好的笑话回应
-            </commentary>
-            assistant: "我将使用Task工具启动greeting-responder代理"
+            user: "帮我找到处理用户认证的代码"
+            assistant: 我将使用 Explore 子智能体来搜索相关代码
+            assistant: 使用Task工具，subagent_type="Explore"，prompt="搜索处理用户认证的代码，包括认证中间件、登录控制器等"
+            </example>
+            
+            <example>
+            user: "运行构建并修复任何类型错误"
+            assistant: 我将先使用 Bash 子智能体运行构建，然后根据结果使用 Code 子智能体修复错误
+            assistant: 使用Task工具，subagent_type="Bash"，prompt="运行构建命令"
             </example>
             """;
 
@@ -171,7 +159,7 @@ public class TaskManager {
             return;
         }
 
-        try (Stream<@NotNull Path> paths = Files.list(subagentDir)) {
+        try (Stream<Path> paths = Files.list(subagentDir)) {
             paths.filter(Files::isRegularFile)
                     .filter(p -> p.toString().endsWith(".md"))
                     .forEach(p -> {
@@ -296,7 +284,7 @@ public class TaskManager {
 
     }
 
-    public static record TaskOutputCall(
+    public record TaskOutputCall(
             @ToolParam(description = "要获取输出的任务ID") String task_id,
             @ToolParam(description = "是否等待完成", required = false) Boolean block,
             @ToolParam(description = "最大等待时间（毫秒）", required = false) Long timeout) {

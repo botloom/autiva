@@ -261,89 +261,19 @@ public class FileSystemTools {
 	}
 
 	private int countOccurrences(String text, String substring) {
-		int count = 0;
-		int index = 0;
-		while ((index = text.indexOf(substring, index)) != -1) {
-			count++;
-			index += substring.length();
-		}
-		return count;
+		return ToolUtils.countOccurrences(text, substring);
 	}
 
 	private String replaceFirst(String text, String old_string, String new_string) {
-		int index = text.indexOf(old_string);
-		if (index == -1) {
-			return text;
-		}
-		return text.substring(0, index) + new_string + text.substring(index + old_string.length());
+		return ToolUtils.replaceFirst(text, old_string, new_string);
 	}
 
 	private String replaceAll(String text, String old_string, String new_string) {
-		StringBuilder result = new StringBuilder();
-		int index = 0;
-		int lastIndex = 0;
-
-		while ((index = text.indexOf(old_string, lastIndex)) != -1) {
-			result.append(text, lastIndex, index);
-			result.append(new_string);
-			lastIndex = index + old_string.length();
-		}
-		result.append(text.substring(lastIndex));
-
-		return result.toString();
+		return ToolUtils.replaceAll(text, old_string, new_string);
 	}
 
-	/**
-	 * 生成文件中编辑部分周围上下文的格式化片段。匹配Claude Code的Edit工具输出格式，
-	 * 带有行号和箭头分隔符。
-	 * @param fileContent 编辑后的完整文件内容
-	 * @param newString 插入的新字符串（用于查找编辑位置）
-	 * @return 带行号的格式化片段
-	 */
 	private String generateEditSnippet(String fileContent, String newString) {
-		String[] lines = fileContent.split("\n", -1);
-
-		int editStartLine = -1;
-		int editEndLine = -1;
-
-		String[] newLines = newString.split("\n", -1);
-
-		for (int i = 0; i < lines.length; i++) {
-			if (newLines.length > 0 && lines[i].contains(newLines[0])) {
-				boolean matches = true;
-				for (int j = 1; j < newLines.length && i + j < lines.length; j++) {
-					if (!lines[i + j].contains(newLines[j])) {
-						matches = false;
-						break;
-					}
-				}
-				if (matches) {
-					editStartLine = i;
-					editEndLine = i + newLines.length - 1;
-					break;
-				}
-			}
-		}
-
-		if (editStartLine == -1) {
-			editStartLine = 0;
-			editEndLine = Math.min(10, lines.length - 1);
-		}
-
-		int contextBefore = 5;
-		int contextAfter = 5;
-		int startLine = Math.max(0, editStartLine - contextBefore);
-		int endLine = Math.min(lines.length - 1, editEndLine + contextAfter);
-
-		StringBuilder snippet = new StringBuilder();
-		for (int i = startLine; i <= endLine; i++) {
-			snippet.append(String.format("%6d→%s", i + 1, lines[i]));
-			if (i < endLine) {
-				snippet.append("\n");
-			}
-		}
-
-		return snippet.toString();
+		return ToolUtils.generateEditSnippet(fileContent, newString);
 	}
 
 	public static Builder builder() {

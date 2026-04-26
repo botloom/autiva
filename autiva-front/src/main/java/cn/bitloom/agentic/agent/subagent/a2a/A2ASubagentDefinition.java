@@ -56,7 +56,7 @@ public class A2ASubagentDefinition implements SubagentDefinition {
 	}
 
 	@Override
-	public SubagentReference getReference() {
+	public SubagentReference reference() {
 		return subagentRef;
 	}
 

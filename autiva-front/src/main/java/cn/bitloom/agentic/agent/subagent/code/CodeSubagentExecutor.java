@@ -1,17 +1,11 @@
 package cn.bitloom.agentic.agent.subagent.code;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
 import cn.bitloom.agentic.agent.subagent.SubagentExecutor;
 import cn.bitloom.agentic.agent.subagent.TaskCall;
 import cn.bitloom.agentic.skill.SkillManager;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -19,6 +13,11 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class CodeSubagentExecutor implements SubagentExecutor {
 
@@ -66,14 +65,12 @@ public class CodeSubagentExecutor implements SubagentExecutor {
 			var skills = this.skillManager.loadDirectories(this.skillsDirectories);
 
 			preloadedSkillsSystemSuffix = "\n"
-					+ skills.stream().filter(s -> codeSubagent.skills().contains(s.name())).map(skill -> {
-						return "%s\nBase directory for this skill: %s\n\n%s".formatted(skill.toXml(),
-								skill.basePath(), skill.content());
-					}).collect(Collectors.joining("\n\n"));
+					+ skills.stream().filter(s -> codeSubagent.skills().contains(s.name())).map(skill -> "%s\nBase directory for this skill: %s\n\n%s".formatted(skill.toXml(),
+                            skill.basePath(), skill.content())).collect(Collectors.joining("\n\n"));
 		}
 
 		return taskChatClient.prompt()
-			.system(codeSubagent.getContent() + preloadedSkillsSystemSuffix)
+			.system(codeSubagent.content() + preloadedSkillsSystemSuffix)
 			.user(taskCall.prompt())
 			.call()
 			.content();
@@ -103,8 +100,7 @@ public class CodeSubagentExecutor implements SubagentExecutor {
 		}
 
 		if (!codeSubagent.permissionMode().equals("default")) {
-			logger.warn("任务permissionMode尚不支持。permissionMode = "
-					+ codeSubagent.permissionMode());
+            logger.warn("任务permissionMode尚不支持。permissionMode = {}", codeSubagent.permissionMode());
 		}
 
 		return builder.defaultAdvisors(ToolCallAdvisor.builder().build()).build();

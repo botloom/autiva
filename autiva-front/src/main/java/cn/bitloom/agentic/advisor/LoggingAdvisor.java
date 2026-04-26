@@ -14,6 +14,8 @@ import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -23,6 +25,10 @@ public class LoggingAdvisor implements StreamAdvisor {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final AtomicInteger REQUEST_SEQ = new AtomicInteger(0);
+
+    private static final String BORDER_TOP = "┌──────────────────────────────────────────────";
+    private static final String BORDER_MID = "├──────────────────────────────────────────────";
+    private static final String BORDER_BOTTOM = "└──────────────────────────────────────────────";
 
     @Override
     public @NonNull String getName() {
@@ -39,11 +45,11 @@ public class LoggingAdvisor implements StreamAdvisor {
         int seq = REQUEST_SEQ.incrementAndGet();
         long startNano = System.nanoTime();
 
-        logRequest(seq, chatClientRequest);
-
         AtomicReference<StringBuilder> fullText = new AtomicReference<>(new StringBuilder());
         AtomicReference<StringBuilder> toolCallBuilder = new AtomicReference<>(new StringBuilder());
         AtomicInteger toolCallCount = new AtomicInteger(0);
+
+        List<String> requestLines = buildRequestLines(seq, chatClientRequest);
 
         Flux<ChatClientResponse> responseFlux = streamAdvisorChain.nextStream(chatClientRequest);
 
@@ -59,45 +65,63 @@ public class LoggingAdvisor implements StreamAdvisor {
 
                         if (!output.getToolCalls().isEmpty()) {
                             for (var toolCall : output.getToolCalls()) {
-                                toolCallCount.incrementAndGet();
+                                int num = toolCallCount.incrementAndGet();
                                 toolCallBuilder.get()
-                                        .append("\n      │  └── Tool #")
-                                        .append(toolCallCount.get())
-                                        .append(": ")
-                                        .append(toolCall.name())
-                                        .append("(")
-                                        .append(toolCall.arguments())
-                                        .append(")");
+                                        .append(String.format("%n│ %-8s│ %s(%s)",
+                                                "#" + num,
+                                                toolCall.name(),
+                                                truncate(toolCall.arguments(), 300)));
                             }
                         }
                     }
                 })
                 .doOnComplete(() -> {
-                    log.info("[#{}][{}] ✅ LLM 响应完成 ({}ms)", seq, LocalDateTime.now().format(TIME_FORMAT),
-                            (System.nanoTime() - startNano) / 1_000_000);
+                    long durationMs = (System.nanoTime() - startNano) / 1_000_000;
+                    String time = LocalDateTime.now().format(TIME_FORMAT);
+
+                    List<String> lines = new ArrayList<>();
+                    lines.add(String.format("┌─ LLM [#%d] %s · %dms ──────────────────────────", seq, time, durationMs));
+                    lines.addAll(requestLines);
+                    lines.add(BORDER_MID);
 
                     if (!fullText.get().isEmpty()) {
-                        log.info("【响应文本】: {}", truncate(fullText.get().toString(), 1000));
+                        lines.add(String.format("│ %-8s│ %s", "Text", truncate(fullText.get().toString(), 1000)));
                     } else if (toolCallCount.get() > 0) {
-                        log.info("【工具调用】({}): {}", toolCallCount.get(), toolCallBuilder.get());
+                        lines.add(String.format("│ %-8s│ (%d calls)", "Tools", toolCallCount.get()));
+                        for (String toolLine : toolCallBuilder.get().toString().split("\n")) {
+                            if (!toolLine.isBlank()) {
+                                lines.add(toolLine);
+                            }
+                        }
                     } else {
-                        log.info("【响应】: (空)");
+                        lines.add(String.format("│ %-8s│ %s", "Result", "(empty)"));
                     }
 
-                    log.info("══════════════════════════════════════════════════════════");
+                    lines.add(BORDER_BOTTOM);
+
+                    lines.forEach(log::info);
                 })
                 .doOnError(error -> {
-                    log.error("[#{}][{}] ❌ LLM 错误: {}", seq, LocalDateTime.now().format(TIME_FORMAT), error.getMessage());
-                    log.error("══════════════════════════════════════════════════════════", error);
+                    long durationMs = (System.nanoTime() - startNano) / 1_000_000;
+                    String time = LocalDateTime.now().format(TIME_FORMAT);
+
+                    List<String> lines = new ArrayList<>();
+                    lines.add(String.format("┌─ LLM [#%d] %s · %dms ──────────────────────────", seq, time, durationMs));
+                    lines.addAll(requestLines);
+                    lines.add(BORDER_MID);
+                    lines.add(String.format("│ %-8s│ %s (%dms)", "Error", error.getMessage(), durationMs));
+                    lines.add(BORDER_BOTTOM);
+
+                    lines.forEach(log::error);
                 });
     }
 
-    private void logRequest(int seq, ChatClientRequest request) {
+    private List<String> buildRequestLines(int seq, ChatClientRequest request) {
+        List<String> lines = new ArrayList<>();
         String time = LocalDateTime.now().format(TIME_FORMAT);
 
-        log.info("");
-        log.info("══════════════════════════════════════════════════════════");
-        log.info("[#{}][{}] 📥 LLM 请求", seq, time);
+        lines.add(String.format("│ %-8s│ %s", "Seq", "#" + seq));
+        lines.add(String.format("│ %-8s│ %s", "Time", time));
 
         var prompt = request.prompt();
         var instructions = prompt.getInstructions();
@@ -109,38 +133,40 @@ public class LoggingAdvisor implements StreamAdvisor {
 
         for (Message message : instructions) {
             if (message instanceof SystemMessage sysMsg) {
-                log.info("【系统消息】: {}", truncate(sysMsg.getText(), 200));
+                lines.add(String.format("│ %-8s│ %s", "System", truncate(sysMsg.getText(), 200)));
             } else if (message instanceof UserMessage userMsg) {
                 lastUserMessage = userMsg.getText();
                 userCount.incrementAndGet();
-            } else if (message instanceof AssistantMessage assistantMsg) {
+            } else if (message instanceof AssistantMessage) {
                 assistantCount.incrementAndGet();
-            } else if (message instanceof ToolResponseMessage toolMsg) {
+            } else if (message instanceof ToolResponseMessage) {
                 toolRespCount.incrementAndGet();
             }
         }
 
         if (lastUserMessage != null) {
-            log.info("【用户消息】: {}", truncate(lastUserMessage, 500));
+            lines.add(String.format("│ %-8s│ %s", "User", truncate(lastUserMessage, 500)));
         }
 
-        StringBuilder summary = new StringBuilder();
-        summary.append("【历史】");
-        if (userCount.get() > 1) summary.append("用户消息:").append(userCount.get());
-        if (assistantCount.get() > 0) summary.append(" 助手消息:").append(assistantCount.get());
-        if (toolRespCount.get() > 0) summary.append(" 工具响应:").append(toolRespCount.get());
-        log.info("{}", summary);
+        if (userCount.get() > 1 || assistantCount.get() > 0 || toolRespCount.get() > 0) {
+            StringBuilder history = new StringBuilder();
+            if (userCount.get() > 1) history.append("User:").append(userCount.get()).append(" ");
+            if (assistantCount.get() > 0) history.append("Asst:").append(assistantCount.get()).append(" ");
+            if (toolRespCount.get() > 0) history.append("Tool:").append(toolRespCount.get());
+            lines.add(String.format("│ %-8s│ %s", "History", history.toString().trim()));
+        }
 
         if (!request.context().isEmpty()) {
-            log.info("【上下文】: {}", JSON.toJSONString(request.context()));
+            lines.add(String.format("│ %-8s│ %s", "Context", truncate(JSON.toJSONString(request.context()), 300)));
         }
 
-        log.info("══════════════════════════════════════════════════════════");
+        return lines;
     }
 
     private String truncate(String text, int maxLen) {
         if (text == null) return "";
-        if (text.length() <= maxLen) return text;
-        return text.substring(0, maxLen) + "...(更多" + (text.length() - maxLen) + "字符)";
+        String normalized = text.replaceAll("[\\r\\n]+", " ").replaceAll("\\s+", " ");
+        if (normalized.length() <= maxLen) return normalized;
+        return normalized.substring(0, maxLen) + "...(+" + (normalized.length() - maxLen) + " chars)";
     }
 }

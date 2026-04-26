@@ -58,94 +58,12 @@ VBox (sideBar)
 - `.sidebar__icon`: 图标样式
 - `.sidebar__label`: 标签样式
 
-### MdEditor.fxml
-Markdown 编辑器组件。
-
-**功能：**
-- Markdown 内容编辑
-- 实时预览
-- 字数统计
-- 状态显示
-- 预览切换
-
-**控制器：** MdEditorController
-
-**结构：**
-```
-VBox (md-editor)
-├── HBox (headerBox) - 头部栏
-│   ├── TextField (nameField) - 名称/标题输入
-│   ├── Button - 预览按钮
-│   ├── Button (saveButton) - 保存按钮
-│   └── Button (cancelButton) - 取消按钮
-├── SplitPane (editorSplitPane) - 编辑区域
-│   ├── TextArea (contentArea) - 编辑器
-│   └── WebView (previewWebView) - 预览
-└── HBox (footer) - 底部栏
-    ├── Label (wordCountLabel) - 字数统计
-    └── Label (statusLabel) - 状态
-```
-
-**样式类：**
-- `.md-editor`: 容器样式
-- `.md-editor__header`: 头部栏样式
-- `.md-editor__name-field`: 名称输入框样式
-- `.md-editor__btn`: 按钮样式
-- `.md-editor__split-pane`: 分割面板
-- `.md-editor__textarea`: 文本区域
-- `.md-editor__footer`: 底部栏
-- `.md-editor__word-count`: 字数统计
-- `.md-editor__status`: 状态
-
-**滚动条样式：**
-- 宽度 6px，符合 Apple 设计规范
-- 半透明圆角滑块，悬停时加深
-- 透明轨道和按钮，极简风格
-
-**API 方法：**
-- `setTitle(String)`: 设置标题提示文本
-- `setName(String)`: 设置名称
-- `getName()`: 获取名称
-- `setContent(String)`: 设置内容
-- `getContent()`: 获取内容
-- `setStatus(String)`: 设置状态文本
-- `setStage(Stage)`: 设置对话框 Stage
-- `setOnSaveCallback(Consumer<MdEditorData>)`: 设置保存回调
-
-**使用示例：**
-```java
-FXMLLoader loader = new FXMLLoader(new ClassPathResource("cn/bitloom/components/MdEditor.fxml").getURL());
-Scene scene = new Scene(loader.load(), 900, 700);
-
-MdEditorController controller = loader.getController();
-controller.setStage(dialogStage);
-controller.setTitle("技能名称");
-
-if (skill != null) {
-    controller.setName(skill.getName());
-    controller.setContent(skill.getContent());
-}
-
-controller.setOnSaveCallback(data -> {
-    String name = data.name();
-    String content = data.content();
-});
-
-dialogStage.showAndWait();
-```
-
 ## 使用方式
 
 在 FXML 中引用组件：
 ```xml
 <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
 <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
-```
-
-作为对话框加载：
-```java
-FXMLLoader loader = new FXMLLoader(new ClassPathResource("cn/bitloom/components/MdEditor.fxml").getURL());
-Scene scene = new Scene(loader.load(), 900, 700);
 ```
 
 ## 设计原则

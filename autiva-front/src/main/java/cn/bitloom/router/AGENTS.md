@@ -52,19 +52,18 @@ public record Route(
 
 ### 注册路由
 ```java
-registerRoute(
-    Path.HOME, 
-    "主页", 
-    HomePageController.class,
-    (indexController) -> indexController.getHomePageController().show(),
-    (indexController) -> indexController.getHomePageController().hide()
-);
+registerRoute(Path.HOME, "主页", HomePageController.class,
+    ic -> safeCall(ic.getHomePageController(), PageHolder::show),
+    ic -> safeCall(ic.getHomePageController(), PageHolder::hide));
 ```
+
+**safeCall 方法**：统一处理 null 检查，避免每个路由注册都写 if-not-null 逻辑。
 
 ### 路由表
 | 路径 | 标题 | 控制器 |
 |------|------|--------|
 | / | 主页 | HomePageController |
+| /agent | 智能体 | AgentPageController |
 | /settings | 设置 | SettingsPageController |
 | /skills | 技能管理 | SkillPageController |
 | /mcp | MCP | McpPageController |
@@ -100,6 +99,7 @@ navigate(path)
 - 命令模式：将页面操作封装为 Consumer
 - 配置模式：集中管理路由配置
 - 依赖注入：Router 和 RouteConfig 由 Spring 管理
+- Map 驱动：Router 使用 buttonBarHolderMap 替代 if-else 链进行路由到 ButtonBarHolder 的映射
 
 ## 注意事项
 1. 路由路径必须唯一

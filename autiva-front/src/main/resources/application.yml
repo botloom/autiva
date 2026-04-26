@@ -28,6 +28,9 @@ logging:
   level:
     root: info
     cn.bitloom: debug
+    org.springframework.web.reactive.function.client.ExchangeFunctions: DEBUG
+    reactor.netty.http.client: DEBUG
+
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
@@ -38,3 +41,7 @@ logging:
       file-name-pattern: ${user.home}/.autiva/logs/autiva-front.%d{yyyy-MM-dd}.%i.log
       max-history: 30
       max-file-size: 10MB
+
+weixin:
+  ilink:
+    enabled: true

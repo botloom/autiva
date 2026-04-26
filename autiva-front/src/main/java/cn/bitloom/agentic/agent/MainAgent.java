@@ -2,6 +2,7 @@ package cn.bitloom.agentic.agent;
 
 import cn.bitloom.agentic.advisor.LoggingAdvisor;
 import cn.bitloom.agentic.agent.subagent.code.CodeSubagentType;
+import cn.bitloom.agentic.deploy.DeployTool;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.session.Session;
@@ -66,8 +67,6 @@ public class MainAgent {
                 .build();
         String systemPrompt = this.getSystemPrompt();
 
-        FileSystemTools fileSystemTools = FileSystemTools.builder().build();
-        ShellTools shellTools = ShellTools.builder().build();
         WebFetchTool webFetchTool = WebFetchTool.builder(deepSeekChatClientBuilder.clone().build()).build();
         AskUserQuestionTool askUserQuestionTool = AskUserQuestionTool.builder()
                 .questionHandler(new GuiQuestionHandler(this.toolUIBridge))
@@ -77,6 +76,11 @@ public class MainAgent {
                 .build();
         CronTool cronTool = CronTool.builder(this.cronManager).build();
 
+        DeployTool deployTool = DeployTool.builder()
+                .backendUrl("http://localhost:9527")
+                .clientId("autiva-user")
+                .build();
+
         this.taskManager.registerSubagentTypes(CodeSubagentType.builder()
                 .chatClientBuilders(
                         Map.of(
@@ -85,6 +89,7 @@ public class MainAgent {
                         )
                 )
                 .skillManager(this.skillManager)
+                .deployTool(deployTool)
                 .build());
         Consumer<ChatClient.AdvisorSpec> advisorSpecConsumer = a -> a.advisors(
                 MessageChatMemoryAdvisor.builder(this.chatMemory).build(),
@@ -97,42 +102,12 @@ public class MainAgent {
                         .build()
         );
 
-        this.chatClientMap.put(
-                ModelTypeEnum.DEEPSEEK,
-                deepSeekChatClientBuilder
-                        .defaultTemplateRenderer(stTemplateRenderer)
-                        .defaultSystem(systemPrompt)
-                        .defaultTools(
-                                fileSystemTools,
-                                shellTools,
-                                webFetchTool,
-                                askUserQuestionTool,
-                                todoWriteTool,
-                                cronTool
-                        )
-                        .defaultToolCallbacks(this.taskManager.buildToolCallbacks())
-                        .defaultToolCallbacks(this.skillManager.buildToolCallback())
-                        .defaultAdvisors(advisorSpecConsumer)
-                        .build()
-        );
-        this.chatClientMap.put(
-                ModelTypeEnum.GLM,
-                zhiPuChatClientBuilder
-                        .defaultTemplateRenderer(stTemplateRenderer)
-                        .defaultSystem(systemPrompt)
-                        .defaultTools(
-                                fileSystemTools,
-                                shellTools,
-                                webFetchTool,
-                                askUserQuestionTool,
-                                todoWriteTool,
-                                cronTool
-                        )
-                        .defaultToolCallbacks(this.taskManager.buildToolCallbacks())
-                        .defaultToolCallbacks(this.skillManager.buildToolCallback())
-                        .defaultAdvisors(advisorSpecConsumer)
-                        .build()
-        );
+        this.chatClientMap.put(ModelTypeEnum.DEEPSEEK,
+                buildChatClient(deepSeekChatClientBuilder, stTemplateRenderer, systemPrompt,
+                        webFetchTool, askUserQuestionTool, todoWriteTool, cronTool, advisorSpecConsumer));
+        this.chatClientMap.put(ModelTypeEnum.GLM,
+                buildChatClient(zhiPuChatClientBuilder, stTemplateRenderer, systemPrompt,
+                        webFetchTool, askUserQuestionTool, todoWriteTool, cronTool, advisorSpecConsumer));
         this.run();
     }
 
@@ -201,6 +176,22 @@ public class MainAgent {
 
     private ChatClient model(ModelTypeEnum model) {
         return this.chatClientMap.getOrDefault(model, this.chatClientMap.get(ModelTypeEnum.GLM));
+    }
+
+    private ChatClient buildChatClient(ChatClient.Builder builder, StTemplateRenderer renderer, String systemPrompt,
+                                       Object... tools) {
+        Consumer<ChatClient.AdvisorSpec> advisorSpec = (Consumer<ChatClient.AdvisorSpec>) tools[tools.length - 1];
+        Object[] toolObjects = new Object[tools.length - 1];
+        System.arraycopy(tools, 0, toolObjects, 0, tools.length - 1);
+
+        return builder
+                .defaultTemplateRenderer(renderer)
+                .defaultSystem(systemPrompt)
+                .defaultTools(toolObjects)
+                .defaultToolCallbacks(this.taskManager.buildToolCallbacks())
+                .defaultToolCallbacks(this.skillManager.buildToolCallback())
+                .defaultAdvisors(advisorSpec)
+                .build();
     }
 
 }

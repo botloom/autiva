@@ -1,7 +1,10 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.node.SvgImageView;
+import cn.bitloom.util.MarkdownFxRenderer;
 import cn.bitloom.util.SyntaxHighlighter;
+import cn.bitloom.holder.DialogHolder;
+import cn.bitloom.window.WindowChromeHelper;
 import cn.bitloom.window.WindowManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -15,18 +18,16 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.scene.shape.Rectangle;
-import javafx.scene.web.WebView;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.StyleClassedTextArea;
 import org.fxmisc.richtext.model.StyleSpans;
-import org.fxmisc.flowless.VirtualizedScrollPane;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -40,10 +41,25 @@ import java.util.stream.Stream;
 
 @Slf4j
 @Component
-public class FileEditorController implements WindowManager.StageAware {
+public class FileEditorController implements WindowManager.StageAware, DialogHolder {
 
     @FXML
     private BorderPane root;
+
+    @FXML
+    private HBox toolbar;
+
+    @FXML
+    private HBox windowControls;
+
+    @FXML
+    private Button minimizeBtn;
+
+    @FXML
+    private Button maximizeBtn;
+
+    @FXML
+    private Button closeBtn;
 
     @FXML
     private TreeView<Path> fileTree;
@@ -103,7 +119,8 @@ public class FileEditorController implements WindowManager.StageAware {
         TextArea lineNumbers;
         boolean modified;
         FileType fileType;
-        WebView previewWebView;
+        ScrollPane previewScrollPane;
+        VBox previewContainer;
         boolean previewVisible;
         SplitPane editorSplitPane;
     }
@@ -118,13 +135,17 @@ public class FileEditorController implements WindowManager.StageAware {
     public void setStage(Stage stage) {
         this.stage = stage;
         stage.setOnCloseRequest(event -> saveAllModifiedFiles());
+
+        Platform.runLater(() -> {
+            WindowChromeHelper.setup(stage, toolbar, root, minimizeBtn, maximizeBtn, closeBtn, 600, 400);
+            WindowChromeHelper.setupClip(editorPanel, 8);
+        });
     }
 
     @FXML
     public void initialize() {
         setupFileTree();
         setupTabPane();
-        setupEditorPanelClip();
         showEmptyState();
         filePathLabel.setText("就绪");
         encodingLabel.setText("UTF-8");
@@ -136,13 +157,14 @@ public class FileEditorController implements WindowManager.StageAware {
         loadFileTree();
     }
 
-    private void setupEditorPanelClip() {
-        Rectangle clip = new Rectangle();
-        clip.widthProperty().bind(editorPanel.widthProperty());
-        clip.heightProperty().bind(editorPanel.heightProperty());
-        clip.setArcWidth(16);
-        clip.setArcHeight(16);
-        editorPanel.setClip(clip);
+    @Override
+    public boolean isResizable() {
+        return true;
+    }
+
+    @Override
+    public StageStyle getStageStyle() {
+        return StageStyle.TRANSPARENT;
     }
 
     private void setupFileTree() {
@@ -379,8 +401,8 @@ public class FileEditorController implements WindowManager.StageAware {
                     updateTabModifiedState(file);
                 }
                 updateLineColIndicator(codeEditor);
-                if (fileType == FileType.MARKDOWN && file.previewVisible && file.previewWebView != null) {
-                    updateMarkdownPreview(file.previewWebView, newVal);
+                if (fileType == FileType.MARKDOWN && file.previewVisible && file.previewContainer != null) {
+                    updateMarkdownPreview(file.previewContainer, newVal);
                 }
             });
 
@@ -391,9 +413,13 @@ public class FileEditorController implements WindowManager.StageAware {
 
             Node editorContent;
             if (fileType == FileType.MARKDOWN) {
-                WebView previewWebView = new WebView();
-                previewWebView.getStyleClass().add("file-editor__preview");
-                file.previewWebView = previewWebView;
+                VBox previewContainer = new VBox();
+                previewContainer.getStyleClass().add("file-editor__preview");
+                ScrollPane previewScrollPane = new ScrollPane(previewContainer);
+                previewScrollPane.setFitToWidth(true);
+                previewScrollPane.getStyleClass().add("file-editor__preview-scroll");
+                file.previewContainer = previewContainer;
+                file.previewScrollPane = previewScrollPane;
 
                 SplitPane mdSplitPane = new SplitPane();
                 mdSplitPane.getStyleClass().add("file-editor__md-split-pane");
@@ -404,7 +430,7 @@ public class FileEditorController implements WindowManager.StageAware {
                 editorBox.getChildren().addAll(lineNumbers, codeScrollPane);
                 HBox.setHgrow(codeScrollPane, Priority.ALWAYS);
 
-                mdSplitPane.getItems().addAll(editorBox, previewWebView);
+                mdSplitPane.getItems().addAll(editorBox, previewScrollPane);
                 file.editorSplitPane = mdSplitPane;
                 editorContent = mdSplitPane;
             } else {
@@ -695,13 +721,13 @@ public class FileEditorController implements WindowManager.StageAware {
             if (Files.isDirectory(path)) {
                 Files.walkFileTree(path, new SimpleFileVisitor<>() {
                     @Override
-                    public @NotNull FileVisitResult visitFile(@NotNull Path file, @NotNull BasicFileAttributes attrs) throws IOException {
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                         Files.delete(file);
                         return FileVisitResult.CONTINUE;
                     }
 
                     @Override
-                    public @NotNull FileVisitResult postVisitDirectory(@NotNull Path dir, IOException exc) throws IOException {
+                    public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
                         Files.delete(dir);
                         return FileVisitResult.CONTINUE;
                     }
@@ -799,79 +825,30 @@ public class FileEditorController implements WindowManager.StageAware {
 
         if (file.editorSplitPane != null) {
             if (file.previewVisible) {
-                if (!file.editorSplitPane.getItems().contains(file.previewWebView)) {
-                    file.editorSplitPane.getItems().add(file.previewWebView);
+                if (!file.editorSplitPane.getItems().contains(file.previewScrollPane)) {
+                    file.editorSplitPane.getItems().add(file.previewScrollPane);
                 }
                 file.editorSplitPane.setDividerPositions(0.5);
-                updateMarkdownPreview(file.previewWebView, file.codeEditor.getText());
+                updateMarkdownPreview(file.previewContainer, file.codeEditor.getText());
             } else {
-                file.editorSplitPane.getItems().remove(file.previewWebView);
+                file.editorSplitPane.getItems().remove(file.previewScrollPane);
                 file.editorSplitPane.setDividerPositions(1.0);
             }
         }
     }
 
-    private void updateMarkdownPreview(WebView webView, String markdownText) {
-        String htmlContent = convertMarkdownToHtml(markdownText);
-        webView.getEngine().loadContent(htmlContent);
-    }
-
-    private String convertMarkdownToHtml(String markdown) {
-        StringBuilder html = new StringBuilder();
-        html.append("<!DOCTYPE html><html><head><style>");
-        html.append("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; ");
-        html.append("padding: 24px; color: #e0e0e0; background: #1e1e1e; line-height: 1.6; }");
-        html.append("h1, h2, h3 { color: #ffffff; margin-top: 1.2em; }");
-        html.append("code { background: #2d2d2d; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }");
-        html.append("pre { background: #2d2d2d; padding: 12px; border-radius: 6px; overflow-x: auto; }");
-        html.append("pre code { background: none; padding: 0; }");
-        html.append("blockquote { border-left: 3px solid #555; margin-left: 0; padding-left: 12px; color: #aaa; }");
-        html.append("a { color: #4fc3f7; }");
-        html.append("</style></head><body>");
-
-        String[] lines = markdown.split("\n");
-        boolean inCodeBlock = false;
-        StringBuilder codeBlock = new StringBuilder();
-
-        for (String line : lines) {
-            if (line.startsWith("```")) {
-                if (inCodeBlock) {
-                    html.append("<pre><code>").append(escapeHtml(codeBlock.toString())).append("</code></pre>");
-                    codeBlock.setLength(0);
-                    inCodeBlock = false;
-                } else {
-                    inCodeBlock = true;
-                }
-                continue;
-            }
-            if (inCodeBlock) {
-                codeBlock.append(line).append("\n");
-                continue;
-            }
-            if (line.startsWith("# ")) {
-                html.append("<h1>").append(escapeHtml(line.substring(2))).append("</h1>");
-            } else if (line.startsWith("## ")) {
-                html.append("<h2>").append(escapeHtml(line.substring(3))).append("</h2>");
-            } else if (line.startsWith("### ")) {
-                html.append("<h3>").append(escapeHtml(line.substring(4))).append("</h3>");
-            } else if (line.startsWith("> ")) {
-                html.append("<blockquote>").append(escapeHtml(line.substring(2))).append("</blockquote>");
-            } else if (line.startsWith("- ") || line.startsWith("* ")) {
-                html.append("<li>").append(escapeHtml(line.substring(2))).append("</li>");
-            } else if (!line.isEmpty()) {
-                html.append("<p>").append(escapeHtml(line)).append("</p>");
-            }
+    private void updateMarkdownPreview(VBox previewContainer, String markdownText) {
+        previewContainer.getChildren().clear();
+        try {
+            javafx.scene.Node rendered = MarkdownFxRenderer.render(markdownText);
+            rendered.getStyleClass().add("file-editor__preview-content");
+            previewContainer.getChildren().add(rendered);
+        } catch (Exception e) {
+            log.error("Failed to render markdown preview", e);
+            Label errorLabel = new Label("预览渲染失败");
+            errorLabel.getStyleClass().add("file-editor__preview-error");
+            previewContainer.getChildren().add(errorLabel);
         }
-
-        html.append("</body></html>");
-        return html.toString();
-    }
-
-    private String escapeHtml(String text) {
-        return text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
     }
 
     @FXML
@@ -979,16 +956,7 @@ public class FileEditorController implements WindowManager.StageAware {
         scene.getStylesheets().add(getClass().getResource("/cn/bitloom/style/file-editor.css").toExternalForm());
         dialogStage.setScene(scene);
 
-        final double[] dragStartX = {0};
-        final double[] dragStartY = {0};
-        dialogRoot.setOnMousePressed(e -> {
-            dragStartX[0] = e.getSceneX();
-            dragStartY[0] = e.getSceneY();
-        });
-        dialogRoot.setOnMouseDragged(e -> {
-            dialogStage.setX(e.getScreenX() - dragStartX[0]);
-            dialogStage.setY(e.getScreenY() - dragStartY[0]);
-        });
+        WindowChromeHelper.setupDrag(dialogStage, dialogRoot);
 
         Platform.runLater(() -> {
             nameField.requestFocus();
@@ -1045,16 +1013,7 @@ public class FileEditorController implements WindowManager.StageAware {
         scene.getStylesheets().add(getClass().getResource("/cn/bitloom/style/file-editor.css").toExternalForm());
         dialogStage.setScene(scene);
 
-        final double[] dragStartX = {0};
-        final double[] dragStartY = {0};
-        dialogRoot.setOnMousePressed(e -> {
-            dragStartX[0] = e.getSceneX();
-            dragStartY[0] = e.getSceneY();
-        });
-        dialogRoot.setOnMouseDragged(e -> {
-            dialogStage.setX(e.getScreenX() - dragStartX[0]);
-            dialogStage.setY(e.getScreenY() - dragStartY[0]);
-        });
+        WindowChromeHelper.setupDrag(dialogStage, dialogRoot);
 
         dialogStage.showAndWait();
 

@@ -72,6 +72,100 @@ MyService service2 = SpringContextUtil.getBean("myService", MyService.class);
 - Spring 自动注入 ApplicationContext
 - 提供静态方法访问
 
+### AlertUtil
+对话框工具类，提供统一的 Alert 对话框方法。
+
+**核心方法：**
+- `showInfo(String message)`: 显示信息对话框
+- `showInfo(String title, String message, Window owner)`: 显示信息对话框（带标题和所有者）
+- `showWarning(String message)`: 显示警告对话框
+- `showError(String message)`: 显示错误对话框
+- `showConfirm(String message)`: 显示确认对话框，返回用户是否点击了确定
+- `showConfirm(String title, String message, Window owner)`: 显示确认对话框（带标题和所有者）
+
+**设计说明：**
+- 统一了所有控制器中的 Alert 创建逻辑
+- 消除了各控制器中重复的 showAlert 方法
+- 确认对话框返回 boolean，简化调用方的判断逻辑
+
+### MarkdownUtil
+Markdown 渲染工具类，将 Markdown 文本转换为 HTML。
+
+**核心方法：**
+- `renderMarkdown(String)`: 将 Markdown 渲染为 HTML 字符串
+
+**依赖：**
+- commonmark: Markdown 解析和 HTML 渲染
+
+### MarkdownFxRenderer
+Markdown → JavaFX Node 渲染器，将 Markdown 文本直接渲染为 JavaFX 节点树，无需 WebView。
+
+**核心方法：**
+- `render(String markdown)`: 将 Markdown 渲染为 VBox（包含 JavaFX Node 子树）
+
+**支持的 Markdown 元素：**
+- 段落 → TextFlow（行间距1.6倍，增强可读性）
+- 标题（h1-h6）→ TextFlow（不同字号/粗细/边框装饰）
+  - h1: 28px，底部双线边框
+  - h2: 22px，底部单线边框
+  - h3-h6: 18px-14px，递减字号
+- 粗体/斜体 → Text（FontWeight/FontPosture）
+- 行内代码 → Text（等宽字体 + 红色文字 + 浅红背景）
+- 代码块 → VBox（语言标签 + 复制按钮 + 语法高亮代码）
+  - 支持 Java/Python/JavaScript/TypeScript 语法高亮
+  - 深色主题（One Dark 风格）
+  - 关键字、字符串、数字、注释不同颜色
+- 有序/无序列表 → VBox + HBox（蓝色标记符，加粗）
+- 引用 → HBox（左侧蓝色竖条 + 浅蓝背景 + 圆角）
+- 链接 → Hyperlink（蓝色文字，悬停下划线）
+- 图片 → Text（显示标题或占位符）
+- 分隔线 → Separator
+- HTML 块 → TextFlow（等宽字体）
+- 表格 → VBox（表头行 + 数据行，支持样式美化）
+
+**实现原理：**
+- 使用 commonmark Parser 解析 Markdown 为 AST
+- 支持 GFM 表格扩展（commonmark-ext-gfm-tables）
+- 递归遍历 AST，为每种节点类型创建对应的 JavaFX 节点
+- 块级元素（Paragraph, Heading, CodeBlock 等）创建容器节点
+- 行内元素（Text, Emphasis, Code, Link 等）创建 Text/Hyperlink 节点
+- 代码块支持语法高亮（基于正则表达式实现）
+- 代码块支持复制到剪贴板功能
+- 根容器 VBox 和表格 ScrollPane 均设置 `setFocusTraversable(false)`，防止点击时焦点环导致内容缩进偏移
+
+**样式类：**
+- `.md-content`: Markdown 容器
+- `.md-paragraph`: 段落
+- `.md-heading`, `.md-heading-1` ~ `.md-heading-6`: 标题
+- `.md-code-block`: 代码块容器
+- `.md-code-header`: 代码块头部
+- `.md-code-lang`: 语言标签
+- `.md-code-copy`: 复制按钮
+- `.md-code-content`: 代码内容
+- `.md-code-text`: 普通代码文本
+- `.md-code-keyword`: 关键字（紫色）
+- `.md-code-string`: 字符串（绿色）
+- `.md-code-number`: 数字（橙色）
+- `.md-code-comment`: 注释（灰色斜体）
+- `.md-inline-code`: 行内代码
+- `.md-list`: 列表容器
+- `.md-list-item`: 列表项
+- `.md-list-marker`: 列表标记符
+- `.md-blockquote`: 引用块
+- `.md-blockquote-bar`: 引用块左侧竖条
+- `.md-blockquote-content`: 引用块内容
+- `.md-link`: 链接
+- `.md-thematic-break`: 分隔线
+- `.md-table`: 表格容器
+- `.md-table-header-row`: 表头行
+- `.md-table-header-cell`: 表头单元格
+- `.md-table-row`: 数据行
+- `.md-table-cell`: 数据单元格
+
+**依赖：**
+- commonmark: Markdown 解析（AST 生成）
+- commonmark-ext-gfm-tables: GFM 表格扩展支持
+
 ### SyntaxHighlighter
 语法高亮工具类，基于正则表达式实现代码语法高亮。
 

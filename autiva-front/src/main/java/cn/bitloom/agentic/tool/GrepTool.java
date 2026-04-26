@@ -15,28 +15,19 @@
 */
 package cn.bitloom.agentic.tool;
 
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.util.StringUtils;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitOption;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.*;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.util.StringUtils;
 
 /**
  * 纯Java grep实现，不需要安装外部ripgrep。使用Java NIO.2进行文件遍历，
@@ -142,16 +133,7 @@ public class GrepTool {
 		@ToolParam(description = "启用多行模式，其中.匹配换行符且模式可以跨行。默认：false。", required = false) Boolean multiline) { // @formatter:on
 
 		try {
-			Path searchPath;
-			if (StringUtils.hasText(path)) {
-				searchPath = Paths.get(path);
-			}
-			else if (this.workingDirectory != null) {
-				searchPath = this.workingDirectory;
-			}
-			else {
-				searchPath = Paths.get(".");
-			}
+			Path searchPath = ToolUtils.resolveWorkingDirectory(path, this.workingDirectory);
 
 			if (!Files.exists(searchPath)) {
 				return "错误：路径不存在: " + searchPath.toAbsolutePath();
@@ -334,7 +316,7 @@ public class GrepTool {
 			return lineCount.get() < skip + limit;
 		});
 
-		if (result.length() == 0) {
+		if (result.isEmpty()) {
 			return "未找到匹配模式的文件: " + pattern.pattern();
 		}
 
@@ -358,10 +340,7 @@ public class GrepTool {
 	}
 
 	private boolean isIgnoredPath(Path path) {
-		String pathStr = path.toString();
-		return pathStr.contains("/.git/") || pathStr.contains("/node_modules/") || pathStr.contains("/target/")
-				|| pathStr.contains("/build/") || pathStr.contains("/.idea/") || pathStr.contains("/.vscode/")
-				|| pathStr.contains("/dist/") || pathStr.contains("/__pycache__/");
+		return ToolUtils.isIgnoredPath(path);
 	}
 
 	private boolean fileContainsPattern(Path file, Pattern pattern) {
@@ -375,7 +354,7 @@ public class GrepTool {
 				}
 			}
 		}
-		catch (IOException e) {
+		catch (IOException ignored) {
 		}
 		return false;
 	}
@@ -393,7 +372,7 @@ public class GrepTool {
 				}
 			}
 		}
-		catch (IOException e) {
+		catch (IOException ignored) {
 		}
 		return count;
 	}
@@ -433,17 +412,15 @@ public class GrepTool {
 					results.add(prefix + allLines.get(i));
 				}
 
-				if (!matchingLineNumbers.isEmpty()) {
-					results.add("--");
-				}
-			}
+                results.add("--");
+            }
 
 			if (!results.isEmpty() && results.get(results.size() - 1).equals("--")) {
 				results.remove(results.size() - 1);
 			}
 
 		}
-		catch (IOException e) {
+		catch (IOException ignored) {
 		}
 
 		return results;

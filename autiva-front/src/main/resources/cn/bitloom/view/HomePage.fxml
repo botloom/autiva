@@ -2,9 +2,7 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
-<?import javafx.scene.image.*?>
 <?import javafx.scene.layout.*?>
-<?import javafx.scene.web.WebView?>
 <?import cn.bitloom.node.SvgImageView?>
 
 <VBox fx:id="homePage" styleClass="home-page" xmlns="http://javafx.com/javafx"
@@ -19,10 +17,15 @@
         <SvgImageView fitWidth="100" fitHeight="100" svgPath="/cn/bitloom/images/icon.svg"/>
     </VBox>
 
-    <WebView fx:id="webView"
-             visible="false" managed="false" VBox.vgrow="ALWAYS"
-             maxWidth="1000" prefWidth="600" minWidth="300"
-    />
+    <ScrollPane fx:id="chatScrollPane"
+                visible="false" managed="false" VBox.vgrow="ALWAYS"
+                maxWidth="1000" prefWidth="600" minWidth="300"
+                fitToWidth="true"
+                styleClass="chat-scroll-pane"
+                hbarPolicy="NEVER"
+    >
+        <VBox fx:id="chatContainer" styleClass="chat-container"/>
+    </ScrollPane>
 
     <VBox fx:id="searchBox"
           styleClass="home-page__search-box"
@@ -36,14 +39,6 @@
             <Button styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
                     <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/plus.svg"/>
-                </graphic>
-                <HBox.margin>
-                    <Insets bottom="8"/>
-                </HBox.margin>
-            </Button>
-            <Button fx:id="voiceButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
-                <graphic>
-                    <SvgImageView fx:id="voiceIcon" fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/voice.svg"/>
                 </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>

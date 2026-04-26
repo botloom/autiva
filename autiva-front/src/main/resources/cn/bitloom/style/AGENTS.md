@@ -85,11 +85,24 @@
 **样式类：**
 - `.home-page`: 主页容器
 - `.home-page__icon`: 图标区域
+- `.home-page__chat-scroll-pane`: 聊天滚动面板
 - `.home-page__search-box`: 搜索框容器
 - `.home-page__search-field`: 搜索输入框
 - `.home-page__icon-btn`: 图标按钮
 - `.home-page__icon-btn--active`: 图标按钮激活状态（红色背景，用于录音状态）
 - `.home-page__model-selector`: 模型选择器
+- `.chat-scroll-pane`: 聊天滚动面板
+- `.chat-container`: 聊天消息容器
+- `.chat-message`: 消息卡片基础样式
+- `.chat-message--user`: 用户消息（蓝色渐变，右对齐）
+- `.chat-message--assistant`: 助手消息（灰色背景，左对齐）
+- `.chat-message--streaming`: 流式输出状态
+- `.chat-message--tool`: 工具消息
+- `.chat-message--tool-request`: 工具请求（蓝色背景）
+- `.chat-message--tool-response`: 工具响应（绿色背景）
+- `.chat-message--question`: 问题卡片（紫色渐变）
+- `.chat-message--todo`: 待办事项卡片（黄色渐变）
+- `.md-*`: Markdown 渲染样式（段落、标题、代码块、列表、引用等）
 
 ### settings-page.css
 设置页面样式。
@@ -213,40 +226,6 @@ Markdown 编辑器对话框样式。
 - `.browser-dialog__webview`: WebView
 - `.browser-dialog__status-bar`: 状态栏
 - `.browser-dialog__status`: 状态
-
-### mcp-editor-dialog.css
-MCP 编辑器对话框样式。
-
-**样式类：**
-- `.mcp-editor-dialog`: 对话框容器
-- `.mcp-editor-dialog__header`: 头部
-- `.mcp-editor-dialog__name-field`: 名称输入
-- `.mcp-editor-dialog__btn`: 按钮
-- `.mcp-editor-dialog__scroll-pane`: 滚动面板
-- `.mcp-editor-dialog__content`: 内容区域
-- `.mcp-editor-dialog__section`: 分节
-- `.mcp-editor-dialog__section-label`: 分节标签
-- `.mcp-editor-dialog__combo`: 下拉框
-- `.mcp-editor-dialog__card`: 卡片
-- `.mcp-editor-dialog__field-group`: 字段组
-- `.mcp-editor-dialog__field-label`: 字段标签
-- `.mcp-editor-dialog__field`: 输入字段
-- `.mcp-editor-dialog__footer`: 底部栏
-- `.mcp-editor-dialog__status`: 状态
-
-### md-editor.css
-Markdown 编辑器组件样式。
-
-**样式类：**
-- `.md-editor`: 组件容器
-- `.md-editor__header`: 头部栏
-- `.md-editor__name-field`: 名称输入框
-- `.md-editor__btn`: 按钮
-- `.md-editor__split-pane`: 分割面板
-- `.md-editor__textarea`: 文本区域
-- `.md-editor__footer`: 底部栏
-- `.md-editor__word-count`: 字数统计
-- `.md-editor__status`: 状态
 
 ### scroll-bar.css
 滚动条样式。

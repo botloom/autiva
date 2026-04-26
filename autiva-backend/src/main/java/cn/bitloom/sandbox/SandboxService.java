@@ -2,141 +2,190 @@ package cn.bitloom.sandbox;
 
 import cn.bitloom.baas.BaasManager;
 import cn.bitloom.baas.BaasResource;
+import cn.bitloom.dto.DeployRequest;
+import cn.bitloom.dto.DeployResult;
+import cn.bitloom.dto.ProjectFile;
 import cn.bitloom.entity.BaasResourceEntity;
 import cn.bitloom.entity.UserServiceEntity;
 import cn.bitloom.repository.BaasResourceRepository;
 import cn.bitloom.repository.UserServiceRepository;
-import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.opensandbox.sandbox.Sandbox;
-import com.alibaba.opensandbox.sandbox.domain.models.execd.executions.Execution;
-import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SandboxService {
 
+    private final SandboxManager sandboxManager;
     private final BaasManager baasManager;
     private final UserServiceRepository userServiceRepository;
     private final BaasResourceRepository baasResourceRepository;
 
-    private final String baseDomain = "autiva.dev";
+    private static final String BASE_DOMAIN = "autiva.dev";
 
-    private final Map<String, Sandbox> sandboxCache = new ConcurrentHashMap<>();
+    public Mono<DeployResult> deployProject(DeployRequest request) {
+        String subdomain = generateSubdomain(request.clientId(), request.projectName());
+        String runtime = request.runtime() != null ? request.runtime() : detectRuntime(request.files());
+        String url = "https://" + subdomain + "." + BASE_DOMAIN;
 
-    private static final Map<String, String> RUNTIME_IMAGES = Map.of(
-            "node", "opensandbox/code-interpreter:v1.0.2",
-            "python", "opensandbox/code-interpreter:v1.0.2",
-            "java", "opensandbox/code-interpreter:v1.0.2"
-    );
-
-    @PreDestroy
-    public void cleanup() {
-        log.info("Cleaning up {} sandbox instances...", sandboxCache.size());
-        sandboxCache.forEach((id, sandbox) -> {
-            try {
-                sandbox.kill();
-                log.info("Sandbox killed: {}", id);
-            } catch (Exception e) {
-                log.error("Failed to kill sandbox {}: {}", id, e.getMessage());
-            }
-        });
-        sandboxCache.clear();
-    }
-
-    public Mono<SandboxResult> createSandbox(String clientId, String projectName, String code, String runtime) {
-        String subdomain = generateSubdomain(clientId, projectName);
-        String url = "https://" + subdomain + "." + baseDomain;
-
-        return checkSubdomainExists(subdomain)
+        return userServiceRepository.existsBySubdomain(subdomain)
                 .flatMap(exists -> {
                     if (exists) {
-                        return Mono.just(SandboxResult.failure("Subdomain already exists: " + subdomain));
+                        return Mono.just(DeployResult.failure("Subdomain already exists: " + subdomain));
                     }
-                    return createSandboxInternal(clientId, projectName, code, runtime, subdomain, url);
+                    return doDeploy(request, runtime, subdomain, url);
                 })
                 .onErrorResume(e -> {
-                    log.error("Failed to create sandbox: {}", e.getMessage(), e);
-                    return Mono.just(SandboxResult.failure("Failed to create sandbox: " + e.getMessage()));
+                    log.error("[Deploy] Failed: {}", e.getMessage(), e);
+                    return Mono.just(DeployResult.failure("Deployment failed: " + e.getMessage()));
                 });
     }
 
-    private Mono<SandboxResult> createSandboxInternal(String clientId, String projectName, String code,
-                                                        String runtime, String subdomain, String url) {
-        String image = RUNTIME_IMAGES.getOrDefault(runtime, RUNTIME_IMAGES.get("node"));
-        String sandboxId = "sandbox-" + System.currentTimeMillis() + "-" + (int)(Math.random() * 10000);
+    private Mono<DeployResult> doDeploy(DeployRequest request, String runtime, String subdomain, String url) {
+        String sandboxId = sandboxManager.generateSandboxId();
+        int port = getPortForRuntime(runtime);
 
-        return Mono.fromCallable(() -> {
-                    Sandbox sandbox = Sandbox.builder()
-                            .image(image)
-                            .build();
-                    
-                    sandboxCache.put(sandboxId, sandbox);
-                    log.info("Sandbox created: id={}", sandboxId);
-                    
-                    return sandbox;
+        return Mono.fromCallable(() -> sandboxManager.create(sandboxId, runtime))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(sandbox -> {
+                    SandboxManager.ExecutionResult mkdirResult = sandboxManager.execute(sandbox, "mkdir -p /app");
+                    if (mkdirResult.hasError()) {
+                        return Mono.just(DeployResult.failure("Failed to create app directory: " + mkdirResult.stderr()));
+                    }
+
+                    SandboxManager.ExecutionResult writeResult = writeAllFiles(sandbox, request.files());
+                    if (writeResult.hasError()) {
+                        return Mono.just(DeployResult.failure("Failed to write project files: " + writeResult.stderr()));
+                    }
+
+                    installDependencies(sandbox, runtime, request.files());
+
+                    return baasManager.createAllResources(request.clientId() + "-" + request.projectName())
+                            .flatMap(baasResources -> {
+                                Map<String, String> allEnvVars = new HashMap<>();
+                                if (request.envVars() != null) {
+                                    allEnvVars.putAll(request.envVars());
+                                }
+                                allEnvVars.putAll(baasManager.resourcesToEnvVars(baasResources));
+
+                                writeEnvFile(sandbox, allEnvVars);
+
+                                SandboxManager.ExecutionResult startResult = startApplication(sandbox, runtime, request.files());
+                                if (startResult.hasError()) {
+                                    log.warn("[Deploy] App start may have issues: {}", startResult.stderr());
+                                }
+
+                                return persistService(request, subdomain, runtime, sandboxId, port, baasResources)
+                                        .thenReturn(DeployResult.success(url, sandboxId, subdomain));
+                            });
                 })
-                .flatMap(sandbox -> deployCode(sandbox, code, runtime)
-                            .then(createBaasResources(clientId, projectName))
-                            .flatMap(baasResources -> saveServiceEntity(
-                                    clientId, projectName, subdomain, runtime,
-                                    sandboxId, null, baasResources
-                            ))
-                            .thenReturn(SandboxResult.success(url, sandboxId)));
+                .onErrorResume(e -> {
+                    log.error("[Deploy] Rolling back sandbox {}: {}", sandboxId, e.getMessage());
+                    sandboxManager.kill(sandboxId);
+                    return Mono.just(DeployResult.failure("Deployment failed: " + e.getMessage()));
+                });
     }
 
-    private Mono<Void> deployCode(Sandbox sandbox, String code, String runtime) {
-        return Mono.fromRunnable(() -> {
-            try {
-                String entryFile = getEntryFile(runtime);
-                String writeCommand = String.format("mkdir -p /app && echo '%s' > %s", 
-                        code.replace("'", "'\\''"), entryFile);
-                
-                Execution writeExecution = sandbox.commands().run(writeCommand);
-                logExecution(writeExecution, "write file");
-                
-                String startCommand = getStartCommand(runtime);
-                Execution startExecution = sandbox.commands().run(startCommand);
-                logExecution(startExecution, "start application");
-                
-            } catch (Exception e) {
-                log.error("Failed to deploy code: {}", e.getMessage(), e);
-                throw new RuntimeException("Failed to deploy code", e);
+    private SandboxManager.ExecutionResult writeAllFiles(Sandbox sandbox, List<ProjectFile> files) {
+        for (ProjectFile file : files) {
+            String dirPath = extractDir(file.path());
+            if (!dirPath.isEmpty()) {
+                sandboxManager.execute(sandbox, "mkdir -p /app/" + dirPath);
             }
-        });
-    }
 
-    private void logExecution(Execution execution, String operation) {
-        if (execution.getLogs() != null && execution.getLogs().getStdout() != null) {
-            execution.getLogs().getStdout().forEach(outputMsg -> 
-                    log.debug("[{}] {}", operation, outputMsg.getText()));
+            String writeCmd = String.format(
+                    "cat > /app/%s << 'AUTIVA_EOF'\n%s\nAUTIVA_EOF",
+                    file.path(), file.content()
+            );
+            SandboxManager.ExecutionResult result = sandboxManager.execute(sandbox, writeCmd);
+            if (result.hasError()) {
+                log.warn("[Deploy] Write file {} warning: {}", file.path(), result.stderr());
+            }
+            log.info("[Deploy] Written file: /app/{}", file.path());
         }
-        if (execution.getLogs() != null && execution.getLogs().getStderr() != null) {
-            execution.getLogs().getStderr().forEach(outputMsg -> 
-                    log.error("[{}] {}", operation, outputMsg.getText()));
+        return new SandboxManager.ExecutionResult(true, "", "", null);
+    }
+
+    private void installDependencies(Sandbox sandbox, String runtime, List<ProjectFile> files) {
+        boolean hasPackageJson = files.stream().anyMatch(f -> f.path().equals("package.json"));
+        boolean hasRequirementsTxt = files.stream().anyMatch(f -> f.path().equals("requirements.txt"));
+        boolean hasPomXml = files.stream().anyMatch(f -> f.path().equals("pom.xml"));
+
+        String installCmd = null;
+        if ("node".equals(runtime) || hasPackageJson) {
+            installCmd = "cd /app && npm install --production 2>&1 || true";
+        } else if ("python".equals(runtime) || hasRequirementsTxt) {
+            installCmd = "cd /app && pip install -r requirements.txt 2>&1 || true";
+        } else if ("java".equals(runtime) || hasPomXml) {
+            installCmd = "cd /app && mvn package -DskipTests 2>&1 || true";
+        }
+
+        if (installCmd != null) {
+            log.info("[Deploy] Installing dependencies for runtime={}", runtime);
+            SandboxManager.ExecutionResult result = sandboxManager.execute(sandbox, installCmd);
+            if (result.hasError()) {
+                log.warn("[Deploy] Dependency install warning: {}", result.stderr());
+            }
         }
     }
 
-    private Mono<Map<String, BaasResource>> createBaasResources(String clientId, String projectName) {
-        String serviceId = clientId + "-" + projectName;
-        return baasManager.createAllResources(serviceId);
+    private void writeEnvFile(Sandbox sandbox, Map<String, String> envVars) {
+        if (envVars == null || envVars.isEmpty()) return;
+
+        StringBuilder envContent = new StringBuilder();
+        envVars.forEach((key, value) -> envContent.append(key).append("=").append(value).append("\n"));
+
+        String writeCmd = String.format(
+                "cat > /app/.env << 'AUTIVA_EOF'\n%s\nAUTIVA_EOF",
+                envContent.toString()
+        );
+        SandboxManager.ExecutionResult result = sandboxManager.execute(sandbox, writeCmd);
+        if (result.success()) {
+            log.info("[Deploy] Written .env file with {} variables", envVars.size());
+        } else {
+            log.warn("[Deploy] Failed to write .env: {}", result.stderr());
+        }
     }
 
-    private Mono<Void> saveServiceEntity(String clientId, String projectName, String subdomain,
-                                          String runtime, String sandboxId, Integer port,
-                                          Map<String, BaasResource> baasResources) {
+    private SandboxManager.ExecutionResult startApplication(Sandbox sandbox, String runtime, List<ProjectFile> files) {
+        String startCmd = determineStartCommand(runtime, files);
+        log.info("[Deploy] Starting application: {}", startCmd);
+        return sandboxManager.execute(sandbox, "cd /app && " + startCmd + " &");
+    }
+
+    private String determineStartCommand(String runtime, List<ProjectFile> files) {
+        if ("node".equals(runtime) || files.stream().anyMatch(f -> f.path().equals("package.json"))) {
+            if (files.stream().anyMatch(f -> f.path().equals("server.js"))) return "node server.js";
+            if (files.stream().anyMatch(f -> f.path().equals("index.js"))) return "node index.js";
+            if (files.stream().anyMatch(f -> f.path().equals("app.js"))) return "node app.js";
+            return "npm start";
+        }
+        if ("python".equals(runtime)) {
+            if (files.stream().anyMatch(f -> f.path().equals("main.py"))) return "python main.py";
+            if (files.stream().anyMatch(f -> f.path().equals("app.py"))) return "python app.py";
+            return "python main.py";
+        }
+        if ("java".equals(runtime)) {
+            return "java -jar target/*.jar";
+        }
+        return "node index.js";
+    }
+
+    private Mono<Void> persistService(DeployRequest request, String subdomain, String runtime,
+                                       String sandboxId, int port, Map<String, BaasResource> baasResources) {
         UserServiceEntity entity = UserServiceEntity.builder()
-                .clientId(clientId)
-                .projectName(projectName)
+                .clientId(request.clientId())
+                .projectName(request.projectName())
                 .subdomain(subdomain)
                 .runtime(runtime)
                 .status("running")
@@ -157,24 +206,18 @@ public class SandboxService {
                                     .createdAt(LocalDateTime.now())
                                     .build())
                             .toList();
-
                     return baasResourceRepository.saveAll(resourceEntities).then();
                 });
     }
 
-    public Mono<Void> stopSandbox(String clientId, String projectName) {
+    public Mono<Void> stopService(String clientId, String projectName) {
         return userServiceRepository.findByClientId(clientId)
                 .filter(service -> service.getProjectName().equals(projectName))
                 .next()
                 .flatMap(service -> {
                     if (service.getSandboxId() != null) {
-                        return Mono.fromRunnable(() -> {
-                                    Sandbox sandbox = sandboxCache.remove(service.getSandboxId());
-                                    if (sandbox != null) {
-                                        sandbox.kill();
-                                        log.info("Sandbox killed: {}", service.getSandboxId());
-                                    }
-                                })
+                        return Mono.fromRunnable(() -> sandboxManager.kill(service.getSandboxId()))
+                                .subscribeOn(Schedulers.boundedElastic())
                                 .then(updateServiceStatus(service, "stopped"));
                     }
                     return updateServiceStatus(service, "stopped");
@@ -187,7 +230,7 @@ public class SandboxService {
         return userServiceRepository.save(service).then();
     }
 
-    public Mono<List<SandboxInfo>> getStatus(String clientId) {
+    public Mono<List<SandboxInfo>> listServices(String clientId) {
         return userServiceRepository.findByClientId(clientId)
                 .map(service -> new SandboxInfo(
                         service.getSandboxId(),
@@ -206,24 +249,21 @@ public class SandboxService {
                 .flatMap(service -> {
                     if (service.getSandboxId() != null) {
                         return Mono.fromCallable(() -> {
-                            Sandbox sandbox = sandboxCache.get(service.getSandboxId());
+                            Sandbox sandbox = sandboxManager.getSandbox(service.getSandboxId());
                             if (sandbox != null) {
-                                Execution execution = sandbox.commands().run("cat /var/log/app.log");
-                                if (execution.getLogs() != null && execution.getLogs().getStdout() != null) {
-                                    StringBuilder sb = new StringBuilder();
-                                    execution.getLogs().getStdout().forEach(log -> sb.append(log.getText()).append("\n"));
-                                    return sb.toString();
-                                }
+                                SandboxManager.ExecutionResult result =
+                                        sandboxManager.execute(sandbox, "cat /var/log/app.log 2>/dev/null || echo 'No log file'");
+                                return result.stdout();
                             }
-                            return "No logs available";
-                        });
+                            return "No logs available (sandbox not in cache)";
+                        }).subscribeOn(Schedulers.boundedElastic());
                     }
                     return Mono.just("No logs available");
                 })
                 .defaultIfEmpty("Service not found");
     }
 
-    public Mono<SandboxInfo> getSandboxBySubdomain(String subdomain) {
+    public Mono<SandboxInfo> getServiceBySubdomain(String subdomain) {
         return userServiceRepository.findBySubdomain(subdomain)
                 .map(service -> new SandboxInfo(
                         service.getSandboxId(),
@@ -234,42 +274,38 @@ public class SandboxService {
                 ));
     }
 
-    public Mono<JSONObject> getServiceWithResources(String subdomain) {
+    public Mono<Map<String, Object>> getServiceDetails(String subdomain) {
         return userServiceRepository.findBySubdomain(subdomain)
                 .flatMap(service -> baasResourceRepository.findByServiceId(service.getId())
                         .collectList()
-                        .map(resources -> {
-                            JSONObject result = new JSONObject();
-                            result.put("service", service);
-                            result.put("resources", resources);
-                            return result;
-                        }));
-    }
-
-    private Mono<Boolean> checkSubdomainExists(String subdomain) {
-        return userServiceRepository.existsBySubdomain(subdomain);
+                        .map(resources -> Map.<String, Object>of(
+                                "service", service,
+                                "resources", resources
+                        )));
     }
 
     private String generateSubdomain(String clientId, String projectName) {
-        String combined = clientId + "-" + projectName;
-        return combined.toLowerCase().replaceAll("[^a-z0-9-]", "-");
+        return (clientId + "-" + projectName).toLowerCase().replaceAll("[^a-z0-9-]", "-");
     }
 
-    private String getEntryFile(String runtime) {
-        return switch (runtime) {
-            case "node" -> "/app/index.js";
-            case "python" -> "/app/main.py";
-            case "java" -> "/app/Main.java";
-            default -> "/app/main";
-        };
+    private String detectRuntime(List<ProjectFile> files) {
+        if (files.stream().anyMatch(f -> f.path().equals("package.json"))) return "node";
+        if (files.stream().anyMatch(f -> f.path().equals("requirements.txt"))) return "python";
+        if (files.stream().anyMatch(f -> f.path().equals("pom.xml"))) return "java";
+        return "node";
     }
 
-    private String getStartCommand(String runtime) {
+    private String extractDir(String filePath) {
+        int lastSlash = filePath.lastIndexOf('/');
+        return lastSlash > 0 ? filePath.substring(0, lastSlash) : "";
+    }
+
+    private int getPortForRuntime(String runtime) {
         return switch (runtime) {
-            case "node" -> "node /app/index.js";
-            case "python" -> "python /app/main.py";
-            case "java" -> "java /app/Main.java";
-            default -> "/app/main";
+            case "node" -> 3000;
+            case "python" -> 8000;
+            case "java" -> 8080;
+            default -> 3000;
         };
     }
 }

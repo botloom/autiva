@@ -46,6 +46,22 @@
             </VBox>
 
             <VBox>
+                <Label text="微信配置" styleClass="settings-page__section-label"/>
+                <VBox styleClass="settings-page__card">
+                    <VBox styleClass="settings-page__row">
+                        <Label text="iLink 接入" styleClass="settings-page__row-title"/>
+                        <HBox alignment="CENTER_LEFT" spacing="12" styleClass="settings-page__path-row">
+                            <CheckBox fx:id="weixinEnabledCheckBox" text="启用" styleClass="settings-page__tool-checkbox"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="weixinStatusLabel" text="未连接" styleClass="settings-page__row-subtitle"/>
+                            <Button fx:id="weixinLoginButton" text="扫码登录" styleClass="settings-page__secondary-btn"/>
+                        </HBox>
+                        <Label text="启用后通过微信 iLink 协议接入，扫码登录即可对话" styleClass="settings-page__row-subtitle" wrapText="true"/>
+                    </VBox>
+                </VBox>
+            </VBox>
+
+            <VBox>
                 <Label text="AI 配置" styleClass="settings-page__section-label"/>
                 <VBox styleClass="settings-page__card">
                     <VBox styleClass="settings-page__row">

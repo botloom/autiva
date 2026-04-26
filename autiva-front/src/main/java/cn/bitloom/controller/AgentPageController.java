@@ -1,9 +1,11 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.agent.AgentManager;
+import cn.bitloom.constant.AppConstants;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.store.Store;
+import cn.bitloom.util.AlertUtil;
+import cn.bitloom.vm.AgentPageViewModel;
 import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -21,11 +23,10 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.time.LocalDateTime;
-import java.util.*;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.ResourceBundle;
 
 @Slf4j
 @Component
@@ -42,14 +43,15 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
     private IndexController indexController;
 
     private final WindowManager windowManager;
-    private final AgentManager agentManager;
+    private final AgentPageViewModel viewModel;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        loadAgents();
+        renderAgents();
     }
 
-    private void loadAgents() {
+    private void renderAgents() {
+        viewModel.loadAgents();
         agentListContainer.getChildren().clear();
 
         VBox cardsContainer = new VBox();
@@ -60,7 +62,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
         mainAgentLabel.getStyleClass().add("agent-page__section-title");
         cardsContainer.getChildren().add(mainAgentLabel);
 
-        List<AgentManager.AgentFolder> mainAgents = agentManager.loadAgentFolders();
+        List<AgentManager.AgentFolder> mainAgents = viewModel.getMainAgents();
         if (mainAgents.isEmpty()) {
             Label emptyLabel = new Label("暂无主智能体配置");
             emptyLabel.getStyleClass().add("agent-page__empty-text");
@@ -78,7 +80,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
         VBox.setMargin(subagentLabel, new Insets(24, 0, 0, 0));
         cardsContainer.getChildren().add(subagentLabel);
 
-        List<AgentManager.SubagentFolder> subagents = agentManager.loadSubagentFolders();
+        List<AgentManager.SubagentFolder> subagents = viewModel.getSubagents();
         if (subagents.isEmpty()) {
             Label emptyLabel = new Label("暂无子智能体配置");
             emptyLabel.getStyleClass().add("agent-page__empty-text");
@@ -124,7 +126,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
         Label iconLabel = new Label("📄");
         iconLabel.getStyleClass().add("agent-page__file-icon");
 
-        Label nameLabel = new Label(subagent.getPath().getFileName().toString());
+        Label nameLabel = new Label(subagent.path().getFileName().toString());
         nameLabel.getStyleClass().add("agent-page__file-name");
 
         Region spacer = new Region();
@@ -142,7 +144,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
         content.getChildren().add(fileRow);
 
         TitledPane titledPane = new TitledPane();
-        titledPane.setText(subagent.getName());
+        titledPane.setText(subagent.name());
         titledPane.setContent(content);
         titledPane.getStyleClass().add("agent-page__agent-card");
         titledPane.setExpanded(false);
@@ -214,98 +216,52 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
 
     private void openEditor(AgentManager.AgentFile file, AgentManager.AgentFolder agent) {
         try {
-            String content = Files.readString(file.getPath());
-
-            WindowManager.WindowConfig<MdEditorController> config = windowManager.<MdEditorController>configBuilder()
-                .fxmlPath("cn/bitloom/components/MdEditor.fxml")
-                .title(agent.getName() + " - " + file.getDisplayName())
-                .owner(agentPage.getScene().getWindow())
-                .controllerInitializer(controller -> {
-                    controller.setTitle(file.getDisplayName());
-                    controller.setContent(content);
-                    controller.setOnSaveCallback(data -> {
-                        try {
-                            Files.writeString(file.getPath(), data.content());
-                            controller.setStatus("已保存: " + LocalDateTime.now().toString());
-                            loadAgents();
-                        } catch (IOException e) {
-                            log.error("Failed to save file: {}", file.getPath(), e);
-                            controller.setStatus("保存失败: " + e.getMessage());
-                        }
-                    });
-                })
-                .build();
-
-            windowManager.showDialog(config);
+            Path agentPath = agent.getPath();
+            windowManager.<FileEditorController>showDialog(
+                "cn/bitloom/view/FileEditorDialog.fxml",
+                agentPage.getScene().getWindow(),
+                controller -> controller.initRootPath(agentPath)
+            );
         } catch (Exception e) {
             log.error("Failed to open agent editor", e);
-            showAlert("打开编辑器失败: " + e.getMessage());
+            AlertUtil.showInfo("打开编辑器失败: " + e.getMessage());
         }
     }
 
     private void openSubagentEditor(AgentManager.SubagentFolder subagent) {
         try {
-            String content = Files.readString(subagent.getPath());
-
-            WindowManager.WindowConfig<MdEditorController> config = windowManager.<MdEditorController>configBuilder()
-                .fxmlPath("cn/bitloom/components/MdEditor.fxml")
-                .title("子智能体 - " + subagent.getName())
-                .owner(agentPage.getScene().getWindow())
-                .controllerInitializer(controller -> {
-                    controller.setTitle(subagent.getName());
-                    controller.setContent(content);
-                    controller.setOnSaveCallback(data -> {
-                        try {
-                            agentManager.saveSubagentConfig(subagent.getName(), data.content());
-                            controller.setStatus("已保存: " + LocalDateTime.now().toString());
-                            loadAgents();
-                        } catch (Exception e) {
-                            log.error("Failed to save subagent config: {}", subagent.getName(), e);
-                            controller.setStatus("保存失败: " + e.getMessage());
-                        }
-                    });
-                })
-                .build();
-
-            windowManager.showDialog(config);
+            Path subagentDir = AppConstants.Base.SUBAGENT_DIR;
+            windowManager.<FileEditorController>showDialog(
+                "cn/bitloom/view/FileEditorDialog.fxml",
+                agentPage.getScene().getWindow(),
+                controller -> controller.initRootPath(subagentDir)
+            );
         } catch (Exception e) {
             log.error("Failed to open subagent editor", e);
-            showAlert("打开编辑器失败: " + e.getMessage());
+            AlertUtil.showInfo("打开编辑器失败: " + e.getMessage());
         }
     }
 
     private void deleteSubagent(AgentManager.SubagentFolder subagent) {
-        javafx.scene.control.Alert confirm = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("确认删除");
-        confirm.setHeaderText(null);
-        confirm.setContentText("确定要删除子智能体 \"" + subagent.getName() + "\" 吗？此操作不可撤销。");
-        confirm.initOwner(agentPage.getScene().getWindow());
-
-        Optional<javafx.scene.control.ButtonType> result = confirm.showAndWait();
-        if (result.isPresent() && result.get() == javafx.scene.control.ButtonType.OK) {
+        boolean confirmed = AlertUtil.showConfirm("确认删除",
+                "确定要删除子智能体 \"" + subagent.name() + "\" 吗？此操作不可撤销。",
+                agentPage.getScene().getWindow());
+        if (confirmed) {
             try {
-                agentManager.deleteSubagentConfig(subagent.getName());
-                loadAgents();
-                Store.statusText.set("子智能体已删除: " + subagent.getName());
+                viewModel.deleteSubagent(subagent.name());
+                renderAgents();
             } catch (Exception e) {
-                log.error("Failed to delete subagent: {}", subagent.getName(), e);
-                showAlert("删除失败: " + e.getMessage());
+                log.error("Failed to delete subagent: {}", subagent.name(), e);
+                AlertUtil.showError("删除失败: " + e.getMessage());
             }
         }
-    }
-
-    private void showAlert(String message) {
-        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
     }
 
     @Override
     public void show() {
         this.agentPage.setVisible(true);
         this.agentPage.setManaged(true);
-        loadAgents();
+        renderAgents();
     }
 
     @Override
@@ -321,7 +277,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
                 "refreshAgentButton",
                 "刷新",
                 "dynamic-btn",
-                event -> loadAgents()
+                event -> renderAgents()
             )
         );
     }

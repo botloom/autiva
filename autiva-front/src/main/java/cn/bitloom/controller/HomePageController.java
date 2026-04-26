@@ -3,53 +3,45 @@ package cn.bitloom.controller;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.node.SvgImageView;
-import cn.bitloom.service.SpeechRecognitionService;
+import cn.bitloom.node.AssistantMessageCard;
+import cn.bitloom.node.ChatMessage;
+import cn.bitloom.node.ToolMessageCard;
+import cn.bitloom.node.UserMessageCard;
 import cn.bitloom.store.Store;
 import cn.bitloom.store.ToolUIBridge;
-import cn.bitloom.util.MarkdownUtil;
 import cn.bitloom.vm.HomePageViewModel;
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
-import javafx.concurrent.Worker;
+import javafx.beans.binding.Bindings;
+import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
-import javafx.scene.text.Text;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.scene.web.WebEngine;
-import javafx.scene.web.WebView;
+import javafx.scene.text.Text;
 import javafx.util.Duration;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import netscape.javascript.JSObject;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Objects;
 import java.util.ResourceBundle;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -65,34 +57,27 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private Button searchButton;
     @FXML
-    private Button voiceButton;
-    @FXML
-    private SvgImageView voiceIcon;
-    @FXML
     private VBox icon;
     @FXML
-    private WebView webView;
+    private ScrollPane chatScrollPane;
+    @FXML
+    private VBox chatContainer;
     @FXML
     private ComboBox<ModelTypeEnum> modelSelector;
 
     @Getter
     private final HomePageViewModel viewModel;
     @Getter
-    private final SpeechRecognitionService speechRecognitionService;
-    @Getter
     private final ToolUIBridge toolUIBridge;
 
     @Getter
     @Setter
     private IndexController indexController;
-    private WebEngine webEngine;
-    private StringBuilder streamMessage = new StringBuilder();
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         this.searchButton.setOnAction(event -> this.handleSendMessage());
         this.searchField.setOnAction(event -> this.handleSendMessage());
-        this.voiceButton.setOnAction(event -> this.handleVoiceButton());
 
         this.modelSelector.getItems().addAll(ModelTypeEnum.values());
         this.modelSelector.setValue(Store.selectedModel.get());
@@ -105,103 +90,108 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             }
         });
 
-        this.webEngine = this.webView.getEngine();
-        this.webEngine.setJavaScriptEnabled(true);
-        this.webEngine.loadContent(this.loadChatHtmlTemplate());
+        this.toolUIBridge.setOnNodeAdded(this::addChatNode);
 
-        this.webEngine.getLoadWorker().stateProperty().addListener((obState, oldState, newState) -> {
-            if (newState == Worker.State.SUCCEEDED) {
-                JSObject window = (JSObject) this.webEngine.executeScript("window");
-                window.setMember("toolUIBridge", this.toolUIBridge);
-                this.toolUIBridge.setWebEngine(this.webEngine);
+        this.chatContainer.heightProperty().addListener((obs, oldVal, newVal) -> {
+            Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
+        });
 
-                List<Message> messages = this.viewModel.getHistoricalMessages();
-                if (!messages.isEmpty()) {
-                    this.animateToChatState();
-                    JSONArray jsonArray = (JSONArray) JSON.toJSON(messages);
-                    for (int i = 0; i < jsonArray.size(); i++) {
-                        JSONObject jsonObject = jsonArray.getJSONObject(i);
-                        if (jsonObject.getString("messageType").equals(MessageType.ASSISTANT.name())) {
-                            String text = MarkdownUtil.renderMarkdown(jsonObject.getString("text"));
-                            jsonObject.put("text", text);
-                        }
+        this.viewModel.getMessages().addListener((ListChangeListener<ChatMessage>) change -> {
+            while (change.next()) {
+                if (change.wasAdded()) {
+                    for (ChatMessage msg : change.getAddedSubList()) {
+                        addChatMessage(msg);
                     }
-                    String script = String.format("window.chat.init(%s);", jsonArray.toJSONString());
-                    this.webEngine.executeScript(script);
                 }
-                this.viewModel.getMessage().addListener((ob, oldMessage, newMessage) -> {
-                    if (Objects.isNull(newMessage)) {
-                        return;
-                    }
-                    JSONObject jsonObject = (JSONObject) JSON.toJSON(newMessage);
-                    if (jsonObject.getString("messageType").equals(MessageType.ASSISTANT.name())) {
-                        this.streamMessage.append(jsonObject.getString("text"));
-                        jsonObject.put("text", MarkdownUtil.renderMarkdown(this.streamMessage.toString()));
-                        String script = String.format("window.chat.add(%s);", jsonObject.toJSONString());
-                        this.webEngine.executeScript(script);
-                        if (StringUtils.isNotBlank(jsonObject.getJSONObject("metadata").getString("finishReason"))) {
-                            this.streamMessage = new StringBuilder();
-                        }
-                    } else {
-                        this.streamMessage = new StringBuilder();
-                        String script = String.format("window.chat.add(%s);", jsonObject.toJSONString());
-                        this.webEngine.executeScript(script);
-                    }
-                });
             }
         });
+
+        if (this.viewModel.hasHistoricalMessages()) {
+            this.animateToChatState();
+            this.viewModel.prepareHistoricalMessages();
+        }
     }
 
-    private void handleVoiceButton() {
-        if (this.speechRecognitionService.isRecording()) {
-            this.voiceButton.getStyleClass().remove("home-page__icon-btn--active");
-            this.speechRecognitionService.stopRecordingAndTranscribe()
-                    .thenAccept(text -> {
-                        if (StringUtils.isNotBlank(text)) {
-                            Platform.runLater(() -> {
-                                this.searchField.setText(text);
-                                this.searchField.requestFocus();
-                                this.searchField.end();
-                            });
-                        }
-                    });
+    private void addChatMessage(ChatMessage msg) {
+        Node card = createMessageCard(msg);
+        if (card != null) {
+            if (card instanceof Region region) {
+                double ratio = msg.getType() == ChatMessage.Type.TOOL ? 0.85 : 0.75;
+                region.maxWidthProperty().bind(
+                        Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(ratio))
+                );
+            }
+            HBox row = createMessageRow(card, msg.getType());
+            chatContainer.getChildren().add(row);
         } else {
-            this.voiceButton.getStyleClass().add("home-page__icon-btn--active");
-            this.speechRecognitionService.startRecording();
+            log.warn("addChatMessage: createMessageCard returned null for type={}", msg.getType());
         }
     }
 
-    private String loadChatHtmlTemplate() {
-        try (InputStream is = getClass().getResourceAsStream("/cn/bitloom/html/chat.html");
-             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            return reader.lines().collect(Collectors.joining("\n"));
-        } catch (Exception e) {
-            log.error("Failed to load chat.html template", e);
-            return "<html><body><p>Error loading chat template</p></body></html>";
+    private void addChatNode(Node node) {
+        if (node instanceof Region region) {
+            region.maxWidthProperty().bind(
+                    Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.85))
+            );
         }
+        HBox row = new HBox();
+        row.getStyleClass().add("chat-row");
+        row.setMaxWidth(Double.MAX_VALUE);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getChildren().add(node);
+        chatContainer.getChildren().add(row);
     }
 
-    private void executeScript(String script) {
-        Platform.runLater(() -> {
-            try {
-                webEngine.executeScript(script);
-            } catch (Exception e) {
-                log.error("Error executing script: {}", script, e);
-            }
-        });
+    private HBox createMessageRow(Node card, ChatMessage.Type type) {
+        HBox row = new HBox();
+        row.getStyleClass().add("chat-row");
+        row.setMaxWidth(Double.MAX_VALUE);
+
+        if (type == ChatMessage.Type.USER) {
+            row.setAlignment(Pos.CENTER_RIGHT);
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            row.getChildren().addAll(spacer, card);
+        } else {
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getChildren().add(card);
+        }
+
+        return row;
+    }
+
+    private Node createMessageCard(ChatMessage msg) {
+        return switch (msg.getType()) {
+            case USER -> new UserMessageCard(msg.getContent());
+            case ASSISTANT -> new AssistantMessageCard(msg);
+            case TOOL -> createToolMessageCard(msg);
+        };
+    }
+
+    private Node createToolMessageCard(ChatMessage msg) {
+        if (!msg.getToolCalls().isEmpty()) {
+            ChatMessage.ToolCallInfo tc = msg.getToolCalls().get(0);
+            return new ToolMessageCard(tc.name(), tc.arguments(), true);
+        }
+        if (!msg.getResponses().isEmpty()) {
+            ChatMessage.ToolResponseInfo resp = msg.getResponses().get(0);
+            return new ToolMessageCard(resp.name(), resp.responseData(), false);
+        }
+        return null;
     }
 
     private void handleSendMessage() {
         if (this.searchField.getText().isBlank()) {
             return;
         }
-        if (!this.webView.isVisible()) {
+        if (!this.chatScrollPane.isVisible()) {
             this.animateToChatState();
         }
+        String text = this.searchField.getText();
+        this.viewModel.addUserMessage(text);
         UserMessage userMessage = UserMessage.builder()
-                .text(this.searchField.getText())
+                .text(text)
                 .build();
-        executeScript(String.format("window.chat.add(%s);", JSON.toJSONString(userMessage)));
         this.viewModel.sendMessage(userMessage);
         this.searchField.clear();
     }
@@ -220,8 +210,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
             this.homePage.setAlignment(Pos.BOTTOM_CENTER);
 
-            this.webView.setVisible(true);
-            this.webView.setManaged(true);
+            this.chatScrollPane.setVisible(true);
+            this.chatScrollPane.setManaged(true);
         });
 
         timeline.play();
@@ -232,14 +222,14 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         if (selectedModel == null) {
             return;
         }
-        
+
         Text text = new Text(selectedModel.name());
         text.setFont(javafx.scene.text.Font.font("SF Pro Text", 13));
-        
+
         double textWidth = text.getLayoutBounds().getWidth();
         double padding = 26;
         double width = Math.max(37, textWidth + padding);
-        
+
         this.modelSelector.setPrefWidth(width);
         this.modelSelector.setMinWidth(width);
         this.modelSelector.setMaxWidth(width);
@@ -268,12 +258,12 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                             Store.statusText.set("正在清除对话...");
                             this.viewModel.clear();
                             this.searchField.setText("");
-                            this.executeScript("window.chat.clear();");
+                            this.chatContainer.getChildren().clear();
 
                             this.homePage.setAlignment(Pos.CENTER);
                             VBox.setMargin(this.searchBox, new Insets(0, 0, 0, 0));
-                            this.webView.setVisible(false);
-                            this.webView.setManaged(false);
+                            this.chatScrollPane.setVisible(false);
+                            this.chatScrollPane.setManaged(false);
 
                             this.icon.setVisible(true);
                             this.icon.setManaged(true);

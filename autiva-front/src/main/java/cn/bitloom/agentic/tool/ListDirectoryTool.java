@@ -33,9 +33,6 @@ import java.util.stream.Stream;
  */
 public class ListDirectoryTool {
 
-	private static final List<String> IGNORED_DIRS = List.of(".git", "node_modules", "target", "build", ".idea",
-			".vscode", "dist", "__pycache__", ".gradle", ".mvn");
-
 	private final Path workingDirectory;
 
 	protected ListDirectoryTool(Path workingDirectory) {
@@ -58,16 +55,7 @@ public class ListDirectoryTool {
 		int maxDepth = (depth != null && depth > 0) ? depth : 1;
 		int maxResults = (limit != null && limit > 0) ? limit : 50;
 
-		Path targetDir;
-		if (path != null && !path.isBlank()) {
-			targetDir = Paths.get(path);
-		}
-		else if (this.workingDirectory != null) {
-			targetDir = this.workingDirectory;
-		}
-		else {
-			targetDir = Paths.get(System.getProperty("user.dir"));
-		}
+		Path targetDir = ToolUtils.resolveWorkingDirectory(path, this.workingDirectory);
 
 		if (!Files.exists(targetDir)) {
 			return "错误：路径不存在: " + targetDir.toAbsolutePath();
@@ -107,12 +95,7 @@ public class ListDirectoryTool {
 	}
 
 	private boolean isIgnored(Path path) {
-		for (Path part : path) {
-			if (IGNORED_DIRS.contains(part.toString())) {
-				return true;
-			}
-		}
-		return false;
+		return ToolUtils.isIgnoredPath(path);
 	}
 
 	private record Entry(Path path, boolean isDir) {

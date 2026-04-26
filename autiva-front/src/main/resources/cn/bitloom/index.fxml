@@ -2,16 +2,47 @@
 
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
-<HBox fx:id="rootContainer" stylesheets="@style/index.css" styleClass="window-container" xmlns="http://javafx.com/javafx"
-      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.IndexController">
-    <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
-    <VBox HBox.hgrow="ALWAYS">
-        <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
-        <fx:include source="view/HomePage.fxml" fx:id="homePage"/>
-        <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
-        <fx:include source="view/SettingsPage.fxml" fx:id="settingsPage"/>
-        <fx:include source="view/SkillPage.fxml" fx:id="skillPage"/>
-        <fx:include source="view/McpPage.fxml" fx:id="mcpPage"/>
-        <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
-    </VBox>
-</HBox>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.control.Button?>
+<StackPane styleClass="window-chrome"
+      stylesheets="@style/window-chrome.css,@style/index.css"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.IndexController"
+>
+    <BorderPane fx:id="rootContainer" styleClass="window-chrome__content">
+        <top>
+            <HBox fx:id="toolbar" styleClass="window-chrome__toolbar">
+                <HBox fx:id="iconArea" styleClass="window-chrome__icon-area">
+                    <ImageView fitWidth="18" fitHeight="18" preserveRatio="true">
+                        <Image url="/cn/bitloom/images/icon.png" requestedWidth="18" requestedHeight="18"/>
+                    </ImageView>
+                </HBox>
+                <Region HBox.hgrow="ALWAYS" styleClass="window-chrome__spacer"/>
+                <HBox fx:id="windowControls" styleClass="window-chrome__controls">
+                    <Button fx:id="minimizeBtn" styleClass="window-chrome__btn,window-chrome__btn--minimize" contentDisplay="GRAPHIC_ONLY"/>
+                    <Button fx:id="maximizeBtn" styleClass="window-chrome__btn,window-chrome__btn--maximize" contentDisplay="GRAPHIC_ONLY"/>
+                    <Button fx:id="closeBtn" styleClass="window-chrome__btn,window-chrome__btn--close" contentDisplay="GRAPHIC_ONLY"/>
+                </HBox>
+            </HBox>
+        </top>
+        <center>
+            <HBox styleClass="index__content-area">
+                <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
+                <VBox HBox.hgrow="ALWAYS">
+                    <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
+                    <fx:include source="view/HomePage.fxml" fx:id="homePage"/>
+                    <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
+                    <fx:include source="view/SettingsPage.fxml" fx:id="settingsPage"/>
+                    <fx:include source="view/SkillPage.fxml" fx:id="skillPage"/>
+                    <fx:include source="view/McpPage.fxml" fx:id="mcpPage"/>
+                    <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
+                </VBox>
+            </HBox>
+        </center>
+    </BorderPane>
+</StackPane>

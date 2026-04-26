@@ -122,8 +122,8 @@ public class TaskTool {
 		public TaskFunction(List<SubagentDefinition> subagents, List<SubagentExecutor> subagentExecutors,
 				TaskRepository taskRepository) {
 			this.taskRepository = taskRepository;
-			this.subagents = subagents.stream().collect(Collectors.toMap(sa -> sa.getName(), sa -> sa));
-			this.subagentExecutors = subagentExecutors.stream().collect(Collectors.toMap(se -> se.getKind(), se -> se));
+			this.subagents = subagents.stream().collect(Collectors.toMap(SubagentDefinition::getName, sa -> sa));
+			this.subagentExecutors = subagentExecutors.stream().collect(Collectors.toMap(SubagentExecutor::getKind, se -> se));
 		}
 
 		@Override
@@ -164,9 +164,9 @@ public class TaskTool {
 
 	public static class Builder {
 
-		private List<SubagentReference> subagentReferences = new ArrayList<>();
+		private final List<SubagentReference> subagentReferences = new ArrayList<>();
 
-		private List<SubagentType> subagentTypes = new ArrayList<>();
+		private final List<SubagentType> subagentTypes = new ArrayList<>();
 
 		private String taskDescriptionTemplate = TASK_DESCRIPTION_TEMPLATE;
 
@@ -210,7 +210,7 @@ public class TaskTool {
 		}
 
 		private SubagentDefinition resolve(SubagentReference subagentReference) {
-			for (SubagentResolver subagentResolver : this.subagentTypes.stream().map(st -> st.resolver()).toList()) {
+			for (SubagentResolver subagentResolver : this.subagentTypes.stream().map(SubagentType::resolver).toList()) {
 				if (subagentResolver.canResolve(subagentReference)) {
 					return subagentResolver.resolve(subagentReference);
 				}
@@ -236,14 +236,14 @@ public class TaskTool {
 			Assert.notEmpty(this.subagentTypes, "必须至少提供一个subagentTypes");
 
 			List<SubagentDefinition> subagentDefinitions = this.subagentReferences.stream()
-				.map(sr -> this.resolve(sr))
+				.map(this::resolve)
 				.toList();
 
 			String subagentRegistrations = subagentDefinitions.stream()
-				.map(sa -> sa.toSubagentRegistrations())
+				.map(SubagentDefinition::toSubagentRegistrations)
 				.collect(Collectors.joining("\n"));
 
-			var executors = this.subagentTypes.stream().map(st -> st.executor()).toList();
+			var executors = this.subagentTypes.stream().map(SubagentType::executor).toList();
 
 			return FunctionToolCallback
 				.builder("Task", new TaskFunction(subagentDefinitions, executors, this.taskRepository))

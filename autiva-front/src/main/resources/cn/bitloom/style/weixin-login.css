@@ -1,0 +1,96 @@
+.weixin-login-dialog {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 16;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 24, 0.3, 0, 8);
+    -fx-padding: 20 24 24 24;
+    -fx-pref-width: 320;
+    -fx-alignment: CENTER;
+    -fx-spacing: 16;
+    -fx-cursor: move;
+}
+
+.weixin-login-dialog__header {
+    -fx-pref-width: 272;
+    -fx-alignment: CENTER;
+}
+
+.weixin-login-dialog__title {
+    -fx-font-size: 17;
+    -fx-font-weight: 600;
+    -fx-text-fill: #1d1d1f;
+    -fx-alignment: CENTER;
+}
+
+.weixin-login-dialog__close-btn {
+    -fx-background-color: transparent;
+    -fx-background-radius: 10;
+    -fx-min-width: 24;
+    -fx-min-height: 24;
+    -fx-pref-width: 24;
+    -fx-pref-height: 24;
+    -fx-cursor: hand;
+    -fx-padding: 0;
+}
+
+.weixin-login-dialog__close-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.06);
+}
+
+.weixin-login-dialog__close-btn:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.12);
+}
+
+.weixin-login-dialog__subtitle {
+    -fx-font-size: 13;
+    -fx-text-fill: #86868b;
+    -fx-alignment: CENTER;
+}
+
+.weixin-login-dialog__qr-container {
+    -fx-pref-width: 200;
+    -fx-pref-height: 200;
+    -fx-alignment: CENTER;
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+
+.weixin-login-dialog__qr-image {
+    -fx-fit-width: 180;
+    -fx-fit-height: 180;
+    -fx-smooth: true;
+    -fx-cursor: default;
+}
+
+.weixin-login-dialog__overlay {
+    -fx-alignment: CENTER;
+    -fx-spacing: 8;
+    -fx-cursor: default;
+}
+
+.weixin-login-dialog__overlay-icon {
+    -fx-font-size: 32;
+}
+
+.weixin-login-dialog__overlay-text {
+    -fx-font-size: 13;
+    -fx-text-fill: #86868b;
+}
+
+.weixin-login-dialog__overlay-text--success {
+    -fx-font-size: 15;
+    -fx-font-weight: 600;
+    -fx-text-fill: #34c759;
+}
+
+.weixin-login-dialog__overlay-text--error {
+    -fx-font-size: 13;
+    -fx-text-fill: #ff3b30;
+}
+
+.weixin-login-dialog__status {
+    -fx-font-size: 12;
+    -fx-text-fill: #aeaeb2;
+    -fx-alignment: CENTER;
+}

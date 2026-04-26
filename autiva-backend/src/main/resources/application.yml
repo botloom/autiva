@@ -14,6 +14,8 @@ baas:
   mysql:
     host: localhost
     port: 3306
+    username: autiva
+    password: autiva_2024
   redis:
     host: localhost
     port: 6379
@@ -25,24 +27,26 @@ baas:
     endpoint: http://localhost:9000
     access-key: autiva_admin
     secret-key: autiva_minio_2024
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
 
 gateway:
   base-domain: autiva.dev
   default-target: http://localhost:3000
 
+server:
+  port: 9527
+
 logging:
   level:
     root: info
     cn.bitloom: debug
-  pattern:
-    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
   file:
     name: ${user.home}/.autiva/logs/autiva-backend.log
   logback:
     rollingpolicy:
-      file-name-pattern: ${user.home}/.autiva/logs/autiva-backend.%d{yyyy-MM-dd}.log
       max-history: 30
-
-server:
-  port: 9527
+      max-file-size: 10MB

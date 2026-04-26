@@ -20,6 +20,9 @@
 - `skills`（可选）: 注入到上下文的技能名称
 - `permissionMode`（可选）: 权限模式
 
+**注册信息格式：**
+覆盖了 `toSubagentRegistrations()` 方法，输出格式为 `- **name**: description (工具: tool1, tool2)`，比默认格式更丰富，包含工具列表信息。
+
 ### CodeSubagentExecutor
 使用 Spring AI ChatClient 执行编码子代理任务。
 
@@ -40,9 +43,11 @@ Builder 模式，配置编码子代理类型。
 - `chatClientBuilder(String, ChatClient.Builder)`: 按模型ID注册 ChatClient Builder
 - `chatClientBuilders(Map)`: 批量注册 ChatClient Builder
 - `skillsDirectories(List<String>)`: 技能目录列表
+- `deployTool(DeployTool)`: 部署工具实例（新增）
 
 **默认子代理工具集：**
 - TodoWriteTool、GrepTool、GlobTool、ShellTools、FileSystemTools、WebFetchTool
+- DeployTool（如果配置了 deployTool）（新增）
 - WebSearchTool（如果配置了 braveApiKey）
 
 ### CodeSubagentReferences
@@ -55,6 +60,7 @@ Builder 模式，配置编码子代理类型。
 
 ## 资源文件
 子代理 Markdown 文件位于 `~/.autiva/workspace/subagents/`：
+- `CODE_SUBAGENT.md`: 编码子代理（唯一拥有文件读写和Shell执行能力的代理）
 - `GENERAL_PURPOSE_SUBAGENT.md`: 通用子代理
 - `EXPLORE_SUBAGENT.md`: 探索子代理
 - `PLAN_SUBAGENT.md`: 计划子代理

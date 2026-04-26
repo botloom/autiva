@@ -2,3 +2,8 @@
     -fx-background-color: transparent;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
+
+.index__content-area {
+    -fx-spacing: 0;
+    -fx-padding: 0;
+}

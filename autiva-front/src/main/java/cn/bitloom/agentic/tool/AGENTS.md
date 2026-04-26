@@ -110,6 +110,9 @@ Brave 搜索引擎网络搜索工具（Builder模式创建，需要 Brave API Ke
 ### task 包 (`cn.bitloom.agentic.tool.task`)
 子代理任务工具，详见 [task/AGENTS.md](task/AGENTS.md)
 
+### deploy 包 (`cn.bitloom.agentic.deploy`)
+项目部署工具，详见 [deploy/AGENTS.md](../deploy/AGENTS.md)
+
 ## 日志规范
 
 所有工具调用都会记录日志，格式统一为 `[ToolCall] {工具名} - {操作描述}: {参数信息}`。
@@ -117,6 +120,20 @@ Brave 搜索引擎网络搜索工具（Builder模式创建，需要 Brave API Ke
 ## 设计模式
 - Builder模式：所有工具使用 Builder 创建，不依赖 Spring 管理
 - 策略模式：不同工具实现统一的 ToolCallback 接口
+- 工具方法提取：共享方法（isIgnoredPath、countOccurrences、replaceFirst、generateEditSnippet、resolveWorkingDirectory）统一提取到 ToolUtils 类
+
+## 共享工具类
+
+### ToolUtils
+包级工具类（package-private），提供工具间共享的方法。
+
+**方法：**
+- `isIgnoredPath(Path)`: 判断路径是否属于忽略目录（.git、node_modules、target、build、.idea、.vscode、dist、__pycache__、.gradle、.mvn），使用 Path API 实现跨平台兼容
+- `resolveWorkingDirectory(String, Path)`: 解析工作目录，优先使用传入路径，其次使用配置的工作目录，最后使用系统当前目录
+- `countOccurrences(String, String)`: 统计子字符串出现次数
+- `replaceFirst(String, String, String)`: 替换第一个匹配项
+- `replaceAll(String, String, String)`: 替换所有匹配项
+- `generateEditSnippet(String, String)`: 生成编辑位置周围的上下文片段（带行号）
 
 ## 注意事项
 1. 工具类不使用 @Component 注解，不由 Spring 管理

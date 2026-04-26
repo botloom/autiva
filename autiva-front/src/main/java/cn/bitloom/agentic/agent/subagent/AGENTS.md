@@ -15,7 +15,7 @@
 - `getDescription()`: 返回子代理能力的描述
 - `getKind()`: 返回类型标识符（如 "CODE"、"A2A"）
 - `getReference()`: 返回用于解析此定义的引用
-- `toSubagentRegistrations()`: 格式化注册显示
+- `toSubagentRegistrations()`: 格式化注册显示，默认格式为 `- **name**: description`
 
 ### SubagentExecutor
 为特定子代理类型执行子代理任务。

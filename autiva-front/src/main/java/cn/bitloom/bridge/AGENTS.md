@@ -1,7 +1,7 @@
 # Bridge 包
 
 ## 概述
-本包实现了与第三方平台的连接和通信，提供消息推送、用户管理、审批流程等能力。支持钉钉 Stream 模式和微信 ClawBot 插件，可以在钉钉和微信中与智能体进行对话。
+本包实现了与第三方平台的连接和通信，提供消息推送、用户管理、审批流程等能力。支持钉钉 Stream 模式和微信 iLink 协议接入，可以在钉钉和微信中与智能体进行对话。
 
 ## 钉钉接入
 
@@ -178,222 +178,252 @@ export DINGTALK_APP_CLIENT_SECRET="your-client-secret"
 ## 微信接入
 
 ### 架构设计
-使用官方 `openclaw-weixin-cli` 桥接器实现微信 ClawBot 插件接入，通过 WebSocket Gateway 与智能体系统通信。
+基于微信 iLink 协议自行实现接入，通过 `ILinkApiClient` 直接调用 iLink HTTP/JSON API 实现二维码登录、长轮询消息接收和消息发送。
 
 **核心组件：**
-- `WeixinProperties`: 微信 Gateway 配置属性类
-- `WeixinGatewayServer`: WebSocket 服务器（端口 18789），处理 ACP/JSON-RPC 协议
+- `WeixinILinkProperties`: 微信 iLink 配置属性类
+- `WeixinILinkClient`: iLink 客户端管理器，负责登录、消息轮询和生命周期管理
+- `WeixinILinkMessageHandler`: 消息处理器，处理消息与 EventBus 的集成
+- `ILinkApiClient`: iLink 协议 HTTP 客户端，封装所有 iLink API 调用
+- `ilink.model`: iLink 数据模型包（WeixinMessage、MessageItem、TextItem、LoginContext 等）
 
 **条件注册：**
-所有微信相关组件都使用 `@ConditionalOnProperty` 注解，只有当配置了 `weixin.gateway.enabled=true` 时才会注册到 Spring 容器中。
+所有微信相关组件都使用 `@ConditionalOnProperty` 注解，只有当配置了 `weixin.ilink.enabled=true` 时才会注册到 Spring 容器中。
 
 **工作流程：**
 ```
-微信用户 → ClawBot 插件 → openclaw-weixin-cli → ws://localhost:18789 → WeixinGatewayServer → EventBus.inBox → MainAgent → EventBus.outBox → WeixinGatewayServer → openclaw-weixin-cli → ClawBot 插件 → 微信用户
+微信用户 → iLink 服务器 → WeixinILinkClient(getUpdates 长轮询) → WeixinILinkMessageHandler → EventBus.inBox → MainAgent → EventBus.outBox → WeixinILinkMessageHandler → WeixinILinkClient(sendText) → iLink 服务器 → 微信用户
 ```
 
-### WeixinProperties
-微信 Gateway 配置属性类，统一管理微信相关配置。
+### WeixinILinkProperties
+微信 iLink 配置属性类，统一管理微信 iLink 相关配置。
 
 **配置属性：**
-- `port`: WebSocket 端口，默认 18789
-- `token`: Gateway 认证令牌
-- `gatewayId`: Gateway 标识，默认 java-gateway-001
-- `version`: Gateway 版本，默认 2026.3.22
-- `enabled`: 是否启用微信接入，默认 false
+- `enabled`: 是否启用微信 iLink 接入，默认 false
+- `connectTimeoutMs`: 连接超时时间（毫秒），默认 35000
+- `readTimeoutMs`: 读取超时时间（毫秒），默认 35000
+- `writeTimeoutMs`: 写入超时时间（毫秒），默认 35000
+- `httpMaxRetries`: HTTP 最大重试次数，默认 3
+- `retryBaseDelayMs`: 重试基础退避时间（毫秒），默认 1000
+- `retryMaxDelayMs`: 重试最大退避时间（毫秒），默认 10000
+- `heartbeatEnabled`: 是否启用心跳，默认 true
+- `heartbeatIntervalMs`: 心跳间隔（毫秒），默认 30000
+- `channelVersion`: 渠道版本，默认 2.0.0
 
 **配置方式：**
 ```yaml
 weixin:
-  gateway:
+  ilink:
     enabled: true
-    port: 18789
-    token: your-gateway-token
-    gateway-id: java-gateway-001
-    version: 2026.3.22
+    connect-timeout-ms: 35000
+    read-timeout-ms: 35000
+    write-timeout-ms: 35000
+    http-max-retries: 3
+    retry-base-delay-ms: 1000
+    retry-max-delay-ms: 10000
+    heartbeat-enabled: true
+    heartbeat-interval-ms: 30000
+    channel-version: "2.0.0"
 ```
 
 **注意：** 只有当 `enabled=true` 时，微信相关的 Bean 才会被注册。
 
-### WeixinGatewayServer
-WebSocket 服务器，监听端口 18789，处理 ACP/JSON-RPC 协议。
+### WeixinILinkClient
+iLink 客户端管理器，负责 ILinkApiClient 的完整生命周期管理。
 
 **核心功能：**
-- 启动 WebSocket 服务器（端口 18789）
-- 处理客户端连接和认证
-- 解析 ACP/JSON-RPC 消息
-- 管理会话映射
-- 与 EventBus 集成
+- 创建 `ILinkApiClient` 并管理其生命周期
+- 执行二维码登录流程（异步）
+- 登录成功后启动消息长轮询
+- 管理客户端生命周期（启动、关闭）
+- 暴露 `connectedProperty()` 供 UI 绑定连接状态
+- 暴露 `getQrCodeContent()` 供 UI 渲染二维码
 
-**协议格式：**
+**登录流程：**
+1. `@PostConstruct` 初始化 ILinkApiClient 并调用 `startLogin()`
+2. `startLogin()` 在独立线程中调用 `apiClient.getQRCode()` 获取二维码
+3. 二维码内容存储在 `qrCodeContent` 字段，供 UI 读取
+4. 用户在设置页点击"扫码登录"按钮，弹出登录对话框
+5. 登录对话框使用 ZXing 将二维码内容渲染为图片
+6. `apiClient.pollLoginStatus()` 轮询扫码状态，登录成功后更新 `connected` 属性
+7. 自动启动消息轮询循环
 
-1. **连接认证（connect）**
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "connect",
-  "params": {
-    "token": "your-gateway-token",
-    "agentId": "default"
-  }
-}
-```
+**消息轮询：**
+- 使用 `apiClient.getUpdates()` 长轮询获取消息（约 35 秒挂起）
+- 轮询在独立线程中运行
+- 异常时自动退避重试（5 秒间隔）
+- 会话过期时自动重新登录
+- 连接断开或重连失败时停止轮询
 
-2. **连接成功响应（gateway.connected）**
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "gateway.connected",
-  "params": {
-    "gatewayId": "java-gateway-001",
-    "version": "2026.3.22"
-  }
-}
-```
+**会话过期处理：**
+- 当 `getUpdates()` 返回 `errcode: -14` 时，自动清除状态并重新发起登录流程
 
-3. **接收消息（channel.message）**
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "channel.message",
-  "params": {
-    "from": "user-id",
-    "text": "用户消息内容",
-    "context_token": "窗口绑定标识"
-  }
-}
-```
+### WeixinILinkMessageHandler
+消息处理器，处理微信消息与 EventBus 的集成。
 
-4. **发送消息（channel.send）**
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "channel.send",
-  "params": {
-    "channel": "openclaw-weixin",
-    "to": "user-id",
-    "text": "回复消息内容",
-    "context_token": "窗口绑定标识"
-  }
-}
-```
+**核心功能：**
+- 解析微信消息（提取文本内容）
+- 管理微信会话与系统会话的映射
+- 将消息转发到 EventBus
+- 订阅智能体回复并通过 iLink 发送
 
 **会话管理：**
-- 使用 `userId:contextToken` 作为会话标识
+- 使用 `userId`（格式：`xxx@im.wechat`）作为微信用户标识
 - 通过 `SessionManager` 创建系统会话
-- 维护会话映射关系
-- 支持多窗口会话隔离
+- 维护 `userId` 到 `Session` 的映射关系
 
 **消息处理流程：**
-1. 接收 WebSocket 连接
-2. 处理 `connect` 认证请求
-3. 接收 `channel.message` 消息
-4. 创建或获取会话
-5. 将消息发布到 EventBus（使用 `inBoxPublishBlocked` 非流式模式）
-6. 订阅智能体回复
-7. 通过 `channel.send` 发送回复
+1. 从 `WeixinMessage` 中提取文本内容
+2. 检查是否已有对应用户会话
+3. 如果没有，创建新会话并订阅回复
+4. 将消息发布到 EventBus（使用 `inBoxPublish` 模式）
+5. 智能体处理消息后，通过 `ILinkApiClient.sendText()` 发送回复
+
+### iLink 协议说明
+
+微信 iLink 协议是微信 ClawBot 功能背后的 HTTP/JSON 协议，基座地址为 `https://ilinkai.weixin.qq.com`。
+
+**协议阶段：**
+1. **登录阶段**：二维码扫码登录
+2. **消息阶段**：长轮询接收消息 + 发送消息
+3. **媒体阶段**：CDN 上传/下载 + AES 加密
+
+**核心概念：**
+- `context_token`：消息上下文标识，每条回复必须回传入站消息中的 token。ILinkApiClient 自动管理，按用户缓存最新 token
+- `cursor`：消息分页游标，ILinkApiClient 内部自动管理
+- `bot_token`：登录成功后获取的 Bearer token，后续 API 调用需要携带
+
+**用户 ID 格式：**
+- 普通用户：`xxx@im.wechat`
+- 机器人：`xxx@im.bot`
+
+**核心 API：**
+
+| 接口 | 方法 | 用途 |
+|------|------|------|
+| /get_bot_qrcode | GET | 获取登录二维码 |
+| /get_qrcode_status | GET | 轮询扫码状态 |
+| /getupdates | POST | 长轮询消息（35秒挂起） |
+| /sendmessage | POST | 发送文本或媒体消息 |
+| /getconfig | POST | 获取用户的 typing_ticket |
+| /sendtyping | POST | 显示/隐藏输入状态 |
+| /getuploadurl | POST | 获取 CDN 上传参数 |
+
+**错误码：**
+- `ret: 0`：成功
+- `errcode: -14`：会话过期，需清除状态并重新登录
+- `ret: -2`：参数错误
 
 ### 配置说明
 
-#### 1. 安装官方桥接器
-```bash
-# 安装 openclaw-weixin-cli（需要 Node 环境）
-npm install -g @tencent-weixin/openclaw-weixin-cli
-```
-
-#### 2. 配置桥接器
-```bash
-# 配置 Gateway 地址
-openclaw config set gateway.url ws://localhost:18789
-
-# 配置 Gateway Token
-openclaw config set gateway.token your-gateway-token
-
-# 绑定微信（扫码）
-openclaw channels login --channel openclaw-weixin
-
-# 启动桥接
-openclaw gateway start
-```
-
-#### 3. 启用微信 ClawBot 插件
-1. 微信 → 我 → 设置 → 插件 → **ClawBot** → 启用
-2. 进入 ClawBot → 绑定设备 → 扫终端二维码
-3. 绑定成功后，微信里 **ClawBot** 就是你的智能体
-
-#### 4. 配置敏感信息
-
-**重要：不要将敏感信息提交到代码库！**
+#### 1. 启用微信 iLink 接入
 
 在用户目录下创建配置文件：
 - Windows: `C:\Users\你的用户名\.autiva\settings.properties`
-- macOS/Linux: `/home/你的用户名\.autiva/settings.properties`
+- macOS/Linux: `/home/你的用户名/.autiva/settings.properties`
 
 配置文件内容：
 ```properties
-# 微信配置
-weixin.gateway.enabled=true
-weixin.gateway.token=your-gateway-token
+# 微信 iLink 配置
+weixin.ilink.enabled=true
 ```
 
 详细说明请参考项目根目录下的 `SENSITIVE_CONFIG.md` 文件。
 
+#### 2. 扫码登录
+启动应用后，控制台会输出二维码内容：
+1. 将二维码内容渲染为二维码图片
+2. 使用微信扫描二维码
+3. 在手机上确认登录
+4. 登录成功后自动开始接收消息
+
+#### 3. 测试对话
+登录成功后，在微信中：
+- 直接给机器人发送消息即可对话
+
 ### 技术实现
 
 #### 依赖配置
-项目使用 Spring Boot WebFlux (Reactor Netty) 实现 WebSocket 服务：
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-webflux</artifactId>
-</dependency>
-```
+项目基于 iLink 协议自行实现，使用 Java 内置 `java.net.http.HttpClient` 和 `fastjson2` 进行 HTTP 通信和 JSON 序列化，无需第三方 SDK 依赖。
+
+#### ILinkApiClient
+iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
+
+**核心功能：**
+- `getQRCode()`: 获取登录二维码
+- `pollLoginStatus()`: 轮询扫码状态，等待用户确认登录
+- `getUpdates()`: 长轮询获取消息，自动管理 cursor 和 context_token
+- `sendText()`: 发送文本消息，自动使用缓存的 context_token
+- `clearState()`: 清除所有状态（cursor、context_token、loginContext）
+
+**请求头：**
+所有业务 POST 请求需要以下请求头：
+- `Content-Type: application/json`
+- `AuthorizationType: ilink_bot_token`
+- `Authorization: Bearer <bot_token>`
+- `X-WECHAT-UIN: base64(String(random_uint32))`（每次请求重新生成）
+
+**请求体：**
+所有请求体包含 `base_info: { channel_version: "2.0.0" }`
+
+**异常体系：**
+- `SessionExpiredException`: 会话过期（errcode: -14），需重新登录
+- `NotLoginException`: 未登录时调用业务 API
+- `ILinkException`: 协议错误（ret != 0）
 
 #### 消息流转
-1. **微信 → 系统**：`WeixinWebSocketHandler.handle()` 接收消息 → `EventBus.inBoxPublish()` 发布
-2. **系统 → 微信**：`EventBus.outBoxSubscribe()` 订阅回复 → `sendReply()` 发送
+1. **微信 → 系统**：`WeixinILinkClient` 长轮询获取消息 → `WeixinILinkMessageHandler.handleMessage()` → `EventBus.inBoxPublish()` 发布
+2. **系统 → 微信**：`EventBus.outBoxSubscribe()` 订阅回复 → `ILinkApiClient.sendText()` 发送
 
 #### 会话隔离
 - 使用 `SessionTypeEnum.DM` 创建点对点会话
-- 每个微信 `userId:contextToken` 对应一个系统 `Session`
+- 每个微信 `userId`（格式：`xxx@im.wechat`）对应一个系统 `Session`
 - 会话映射存储在 `ConcurrentHashMap` 中，保证线程安全
-- 支持多窗口消息隔离（通过 `context_token`）
 
 ### 注意事项
 
 1. **条件注册机制**：
    - 微信相关组件使用 `@ConditionalOnProperty` 注解
-   - 只有配置了 `weixin.gateway.enabled=true` 才会注册
-   - 未配置时不会启动 WebSocket 服务器
+   - 只有配置了 `weixin.ilink.enabled=true` 才会注册
+   - 未配置时不会启动 iLink 客户端
    - 避免不必要的资源占用
 
-2. **端口要求**：
-   - 默认端口 18789（官方桥接器默认连接端口）
-   - 确保端口未被占用
-   - 可通过配置修改端口
+2. **登录机制**：
+   - 启动时自动获取二维码并等待扫码
+   - 登录状态通过 `connectedProperty()` 暴露给 UI
+   - 二维码内容通过 `getQrCodeContent()` 供 UI 渲染
+   - 设置页提供"扫码登录"按钮，弹出二维码登录对话框
+   - 登录对话框使用 ZXing 生成二维码图片
+   - 登录状态失效后可通过"刷新二维码"重新登录
 
-3. **协议规范**：
-   - 严格遵循 ACP/JSON-RPC 2.0 格式
-   - 必须透传 `context_token`（微信窗口绑定标识）
-   - 首帧必须是 `connect` 认证
+3. **消息轮询**：
+   - 使用长轮询模式（约 35 秒挂起）
+   - 轮询在独立线程池中运行
+   - 异常时自动退避重试（5 秒间隔）
+   - 连接断开时停止轮询
 
 4. **消息发送方式**：
-   - 使用 `inBoxPublishBlocked` 发送非流式消息
-   - 智能体回复通过 `channel.send` 发送
-   - 支持文本消息格式
+   - 使用 `inBoxPublish` 发送消息到 EventBus
+   - 智能体回复通过 `ILinkApiClient.sendText()` 发送
+   - 当前仅支持文本消息格式
+   - 发送消息前，目标用户必须先给 bot 发过消息（context_token 前提）
 
 5. **会话管理**：
-   - 会话映射使用 `userId:contextToken` 作为 key
+   - 会话映射使用 `userId` 作为 key
    - 避免重复创建会话
    - 支持多用户同时对话
-   - 支持同一用户多窗口隔离
 
 6. **错误处理**：
-   - 认证失败时关闭连接
-   - 订阅错误时记录日志
-   - 消息处理异常时发送错误响应
+   - 登录失败时记录日志
+   - 消息轮询异常时退避重试
+   - 回复发送失败时记录日志
+   - 连接断开/重连失败时停止轮询
+
+7. **生命周期管理**：
+   - `@PostConstruct` 初始化客户端并启动登录
+   - `@PreDestroy` 关闭客户端和线程池
+   - ILinkApiClient 实现了 `AutoCloseable`
 
 ### API 文档参考
-- 微信开放平台：https://open.weixin.qq.com/
-- ClawBot 插件文档：https://open.weixin.qq.com/doc/clawbot
-- OpenClaw Gateway 协议：https://openclaw.dev/docs/gateway-protocol
+- 微信 iLink Bot API：https://www.wechatbot.dev/zh
+- iLink 协议文档：https://www.wechatbot.dev/zh/protocol

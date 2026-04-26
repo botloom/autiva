@@ -25,10 +25,17 @@
 
 **内置 Claude 子代理引用：**
 当注册 Claude 类型的子代理时，自动注册以下引用：
+- `classpath:/agent/CODE_SUBAGENT.md`
 - `classpath:/agent/GENERAL_PURPOSE_SUBAGENT.md`
 - `classpath:/agent/EXPLORE_SUBAGENT.md`
 - `classpath:/agent/PLAN_SUBAGENT.md`
 - `classpath:/agent/BASH_SUBAGENT.md`
+
+**Task 工具描述特点：**
+- 明确告知主智能体"你没有文件读写和Shell执行的能力"
+- 提供子智能体选择规则（编码→Code、探索→Explore、计划→Plan、Shell→Bash）
+- 收窄"何时不使用Task工具"的范围，仅限 WebFetch、TodoWrite、AskUserQuestion
+- 示例改为展示如何通过 Task 工具委派给子智能体
 
 **内部类：**
 - `TaskFunction`: 实现 Function<TaskCall, String>，委托 TaskManager

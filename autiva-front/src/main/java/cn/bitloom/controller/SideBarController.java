@@ -1,6 +1,7 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.holder.PageHolder;
+import cn.bitloom.router.RouteConfig;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.layout.HBox;
@@ -10,10 +11,14 @@ import lombok.Setter;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.ResourceBundle;
 
 @Component
 public class SideBarController implements Initializable, PageHolder {
+
+    private static final String ACTIVE_CSS_CLASS = "sidebar__option--active";
 
     @FXML
     private VBox sideBar;
@@ -34,63 +39,38 @@ public class SideBarController implements Initializable, PageHolder {
     @Setter
     private IndexController indexController;
 
+    private Map<String, HBox> routeOptionMap;
+
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         this.hide();
-        this.homeOption.setOnMouseClicked(event -> {
-            if (this.indexController != null) {
-                this.indexController.navigate(cn.bitloom.router.RouteConfig.Path.HOME);
-            }
-        });
-        this.agentOption.setOnMouseClicked(event -> {
-            if (this.indexController != null) {
-                this.indexController.navigate(cn.bitloom.router.RouteConfig.Path.AGENT);
-            }
-        });
-        this.settingsOption.setOnMouseClicked(event -> {
-            if (this.indexController != null) {
-                this.indexController.navigate(cn.bitloom.router.RouteConfig.Path.SETTINGS);
-            }
-        });
-        this.skillOption.setOnMouseClicked(event -> {
-            if (this.indexController != null) {
-                this.indexController.navigate(cn.bitloom.router.RouteConfig.Path.SKILLS);
-            }
-        });
-        this.mcpOption.setOnMouseClicked(event -> {
-            if (this.indexController != null) {
-                this.indexController.navigate(cn.bitloom.router.RouteConfig.Path.MCP);
-            }
-        });
-        this.taskOption.setOnMouseClicked(event -> {
-            if (this.indexController != null) {
-                this.indexController.navigate(cn.bitloom.router.RouteConfig.Path.TASK);
-            }
+
+        this.routeOptionMap = new LinkedHashMap<>();
+        this.routeOptionMap.put(RouteConfig.Path.HOME, this.homeOption);
+        this.routeOptionMap.put(RouteConfig.Path.AGENT, this.agentOption);
+        this.routeOptionMap.put(RouteConfig.Path.SETTINGS, this.settingsOption);
+        this.routeOptionMap.put(RouteConfig.Path.SKILLS, this.skillOption);
+        this.routeOptionMap.put(RouteConfig.Path.MCP, this.mcpOption);
+        this.routeOptionMap.put(RouteConfig.Path.TASK, this.taskOption);
+
+        this.routeOptionMap.forEach((path, option) -> {
+            option.setOnMouseClicked(event -> {
+                if (this.indexController != null) {
+                    this.indexController.navigate(path);
+                }
+            });
         });
 
-        this.homeOption.getStyleClass().add("sidebar__option--active");
+        this.homeOption.getStyleClass().add(ACTIVE_CSS_CLASS);
     }
 
     public void updateActiveState(String path) {
-        this.homeOption.getStyleClass().remove("sidebar__option--active");
-        this.agentOption.getStyleClass().remove("sidebar__option--active");
-        this.settingsOption.getStyleClass().remove("sidebar__option--active");
-        this.skillOption.getStyleClass().remove("sidebar__option--active");
-        this.mcpOption.getStyleClass().remove("sidebar__option--active");
-        this.taskOption.getStyleClass().remove("sidebar__option--active");
+        this.routeOptionMap.values().forEach(option ->
+                option.getStyleClass().remove(ACTIVE_CSS_CLASS));
 
-        if (cn.bitloom.router.RouteConfig.Path.HOME.equals(path)) {
-            this.homeOption.getStyleClass().add("sidebar__option--active");
-        } else if (cn.bitloom.router.RouteConfig.Path.AGENT.equals(path)) {
-            this.agentOption.getStyleClass().add("sidebar__option--active");
-        } else if (cn.bitloom.router.RouteConfig.Path.SETTINGS.equals(path)) {
-            this.settingsOption.getStyleClass().add("sidebar__option--active");
-        } else if (cn.bitloom.router.RouteConfig.Path.SKILLS.equals(path)) {
-            this.skillOption.getStyleClass().add("sidebar__option--active");
-        } else if (cn.bitloom.router.RouteConfig.Path.MCP.equals(path)) {
-            this.mcpOption.getStyleClass().add("sidebar__option--active");
-        } else if (cn.bitloom.router.RouteConfig.Path.TASK.equals(path)) {
-            this.taskOption.getStyleClass().add("sidebar__option--active");
+        HBox activeOption = this.routeOptionMap.get(path);
+        if (activeOption != null) {
+            activeOption.getStyleClass().add(ACTIVE_CSS_CLASS);
         }
     }
 

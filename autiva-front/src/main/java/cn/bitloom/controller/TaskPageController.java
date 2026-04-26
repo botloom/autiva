@@ -1,11 +1,10 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.cron.CronManager;
 import cn.bitloom.cron.CronManager.CronTaskInfo;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
+import cn.bitloom.util.AlertUtil;
+import cn.bitloom.vm.TaskPageViewModel;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
@@ -22,12 +21,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -43,29 +39,22 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
     @Setter
     private IndexController indexController;
 
-    private final CronManager cronManager;
-    private final ObservableList<CronTaskInfo> taskList = FXCollections.observableArrayList();
-    private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-            .withZone(ZoneId.systemDefault());
+    private final TaskPageViewModel viewModel;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        loadTasks();
+        renderTasks();
     }
 
-    private void loadTasks() {
+    private void renderTasks() {
+        viewModel.loadTasks();
         taskListContainer.getChildren().clear();
-        taskList.clear();
 
-        Map<String, CronTaskInfo> tasks = cronManager.getAllTasks(null);
-        taskList.addAll(tasks.values());
-
-        if (taskList.isEmpty()) {
+        if (viewModel.getTasks().isEmpty()) {
             return;
         }
 
-        Map<String, List<CronTaskInfo>> tasksBySessionId = taskList.stream()
-                .collect(Collectors.groupingBy(CronTaskInfo::getSessionId));
+        Map<String, List<CronTaskInfo>> tasksBySessionId = viewModel.getTasksGroupedBySessionId();
 
         VBox cardsContainer = new VBox();
         cardsContainer.getStyleClass().add("task-page__cards-container");
@@ -110,7 +99,7 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
         Label nameLabel = new Label(task.getName());
         nameLabel.getStyleClass().add("task-page__card-title");
 
-        Label typeLabel = new Label(getTypeLabel(task.getType()));
+        Label typeLabel = new Label(viewModel.getTypeLabel(task.getType()));
         typeLabel.getStyleClass().add("task-page__card-type");
 
         Region spacer = new Region();
@@ -118,13 +107,18 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
 
         Button triggerButton = new Button("触发");
         triggerButton.getStyleClass().add("task-page__card-btn");
-        triggerButton.setOnAction(e ->  cronManager.triggerTask(task.getSessionId(), task.getName()));
+        triggerButton.setOnAction(e -> viewModel.triggerTask(task.getSessionId(), task.getName()));
 
         Button deleteButton = new Button("删除");
         deleteButton.getStyleClass().add("task-page__card-btn");
         deleteButton.setOnAction(e -> {
-            cronManager.deleteTask(task.getSessionId(), task.getName());
-            loadTasks();
+            boolean confirmed = AlertUtil.showConfirm("确认删除",
+                    "确定要删除任务 \"" + task.getName() + "\" 吗？",
+                    taskPage.getScene().getWindow());
+            if (confirmed) {
+                viewModel.deleteTask(task.getSessionId(), task.getName());
+                renderTasks();
+            }
         });
 
         header.getChildren().addAll(nameLabel, typeLabel, spacer, triggerButton, deleteButton);
@@ -135,13 +129,13 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
         Label statusLabel = new Label("状态: " + (task.getScheduledFuture().isCancelled() ? "已取消" : "运行中"));
         statusLabel.getStyleClass().add("task-page__card-info");
 
-        Label timeLabel = new Label("创建时间: " + formatter.format(task.getCreateTime()));
+        Label timeLabel = new Label("创建时间: " + viewModel.formatCreateTime(task.getCreateTime()));
         timeLabel.getStyleClass().add("task-page__card-info");
 
-        Label configLabel = new Label(getTaskConfig(task));
+        Label configLabel = new Label(viewModel.getTaskConfig(task));
         configLabel.getStyleClass().add("task-page__card-info");
 
-        Label messageLabel = new Label("消息: " + truncateMessage(task.getMessage()));
+        Label messageLabel = new Label("消息: " + viewModel.truncateMessage(task.getMessage()));
         messageLabel.getStyleClass().add("task-page__card-description");
 
         content.getChildren().addAll(statusLabel, timeLabel, configLabel, messageLabel);
@@ -151,45 +145,11 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
         return card;
     }
 
-    private String getTypeLabel(String type) {
-        return switch (type.toLowerCase()) {
-            case "once" -> "一次性任务";
-            case "interval" -> "周期性任务";
-            case "cron" -> "Cron任务";
-            default -> type;
-        };
-    }
-
-    private String getTaskConfig(CronTaskInfo task) {
-        return switch (task.getType().toLowerCase()) {
-            case "once" -> "延迟: " + task.getDelaySeconds() + "秒";
-            case "interval" -> {
-                StringBuilder sb = new StringBuilder("间隔: " + task.getIntervalSeconds() + "秒");
-                if (task.getDelaySeconds() != null && task.getDelaySeconds() > 0) {
-                    sb.append(", 初始延迟: ").append(task.getDelaySeconds()).append("秒");
-                }
-                yield sb.toString();
-            }
-            case "cron" -> "Cron表达式: " + task.getCronExpression();
-            default -> "";
-        };
-    }
-
-    private String truncateMessage(String message) {
-        if (message == null) {
-            return "";
-        }
-        if (message.length() <= 50) {
-            return message;
-        }
-        return message.substring(0, 50) + "...";
-    }
-
     @Override
     public void show() {
         this.taskPage.setVisible(true);
         this.taskPage.setManaged(true);
-        loadTasks();
+        renderTasks();
     }
 
     @Override
@@ -205,7 +165,7 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
                         "refreshTaskButton",
                         "刷新",
                         "dynamic-btn",
-                        event -> loadTasks()
+                        event -> renderTasks()
                 )
         );
     }

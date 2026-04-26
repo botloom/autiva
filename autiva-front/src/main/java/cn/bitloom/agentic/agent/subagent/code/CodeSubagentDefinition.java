@@ -1,15 +1,14 @@
 package cn.bitloom.agentic.agent.subagent.code;
 
+import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
+import cn.bitloom.agentic.agent.subagent.SubagentReference;
+import org.springframework.util.StringUtils;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
-import cn.bitloom.agentic.agent.subagent.SubagentReference;
-
-import org.springframework.util.StringUtils;
-
-public class CodeSubagentDefinition implements SubagentDefinition {
+public record CodeSubagentDefinition(SubagentReference reference, Map<String, Object> frontMatter, String content) implements SubagentDefinition {
 
 	public static final String KIND = "CODE";
 
@@ -26,18 +25,6 @@ public class CodeSubagentDefinition implements SubagentDefinition {
 	private static final String FRONTMATTER_SKILLS_KEY = "skills";
 
 	private static final String FRONTMATTER_PERMISSION_MODE_KEY = "permissionMode";
-
-	private final Map<String, Object> frontMatter;
-
-	private final String content;
-
-	private final SubagentReference reference;
-
-	public CodeSubagentDefinition(SubagentReference reference, Map<String, Object> frontMatter, String content) {
-		this.reference = reference;
-		this.frontMatter = frontMatter;
-		this.content = content;
-	}
 
 	@Override
 	public String getName() {
@@ -64,7 +51,7 @@ public class CodeSubagentDefinition implements SubagentDefinition {
 			return List.of();
 		}
 		String[] toolNames = this.frontMatter.get(FRONTMATTER_TOOLS_KEY).toString().split(",");
-		return Stream.of(toolNames).map(String::trim).filter(tn -> StringUtils.hasText(tn)).toList();
+		return Stream.of(toolNames).map(String::trim).filter(StringUtils::hasText).toList();
 	}
 
 	public List<String> disallowedTools() {
@@ -72,7 +59,7 @@ public class CodeSubagentDefinition implements SubagentDefinition {
 			return List.of();
 		}
 		String[] toolNames = this.frontMatter.get(FRONTMATTER_DISALLOWED_TOOLS_KEY).toString().split(",");
-		return Stream.of(toolNames).map(String::trim).filter(tn -> StringUtils.hasText(tn)).toList();
+		return Stream.of(toolNames).map(String::trim).filter(StringUtils::hasText).toList();
 	}
 
 	public List<String> skills() {
@@ -80,7 +67,7 @@ public class CodeSubagentDefinition implements SubagentDefinition {
 			return List.of();
 		}
 		String[] skillNames = this.frontMatter.get(FRONTMATTER_SKILLS_KEY).toString().split(",");
-		return Stream.of(skillNames).map(String::trim).filter(tn -> StringUtils.hasText(tn)).toList();
+		return Stream.of(skillNames).map(String::trim).filter(StringUtils::hasText).toList();
 	}
 
 	public String permissionMode() {
@@ -90,17 +77,15 @@ public class CodeSubagentDefinition implements SubagentDefinition {
 		return this.frontMatter.get(FRONTMATTER_PERMISSION_MODE_KEY).toString();
 	}
 
+
 	@Override
-	public SubagentReference getReference() {
-		return this.reference;
-	}
-
-	public Map<String, Object> getFrontMatter() {
-		return frontMatter;
-	}
-
-	public String getContent() {
-		return content;
+	public String toSubagentRegistrations() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("- **%s**: %s".formatted(getName(), getDescription()));
+		if (!tools().isEmpty()) {
+			sb.append(" (工具: %s)".formatted(String.join(", ", tools())));
+		}
+		return sb.toString();
 	}
 
 }

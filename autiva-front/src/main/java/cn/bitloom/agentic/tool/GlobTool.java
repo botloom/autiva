@@ -15,23 +15,17 @@
 */
 package cn.bitloom.agentic.tool;
 
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.util.Assert;
+
 import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitOption;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
-
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.util.Assert;
-import org.springframework.util.StringUtils;
 
 /**
  * 纯Java glob实现，不需要外部工具。使用Java NIO.2进行文件模式匹配和遍历。
@@ -63,12 +57,12 @@ public class GlobTool {
 
 	// @formatter:off
 	@Tool(name = "Glob", description = """
-        - 快速文件模式匹配工具，适用于任何大小的代码库
-        - 支持glob模式，如"**/*.js"或"src/**/*.ts"
-        - 返回按修改时间排序的匹配文件路径
-        - 当你需要按名称模式查找文件时使用此工具
-        - 当你进行可能需要多轮glob和grep的开放式搜索时，请使用Agent工具代替
-        - 你可以在一次响应中调用多个工具。如果多个搜索可能有用，推测性地并行执行多个搜索总是更好的做法。
+			- 快速文件模式匹配工具，适用于任何大小的代码库
+			- 支持glob模式，如"**/*.js"或"src/**/*.ts"
+			- 返回按修改时间排序的匹配文件路径
+			- 当你需要按名称模式查找文件时使用此工具
+			- 当你进行可能需要多轮glob和grep的开放式搜索时，请使用Agent工具代替
+			- 你可以在一次响应中调用多个工具。如果多个搜索可能有用，推测性地并行执行多个搜索总是更好的做法。
 		""")
 	public String glob(
 		@ToolParam(description = "用于匹配文件的glob模式") String pattern,
@@ -77,16 +71,7 @@ public class GlobTool {
 		Assert.hasText(pattern, "	glob模式不能为空");
 
 		try {
-			Path searchPath;
-			if (StringUtils.hasText(path)) {
-				searchPath = Paths.get(path);
-			}
-			else if (this.workingDirectory != null) {
-				searchPath = this.workingDirectory;
-			}
-			else {
-				searchPath = Paths.get(".");
-			}
+			Path searchPath = ToolUtils.resolveWorkingDirectory(path, this.workingDirectory);
 
 			if (!Files.exists(searchPath)) {
 				return "错误：路径不存在: " + searchPath.toAbsolutePath();
@@ -155,10 +140,7 @@ public class GlobTool {
 	}
 
 	private boolean isIgnoredPath(Path path) {
-		String pathStr = path.toString();
-		return pathStr.contains("/.git/") || pathStr.contains("/node_modules/") || pathStr.contains("/target/")
-				|| pathStr.contains("/build/") || pathStr.contains("/.idea/") || pathStr.contains("/.vscode/")
-				|| pathStr.contains("/dist/") || pathStr.contains("/__pycache__/");
+		return ToolUtils.isIgnoredPath(path);
 	}
 
 	private record FileInfo(Path path, long modificationTime) {

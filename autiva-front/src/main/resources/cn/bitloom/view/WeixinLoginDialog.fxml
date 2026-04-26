@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.image.ImageView?>
+
+<VBox fx:id="root" styleClass="weixin-login-dialog"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.WeixinLoginController"
+      stylesheets="@../style/weixin-login.css"
+      alignment="CENTER" spacing="16">
+
+    <StackPane styleClass="weixin-login-dialog__header">
+        <Label text="微信扫码登录" styleClass="weixin-login-dialog__title" StackPane.alignment="CENTER"/>
+        <Button fx:id="closeBtn" styleClass="weixin-login-dialog__close-btn" onAction="#handleClose" contentDisplay="GRAPHIC_ONLY" StackPane.alignment="TOP_RIGHT"/>
+    </StackPane>
+
+    <Label text="请使用微信扫描下方二维码" styleClass="weixin-login-dialog__subtitle"/>
+
+    <StackPane styleClass="weixin-login-dialog__qr-container">
+        <ImageView fx:id="qrCodeImageView" styleClass="weixin-login-dialog__qr-image"/>
+        <VBox fx:id="loadingPane" styleClass="weixin-login-dialog__overlay" alignment="CENTER" spacing="8">
+            <Label text="⏳" styleClass="weixin-login-dialog__overlay-icon"/>
+            <Label text="生成二维码中..." styleClass="weixin-login-dialog__overlay-text"/>
+        </VBox>
+        <VBox fx:id="successPane" styleClass="weixin-login-dialog__overlay" alignment="CENTER" spacing="8" visible="false">
+            <Label text="✅" styleClass="weixin-login-dialog__overlay-icon"/>
+            <Label text="登录成功" styleClass="weixin-login-dialog__overlay-text--success"/>
+        </VBox>
+        <VBox fx:id="errorPane" styleClass="weixin-login-dialog__overlay" alignment="CENTER" spacing="8" visible="false">
+            <Label text="❌" styleClass="weixin-login-dialog__overlay-icon"/>
+            <Label fx:id="errorText" text="登录失败" styleClass="weixin-login-dialog__overlay-text--error"/>
+        </VBox>
+    </StackPane>
+
+    <Label fx:id="statusLabel" text="等待扫码..." styleClass="weixin-login-dialog__status"/>
+
+</VBox>

@@ -1,18 +1,17 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.mcp.McpManager;
 import cn.bitloom.agentic.mcp.McpServer;
+import cn.bitloom.constant.AppConstants;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
+import cn.bitloom.util.AlertUtil;
+import cn.bitloom.vm.McpPageViewModel;
 import cn.bitloom.window.WindowManager;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
-import javafx.scene.control.Alert;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -24,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.ResourceBundle;
 
@@ -41,23 +41,20 @@ public class McpPageController implements Initializable, ButtonBarHolder, PageHo
     @Setter
     private IndexController indexController;
 
-    private final McpManager mcpManager;
+    private final McpPageViewModel viewModel;
     private final WindowManager windowManager;
-
-    private final ObservableList<McpServer> serverList = FXCollections.observableArrayList();
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        loadServers();
+        renderServers();
     }
 
-    private void loadServers() {
+    private void renderServers() {
+        viewModel.loadServers();
         mcpListContainer.getChildren().clear();
-        serverList.clear();
-        List<McpServer> servers = mcpManager.getMcpServers().values().stream().toList();
-        serverList.addAll(servers);
+        List<McpServer> servers = viewModel.getServers();
 
-        for (McpServer server : serverList) {
+        for (McpServer server : servers) {
             VBox card = createServerCard(server);
             mcpListContainer.getChildren().add(card);
         }
@@ -71,7 +68,7 @@ public class McpPageController implements Initializable, ButtonBarHolder, PageHo
 
         HBox header = new HBox();
         header.getStyleClass().add("mcp-page__card-header");
-        header.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        header.setAlignment(Pos.CENTER_LEFT);
         header.setSpacing(12);
 
         Label nameLabel = new Label(server.getName());
@@ -85,15 +82,27 @@ public class McpPageController implements Initializable, ButtonBarHolder, PageHo
 
         Button editButton = new Button("编辑");
         editButton.getStyleClass().add("mcp-page__card-btn");
-        editButton.setOnAction(e -> openEditor(server));
+        editButton.setOnAction(e -> openEditor());
 
         Button deleteButton = new Button("删除");
         deleteButton.getStyleClass().add("mcp-page__card-btn");
-        deleteButton.setOnAction(e -> deleteServer(server));
+        deleteButton.setOnAction(e -> {
+            boolean confirmed = AlertUtil.showConfirm("确认删除",
+                    "确定要删除 MCP 服务器 \"" + server.getName() + "\" 吗？",
+                    mcpPage.getScene().getWindow());
+            if (confirmed) {
+                try {
+                    viewModel.deleteServer(server.getName());
+                    renderServers();
+                } catch (Exception ex) {
+                    AlertUtil.showError("删除失败: " + ex.getMessage());
+                }
+            }
+        });
 
         header.getChildren().addAll(nameLabel, typeLabel, spacer, editButton, deleteButton);
 
-        String description = buildServerDescription(server);
+        String description = viewModel.buildServerDescription(server);
         Label descLabel = new Label(description);
         descLabel.getStyleClass().add("mcp-page__card-description");
 
@@ -101,7 +110,7 @@ public class McpPageController implements Initializable, ButtonBarHolder, PageHo
 
         card.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
-                openEditor(server);
+                openEditor();
             }
         });
         card.setCursor(javafx.scene.Cursor.HAND);
@@ -109,81 +118,25 @@ public class McpPageController implements Initializable, ButtonBarHolder, PageHo
         return card;
     }
 
-    private String buildServerDescription(McpServer server) {
-        StringBuilder sb = new StringBuilder();
-        if (server.getTransportType() == null) {
-            return "";
-        }
-        switch (server.getTransportType()) {
-            case STDIO -> {
-                sb.append("命令: ").append(server.getCommand());
-                if (server.getArgs() != null && !server.getArgs().isEmpty()) {
-                    sb.append(" ").append(String.join(" ", server.getArgs()));
-                }
-            }
-            case SSE -> {
-                sb.append("URL: ").append(server.getUrl());
-                if (server.getSseEndpoint() != null) {
-                    sb.append(" | SSE Endpoint: ").append(server.getSseEndpoint());
-                }
-            }
-            case STREAMABLE_HTTP -> {
-                sb.append("URL: ").append(server.getUrl());
-                if (server.getEndpoint() != null) {
-                    sb.append(" | Endpoint: ").append(server.getEndpoint());
-                }
-            }
-        }
-        return sb.toString();
-    }
-
-    private void openEditor(McpServer server) {
+    private void openEditor() {
         try {
-            WindowManager.WindowConfig<McpEditorDialogController> config = windowManager.<McpEditorDialogController>configBuilder()
-                .fxmlPath("cn/bitloom/view/McpEditorDialog.fxml")
-                .owner(mcpPage.getScene().getWindow())
-                .resizable(true)
-                .controllerInitializer(controller -> {
-                    controller.initData(server);
-                    controller.setOnSaveCallback(savedServer -> {
-                        if (server == null) {
-                            mcpManager.addServer(savedServer);
-                        } else {
-                            mcpManager.updateServer(savedServer.getName(), savedServer);
-                        }
-                        loadServers();
-                    });
-                })
-                .build();
-            
-            windowManager.showDialog(config);
+            Path mcpDir = AppConstants.Base.MCP_DIR;
+            windowManager.<FileEditorController>showDialog(
+                "cn/bitloom/view/FileEditorDialog.fxml",
+                mcpPage.getScene().getWindow(),
+                controller -> controller.initRootPath(mcpDir)
+            );
         } catch (Exception e) {
             log.error("Failed to open MCP editor", e);
-            showAlert("打开编辑器失败: " + e.getMessage());
+            AlertUtil.showInfo("打开编辑器失败: " + e.getMessage());
         }
-    }
-
-    private void deleteServer(McpServer server) {
-        try {
-            mcpManager.deleteServer(server.getName());
-            loadServers();
-        } catch (Exception e) {
-            showAlert("删除失败: " + e.getMessage());
-        }
-    }
-
-    private void showAlert(String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
     }
 
     @Override
     public void show() {
         this.mcpPage.setVisible(true);
         this.mcpPage.setManaged(true);
-        loadServers();
+        renderServers();
     }
 
     @Override
@@ -199,7 +152,7 @@ public class McpPageController implements Initializable, ButtonBarHolder, PageHo
                         "addMcpButton",
                         "添加",
                         "dynamic-btn",
-                        event -> openEditor(null)
+                        event -> openEditor()
                 )
         );
     }

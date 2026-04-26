@@ -7,12 +7,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+import java.util.function.Function;
+
 @Slf4j
 @Component
 public class Router {
 
+    private static final String ACTIVE_CSS_CLASS = "sidebar__option--active";
+
     private final IndexController indexController;
     private final RouteConfig routeConfig;
+    private final Map<String, Function<IndexController, ButtonBarHolder>> buttonBarHolderMap;
     private String currentRoute;
 
     public Router(@Lazy IndexController indexController, RouteConfig routeConfig) {
@@ -20,6 +26,15 @@ public class Router {
         this.routeConfig = routeConfig;
         this.routeConfig.init();
         this.currentRoute = RouteConfig.Path.HOME;
+
+        this.buttonBarHolderMap = Map.of(
+                RouteConfig.Path.HOME, IndexController::getHomePageController,
+                RouteConfig.Path.AGENT, IndexController::getAgentPageController,
+                RouteConfig.Path.SETTINGS, IndexController::getSettingsPageController,
+                RouteConfig.Path.SKILLS, IndexController::getSkillPageController,
+                RouteConfig.Path.MCP, IndexController::getMcpPageController,
+                RouteConfig.Path.TASK, IndexController::getTaskPageController
+        );
     }
 
     public void navigate(String path) {
@@ -43,29 +58,13 @@ public class Router {
     private void updateButtonBar(String path) {
         if (this.indexController.getButtonBarController() != null) {
             ButtonBarHolder config = null;
-
-            if (RouteConfig.Path.HOME.equals(path)) {
-                if (this.indexController.getHomePageController() != null) {
-                    config = this.indexController.getHomePageController();
-                }
-            } else if (RouteConfig.Path.AGENT.equals(path)) {
-                if (this.indexController.getAgentPageController() != null) {
-                    config = this.indexController.getAgentPageController();
-                }
-            } else if (RouteConfig.Path.SETTINGS.equals(path)) {
-                if (this.indexController.getSettingsPageController() != null) {
-                    config = this.indexController.getSettingsPageController();
-                }
-            } else if (RouteConfig.Path.SKILLS.equals(path)) {
-                if (this.indexController.getSkillPageController() != null) {
-                    config = this.indexController.getSkillPageController();
-                }
-            } else if (RouteConfig.Path.MCP.equals(path)) {
-                if (this.indexController.getMcpPageController() != null) {
-                    config = this.indexController.getMcpPageController();
+            Function<IndexController, ButtonBarHolder> holderFunc = this.buttonBarHolderMap.get(path);
+            if (holderFunc != null) {
+                ButtonBarHolder holder = holderFunc.apply(this.indexController);
+                if (holder != null) {
+                    config = holder;
                 }
             }
-
             this.indexController.getButtonBarController().updateButtons(config);
         }
 

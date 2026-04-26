@@ -1,5 +1,6 @@
 package cn.bitloom.agentic.agent.subagent.code;
 
+import cn.bitloom.agentic.deploy.DeployTool;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.agent.subagent.SubagentType;
 import cn.bitloom.agentic.tool.*;
@@ -31,6 +32,8 @@ public class CodeSubagentType {
 		private SkillManager skillManager;
 
 		private final List<String> skillsDirectories = new ArrayList<>();
+
+		private DeployTool deployTool;
 
 		public Builder braveApiKey(String braveApiKey) {
 			Assert.notNull(braveApiKey, "braveApiKey不能为null");
@@ -87,6 +90,12 @@ public class CodeSubagentType {
 			return this;
 		}
 
+		public Builder deployTool(DeployTool deployTool) {
+			Assert.notNull(deployTool, "deployTool不能为null");
+			this.deployTool = deployTool;
+			return this;
+		}
+
 		public SubagentType build() {
 
 			Assert.notEmpty(this.chatClientBuilderMap, "至少需要一个chatClientBuilder");
@@ -105,10 +114,18 @@ public class CodeSubagentType {
 
 			List<ToolCallback> defaultCallbacks = new ArrayList<>();
 
+			List<Object> toolObjects = new ArrayList<>(List.of(
+					TodoWriteTool.builder().build(), GrepTool.builder().build(), GlobTool.builder().build(),
+					ShellTools.builder().build(), FileSystemTools.builder().build(),
+					WebFetchTool.builder(webFetchChatClientBuilder.clone().build()).build()
+			));
+
+			if (this.deployTool != null) {
+				toolObjects.add(this.deployTool);
+			}
+
 			List<ToolCallback> commonTools = List.of(MethodToolCallbackProvider.builder()
-				.toolObjects(TodoWriteTool.builder().build(), GrepTool.builder().build(), GlobTool.builder().build(),
-						ShellTools.builder().build(), FileSystemTools.builder().build(),
-						WebFetchTool.builder(webFetchChatClientBuilder.clone().build()).build())
+				.toolObjects(toolObjects.toArray())
 				.build()
 				.getToolCallbacks());
 

@@ -3,6 +3,7 @@ package cn.bitloom.controller;
 import cn.bitloom.router.Router;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +19,13 @@ public class IndexController implements Initializable {
 
     @FXML
     @Getter
-    private HBox rootContainer;
+    private BorderPane rootContainer;
+    @FXML
+    @Getter
+    private HBox toolbar;
+    @FXML
+    @Getter
+    private HBox windowControls;
     @FXML
     @Getter
     private ButtonBarController buttonBarController;

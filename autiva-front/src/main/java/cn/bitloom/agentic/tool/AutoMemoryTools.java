@@ -15,6 +15,12 @@
 */
 package cn.bitloom.agentic.tool;
 
+import lombok.Getter;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,11 +30,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.util.Assert;
-import org.springframework.util.StringUtils;
-
 /**
  * 用于在专用记忆目录中管理持久化记忆文件的工具。
  * 实现了Claude平台的记忆工具规范，提供查看、创建、字符串替换、插入、删除和重命名操作，
@@ -36,6 +37,7 @@ import org.springframework.util.StringUtils;
  *
  * @author Christian Tzolov
  */
+@Getter
 public class AutoMemoryTools {
 
 	private final Path memoriesDir;
@@ -45,11 +47,7 @@ public class AutoMemoryTools {
 		this.memoriesDir = memoriesDir.normalize();
 	}
 
-	public Path getMemoriesDir() {
-		return this.memoriesDir;
-	}
-
-	// @formatter:off
+    // @formatter:off
 	@Tool(name = "MemoryView", description = """
 		查看持久化记忆存储中文件的内容或列出目录的内容。
 
@@ -329,13 +327,10 @@ public class AutoMemoryTools {
 		catch (SecurityException e) {
 			return "错误: " + e.getMessage();
 		}
-		catch (RuntimeException e) {
+		catch (RuntimeException | IOException e) {
 			return "删除路径时出错: " + e.getMessage();
 		}
-		catch (IOException e) {
-			return "删除路径时出错: " + e.getMessage();
-		}
-	}
+    }
 
 	// @formatter:off
 	@Tool(name = "MemoryRename", description = """
@@ -467,63 +462,15 @@ public class AutoMemoryTools {
 	}
 
 	private int countOccurrences(String text, String substring) {
-		int count = 0;
-		int index = 0;
-		while ((index = text.indexOf(substring, index)) != -1) {
-			count++;
-			index += substring.length();
-		}
-		return count;
+		return ToolUtils.countOccurrences(text, substring);
 	}
 
 	private String replaceFirst(String text, String oldStr, String newStr) {
-		int index = text.indexOf(oldStr);
-		if (index == -1) {
-			return text;
-		}
-		return text.substring(0, index) + newStr + text.substring(index + oldStr.length());
+		return ToolUtils.replaceFirst(text, oldStr, newStr);
 	}
 
 	private String generateEditSnippet(String fileContent, String newStr) {
-		String[] lines = fileContent.split("\n", -1);
-		String[] newLines = newStr.split("\n", -1);
-
-		int editStartLine = -1;
-		int editEndLine = -1;
-
-		for (int i = 0; i < lines.length; i++) {
-			if (newLines.length > 0 && lines[i].contains(newLines[0])) {
-				boolean matches = true;
-				for (int j = 1; j < newLines.length && i + j < lines.length; j++) {
-					if (!lines[i + j].contains(newLines[j])) {
-						matches = false;
-						break;
-					}
-				}
-				if (matches) {
-					editStartLine = i;
-					editEndLine = i + newLines.length - 1;
-					break;
-				}
-			}
-		}
-
-		if (editStartLine == -1) {
-			editStartLine = 0;
-			editEndLine = Math.min(10, lines.length - 1);
-		}
-
-		int startLine = Math.max(0, editStartLine - 5);
-		int endLine = Math.min(lines.length - 1, editEndLine + 5);
-
-		StringBuilder snippet = new StringBuilder();
-		for (int i = startLine; i <= endLine; i++) {
-			snippet.append(String.format("%6d→%s", i + 1, lines[i]));
-			if (i < endLine) {
-				snippet.append("\n");
-			}
-		}
-		return snippet.toString();
+		return ToolUtils.generateEditSnippet(fileContent, newStr);
 	}
 
 	public static Builder builder() {

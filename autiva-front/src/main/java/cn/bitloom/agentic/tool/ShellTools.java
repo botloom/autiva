@@ -15,6 +15,9 @@
 */
 package cn.bitloom.agentic.tool;
 
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -24,9 +27,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 /**
  * Shell命令执行工具，提供Bash命令执行、后台进程管理和输出获取功能。
@@ -81,7 +81,7 @@ public class ShellTools {
 						}
 					}
 				}
-				catch (IOException e) {
+				catch (IOException ignored) {
 				}
 			});
 			this.stdoutReader.setDaemon(true);
@@ -96,7 +96,7 @@ public class ShellTools {
 						}
 					}
 				}
-				catch (IOException e) {
+				catch (IOException ignored) {
 				}
 			});
 			this.stderrReader.setDaemon(true);
@@ -125,7 +125,7 @@ public class ShellTools {
 					newStderr = filterOutput(newStderr, pattern);
 				}
 				if (!newStderr.isEmpty()) {
-					if (result.length() > 0)
+					if (!result.isEmpty())
 						result.append("\n");
 					result.append("STDERR:\n").append(newStderr);
 				}
@@ -290,7 +290,7 @@ public class ShellTools {
 							stdout.append(line).append("\n");
 						}
 					}
-					catch (IOException e) {
+					catch (IOException ignored) {
 					}
 				});
 
@@ -301,7 +301,7 @@ public class ShellTools {
 							stderr.append(line).append("\n");
 						}
 					}
-					catch (IOException e) {
+					catch (IOException ignored) {
 					}
 				});
 
@@ -326,11 +326,11 @@ public class ShellTools {
 
 				result.append("bash_id: ").append(shellId).append("\n\n");
 
-				if (stdout.length() > 0) {
+				if (!stdout.isEmpty()) {
 					result.append(stdout.toString());
 				}
 
-				if (stderr.length() > 0) {
+				if (!stderr.isEmpty()) {
 					if (result.length() > result.indexOf("\n\n") + 2)
 						result.append("\n");
 					result.append("STDERR:\n").append(stderr.toString());
@@ -393,7 +393,7 @@ public class ShellTools {
 			try {
 				result.append("退出码: ").append(bgProcess.getExitCode()).append("\n");
 			}
-			catch (IllegalThreadStateException e) {
+			catch (IllegalThreadStateException ignored) {
 			}
 		}
 

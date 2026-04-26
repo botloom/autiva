@@ -1,15 +1,15 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.skill.Skill;
-import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
+import cn.bitloom.util.AlertUtil;
+import cn.bitloom.vm.SkillPageViewModel;
 import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
@@ -34,7 +34,7 @@ import java.util.ResourceBundle;
 @RequiredArgsConstructor
 public class SkillPageController implements Initializable, ButtonBarHolder, PageHolder {
 
-    private final SkillManager skillManager;
+    private final SkillPageViewModel viewModel;
     private final WindowManager windowManager;
 
     @FXML
@@ -48,13 +48,14 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        loadSkills();
+        renderSkills();
     }
 
-    private void loadSkills() {
+    private void renderSkills() {
+        viewModel.loadSkills();
         skillListContainer.getChildren().clear();
-        List<Skill> skills = skillManager.getAllSkills();
-        
+        List<Skill> skills = viewModel.getSkills();
+
         if (skills.isEmpty()) {
             Label emptyLabel = new Label("暂无技能，点击上方\"导入\"按钮选择ZIP包导入技能");
             emptyLabel.getStyleClass().add("skill-page__empty");
@@ -62,7 +63,7 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
             skillListContainer.getChildren().add(emptyLabel);
             return;
         }
-        
+
         for (Skill skill : skills) {
             VBox card = createSkillCard(skill);
             skillListContainer.getChildren().add(card);
@@ -93,7 +94,15 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         Button deleteButton = new Button("删除");
         deleteButton.getStyleClass().add("skill-page__card-btn");
         deleteButton.setStyle("-fx-text-fill: #ff3b30;");
-        deleteButton.setOnAction(event -> deleteSkill(skill));
+        deleteButton.setOnAction(event -> {
+            boolean confirmed = AlertUtil.showConfirm("确认删除",
+                    "确定要删除技能 \"" + skill.name() + "\" 吗？",
+                    skillPage.getScene().getWindow());
+            if (confirmed) {
+                viewModel.deleteSkill(skill.name());
+                renderSkills();
+            }
+        });
 
         header.getChildren().addAll(nameLabel, spacer, editButton, deleteButton);
 
@@ -110,19 +119,14 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
     private void openFileEditor(Skill skill) {
         try {
             Path skillPath = Path.of(skill.basePath());
-            WindowManager.WindowConfig<FileEditorController> config = windowManager.<FileEditorController>configBuilder()
-                    .fxmlPath("cn/bitloom/view/FileEditorDialog.fxml")
-                    .owner(skillPage.getScene().getWindow())
-                    .resizable(true)
-                    .controllerInitializer(controller -> {
-                        controller.initRootPath(skillPath);
-                    })
-                    .build();
-
-            windowManager.showDialog(config);
+            windowManager.<FileEditorController>showDialog(
+                    "cn/bitloom/view/FileEditorDialog.fxml",
+                    skillPage.getScene().getWindow(),
+                    controller -> controller.initRootPath(skillPath)
+            );
         } catch (Exception e) {
             log.error("Failed to open file editor", e);
-            showAlert(Alert.AlertType.ERROR, "打开编辑器失败", e.getMessage());
+            AlertUtil.showError("打开编辑器失败", e.getMessage(), null);
         }
     }
 
@@ -132,46 +136,29 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         fileChooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("ZIP Files", "*.zip")
         );
-        
+
         File selectedFile = fileChooser.showOpenDialog(skillPage.getScene().getWindow());
         if (selectedFile == null) {
             return;
         }
-        
+
         try {
             Path zipPath = selectedFile.toPath();
-            Skill importedSkill = skillManager.importSkillFromZip(zipPath);
-            skillManager.loadSkills();
-            loadSkills();
-            
-            showAlert(Alert.AlertType.INFORMATION, "导入成功", 
-                    "技能 \"" + importedSkill.name() + "\" 已成功导入");
+            Skill importedSkill = viewModel.importSkillFromZip(zipPath);
+            renderSkills();
+
+            AlertUtil.showInfo("导入成功", "技能 \"" + importedSkill.name() + "\" 已成功导入", null);
         } catch (IOException e) {
             log.error("Failed to import skill from zip", e);
-            showAlert(Alert.AlertType.ERROR, "导入失败", e.getMessage());
+            AlertUtil.showError("导入失败", e.getMessage(), null);
         }
-    }
-
-    private void deleteSkill(Skill skill) {
-        skillManager.deleteSkill(skill.name());
-        skillManager.loadSkills();
-        loadSkills();
-    }
-
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.initOwner(skillPage.getScene().getWindow());
-        alert.showAndWait();
     }
 
     @Override
     public void show() {
         this.skillPage.setVisible(true);
         this.skillPage.setManaged(true);
-        loadSkills();
+        renderSkills();
     }
 
     @Override

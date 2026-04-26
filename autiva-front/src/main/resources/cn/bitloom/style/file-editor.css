@@ -1,14 +1,11 @@
 .file-editor {
     -fx-background-color: #f5f5f7;
+    -fx-background-radius: 8px;
+    -fx-border-color: rgba(0, 0, 0, 0.06);
+    -fx-border-width: 0.5px;
+    -fx-border-radius: 8px;
     -fx-pref-height: 700;
     -fx-pref-width: 1000;
-}
-
-.file-editor__toolbar {
-    -fx-background-color: #ffffff;
-    -fx-padding: 6 40;
-    -fx-spacing: 2;
-    -fx-alignment: center-left;
 }
 
 .file-editor__toolbar-btn {
@@ -470,9 +467,10 @@
 
 .file-editor__footer {
     -fx-background-color: #ffffff;
-    -fx-padding: 4 40;
+    -fx-padding: 4 14;
     -fx-spacing: 16;
     -fx-alignment: center-left;
+    -fx-background-radius: 0 0 8px 8px;
 }
 
 .file-editor__status {

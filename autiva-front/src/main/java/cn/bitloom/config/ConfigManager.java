@@ -34,6 +34,9 @@ public class ConfigManager {
     
     @Value("${spring.ai.zhipuai.api-key:}")
     private String zApiKey;
+
+    @Value("${weixin.ilink.enabled:false}")
+    private boolean weixinILinkEnabled;
     
     public void save() {
         try (FileWriter writer = new FileWriter(AppConstants.Base.CONFIG_FILE.toFile())) {
@@ -50,6 +53,10 @@ public class ConfigManager {
             writer.write("# AI API Keys\n");
             writer.write("spring.ai.deepseek.api-key=" + (deepseekApiKey != null ? deepseekApiKey : "") + "\n");
             writer.write("spring.ai.zhipuai.api-key=" + (zApiKey != null ? zApiKey : "") + "\n");
+            writer.write("\n");
+
+            writer.write("# WeChat iLink Configuration\n");
+            writer.write("weixin.ilink.enabled=" + weixinILinkEnabled + "\n");
             
             log.info("配置保存成功: {}", AppConstants.Base.CONFIG_FILE);
         } catch (IOException e) {

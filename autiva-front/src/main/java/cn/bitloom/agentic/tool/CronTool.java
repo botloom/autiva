@@ -35,7 +35,7 @@ public class CronTool {
         log.info("[ToolCall] cron_create - 创建定时任务: name={}, type={}", name, type);
 
         try {
-            cronManager.createTask(name, type, intervalSeconds, delaySeconds, cronExpression, message, toolContext.getContext().get("sessionId").toString());
+            cronManager.createTask(name, type, intervalSeconds, delaySeconds, cronExpression, message, getSessionId(toolContext));
             log.info("[ToolCall] cron_create - 创建成功: name={}", name);
             return "定时任务创建成功: " + name;
 
@@ -49,7 +49,7 @@ public class CronTool {
     public String list(ToolContext toolContext) {
         log.info("[ToolCall] cron_list - 列出所有定时任务");
 
-        Map<String, CronTaskInfo> tasks = cronManager.getAllTasks(toolContext.getContext().get("sessionId").toString());
+        Map<String, CronTaskInfo> tasks = cronManager.getAllTasks(getSessionId(toolContext));
 
         if (tasks.isEmpty()) {
             return "当前没有定时任务";
@@ -90,7 +90,7 @@ public class CronTool {
         log.info("[ToolCall] cron_delete - 删除定时任务: name={}", name);
 
         try {
-            String sessionId = toolContext.getContext().get("sessionId").toString();
+            String sessionId = getSessionId(toolContext);
             cronManager.deleteTask(sessionId, name);
             log.info("[ToolCall] cron_delete - 删除成功: name={}", name);
             return "定时任务已删除: " + name;
@@ -106,7 +106,7 @@ public class CronTool {
         log.info("[ToolCall] cron_trigger - 手动触发定时任务: name={}", name);
 
         try {
-            String sessionId = toolContext.getContext().get("sessionId").toString();
+            String sessionId = getSessionId(toolContext);
             cronManager.triggerTask(sessionId, name);
             log.info("[ToolCall] cron_trigger - 触发成功: name={}", name);
             return "定时任务已手动触发: " + name;
@@ -115,6 +115,11 @@ public class CronTool {
             log.error("[ToolCall] cron_trigger - 触发失败: name={}", name, e);
             return "触发定时任务失败: " + e.getMessage();
         }
+    }
+
+    private String getSessionId(ToolContext toolContext) {
+        Object sessionId = toolContext.getContext().get("sessionId");
+        return sessionId != null ? sessionId.toString() : null;
     }
 
     public static Builder builder(CronManager cronManager) {

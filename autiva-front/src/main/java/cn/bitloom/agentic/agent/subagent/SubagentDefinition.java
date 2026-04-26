@@ -32,11 +32,11 @@ public interface SubagentDefinition {
 	String getKind();
 
 	/** 返回用于解析此定义的引用。 */
-	SubagentReference getReference();
+	SubagentReference reference();
 
 	/** 格式化此子代理以用于注册显示。 */
 	default public String toSubagentRegistrations() {
-		return "-%s: /%s".formatted(getName(), getDescription());
+		return "- **%s**: %s".formatted(getName(), getDescription());
 	}
 
 }

@@ -2,11 +2,14 @@ package cn.bitloom;
 
 import cn.bitloom.constant.AppConstants;
 import cn.bitloom.util.ExecutorManager;
+import cn.bitloom.window.WindowChromeHelper;
 import javafx.application.Application;
-import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.image.Image;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -41,10 +44,19 @@ public class AutivaApplication extends Application {
         FXMLLoader loader = new FXMLLoader(getClass().getResource(AppConstants.Stage.FXML));
         loader.setControllerFactory(springContext::getBean);
         Scene scene = new Scene(loader.load(), AppConstants.Stage.WIDTH, AppConstants.Stage.HEIGHT);
-        scene.setFill(Color.WHITE);
+        scene.setFill(Color.TRANSPARENT);
         stage.setScene(scene);
+        stage.initStyle(StageStyle.TRANSPARENT);
         stage.getIcons().add(new Image(Objects.requireNonNull(this.getClass().getResourceAsStream(AppConstants.Stage.ICON))));
-        stage.initStyle(StageStyle.UNIFIED);
+
+        HBox toolbar = (HBox) scene.lookup("#toolbar");
+        Region rootContainer = (Region) scene.lookup("#rootContainer");
+        Button minimizeBtn = (Button) scene.lookup("#minimizeBtn");
+        Button maximizeBtn = (Button) scene.lookup("#maximizeBtn");
+        Button closeBtn = (Button) scene.lookup("#closeBtn");
+
+        WindowChromeHelper.setup(stage, toolbar, rootContainer, minimizeBtn, maximizeBtn, closeBtn, 600, 400);
+
         stage.show();
     }
 
@@ -52,7 +64,6 @@ public class AutivaApplication extends Application {
     public void stop() {
         ExecutorManager.close();
         springContext.close();
-        Platform.exit();
     }
 
     private void createAppDirsIfNotExist() {
@@ -79,5 +90,4 @@ public class AutivaApplication extends Application {
             log.error("创建应用目录失败", e);
         }
     }
-
 }

@@ -77,8 +77,6 @@ public class SyntaxHighlighter {
             "true", "false", "null"
     };
 
-    private static final String[] MARKDOWN_KEYWORDS = {};
-
     private static final Pattern JAVA_PATTERN = buildPattern(JAVA_KEYWORDS, true);
     private static final Pattern PYTHON_PATTERN = buildPattern(PYTHON_KEYWORDS, true);
     private static final Pattern JS_PATTERN = buildPattern(JS_KEYWORDS, true);

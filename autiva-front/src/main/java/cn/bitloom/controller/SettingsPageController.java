@@ -1,12 +1,15 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.config.ConfigManager;
+import cn.bitloom.bridge.weixin.WeixinILinkClient;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.store.Store;
+import cn.bitloom.vm.SettingsPageViewModel;
+import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
@@ -15,6 +18,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -31,7 +35,8 @@ import java.util.ResourceBundle;
 @RequiredArgsConstructor
 public class SettingsPageController implements Initializable, ButtonBarHolder, PageHolder {
 
-    private final ConfigManager configManager;
+    private final SettingsPageViewModel viewModel;
+    private final ApplicationContext applicationContext;
 
     @FXML
     private VBox settingsPage;
@@ -43,6 +48,12 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
     private TextField dingTalkClientIdField;
     @FXML
     private PasswordField dingTalkClientSecretField;
+    @FXML
+    private CheckBox weixinEnabledCheckBox;
+    @FXML
+    private Label weixinStatusLabel;
+    @FXML
+    private Button weixinLoginButton;
     @FXML
     private PasswordField deepseekApiKeyField;
     @FXML
@@ -69,22 +80,43 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
             }
         });
 
-        this.loadFromStore();
+        this.weixinLoginButton.setOnAction(event -> openWeixinLoginDialog());
+
+        this.bindViewModel();
     }
 
-    private void loadFromStore() {
-        this.browserPathTextField.setText(this.configManager.getBrowserPath());
-        this.dingTalkClientIdField.setText(this.configManager.getDingTalkClientId() != null ? this.configManager.getDingTalkClientId() : "");
-        this.dingTalkClientSecretField.setText(this.configManager.getDingTalkClientSecret() != null ? this.configManager.getDingTalkClientSecret() : "");
-        this.deepseekApiKeyField.setText(this.configManager.getDeepseekApiKey() != null ? this.configManager.getDeepseekApiKey() : "");
-        this.zApiKeyField.setText(this.configManager.getZApiKey() != null ? this.configManager.getZApiKey() : "");
+    private void openWeixinLoginDialog() {
+        try {
+            WeixinILinkClient client = applicationContext.getBean(WeixinILinkClient.class);
+            WindowManager windowManager = applicationContext.getBean(WindowManager.class);
+            windowManager.showDialog(
+                    "cn/bitloom/view/WeixinLoginDialog.fxml",
+                    settingsPage.getScene().getWindow(),
+                    controller -> {
+                        WeixinLoginController loginController = (WeixinLoginController) controller;
+                        loginController.setWeixinILinkClient(client);
+                    }
+            );
+        } catch (Exception e) {
+            log.warn("微信 iLink 未启用，请先在配置中启用", e);
+        }
+    }
+
+    private void bindViewModel() {
+        browserPathTextField.textProperty().bindBidirectional(viewModel.getBrowserPath());
+        dingTalkClientIdField.textProperty().bindBidirectional(viewModel.getDingTalkClientId());
+        dingTalkClientSecretField.textProperty().bindBidirectional(viewModel.getDingTalkClientSecret());
+        weixinEnabledCheckBox.selectedProperty().bindBidirectional(viewModel.getWeixinEnabled());
+        deepseekApiKeyField.textProperty().bindBidirectional(viewModel.getDeepseekApiKey());
+        zApiKeyField.textProperty().bindBidirectional(viewModel.getZApiKey());
     }
 
     @Override
     public void show() {
         this.settingsPage.setVisible(true);
         this.settingsPage.setManaged(true);
-        this.loadFromStore();
+        viewModel.loadFromStore();
+        updateWeixinStatus();
     }
 
     @Override
@@ -93,25 +125,29 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
         this.settingsPage.setManaged(false);
     }
 
-    public void save() {
-        configManager.setBrowserPath(browserPathTextField.getText());
-        configManager.setDingTalkClientId(dingTalkClientIdField.getText());
-        configManager.setDingTalkClientSecret(dingTalkClientSecretField.getText());
-        configManager.setDeepseekApiKey(deepseekApiKeyField.getText());
-        configManager.setZApiKey(zApiKeyField.getText());
-        configManager.save();
-        Store.statusText.set("配置已保存");
-    }
-
-    public void reset() {
-        configManager.setBrowserPath("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe");
-        configManager.setDingTalkClientId("");
-        configManager.setDingTalkClientSecret("");
-        configManager.setDeepseekApiKey("");
-        configManager.setZApiKey("");
-        configManager.save();
-        this.loadFromStore();
-        Store.statusText.set("重置成功");
+    private void updateWeixinStatus() {
+        try {
+            WeixinILinkClient client = applicationContext.getBean(WeixinILinkClient.class);
+            if (client.isConnected()) {
+                weixinStatusLabel.setText("已连接");
+                weixinStatusLabel.setStyle("-fx-text-fill: #34c759;");
+            } else {
+                weixinStatusLabel.setText("未连接");
+                weixinStatusLabel.setStyle("-fx-text-fill: #86868b;");
+            }
+            client.connectedProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal) {
+                    weixinStatusLabel.setText("已连接");
+                    weixinStatusLabel.setStyle("-fx-text-fill: #34c759;");
+                } else {
+                    weixinStatusLabel.setText("未连接");
+                    weixinStatusLabel.setStyle("-fx-text-fill: #86868b;");
+                }
+            });
+        } catch (Exception e) {
+            weixinStatusLabel.setText("未启用");
+            weixinStatusLabel.setStyle("-fx-text-fill: #86868b;");
+        }
     }
 
     @Override
@@ -121,13 +157,13 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
                         "saveSettingsButton",
                         "保存",
                         "dynamic-btn",
-                        event -> this.save()
+                        event -> viewModel.save()
                 ),
                 new ButtonBarHolder.ButtonConfig(
                         "resetSettingsButton",
                         "重置",
                         "dynamic-btn",
-                        event -> this.reset()
+                        event -> viewModel.reset()
                 )
         );
     }

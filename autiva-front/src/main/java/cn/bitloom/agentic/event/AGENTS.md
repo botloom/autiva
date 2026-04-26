@@ -6,13 +6,12 @@
 ## 核心类
 
 ### Event
-事件实体类，封装事件的所有信息。
+事件实体类（不可变，使用 @Value），封装事件的所有信息。
 
 **字段：**
-- `timestamp`: 事件时间戳
+- `timestamp`: 事件时间戳（@Builder.Default，自动设置为当前时间）
 - `sessionId`: 会话ID
 - `message`: Spring AI Message 对象
-- `metadata`: 元数据（可选）
 
 **构建方式：**
 ```java
@@ -23,12 +22,12 @@ Event event = Event.builder()
 ```
 
 ### EventBus
-事件总线，提供静态方法实现 Inbox/Outbox 双通道消息传递。
+事件总线（纯工具类，非 Spring Bean），提供静态方法实现 Inbox/Outbox 双通道消息传递。
 
 **核心方法（静态方法）：**
-- `inBoxPublish(sessionId, message)`: 发布事件到 Inbox（智能体接收消息）
+- `inBoxPublish(sessionId, message)`: 发布事件到 Inbox（智能体接收消息），使用 tryEmitNext 并记录失败日志
 - `inBoxSubscribe()`: 订阅 Inbox 事件流
-- `outBoxPublish(sessionId, message)`: 发布消息到 Outbox（返回给用户）
+- `outBoxPublish(sessionId, message)`: 发布消息到 Outbox（返回给用户），使用 tryEmitNext 并记录失败日志
 - `outBoxSubscribe()`: 订阅 Outbox 消息流
 
 **实现原理：**
@@ -68,8 +67,9 @@ EventBus.outBoxSubscribe()
 - 双通道架构：Inbox 处理输入，Outbox 处理输出
 
 ## 注意事项
-1. EventBus 使用静态方法，无需依赖注入
+1. EventBus 是纯工具类（非 Spring Bean），使用静态方法，无需依赖注入
 2. 使用 filter 进行精确的会话路由
-3. 注意处理异常，避免中断事件流
+3. 消息发布使用 tryEmitNext，失败时记录 warn 日志而非静默丢弃
 4. message 使用 Spring AI 的 Message 类型
 5. 接收方需要根据 Message 的具体类型进行处理（如 `instanceof AssistantMessage`）
+6. Event 使用 @Value（不可变），不应在构建后修改状态

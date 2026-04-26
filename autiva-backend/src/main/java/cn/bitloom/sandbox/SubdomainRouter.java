@@ -4,7 +4,6 @@ import cn.bitloom.config.GatewayProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @Slf4j
@@ -13,7 +12,7 @@ import reactor.core.publisher.Mono;
 public class SubdomainRouter {
 
     private final GatewayProperties properties;
-    private final WebClient webClient = WebClient.create();
+    private final SandboxService sandboxService;
 
     public Mono<RouteTarget> resolve(String host) {
         if (!host.endsWith("." + properties.getBaseDomain())) {
@@ -23,20 +22,9 @@ public class SubdomainRouter {
         String subdomain = host.replace("." + properties.getBaseDomain(), "");
         log.debug("Resolving subdomain: {}", subdomain);
 
-        return fetchSandboxInfo(subdomain)
+        return sandboxService.getServiceBySubdomain(subdomain)
                 .map(info -> new RouteTarget(buildTargetUrl(info), true))
                 .defaultIfEmpty(new RouteTarget(properties.getDefaultTarget(), false));
-    }
-
-    private Mono<SandboxInfo> fetchSandboxInfo(String subdomain) {
-        return webClient.get()
-                .uri("/api/sandbox/" + subdomain)
-                .retrieve()
-                .bodyToMono(SandboxInfo.class)
-                .onErrorResume(e -> {
-                    log.warn("Failed to fetch sandbox info for {}: {}", subdomain, e.getMessage());
-                    return Mono.empty();
-                });
     }
 
     private String buildTargetUrl(SandboxInfo info) {

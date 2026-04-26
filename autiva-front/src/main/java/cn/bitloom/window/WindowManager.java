@@ -1,15 +1,19 @@
 package cn.bitloom.window;
 
 import cn.bitloom.constant.AppConstants;
+import cn.bitloom.holder.DialogHolder;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
+import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.stage.Window;
-import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -18,124 +22,69 @@ import java.util.function.Consumer;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class WindowManager {
 
-    public <T> void showDialog(WindowConfig<T> config) {
-        try {
-            FXMLLoader loader = new FXMLLoader(new ClassPathResource(config.getFxmlPath()).getURL());
-            Scene scene = new Scene(loader.load(), config.getWidth(), config.getHeight());
+    private final ApplicationContext applicationContext;
 
+    public <T> void showDialog(String fxmlPath, Window owner, Consumer<T> controllerInitializer) {
+        try {
+            FXMLLoader loader = new FXMLLoader(new ClassPathResource(fxmlPath).getURL());
+            loader.setControllerFactory(applicationContext::getBean);
+            Parent root = loader.load();
+            T controller = loader.getController();
+
+            double width = AppConstants.Stage.WIDTH;
+            double height = AppConstants.Stage.HEIGHT;
+            boolean resizable = false;
+            StageStyle stageStyle = StageStyle.UNIFIED;
+
+            if (controller instanceof DialogHolder holder) {
+                width = holder.getWidth();
+                height = holder.getHeight();
+                resizable = holder.isResizable();
+                stageStyle = holder.getStageStyle();
+            }
+
+            Scene scene = new Scene(root, width, height);
             Stage dialogStage = new Stage();
-            dialogStage.initStyle(StageStyle.UNIFIED);
+            dialogStage.initStyle(stageStyle);
             dialogStage.getIcons().add(new Image(
                 Objects.requireNonNull(getClass().getResourceAsStream(AppConstants.Stage.ICON))));
-            
-            if (config.isResizable()) {
+
+            if (resizable) {
                 dialogStage.setResizable(true);
             }
-            
+
             dialogStage.initModality(Modality.WINDOW_MODAL);
-            
-            if (config.getOwner() != null) {
-                dialogStage.initOwner(config.getOwner());
-            }
-            
-            dialogStage.setScene(scene);
-            
-            if (config.getTitle() != null) {
-                dialogStage.setTitle(config.getTitle());
+
+            if (owner != null) {
+                dialogStage.initOwner(owner);
             }
 
-            T controller = loader.getController();
-            
+            dialogStage.setScene(scene);
+
+            if (stageStyle == StageStyle.TRANSPARENT) {
+                scene.setFill(Color.TRANSPARENT);
+            }
+
             if (controller instanceof StageAware stageAware) {
                 stageAware.setStage(dialogStage);
             }
-            
-            if (config.getControllerInitializer() != null) {
-                config.getControllerInitializer().accept(controller);
+
+            if (controllerInitializer != null) {
+                controllerInitializer.accept(controller);
             }
 
             dialogStage.showAndWait();
         } catch (Exception e) {
-            log.error("Failed to open dialog: {}", config.getFxmlPath(), e);
+            log.error("Failed to open dialog: {}", fxmlPath, e);
             throw new WindowException("打开窗口失败: " + e.getMessage(), e);
         }
     }
 
-    public <T> WindowConfig.Builder<T> configBuilder() {
-        return new WindowConfig.Builder<>();
-    }
-
-    @Getter
-    public static class WindowConfig<T> {
-        private final String fxmlPath;
-        private final String title;
-        private final Window owner;
-        private final double width;
-        private final double height;
-        private final boolean resizable;
-        private final Consumer<T> controllerInitializer;
-
-        private WindowConfig(Builder<T> builder) {
-            this.fxmlPath = builder.fxmlPath;
-            this.title = builder.title;
-            this.owner = builder.owner;
-            this.width = builder.width;
-            this.height = builder.height;
-            this.resizable = builder.resizable;
-            this.controllerInitializer = builder.controllerInitializer;
-        }
-
-        public static class Builder<T> {
-            private String fxmlPath;
-            private String title;
-            private Window owner;
-            private double width = AppConstants.Stage.WIDTH;
-            private double height = AppConstants.Stage.HEIGHT;
-            private boolean resizable = false;
-            private Consumer<T> controllerInitializer;
-
-            public Builder<T> fxmlPath(String fxmlPath) {
-                this.fxmlPath = fxmlPath;
-                return this;
-            }
-
-            public Builder<T> title(String title) {
-                this.title = title;
-                return this;
-            }
-
-            public Builder<T> owner(Window owner) {
-                this.owner = owner;
-                return this;
-            }
-
-            public Builder<T> width(double width) {
-                this.width = width;
-                return this;
-            }
-
-            public Builder<T> height(double height) {
-                this.height = height;
-                return this;
-            }
-
-            public Builder<T> resizable(boolean resizable) {
-                this.resizable = resizable;
-                return this;
-            }
-
-            public Builder<T> controllerInitializer(Consumer<T> initializer) {
-                this.controllerInitializer = initializer;
-                return this;
-            }
-
-            public WindowConfig<T> build() {
-                Objects.requireNonNull(fxmlPath, "FXML path must not be null");
-                return new WindowConfig<>(this);
-            }
-        }
+    public <T> void showDialog(String fxmlPath, Window owner) {
+        showDialog(fxmlPath, owner, null);
     }
 
     public interface StageAware {

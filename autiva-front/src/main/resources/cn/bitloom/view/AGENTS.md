@@ -15,7 +15,8 @@
 VBox (homePage)
 ├── VBox (icon) - 应用图标
 │   └── SvgImageView - SVG 图标
-├── WebView (webView) - 聊天内容显示
+├── ScrollPane (chatScrollPane) - 聊天内容滚动容器
+│   └── VBox (chatContainer) - 聊天消息容器
 └── VBox (searchBox) - 搜索输入框
     ├── TextField (searchField) - 输入框
     └── HBox - 按钮组
@@ -26,7 +27,8 @@ VBox (homePage)
 ```
 
 **特性：**
-- WebView 用于显示聊天内容
+- ScrollPane + VBox 替代 WebView 显示聊天内容
+- 消息卡片使用纯 JavaFX 组件（UserMessageCard, AssistantMessageCard, ToolMessageCard, QuestionCard, TodoCard）
 - 图标在首次发送后动画上移
 - 响应式宽度设计
 - 搜索框具有悬浮阴影效果（hover 时加深），样式与 MCP 卡片一致
@@ -170,67 +172,64 @@ VBox (workflowPage)
 ## 对话框视图
 
 ### FileEditorDialog.fxml
-通用文件编辑器对话框，IDEA风格布局。
+通用文件编辑器对话框，IDEA风格布局，无系统标题栏。
 
 **控制器：** FileEditorController
 
 **结构：**
 ```
-BorderPane (file-editor)
-├── HBox (toolbar) - 顶部工具栏
-│   ├── Button - 新建文件
-│   ├── Button - 新建文件夹
-│   ├── Region - 弹性空间
-│   ├── Button - 保存
-│   └── Button - 关闭
-├── HBox (center) - 主内容区
-│   ├── VBox (leftBar) - 左侧按钮栏（窄条形）
-│   │   └── ToggleButton (treeToggleBtn) - 文件树切换
-│   ├── SplitPane (splitPane) - 分割面板
-│   │   ├── VBox (treePanel) - 文件树面板（浅色背景，右侧圆角）
-│   │   │   └── TreeView (fileTree) - 文件树
-│   │   └── VBox (editorPanel) - 编辑器面板（深色背景 #1e1e1e，左侧圆角）
-│   │       ├── TabPane (tabPane) - 文件Tab页
-│   │       └── VBox (emptyState) - 空状态提示
-│   └── VBox (rightBar) - 右侧按钮栏（窄条形）
-└── HBox (footer) - 底部状态栏（蓝色背景）
-    ├── Label (filePathLabel) - 文件路径
-    ├── Region - 弹性空间
-    ├── Label (encodingLabel) - 编码
-    └── Label (lineColLabel) - 行号列号
+StackPane (window-chrome) - 透明窗口容器（8px padding，为阴影留空间）
+└── BorderPane (window-chrome__content) - 主内容区（圆角8px，阴影效果）
+    ├── HBox (top) - 工具栏（可拖拽移动窗口）
+    │   ├── HBox (iconArea) - 应用图标区域（40px宽，与左侧栏对齐）
+    │   ├── HBox (toolbar-buttons) - 工具栏按钮
+    │   │   ├── Button - 新建文件
+    │   │   └── Button - 新建文件夹
+    │   ├── Region (spacer) - 弹性空间（可拖拽移动窗口）
+    │   └── HBox (windowControls) - Windows风格窗口控制按钮
+    │       ├── Button - 最小化
+    │       ├── Button - 最大化/还原
+    │       └── Button - 关闭（悬停变红色）
+    ├── HBox (center) - 主内容区
+    │   ├── VBox (leftBar) - 左侧按钮栏（窄条形）
+    │   │   └── ToggleButton (treeToggleBtn) - 文件树切换
+    │   ├── SplitPane (splitPane) - 分割面板
+    │   │   ├── VBox (treePanel) - 文件树面板
+    │   │   │   └── TreeView (fileTree) - 文件树
+    │   │   └── VBox (editorPanel) - 编辑器面板
+    │   │       ├── TabPane (tabPane) - 文件Tab页
+    │   │       └── VBox (emptyState) - 空状态提示
+    │   └── VBox (rightBar) - 右侧按钮栏（窄条形）
+    │       ├── Button (previewBtn) - Markdown预览按钮（默认隐藏）
+    │       └── Button (formatBtn) - 代码格式化按钮（默认隐藏）
+    └── HBox (footer) - 底部状态栏
+        ├── Label (filePathLabel) - 文件路径
+        ├── Region - 弹性空间
+        ├── Label (encodingLabel) - 编码
+        └── Label (lineColLabel) - 行号列号
 ```
 
-**特性：**
-- IDEA风格布局，左侧/右侧/顶部有毛玻璃样式按钮栏
+**窗口特性：**
+- 使用 `StageStyle.TRANSPARENT` 创建无系统标题栏窗口
+- Scene 背景透明，BorderPane 有圆角和阴影
+- 工具栏支持拖拽移动窗口（通过 WindowChromeHelper）
+- 双击工具栏切换最大化/还原
+- 边缘拖拽调整窗口大小（6px 边缘检测区域，8个方向）
+- Windows 风格窗口控制按钮（最小化/最大化/关闭）
+- 关闭按钮悬停变红色（#e81123）
+- 窗口最小尺寸 600x400
+- 从最大化状态拖拽工具栏自动还原窗口
+- 使用 WindowChromeHelper 封装通用能力
+
+**样式特性：**
+- IDEA风格布局，左侧/右侧/顶部有按钮栏
 - 编辑器区域深色背景，其他区域浅色
 - 左侧目录树和右侧编辑器都是圆角卡片
-- 中间分割区域为毛玻璃样式
 - Tab多文件编辑，Tab有图标、文件名、关闭按钮
 - 代码编辑器带行号显示
-- 窗口无标题
-- 自定义新建/重命名/删除弹窗（非原生弹窗）
-- 工具栏按钮与系统风格一致（蓝色文字、8px圆角、浅灰背景）
-
-### MdEditorDialog.fxml
-Markdown 编辑器对话框。
-
-**控制器：** MdEditorDialogController
-
-**结构：**
-```
-VBox (md-editor-dialog)
-├── HBox (header) - 标题栏
-│   ├── TextField (titleField) - 标题输入
-│   ├── Button - 预览
-│   ├── Button - 保存
-│   └── Button - 清空
-├── SplitPane - 编辑区域
-│   ├── TextArea (markdownEditor) - 编辑器
-│   └── WebView (previewWebView) - 预览
-└── HBox (footer) - 底部栏
-    ├── Label (wordCountLabel) - 字数统计
-    └── Label (statusLabel) - 状态
-```
+- 自定义新建/重命名/删除弹窗（无系统栏，StageStyle.TRANSPARENT）
+- 工具栏按钮与系统风格一致（8px圆角、浅灰背景）
+- 引入 window-chrome.css 公共样式
 
 ### BrowserDialog.fxml
 浏览器对话框。
@@ -250,28 +249,6 @@ VBox (browser-dialog)
     └── Label (statusLabel) - 状态
 ```
 
-### McpEditorDialog.fxml
-MCP 服务器编辑器对话框。
-
-**控制器：** McpEditorDialogController
-
-**结构：**
-```
-VBox (mcp-editor-dialog)
-├── HBox (header) - 标题栏
-│   ├── TextField (nameField) - 名称输入
-│   ├── Button - 取消
-│   └── Button - 保存
-├── ScrollPane - 内容区域
-│   └── VBox (content)
-│       ├── ComboBox (connectionTypeCombo) - 连接类型
-│       ├── VBox (stdioSection) - STDIO 配置
-│       ├── VBox (sseSection) - SSE 配置
-│       └── VBox (httpSection) - HTTP 配置
-└── HBox (footer) - 底部栏
-    └── Label (statusLabel) - 状态
-```
-
 ### chat.html
 聊天页面 HTML 模板。
 
@@ -280,6 +257,13 @@ VBox (mcp-editor-dialog)
 - 支持 Markdown 渲染
 - 流式消息更新
 - JavaScript API 供 Java 调用
+- 自定义滚轮事件处理，提高滚动灵敏度（1.5倍速度）
+
+**滚动优化：**
+- 禁用平滑滚动（scroll-behavior: auto）
+- 禁用过度滚动（overscroll-behavior: none）
+- 自定义 wheel 事件监听器，滚动倍率 1.5
+- 使用 requestAnimationFrame 确保流畅滚动
 
 **JavaScript API：**
 - `window.chatAPI.appendUserMessage(content)`: 添加用户消息
