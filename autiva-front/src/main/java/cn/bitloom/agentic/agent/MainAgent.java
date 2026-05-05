@@ -1,7 +1,7 @@
 package cn.bitloom.agentic.agent;
 
 import cn.bitloom.agentic.advisor.LoggingAdvisor;
-import cn.bitloom.agentic.agent.subagent.code.CodeSubagentType;
+import cn.bitloom.agentic.agent.subagent.generic.GenericSubagentType;
 import cn.bitloom.agentic.deploy.DeployTool;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.model.ModelTypeEnum;
@@ -13,7 +13,6 @@ import cn.bitloom.agentic.task.TaskManager;
 import cn.bitloom.agentic.tool.*;
 import cn.bitloom.agentic.util.GuiQuestionHandler;
 import cn.bitloom.agentic.util.GuiTodoEventHandler;
-import cn.bitloom.config.ConfigManager;
 import cn.bitloom.constant.AppConstants;
 import cn.bitloom.cron.CronManager;
 import cn.bitloom.store.ToolUIBridge;
@@ -34,6 +33,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -50,9 +50,7 @@ public class MainAgent {
     private ChatClient.Builder zhiPuChatClientBuilder;
     private final SkillManager skillManager;
     private final ChatMemory chatMemory;
-    private final LoggingAdvisor loggingAdvisor;
     private final ToolCallingManager toolCallingManager;
-    private final ConfigManager configManager;
     private final SessionManager sessionManager;
     private final AgentManager agentManager;
     private final ToolUIBridge toolUIBridge;
@@ -81,19 +79,20 @@ public class MainAgent {
                 .clientId("autiva-user")
                 .build();
 
-        this.taskManager.registerSubagentTypes(CodeSubagentType.builder()
-                .chatClientBuilders(
-                        Map.of(
-                                ModelTypeEnum.DEEPSEEK.name(), deepSeekChatClientBuilder.clone(),
-                                "default", zhiPuChatClientBuilder.clone()
-                        )
-                )
+        this.taskManager.setSessionManager(this.sessionManager);
+        this.taskManager.setToolUIBridge(this.toolUIBridge);
+
+        this.taskManager.registerSubagentTypes(GenericSubagentType.builder()
+                .chatClientBuilder("default", zhiPuChatClientBuilder.clone().defaultAdvisors(LoggingAdvisor.builder().build()))
                 .skillManager(this.skillManager)
                 .deployTool(deployTool)
+                .chatMemory(this.chatMemory)
+                .sessionManager(this.sessionManager)
                 .build());
+
         Consumer<ChatClient.AdvisorSpec> advisorSpecConsumer = a -> a.advisors(
                 MessageChatMemoryAdvisor.builder(this.chatMemory).build(),
-                this.loggingAdvisor,
+                LoggingAdvisor.builder().build(),
                 ToolCallAdvisor.builder()
                         .toolCallingManager(toolCallingManager)
                         .advisorOrder(BaseAdvisor.HIGHEST_PRECEDENCE + 300)
@@ -102,12 +101,14 @@ public class MainAgent {
                         .build()
         );
 
+        List<Object> mainAgentTools = List.of(webFetchTool, askUserQuestionTool, todoWriteTool, cronTool);
+
         this.chatClientMap.put(ModelTypeEnum.DEEPSEEK,
                 buildChatClient(deepSeekChatClientBuilder, stTemplateRenderer, systemPrompt,
-                        webFetchTool, askUserQuestionTool, todoWriteTool, cronTool, advisorSpecConsumer));
+                        mainAgentTools, advisorSpecConsumer));
         this.chatClientMap.put(ModelTypeEnum.GLM,
                 buildChatClient(zhiPuChatClientBuilder, stTemplateRenderer, systemPrompt,
-                        webFetchTool, askUserQuestionTool, todoWriteTool, cronTool, advisorSpecConsumer));
+                        mainAgentTools, advisorSpecConsumer));
         this.run();
     }
 
@@ -115,6 +116,10 @@ public class MainAgent {
         EventBus.inBoxSubscribe()
                 .concatMap(event -> {
                     Session session = sessionManager.getById(event.getSessionId());
+                    if (EventBus.isCancelled(event.getSessionId())) {
+                        EventBus.clearCancelFlag(event.getSessionId());
+                        return Flux.empty();
+                    }
                     if (session.getRespType().equals(SessionRespTypeEnum.STREAM)) {
                         return this.model(session.getModel())
                                 .prompt()
@@ -124,7 +129,10 @@ public class MainAgent {
                                 .stream()
                                 .chatResponse()
                                 .publishOn(Schedulers.boundedElastic())
-                                .doOnNext(message -> EventBus.outBoxPublish(event.getSessionId(), message.getResult().getOutput()));
+                                .takeUntil(x -> EventBus.isCancelled(event.getSessionId()))
+                                .doOnNext(message -> EventBus.outBoxPublish(event.getSessionId(), message.getResult().getOutput()))
+                                .doOnError(e -> log.error(e.getMessage(), e))
+                                .doOnComplete(() -> EventBus.clearCancelFlag(event.getSessionId()));
                     } else {
                         ChatResponse chatResponse = this.model(session.getModel())
                                 .prompt()
@@ -161,9 +169,12 @@ public class MainAgent {
                 - 工作目录: %s
                 - 当前时间: $time$
                 - 智能体: %s
+                - 平台: %s (%s)
                 """.formatted(
                 AppConstants.Base.WORKSPACE_DIR.resolve(this.getIdentity().name()),
-                this.getIdentity()
+                this.getIdentity(),
+                System.getProperty("os.name"),
+                System.getProperty("os.version")
         ));
 
         String skillDesc = this.skillManager.getDescription();
@@ -179,15 +190,11 @@ public class MainAgent {
     }
 
     private ChatClient buildChatClient(ChatClient.Builder builder, StTemplateRenderer renderer, String systemPrompt,
-                                       Object... tools) {
-        Consumer<ChatClient.AdvisorSpec> advisorSpec = (Consumer<ChatClient.AdvisorSpec>) tools[tools.length - 1];
-        Object[] toolObjects = new Object[tools.length - 1];
-        System.arraycopy(tools, 0, toolObjects, 0, tools.length - 1);
-
+                                       List<Object> tools, Consumer<ChatClient.AdvisorSpec> advisorSpec) {
         return builder
                 .defaultTemplateRenderer(renderer)
                 .defaultSystem(systemPrompt)
-                .defaultTools(toolObjects)
+                .defaultTools(tools.toArray())
                 .defaultToolCallbacks(this.taskManager.buildToolCallbacks())
                 .defaultToolCallbacks(this.skillManager.buildToolCallback())
                 .defaultAdvisors(advisorSpec)

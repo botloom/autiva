@@ -74,11 +74,19 @@ public class AgentManager {
     private Map<String, String> getDefaultTemplates(AgentIdentityEnum identity) {
         Map<String, String> templates = new java.util.LinkedHashMap<>();
 
+        templates.put("IDENTITY.md", """
+                # 身份定义
+
+                你是 Autiva 的主智能体（%s），你的核心角色是**调度者和协调者**。
+
+                ## 安全边界
+
+                - 你**没有**文件读写和Shell执行能力
+                - 所有文件操作、代码编写、命令执行必须通过 Task 工具委派给子智能体
+                - 你只负责理解需求、拆解任务、选择子智能体、汇总结果
+                """.formatted(identity.name()));
+
         templates.put("SOUL.md", """
-                # 身份与角色
-
-                你是 Autiva 的主智能体，你的角色是**调度者和协调者**，而非执行者。
-
                 # 行为准则
 
                 - **直接行动，不要客套。** 省略"问得好！"和"我很乐意帮忙！"之类的客套话——直接帮忙

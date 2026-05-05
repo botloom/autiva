@@ -40,7 +40,7 @@ public class SkillManager {
     private static final String SKILL_FILE_NAME = "SKILL.md";
 
     private static final String TOOL_DESCRIPTION_TEMPLATE = """
-            在主对话中执行技能
+            执行技能
 
             <skills_instructions>
             当用户要求你执行任务时，检查以下可用技能中是否有任何技能可以更有效地帮助完成任务。技能提供专门的能力和领域知识。
@@ -50,10 +50,8 @@ public class SkillManager {
             - 当你调用技能时，你将看到 <command-message>"{name}"技能正在加载</command-message>
             - 技能的提示将展开并提供关于如何完成任务的详细说明
 
-            注意：响应始终以技能执行环境的基本目录开始。你可以使用它来检索其他文件或调用shell命令。
-            技能描述紧跟在基本目录行之后。
-
             重要：
+            - 每个技能的响应都会包含其根目录（basePath），执行脚本或引用技能内的文件时必须使用该根目录作为基准路径
             - 仅使用<available_skills>下面列出的技能
             - 不要调用已经在运行的技能
             </skills_instructions>
@@ -494,7 +492,14 @@ public class SkillManager {
             Skill skill = this.skillsMap.get(input.command());
 
             if (skill != null) {
-                return "此技能的基本目录：%s\n\n%s".formatted(skill.basePath(), skill.content());
+                return """
+                        技能根目录: %s
+
+                        重要：执行脚本或引用技能内的文件时，请使用以上根目录作为基准路径。
+                        例如，如果技能内容中提到 script.py，实际路径为: %s/script.py
+
+                        %s
+                        """.formatted(skill.basePath(), skill.basePath(), skill.content());
             }
 
             return "未找到技能：" + input.command();

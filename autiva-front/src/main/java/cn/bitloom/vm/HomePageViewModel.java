@@ -13,6 +13,8 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import jakarta.annotation.PostConstruct;
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import lombok.Getter;
@@ -40,6 +42,9 @@ public class HomePageViewModel {
 
     private StringBuilder streamMessage = new StringBuilder();
     private ChatMessage currentStreamingMessage = null;
+
+    @Getter
+    private BooleanProperty isStreaming = new SimpleBooleanProperty(false);
 
     @PostConstruct
     public void init() {
@@ -107,6 +112,7 @@ public class HomePageViewModel {
             }
             currentStreamingMessage.setContent(streamMessage.toString());
         } else if ("STOP".equals(finishReason)) {
+            isStreaming.set(false);
             if (currentStreamingMessage != null) {
                 currentStreamingMessage.setStreaming(false);
                 currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.STOP);
@@ -174,8 +180,8 @@ public class HomePageViewModel {
 
     public void sendMessage(UserMessage message) {
         Platform.runLater(() -> Store.statusText.set("正在处理..."));
+        isStreaming.set(true);
         EventBus.inBoxPublish(this.session.getId(), message);
-        Platform.runLater(() -> Store.statusText.set("就绪"));
     }
 
     public void clear() {
@@ -184,5 +190,21 @@ public class HomePageViewModel {
         currentStreamingMessage = null;
         sessionManager.clearSessionMessages(this.session.getId());
         Platform.runLater(() -> Store.statusText.set("就绪"));
+    }
+
+    public void stopGeneration() {
+        if (isStreaming.get()) {
+            isStreaming.set(false);
+            EventBus.cancelPublish(this.session.getId());
+
+            if (currentStreamingMessage != null) {
+                currentStreamingMessage.setStreaming(false);
+                currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.STOP);
+                currentStreamingMessage = null;
+            }
+            streamMessage = new StringBuilder();
+
+            Platform.runLater(() -> Store.statusText.set("已停止"));
+        }
     }
 }

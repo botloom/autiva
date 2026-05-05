@@ -25,22 +25,40 @@
 
 **内置 Claude 子代理引用：**
 当注册 Claude 类型的子代理时，自动注册以下引用：
-- `classpath:/agent/CODE_SUBAGENT.md`
-- `classpath:/agent/GENERAL_PURPOSE_SUBAGENT.md`
-- `classpath:/agent/EXPLORE_SUBAGENT.md`
-- `classpath:/agent/PLAN_SUBAGENT.md`
 - `classpath:/agent/BASH_SUBAGENT.md`
 
 **Task 工具描述特点：**
-- 明确告知主智能体"你没有文件读写和Shell执行的能力"
-- 提供子智能体选择规则（编码→Code、探索→Explore、计划→Plan、Shell→Bash）
+- 提供子智能体选择规则（Shell→Bash）
 - 收窄"何时不使用Task工具"的范围，仅限 WebFetch、TodoWrite、AskUserQuestion
-- 示例改为展示如何通过 Task 工具委派给子智能体
+- 示例改为展示如何通过 Task 工具委派给 Bash 子智能体
 
 **内部类：**
 - `TaskFunction`: 实现 Function<TaskCall, String>，委托 TaskManager
 - `TaskOutputFunction`: 实现 Function<TaskOutputCall, String>，委托 TaskManager
 - `TaskOutputCall`: 后台任务输出查询 record
+- `SessionAwareTaskToolCallback`: 包装 FunctionToolCallback，从 ToolContext 提取 sessionId 自动注入到 TaskCall
+
+**Session 集成机制：**
+Task 工具通过 `SessionAwareTaskToolCallback` 实现与 Session 的集成：
+1. MainAgent 在调用 ChatClient 时设置 `toolContext(Map.of("sessionId", sessionId))`
+2. `SessionAwareTaskToolCallback.call(String, ToolContext)` 从 ToolContext 提取 sessionId
+3. 将 sessionId 注入到 TaskCall 的 JSON 输入中
+4. 子智能体执行器使用 sessionId 构建会话感知的 conversationId，实现同一会话内对话记忆共享
+
+**Session Fork 机制：**
+Task 调用时自动 fork 子会话，实现主子会话的父子关系：
+1. `executeTask()` 调用 `sessionManager.forkSession(parentSessionId, subagentType)` 创建子会话
+2. 子会话 ID 格式：`{parentSessionId}_{自增序号}`
+3. 子会话的 `parentId` 指向主会话，`target` 记录子智能体类型
+4. TaskCard ID 使用子会话 ID，确保 UI 卡片与子会话一一对应
+
+**TaskCard 流式输出机制：**
+子智能体执行时通过 ToolUIBridge 实时推送输出到 TaskCard：
+1. `executeTask()` 调用 `toolUIBridge.createTaskCard(taskCardId, taskJson)` 创建 UI 卡片
+2. 子智能体执行器通过 `onChunk` 回调实时输出文本
+3. `TaskManager` 将 chunk 通过 `toolUIBridge.appendTaskOutput(taskCardId, chunk)` 推送到 UI
+4. 执行完成后调用 `toolUIBridge.completeTaskCard(taskCardId, null)` 更新状态
+5. 执行失败时调用 `toolUIBridge.failTaskCard(taskCardId, error)` 显示错误
 
 ### TaskTool
 底层任务工具实现，保留原始 Builder 模式供 TaskManager 内部使用。

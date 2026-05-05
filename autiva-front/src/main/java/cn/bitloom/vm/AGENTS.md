@@ -30,6 +30,7 @@
 
 **属性：**
 - `messages`: 聊天消息列表（ObservableList<ChatMessage>），Controller 监听此列表变化创建消息卡片
+- `isStreaming`: 流式生成状态（BooleanProperty），Controller 监听此属性切换发送/停止按钮
 
 **核心方法：**
 - `init()`: 初始化 Session，订阅 EventBus 消息流
@@ -39,6 +40,7 @@
 - `prepareHistoricalMessages()`: 准备历史消息，填充 messages 列表
 - `addUserMessage(String)`: 添加用户消息到列表
 - `sendMessage(UserMessage)`: 发送消息给智能体系统
+- `stopGeneration()`: 停止当前流式生成，发布取消信号到 EventBus，重置流式状态
 - `hasHistoricalMessages()`: 是否有历史消息
 - `clear()`: 清除所有状态
 

@@ -16,7 +16,7 @@
 **派生方法：**
 - `name()`: 从 frontMatter 获取技能名称
 - `description()`: 从 frontMatter 获取技能描述
-- `toXml()`: 将 frontMatter 格式化为 XML（用于 AI 工具描述）
+- `toXml()`: 将 frontMatter 和 basePath 格式化为 XML（用于 AI 工具描述，便于模型定位技能根目录）
 
 ### SkillManager
 技能管理器，统一负责技能的加载、管理、持久化和 AI 工具回调构建。

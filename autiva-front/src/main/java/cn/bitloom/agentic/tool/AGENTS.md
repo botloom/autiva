@@ -38,10 +38,11 @@ chatClientBuilder
 
 ### ShellTools
 Shell 命令执行工具（Builder模式创建）。
-- `Bash`: 执行命令，支持后台运行、超时、Windows/Unix 跨平台
+- `Bash`: 执行终端命令，支持后台运行、超时。Windows 上通过 WSL 运行 bash，Unix/Mac 直接使用 bash
 - `BashOutput`: 获取后台 Shell 输出，支持正则过滤
 - `KillShell`: 终止后台 Shell
-- **编码处理**：通过 `getConsoleCharset()` 自动检测平台控制台编码，Windows 下使用 `sun.jnu.encoding` 系统属性（通常为 GBK）读取输出，Linux/macOS 下使用 UTF-8，解决中文乱码问题
+- **跨平台适配**：Windows 使用 `wsl --cd <cwd> -e bash -c` 执行命令（需安装 WSL），Unix/Mac 使用 `/bin/bash -c`
+- **编码处理**：统一使用 UTF-8 编码（WSL 和 Unix/Mac 均为 UTF-8 环境）
 
 ### GlobTool
 文件模式匹配工具（纯 Java NIO.2 实现，Builder模式创建）。

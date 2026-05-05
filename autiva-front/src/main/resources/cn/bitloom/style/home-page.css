@@ -91,6 +91,24 @@
     -fx-effect: innershadow(gaussian, rgba(255, 255, 255, 0.3), 2, 0, 0, 0);
 }
 
+.home-page__icon-btn--stop {
+    -fx-background-color: #ff3b30;
+    -fx-border-color: #ff3b30;
+}
+
+.home-page__icon-btn--stop:hover {
+    -fx-background-color: #ff453a;
+    -fx-border-color: #ff453a;
+}
+
+.home-page__icon-btn--stop:pressed {
+    -fx-background-color: #e0352b;
+}
+
+.home-page__icon-btn--stop .svg-image-view {
+    -fx-effect: innershadow(gaussian, rgba(255, 255, 255, 0.3), 2, 0, 0, 0);
+}
+
 .home-page__model-selector {
     -fx-font-size: 13px;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -536,6 +554,218 @@
     -fx-text-fill: #92400e;
 }
 
+.chat-message--task {
+    -fx-background-color: linear-gradient(to bottom right, #f8fafc, #f1f5f9);
+    -fx-border-color: #cbd5e1;
+    -fx-border-width: 1;
+    -fx-border-radius: 14;
+    -fx-background-radius: 14;
+    -fx-padding: 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.06), 4, 0, 0, 2);
+}
+
+.chat-message__task-header {
+    -fx-spacing: 10;
+    -fx-padding: 12 16;
+    -fx-cursor: hand;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.chat-message__task-header:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.02);
+    -fx-background-radius: 14 14 0 0;
+}
+
+.chat-message__task-pulse {
+    -fx-fill: #3b82f6;
+    -fx-stroke: transparent;
+    -fx-stroke-width: 0;
+    -fx-effect: dropshadow(gaussian, rgba(59, 130, 246, 0.5), 6, 0.5, 0, 0);
+}
+
+.chat-message__task-pulse--completed {
+    -fx-fill: #22c55e;
+    -fx-effect: dropshadow(gaussian, rgba(34, 197, 94, 0.4), 4, 0.5, 0, 0);
+}
+
+.chat-message__task-pulse--failed {
+    -fx-fill: #ef4444;
+    -fx-effect: dropshadow(gaussian, rgba(239, 68, 68, 0.4), 4, 0.5, 0, 0);
+}
+
+.chat-message__task-type {
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+    -fx-text-fill: #1e293b;
+    -fx-background-color: rgba(59, 130, 246, 0.1);
+    -fx-padding: 2 8;
+    -fx-background-radius: 6;
+}
+
+.chat-message__task-separator {
+    -fx-font-size: 14px;
+    -fx-text-fill: #94a3b8;
+}
+
+.chat-message__task-desc {
+    -fx-font-size: 13px;
+    -fx-text-fill: #475569;
+}
+
+.chat-message__task-status {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 3 10;
+    -fx-background-radius: 10;
+}
+
+.chat-message__task-status--running {
+    -fx-background-color: #dbeafe;
+    -fx-text-fill: #2563eb;
+}
+
+.chat-message__task-status--completed {
+    -fx-background-color: #dcfce7;
+    -fx-text-fill: #16a34a;
+}
+
+.chat-message__task-status--failed {
+    -fx-background-color: #fee2e2;
+    -fx-text-fill: #dc2626;
+}
+
+.chat-message__task-chevron {
+    -fx-font-size: 14px;
+    -fx-text-fill: #94a3b8;
+    -fx-padding: 0 4;
+}
+
+.chat-message__task-divider {
+    -fx-pref-height: 1;
+    -fx-background-color: #e2e8f0;
+    -fx-margin: 0 16;
+}
+
+.chat-message__task-body {
+    -fx-padding: 0 12 12 12;
+    -fx-spacing: 0;
+}
+
+.chat-message__task-terminal-header {
+    -fx-padding: 8 12 6 12;
+    -fx-background-color: #1e293b;
+    -fx-background-radius: 10 10 0 0;
+    -fx-spacing: 6;
+}
+
+.chat-message__task-terminal-dot--red {
+    -fx-fill: #ff5f57;
+    -fx-stroke: transparent;
+}
+
+.chat-message__task-terminal-dot--yellow {
+    -fx-fill: #febc2e;
+    -fx-stroke: transparent;
+}
+
+.chat-message__task-terminal-dot--green {
+    -fx-fill: #28c840;
+    -fx-stroke: transparent;
+}
+
+.chat-message__task-terminal-title {
+    -fx-font-size: 11px;
+    -fx-text-fill: #64748b;
+    -fx-padding: 0 4;
+}
+
+.chat-message__task-scroll {
+    -fx-background-color: #0d1117;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-radius: 0 0 10 10;
+    -fx-background-radius: 0 0 10 10;
+    -fx-padding: 0;
+}
+
+.chat-message__task-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.chat-message__task-scroll > .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-opacity: 0.4;
+}
+
+.chat-message__task-scroll > .scroll-bar:vertical .thumb {
+    -fx-background-color: #475569;
+    -fx-background-radius: 4;
+}
+
+.chat-message__task-scroll > .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.chat-message__task-scroll > .scroll-bar:vertical .increment-button,
+.chat-message__task-scroll > .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.chat-message__task-scroll > .scroll-bar:vertical .increment-arrow,
+.chat-message__task-scroll > .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.chat-message__task-output {
+    -fx-padding: 12 14;
+    -fx-line-spacing: 1.6;
+    -fx-background-color: #0d1117;
+}
+
+.chat-message__task-messages {
+    -fx-spacing: 6;
+    -fx-padding: 8 4;
+}
+
+.chat-message__task-assistant {
+    -fx-padding: 8 12;
+    -fx-background-color: rgba(0, 0, 0, 0.02);
+    -fx-background-radius: 8;
+    -fx-spacing: 4;
+}
+
+.chat-message__task-md-content {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1e293b;
+    -fx-line-spacing: 1.5;
+}
+
+.chat-message__task-messages .chat-message--tool {
+    -fx-effect: null;
+    -fx-border-width: 0.5;
+    -fx-padding: 6 10;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+.chat-message__task-messages .chat-message__tool-header {
+    -fx-padding: 4 8;
+    -fx-border-width: 0;
+}
+
+.chat-message__task-messages .chat-message__tool-name {
+    -fx-font-size: 11px;
+}
+
+.chat-message__task-messages .chat-message__tool-content {
+    -fx-font-size: 11px;
+    -fx-padding: 8;
+}
+
 .md-content {
     -fx-spacing: 8;
 }
@@ -703,6 +933,19 @@
 
 .md-link {
     -fx-text-fill: #007aff;
+    -fx-underline: false;
+    -fx-padding: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.md-link:focused {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
     -fx-underline: false;
 }
 

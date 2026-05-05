@@ -1,18 +1,3 @@
-/*
-* Copyright 2025 - 2025 the original author or authors.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* https://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
 package cn.bitloom.agentic.tool;
 
 import org.springframework.ai.tool.annotation.Tool;
@@ -21,34 +6,26 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-/**
- * Shell命令执行工具，提供Bash命令执行、后台进程管理和输出获取功能。
- *
- * @author Christian Tzolov
- */
 public class ShellTools {
 
 	private static final Map<String, BackgroundProcess> backgroundProcesses = new ConcurrentHashMap<>();
 
-	private static Charset getConsoleCharset() {
-		String os = System.getProperty("os.name").toLowerCase();
-		if (os.contains("win")) {
-			String jnuEncoding = System.getProperty("sun.jnu.encoding");
-			if (jnuEncoding != null && Charset.isSupported(jnuEncoding)) {
-				return Charset.forName(jnuEncoding);
-			}
-			if (Charset.isSupported("GBK")) {
-				return Charset.forName("GBK");
-			}
+	private static boolean isWindows() {
+		return System.getProperty("os.name").toLowerCase().contains("win");
+	}
+
+	private static String[] buildShellCommand(String command) {
+		if (isWindows()) {
+			String cwd = System.getProperty("user.dir");
+			return new String[] { "wsl", "--cd", cwd, "-e", "bash", "-c", command };
 		}
-		return StandardCharsets.UTF_8;
+		return new String[] { "/bin/bash", "-c", command };
 	}
 
 	private static class BackgroundProcess {
@@ -73,7 +50,7 @@ public class ShellTools {
 			this.stderr = new StringBuilder();
 
 			this.stdoutReader = new Thread(() -> {
-				try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), getConsoleCharset()))) {
+				try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 					String line;
 					while ((line = reader.readLine()) != null) {
 						synchronized (stdout) {
@@ -169,13 +146,8 @@ public class ShellTools {
 
 	}
 
-	//
-	// Shell命令
-	//
-
-	// @formatter:off
 	@Tool(name = "Bash", description = """
-		执行bash命令用于终端操作，如npm、docker、make、mvn、python。
+		执行终端命令用于构建、测试、包管理等操作（如npm、docker、make、mvn、python、git）。
 		不要用于文件操作 —— 请使用专用工具：
 		- 文件搜索：使用Glob（不要用find或ls）
 		- 内容搜索：使用Grep（不要用grep或rg）
@@ -183,39 +155,33 @@ public class ShellTools {
 		- 编辑文件：使用Edit（不要用sed/awk）
 		- 写入文件：使用Write（不要用echo >/cat <<EOF）
 
+		平台说明：
+		- 所有平台统一通过bash执行命令。Windows上通过WSL运行bash（需安装WSL），Unix/Mac直接使用bash
+		- 使用&&链接依赖命令，使用;链接可独立失败的命令
+		- Windows上通过WSL执行时，路径需使用Linux格式：C:\\path → /mnt/c/path，D:\\project → /mnt/d/project
+
 		使用说明：
 		- command参数是必需的。
 		- 可选超时时间，单位毫秒（最大600000ms / 10分钟）。默认：120000ms（2分钟）。
 		- 输出在30000字符处截断。
 		- 使用run_in_background运行长时间命令。
 		- 包含空格的文件路径请用双引号括起来。
-		- 使用&&链接依赖命令。如果前面的失败可以接受，则使用;。
 		- 优先使用绝对路径而非cd。
 
 		重要提示：
-		- 永远不要运行额外的命令来读取或探索代码，除了git bash命令
+		- 永远不要运行额外的命令来读取或探索代码，除了git命令
 		- 永远不要使用TodoWrite或Task工具
 		- 除非用户明确要求，否则不要推送到远程仓库
 		- 重要：永远不要使用带-i标志的git命令（如git rebase -i或git add -i），因为它们需要交互式输入，不受支持。
 		- 如果没有更改需要提交（即没有未跟踪的文件和没有修改），不要创建空提交
-		- 为了确保良好的格式，始终通过HEREDOC传递提交消息，如下例所示：
-		<example>
-		git commit -m "$(cat <<'EOF'
-		在此填写提交消息。
-
-		🤶 Generated with [Claude Code](https://claude.com/claude-code)
-
-		Co-Authored-By: Claude <noreply@anthropic.com>
-		EOF
-		)"
-		</example>
+		- 要确保良好的格式，通过引号或直接参数传递提交消息：
 
 		# 创建Pull Request
 		使用gh命令通过Bash工具执行所有GitHub相关任务，包括处理issues、pull requests、checks和releases。如果提供了Github URL，请使用gh命令获取所需信息。
 
 		重要：当用户要求你创建pull request时，请仔细遵循以下步骤：
 
-		1. 你可以在单次响应中调用多个工具。当请求多个独立信息且所有命令都可能成功时，并行运行多个工具调用以获得最佳性能。使用Bash工具并行运行以下bash命令，以了解分支自主分支分叉以来的当前状态：
+		1. 你可以在单次响应中调用多个工具。当请求多个独立信息且所有命令都可能成功时，并行运行多个工具调用以获得最佳性能。使用Bash工具并行运行以下命令，以了解分支自主分支分叉以来的当前状态：
 		- 运行git status命令查看所有未跟踪的文件
 		- 运行git diff命令查看暂存和未暂存的更改
 		- 检查当前分支是否跟踪远程分支并与远程保持同步，以了解是否需要推送到远程
@@ -224,20 +190,7 @@ public class ShellTools {
 		3. 你可以在单次响应中调用多个工具。当请求多个独立信息且所有命令都可能成功时，并行运行多个工具调用以获得最佳性能。并行运行以下命令：
 		- 如需要则创建新分支
 		- 如需要则使用-u标志推送到远程
-		- 使用gh pr create创建PR，格式如下。使用HEREDOC传递正文以确保正确格式。
-		<example>
-		gh pr create --title "PR标题" --body "$(cat <<'EOF'
-
-		## 摘要
-		<1-3个要点>
-
-		## 测试计划
-		[用于测试pull request的待办事项的markdown清单...]
-
-		🤶 Generated with [Claude Code](https://claude.com/claude-code)
-		EOF
-		)"
-		</example>
+		- 使用gh pr create创建PR，使用--title和--body参数。
 
 		重要：
 		- 不要使用TodoWrite或Task工具
@@ -250,19 +203,12 @@ public class ShellTools {
 		@ToolParam(description = "要执行的命令") String command,
 		@ToolParam(description = "可选超时时间，单位毫秒（最大600000）", required = false) Long timeout,
 		@ToolParam(description = "对该命令功能的简明描述，5-10个词，使用主动语态。示例：\n输入：ls\n输出：列出当前目录文件\n\n输入：git status\n输出：显示工作树状态\n\n输入：npm install\n输出：安装包依赖\n\n输入：mkdir foo\n输出：创建目录'foo'", required = false) String description,
-		@ToolParam(description = "设置为true以在后台运行此命令。使用BashOutput稍后读取输出。", required = false) Boolean runInBackground) { // @formatter:on
+		@ToolParam(description = "设置为true以在后台运行此命令。使用BashOutput稍后读取输出。", required = false) Boolean runInBackground) {
 
 		String shellId = "shell_" + System.currentTimeMillis();
 
 		try {
-			String[] shellCommand;
-			String os = System.getProperty("os.name").toLowerCase();
-			if (os.contains("win")) {
-				shellCommand = new String[] { "cmd.exe", "/c", command };
-			}
-			else {
-				shellCommand = new String[] { "/bin/bash", "-c", command };
-			}
+			String[] shellCommand = buildShellCommand(command);
 
 			ProcessBuilder processBuilder = new ProcessBuilder(shellCommand);
 			processBuilder.redirectErrorStream(false);
@@ -284,7 +230,7 @@ public class ShellTools {
 				StringBuilder stderr = new StringBuilder();
 
 				Thread stdoutThread = new Thread(() -> {
-				try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), getConsoleCharset()))) {
+				try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 						String line;
 						while ((line = reader.readLine()) != null) {
 							stdout.append(line).append("\n");
@@ -295,7 +241,7 @@ public class ShellTools {
 				});
 
 				Thread stderrThread = new Thread(() -> {
-				try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), getConsoleCharset()))) {
+				try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
 						String line;
 						while ((line = reader.readLine()) != null) {
 							stderr.append(line).append("\n");
@@ -363,7 +309,6 @@ public class ShellTools {
 		}
 	}
 
-	// @formatter:off
 	@Tool(name = "BashOutput", description = """
 		- 从正在运行或已完成的后台bash shell获取输出
 		- 接受一个标识shell的shell_id参数
@@ -375,7 +320,7 @@ public class ShellTools {
 		""")
 	public String bashOutput(
 		@ToolParam(description = "要获取输出的后台Shell的ID") String bash_id,
-		@ToolParam(description = "可选的正则表达式，用于过滤输出行。仅匹配此正则表达式的行将包含在结果中。不匹配的行将不再可读。", required = false) String filter) { // @formatter:on
+		@ToolParam(description = "可选的正则表达式，用于过滤输出行。仅匹配此正则表达式的行将包含在结果中。不匹配的行将不再可读。", required = false) String filter) {
 
 		BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
 
@@ -407,7 +352,6 @@ public class ShellTools {
 		return result.toString();
 	}
 
-	// @formatter:off
 	@Tool(name = "KillShell", description = """
 		- 通过ID终止正在运行的后台bash shell
 		- 接受一个标识要终止的shell的shell_id参数
@@ -416,7 +360,7 @@ public class ShellTools {
 		- Shell ID可以通过/bashes命令找到
 		""")
 	public String killShell(
-		@ToolParam(description = "要终止的后台Shell的ID") String bash_id) { // @formatter:on
+		@ToolParam(description = "要终止的后台Shell的ID") String bash_id) {
 
 		BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
 
@@ -446,7 +390,7 @@ public class ShellTools {
 	public static Builder builder() {
 		return new Builder();
 	}
-	
+
 	public static class Builder {
 		public ShellTools build() {
 			return new ShellTools();

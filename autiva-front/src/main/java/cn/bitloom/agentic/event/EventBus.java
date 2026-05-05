@@ -6,6 +6,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.util.concurrent.Queues;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 @Slf4j
 public class EventBus {
 
@@ -16,6 +18,7 @@ public class EventBus {
     private static final Sinks.Many<Event> outBox = Sinks.many()
             .multicast()
             .onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE * 10, false);
+    private static final ConcurrentHashMap<String, Boolean> cancelFlags = new ConcurrentHashMap<>();
 
     public static void inBoxPublish(String sessionId, Message message) {
         Sinks.EmitResult result = inBox.tryEmitNext(
@@ -47,6 +50,19 @@ public class EventBus {
 
     public static Flux<Event> outBoxSubscribe() {
         return outBox.asFlux();
+    }
+
+    public static void cancelPublish(String sessionId) {
+        cancelFlags.put(sessionId, Boolean.TRUE);
+        log.debug("Cancel signal published for session: {}", sessionId);
+    }
+
+    public static boolean isCancelled(String sessionId) {
+        return Boolean.TRUE.equals(cancelFlags.get(sessionId));
+    }
+
+    public static void clearCancelFlag(String sessionId) {
+        cancelFlags.remove(sessionId);
     }
 
 }

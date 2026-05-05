@@ -1,6 +1,7 @@
 package cn.bitloom.store;
 
 import cn.bitloom.node.QuestionCard;
+import cn.bitloom.node.TaskCard;
 import cn.bitloom.node.TodoCard;
 import javafx.application.Platform;
 import javafx.scene.Node;
@@ -18,6 +19,7 @@ import java.util.function.Consumer;
 public class ToolUIBridge {
 
     private final Map<String, CompletableFuture<String>> pendingQuestions = new ConcurrentHashMap<>();
+    private final Map<String, TaskCard> activeTaskCards = new ConcurrentHashMap<>();
     private Consumer<Node> onNodeAdded;
 
     public void setOnNodeAdded(Consumer<Node> callback) {
@@ -62,5 +64,50 @@ public class ToolUIBridge {
                 log.error("Error showing todos", e);
             }
         });
+    }
+
+    public TaskCard createTaskCard(String taskId, String taskJson) {
+        TaskCard card = new TaskCard(taskJson);
+        this.activeTaskCards.put(taskId, card);
+        Platform.runLater(() -> {
+            try {
+                if (this.onNodeAdded != null) {
+                    this.onNodeAdded.accept(card);
+                }
+            } catch (Exception e) {
+                log.error("Error showing task card", e);
+            }
+        });
+        return card;
+    }
+
+    public TaskCard getTaskCard(String taskId) {
+        return this.activeTaskCards.get(taskId);
+    }
+
+    public void removeTaskCard(String taskId) {
+        this.activeTaskCards.remove(taskId);
+    }
+
+    public void appendTaskOutput(String taskId, String text) {
+        TaskCard card = this.activeTaskCards.get(taskId);
+        if (card != null) {
+            card.appendOutput(text);
+        }
+    }
+
+    public void completeTaskCard(String taskId, String result) {
+        TaskCard card = this.activeTaskCards.remove(taskId);
+        if (card != null) {
+            card.complete(result);
+        }
+    }
+
+    public void failTaskCard(String taskId, String error) {
+        TaskCard card = this.activeTaskCards.remove(taskId);
+        if (card != null) {
+            card.appendOutput("\n错误: " + error);
+            card.setStatus("failed");
+        }
     }
 }

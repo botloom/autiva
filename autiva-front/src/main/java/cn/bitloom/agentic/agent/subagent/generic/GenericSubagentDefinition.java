@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.agent.subagent.code;
+package cn.bitloom.agentic.agent.subagent.generic;
 
 import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
 import cn.bitloom.agentic.agent.subagent.SubagentReference;
@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-public record CodeSubagentDefinition(SubagentReference reference, Map<String, Object> frontMatter, String content) implements SubagentDefinition {
+public record GenericSubagentDefinition(SubagentReference reference, Map<String, Object> frontMatter, String content) implements SubagentDefinition {
 
-	public static final String KIND = "CODE";
+	public static final String KIND = "GENERIC";
 
 	private static final String FRONTMATTER_NAME_KEY = "name";
 

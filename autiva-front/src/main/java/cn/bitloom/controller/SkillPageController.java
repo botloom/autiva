@@ -95,13 +95,8 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         deleteButton.getStyleClass().add("skill-page__card-btn");
         deleteButton.setStyle("-fx-text-fill: #ff3b30;");
         deleteButton.setOnAction(event -> {
-            boolean confirmed = AlertUtil.showConfirm("确认删除",
-                    "确定要删除技能 \"" + skill.name() + "\" 吗？",
-                    skillPage.getScene().getWindow());
-            if (confirmed) {
-                viewModel.deleteSkill(skill.name());
-                renderSkills();
-            }
+            viewModel.deleteSkill(skill.name());
+            renderSkills();
         });
 
         header.getChildren().addAll(nameLabel, spacer, editButton, deleteButton);
@@ -144,10 +139,8 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
 
         try {
             Path zipPath = selectedFile.toPath();
-            Skill importedSkill = viewModel.importSkillFromZip(zipPath);
+            viewModel.importSkillFromZip(zipPath);
             renderSkills();
-
-            AlertUtil.showInfo("导入成功", "技能 \"" + importedSkill.name() + "\" 已成功导入", null);
         } catch (IOException e) {
             log.error("Failed to import skill from zip", e);
             AlertUtil.showError("导入失败", e.getMessage(), null);

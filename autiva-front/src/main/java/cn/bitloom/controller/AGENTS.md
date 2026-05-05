@@ -74,6 +74,7 @@
 - 管理 ScrollPane + VBox 聊天容器
 - 监听 ViewModel 的 ObservableList 变化，创建消息卡片组件
 - 处理搜索输入框和发送按钮事件
+- 管理停止按钮（流式生成时切换显示，替代发送按钮）
 - 管理模型选择 ComboBox
 - 处理语音输入按钮
 - 动画效果（图标淡出、聊天区域展开）
@@ -84,6 +85,7 @@
 
 **ViewModel 委托：**
 - `viewModel.sendMessage()` - 发送消息
+- `viewModel.stopGeneration()` - 停止生成
 - `viewModel.clear()` - 清除对话
 - `viewModel.addUserMessage()` - 添加用户消息到列表
 - `viewModel.prepareHistoricalMessages()` - 准备历史消息

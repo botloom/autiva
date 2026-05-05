@@ -54,7 +54,7 @@ windowManager.<FileEditorController>showDialog(
 | 主窗口 | `AutivaApplication.start()` | 通过 `scene.lookup()` 获取按钮，内联绑定行为 |
 | 文件编辑器对话框 | `FileEditorController.setStage()` | 通过 `@FXML` 获取按钮，内联绑定行为 |
 | 轻量级弹窗 | `FileEditorController.showInputDialog/showConfirmDialog` | 仅使用 `setupDrag` |
-| 微信扫码登录对话框 | `WeixinLoginController.setStage()` | 使用 `WindowChromeHelper.setupDrag`，整个卡片可拖动，右上角关闭按钮 |
+| 微信扫码登录对话框 | `WeixinLoginController.setStage()` | 使用 `WindowChromeHelper.setup`，toolbar 拖动，仅关闭按钮 |
 
 ### 各窗口需实现的私有方法
 

@@ -1,15 +1,17 @@
 package cn.bitloom.agentic.advisor;
 
 import com.alibaba.fastjson2.JSON;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
+import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.lang.NonNull;
-import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
@@ -20,15 +22,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
-@Component
-public class LoggingAdvisor implements StreamAdvisor {
+@Builder
+public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
-    private static final AtomicInteger REQUEST_SEQ = new AtomicInteger(0);
 
-    private static final String BORDER_TOP = "┌──────────────────────────────────────────────";
     private static final String BORDER_MID = "├──────────────────────────────────────────────";
     private static final String BORDER_BOTTOM = "└──────────────────────────────────────────────";
+
+    private final AtomicInteger requestSeq = new AtomicInteger(0);
 
     @Override
     public @NonNull String getName() {
@@ -42,7 +44,7 @@ public class LoggingAdvisor implements StreamAdvisor {
 
     @Override
     public @NonNull Flux<ChatClientResponse> adviseStream(@NonNull ChatClientRequest chatClientRequest, @NonNull StreamAdvisorChain streamAdvisorChain) {
-        int seq = REQUEST_SEQ.incrementAndGet();
+        int seq = this.requestSeq.incrementAndGet();
         long startNano = System.nanoTime();
 
         AtomicReference<StringBuilder> fullText = new AtomicReference<>(new StringBuilder());
@@ -114,6 +116,74 @@ public class LoggingAdvisor implements StreamAdvisor {
 
                     lines.forEach(log::error);
                 });
+    }
+
+    @Override
+    public @NonNull ChatClientResponse adviseCall(@NonNull ChatClientRequest chatClientRequest, @NonNull CallAdvisorChain callAdvisorChain) {
+        int seq = this.requestSeq.incrementAndGet();
+        long startNano = System.nanoTime();
+
+        List<String> requestLines = buildRequestLines(seq, chatClientRequest);
+
+        ChatClientResponse response;
+        try {
+            response = callAdvisorChain.nextCall(chatClientRequest);
+        } catch (RuntimeException e) {
+            long durationMs = (System.nanoTime() - startNano) / 1_000_000;
+            String time = LocalDateTime.now().format(TIME_FORMAT);
+
+            List<String> lines = new ArrayList<>();
+            lines.add(String.format("┌─ LLM [#%d] %s · %dms ──────────────────────────", seq, time, durationMs));
+            lines.addAll(requestLines);
+            lines.add(BORDER_MID);
+            lines.add(String.format("│ %-8s│ %s (%dms)", "Error", e.getMessage(), durationMs));
+            lines.add(BORDER_BOTTOM);
+
+            lines.forEach(log::error);
+            throw e;
+        }
+
+        long durationMs = (System.nanoTime() - startNano) / 1_000_000;
+        String time = LocalDateTime.now().format(TIME_FORMAT);
+
+        List<String> lines = new ArrayList<>();
+        lines.add(String.format("┌─ LLM [#%d] %s · %dms ──────────────────────────", seq, time, durationMs));
+        lines.addAll(requestLines);
+        lines.add(BORDER_MID);
+
+        ChatResponse chatResponse = response.chatResponse();
+        if (chatResponse != null && chatResponse.getResult() != null) {
+            var output = chatResponse.getResult().getOutput();
+            String text = output.getText();
+            var toolCalls = output.getToolCalls();
+
+            if (text != null && !text.isEmpty()) {
+                lines.add(String.format("│ %-8s│ %s", "Text", truncate(text, 1000)));
+            }
+
+            if (!toolCalls.isEmpty()) {
+                lines.add(String.format("│ %-8s│ (%d calls)", "Tools", toolCalls.size()));
+                int num = 1;
+                for (var toolCall : toolCalls) {
+                    lines.add(String.format("│ %-8s│ %s(%s)",
+                            "#" + num,
+                            toolCall.name(),
+                            truncate(toolCall.arguments(), 300)));
+                    num++;
+                }
+            }
+
+            if ((text == null || text.isEmpty()) && toolCalls.isEmpty()) {
+                lines.add(String.format("│ %-8s│ %s", "Result", "(empty)"));
+            }
+        } else {
+            lines.add(String.format("│ %-8s│ %s", "Result", "(empty)"));
+        }
+
+        lines.add(BORDER_BOTTOM);
+        lines.forEach(log::info);
+
+        return response;
     }
 
     private List<String> buildRequestLines(int seq, ChatClientRequest request) {

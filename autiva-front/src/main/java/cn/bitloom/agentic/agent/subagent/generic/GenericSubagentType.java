@@ -1,10 +1,12 @@
-package cn.bitloom.agentic.agent.subagent.code;
+package cn.bitloom.agentic.agent.subagent.generic;
 
 import cn.bitloom.agentic.deploy.DeployTool;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.agent.subagent.SubagentType;
+import cn.bitloom.agentic.session.SessionManager;
 import cn.bitloom.agentic.tool.*;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.core.io.Resource;
@@ -17,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class CodeSubagentType {
+public class GenericSubagentType {
 
 	public static Builder builder() {
 		return new Builder();
@@ -34,6 +36,9 @@ public class CodeSubagentType {
 		private final List<String> skillsDirectories = new ArrayList<>();
 
 		private DeployTool deployTool;
+
+		private ChatMemory chatMemory;
+		private SessionManager sessionManager;
 
 		public Builder braveApiKey(String braveApiKey) {
 			Assert.notNull(braveApiKey, "braveApiKey不能为null");
@@ -96,19 +101,33 @@ public class CodeSubagentType {
 			return this;
 		}
 
+		public Builder chatMemory(ChatMemory chatMemory) {
+			Assert.notNull(chatMemory, "chatMemory不能为null");
+			this.chatMemory = chatMemory;
+			return this;
+		}
+
+		public Builder sessionManager(SessionManager sessionManager) {
+			Assert.notNull(sessionManager, "sessionManager不能为null");
+			this.sessionManager = sessionManager;
+			return this;
+		}
+
 		public SubagentType build() {
 
 			Assert.notEmpty(this.chatClientBuilderMap, "至少需要一个chatClientBuilder");
 			Assert.isTrue(this.chatClientBuilderMap.containsKey("default"),
 					"chatClientBuilderMap必须包含一个'default'构建器用于SmartWebFetchTool");
+			Assert.notNull(this.chatMemory, "chatMemory不能为null，请通过chatMemory()方法设置");
 
-			CodeSubagentExecutor executor = new CodeSubagentExecutor(this.chatClientBuilderMap,
-					this.defaultCodeSubagentTools(), this.skillManager, this.skillsDirectories);
+			GenericSubagentExecutor executor = new GenericSubagentExecutor(this.chatClientBuilderMap,
+					this.defaultGenericSubagentTools(), this.skillManager, this.skillsDirectories, this.chatMemory,
+					this.sessionManager);
 
-			return new SubagentType(new CodeSubagentResolver(), executor);
+			return new SubagentType(new GenericSubagentResolver(), executor);
 		}
 
-		private List<ToolCallback> defaultCodeSubagentTools() {
+		private List<ToolCallback> defaultGenericSubagentTools() {
 
 			ChatClient.Builder webFetchChatClientBuilder = this.chatClientBuilderMap.get("default");
 
@@ -130,6 +149,10 @@ public class CodeSubagentType {
 				.getToolCallbacks());
 
 			defaultCallbacks.addAll(commonTools);
+
+			if (this.skillManager != null && !this.skillManager.getAllSkills().isEmpty()) {
+				defaultCallbacks.add(this.skillManager.buildToolCallback());
+			}
 
 			if (StringUtils.hasText(this.braveApiKey)) {
 				defaultCallbacks.add(MethodToolCallbackProvider.builder()

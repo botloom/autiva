@@ -17,9 +17,9 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Line;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import lombok.Getter;
@@ -34,7 +34,8 @@ import java.util.concurrent.Executors;
 @Component
 public class WeixinLoginController implements WindowManager.StageAware, DialogHolder {
 
-    @FXML private VBox root;
+    @FXML private BorderPane rootContainer;
+    @FXML private HBox toolbar;
     @FXML private ImageView qrCodeImageView;
     @FXML private VBox loadingPane;
     @FXML private VBox successPane;
@@ -59,12 +60,9 @@ public class WeixinLoginController implements WindowManager.StageAware, DialogHo
         this.stage = stage;
         stage.setOnCloseRequest(event -> cleanup());
 
-        Platform.runLater(() -> {
-            WindowChromeHelper.setupDrag(stage, root);
-            if (closeBtn != null) {
-                closeBtn.setGraphic(createCloseIcon());
-            }
-        });
+        Platform.runLater(() ->
+                WindowChromeHelper.setup(stage, toolbar, rootContainer, null, null, closeBtn, 320, 400)
+        );
     }
 
     public void setWeixinILinkClient(WeixinILinkClient client) {
@@ -140,29 +138,11 @@ public class WeixinLoginController implements WindowManager.StageAware, DialogHo
         statusLabel.setText("登录失败");
     }
 
-    @FXML
-    private void handleClose() {
-        cleanup();
-        if (stage != null) {
-            stage.close();
-        }
-    }
-
     private void cleanup() {
         if (weixinILinkClient != null && connectedListener != null) {
             weixinILinkClient.connectedProperty().removeListener(connectedListener);
             connectedListener = null;
         }
-    }
-
-    private javafx.scene.Node createCloseIcon() {
-        Line l1 = new Line(0, 0, 10, 10);
-        l1.setStroke(Color.rgb(134, 134, 139));
-        l1.setStrokeWidth(1.5);
-        Line l2 = new Line(10, 0, 0, 10);
-        l2.setStroke(Color.rgb(134, 134, 139));
-        l2.setStrokeWidth(1.5);
-        return new javafx.scene.Group(l1, l2);
     }
 
     @Override

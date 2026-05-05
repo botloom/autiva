@@ -16,7 +16,7 @@
 package cn.bitloom.agentic.tool;
 
 import cn.bitloom.agentic.agent.subagent.*;
-import cn.bitloom.agentic.agent.subagent.code.CodeSubagentDefinition;
+import cn.bitloom.agentic.agent.subagent.generic.GenericSubagentDefinition;
 import cn.bitloom.agentic.task.repository.DefaultTaskRepository;
 import cn.bitloom.agentic.task.repository.TaskRepository;
 import org.slf4j.Logger;
@@ -73,38 +73,10 @@ public class TaskTool {
 
 			示例用法：
 
-			<example_agent_descriptions>
-			"code-reviewer": 在你完成编写重要代码后使用此代理
-			"greeting-responder": 使用此代理以友好的笑话回应用户问候
-			</example_agent_description>
-
 			<example>
-			user: "请编写一个检查数字是否为质数的函数"
-			assistant: 好的，让我编写一个检查数字是否为质数的函数
-			assistant: 首先让我使用Write工具编写一个检查数字是否为质数的函数
-			assistant: 我将使用Write工具编写以下代码：
-			<code>
-			function isPrime(n) {
-			if (n <= 1) return false
-			for (let i = 2; i * i <= n; i++) {
-				if (n %% i === 0) return false
-			}
-			return true
-			}
-			</code>
-			<commentary>
-			由于编写了重要的代码片段且任务已完成，现在使用code-reviewer代理审查代码
-			</commentary>
-			assistant: 现在让我使用code-reviewer代理审查代码
-			assistant: 使用Task工具启动code-reviewer代理
-			</example>
-
-			<example>
-			user: "你好"
-			<commentary>
-			由于用户正在问候，使用greeting-responder代理以友好的笑话回应
-			</commentary>
-			assistant: "我将使用Task工具启动greeting-responder代理"
+			user: "运行构建并修复任何类型错误"
+			assistant: 我将使用 Bash 子智能体运行构建
+			assistant: 使用Task工具，subagent_type="Bash"，prompt="运行构建命令"
 			</example>
 			""";
 
@@ -222,15 +194,9 @@ public class TaskTool {
 		public ToolCallback build() {
 			Assert.notNull(this.taskRepository, "必须提供taskRepository");
 
-			if (this.subagentTypes.stream().anyMatch(st -> st.kind().equals(CodeSubagentDefinition.KIND))) {
-				this.subagentReferences.add(new SubagentReference("classpath:/agent/GENERAL_PURPOSE_SUBAGENT.md",
-						CodeSubagentDefinition.KIND));
+			if (this.subagentTypes.stream().anyMatch(st -> st.kind().equals(GenericSubagentDefinition.KIND))) {
 				this.subagentReferences
-					.add(new SubagentReference("classpath:/agent/EXPLORE_SUBAGENT.md", CodeSubagentDefinition.KIND));
-				this.subagentReferences
-					.add(new SubagentReference("classpath:/agent/PLAN_SUBAGENT.md", CodeSubagentDefinition.KIND));
-				this.subagentReferences
-					.add(new SubagentReference("classpath:/agent/BASH_SUBAGENT.md", CodeSubagentDefinition.KIND));
+					.add(new SubagentReference("classpath:/agent/BASH_SUBAGENT.md", GenericSubagentDefinition.KIND));
 			}
 
 			Assert.notEmpty(this.subagentTypes, "必须至少提供一个subagentTypes");

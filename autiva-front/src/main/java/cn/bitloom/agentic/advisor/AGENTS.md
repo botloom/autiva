@@ -6,7 +6,7 @@
 ## 核心类
 
 ### LoggingAdvisor
-实现 StreamAdvisor 接口，提供 LLM 请求和响应的日志记录功能。
+实现 StreamAdvisor 和 CallAdvisor 接口，同时支持流式调用（`.stream()`）和同步调用（`.call()`），提供 LLM 请求和响应的日志记录功能。
 
 **功能：**
 - 记录所有发送给 LLM 的消息（System、User、Assistant、Tool Response）
@@ -15,7 +15,7 @@
 - 记录错误信息
 
 **日志格式：**
-流式响应完成后一次性输出，请求和响应通过 `├──` 分隔线分为上下两区。
+流式和同步调用完成后均一次性输出，请求和响应通过 `├──` 分隔线分为上下两区。同步模式下直接获取完整响应后打印，流式模式下在 `doOnComplete` 中统一打印。
 每行通过 `String.format("│ %-8s│ %s", label, content)` 格式化后逐行 `log.info()` 输出：
 ```
 ┌─ LLM [#1] 14:30:28.456 · 3334ms ──────────────────────────
@@ -38,7 +38,7 @@
 
 **配置：**
 - Order: 1（执行顺序）
-- 自动注册为 Spring Bean
+- 使用 Lombok `@Builder` 手动实例化，`requestSeq` 为实例字段
 
 ### AutoMemoryToolsAdvisor
 实现 BaseChatMemoryAdvisor 接口，自动将记忆工具注入到 ChatClient 请求中（来自 spring-ai-agent-utils）。
@@ -61,10 +61,10 @@
 ## 使用方式
 
 ### LoggingAdvisor
-自动注入到 ChatClient 配置中：
+手动 Builder 创建，添加到 ChatClient 配置中：
 ```java
 ChatClient chatClient = ChatClient.builder(chatModel)
-    .defaultAdvisors(a -> a.advisors(loggingAdvisor))
+    .defaultAdvisors(a -> a.advisors(LoggingAdvisor.builder().build()))
     .build();
 ```
 
@@ -78,7 +78,7 @@ AutoMemoryToolsAdvisor advisor = AutoMemoryToolsAdvisor.builder()
 
 ## 扩展指南
 可以创建其他 Advisor 实现：
-1. 实现 StreamAdvisor 或 BaseChatMemoryAdvisor 接口
+1. 实现 StreamAdvisor（流式）、CallAdvisor（同步）或两者同时实现
 2. 在对应方法中添加自定义逻辑
 3. 注册为 Spring Bean
 4. 在 Agent 中注入并添加到 ChatClient
@@ -88,3 +88,4 @@ AutoMemoryToolsAdvisor advisor = AutoMemoryToolsAdvisor.builder()
 2. 流式处理需要注意线程安全
 3. 日志记录可能包含敏感信息，生产环境需谨慎
 4. AutoMemoryToolsAdvisor 的 order 必须小于 ToolCallAdvisor（300）
+5. 如果同时需要支持 `.call()` 和 `.stream()`，Advisor 必须同时实现 CallAdvisor 和 StreamAdvisor 接口。只实现 StreamAdvisor 的 Advisor 在同步调用中不会被触发

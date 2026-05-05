@@ -23,5 +23,7 @@ public record TaskCall( // @formatter:off
 		@ToolParam(description = "用于此任务的专门代理类型") String subagent_type,
 		@ToolParam(description = "用于此代理的可选模型。如果未指定，则从父级继承。对于快速、简单的任务，优先使用小型模型以最小化成本和延迟。", required = false) String model,
 		@ToolParam(description = "要从中恢复的可选代理ID。如果提供，代理将从之前的执行记录继续。", required = false) String resume,
-		@ToolParam(description = "设置为true以在后台运行此代理。稍后使用TaskOutput读取输出。", required = false) Boolean run_in_background ) { // @formatter:on
+		@ToolParam(description = "设置为true以在后台运行此代理。稍后使用TaskOutput读取输出。", required = false) Boolean run_in_background,
+		@ToolParam(description = "当前会话ID，由系统自动注入，无需填写", required = false) String sessionId,
+		@ToolParam(description = "子会话ID，由系统自动注入，无需填写", required = false) String childSessionId ) { // @formatter:on
 }

@@ -1,7 +1,7 @@
 # Event 包
 
 ## 概述
-本包实现了基于 Reactor 的发布-订阅事件系统，用于智能体之间的异步通信。采用 Inbox/Outbox 双通道架构，支持会话级别的消息隔离。
+本包实现了基于 Reactor 的发布-订阅事件系统，用于智能体之间的异步通信。采用 Inbox/Outbox/CancelBox 三通道架构，支持会话级别的消息隔离和流式生成中断。
 
 ## 核心类
 
@@ -29,10 +29,14 @@ Event event = Event.builder()
 - `inBoxSubscribe()`: 订阅 Inbox 事件流
 - `outBoxPublish(sessionId, message)`: 发布消息到 Outbox（返回给用户），使用 tryEmitNext 并记录失败日志
 - `outBoxSubscribe()`: 订阅 Outbox 消息流
+- `cancelPublish(sessionId)`: 发布取消信号（设置 ConcurrentHashMap 标记），用于中止当前流式生成
+- `isCancelled(sessionId)`: 检查指定会话是否已被取消
+- `clearCancelFlag(sessionId)`: 清除指定会话的取消标记（流式完成/中断后清理）
 
 **实现原理：**
-- 使用 Reactor 的 Sinks.Many 实现多播
+- 使用 Reactor 的 Sinks.Many 实现多播（Inbox/Outbox）
 - `multicast().onBackpressureBuffer()`: 多播模式，带背压缓冲
+- 取消信号使用 ConcurrentHashMap 存储，配合 Flux.takeWhile() 实现流式中断
 
 ## 使用示例
 

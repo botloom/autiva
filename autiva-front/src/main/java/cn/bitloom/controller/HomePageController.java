@@ -16,12 +16,15 @@ import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ScrollPane;
@@ -57,6 +60,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private Button searchButton;
     @FXML
+    private Button stopButton;
+    @FXML
     private VBox icon;
     @FXML
     private ScrollPane chatScrollPane;
@@ -64,6 +69,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private VBox chatContainer;
     @FXML
     private ComboBox<ModelTypeEnum> modelSelector;
+
+    private final BooleanProperty shouldScrollToBottom = new SimpleBooleanProperty(false);
 
     @Getter
     private final HomePageViewModel viewModel;
@@ -78,6 +85,26 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     public void initialize(URL location, ResourceBundle resources) {
         this.searchButton.setOnAction(event -> this.handleSendMessage());
         this.searchField.setOnAction(event -> this.handleSendMessage());
+        this.stopButton.setOnAction(event -> this.viewModel.stopGeneration());
+
+        this.viewModel.getIsStreaming().addListener((obs, oldVal, newVal) -> {
+            boolean streaming = newVal != null && newVal;
+            this.searchButton.setVisible(!streaming);
+            this.searchButton.setManaged(!streaming);
+            this.stopButton.setVisible(streaming);
+            this.stopButton.setManaged(streaming);
+        });
+
+        homePage.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                newScene.addPostLayoutPulseListener(() -> {
+                    if (shouldScrollToBottom.get()) {
+                        shouldScrollToBottom.set(false);
+                        chatScrollPane.setVvalue(1.0);
+                    }
+                });
+            }
+        });
 
         this.modelSelector.getItems().addAll(ModelTypeEnum.values());
         this.modelSelector.setValue(Store.selectedModel.get());
@@ -91,10 +118,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         });
 
         this.toolUIBridge.setOnNodeAdded(this::addChatNode);
-
-        this.chatContainer.heightProperty().addListener((obs, oldVal, newVal) -> {
-            Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
-        });
 
         this.viewModel.getMessages().addListener((ListChangeListener<ChatMessage>) change -> {
             while (change.next()) {
@@ -123,6 +146,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             }
             HBox row = createMessageRow(card, msg.getType());
             chatContainer.getChildren().add(row);
+            scrollToBottom();
         } else {
             log.warn("addChatMessage: createMessageCard returned null for type={}", msg.getType());
         }
@@ -140,6 +164,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         row.setAlignment(Pos.CENTER_LEFT);
         row.getChildren().add(node);
         chatContainer.getChildren().add(row);
+        scrollToBottom();
     }
 
     private HBox createMessageRow(Node card, ChatMessage.Type type) {
@@ -163,7 +188,11 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private Node createMessageCard(ChatMessage msg) {
         return switch (msg.getType()) {
             case USER -> new UserMessageCard(msg.getContent());
-            case ASSISTANT -> new AssistantMessageCard(msg);
+            case ASSISTANT -> {
+                AssistantMessageCard card = new AssistantMessageCard(msg);
+                card.setOnContentChanged(c -> scrollToBottom());
+                yield card;
+            }
             case TOOL -> createToolMessageCard(msg);
         };
     }
@@ -194,6 +223,10 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                 .build();
         this.viewModel.sendMessage(userMessage);
         this.searchField.clear();
+    }
+
+    private void scrollToBottom() {
+        shouldScrollToBottom.set(true);
     }
 
     private void animateToChatState() {

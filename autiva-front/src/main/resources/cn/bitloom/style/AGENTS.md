@@ -90,6 +90,7 @@
 - `.home-page__search-field`: 搜索输入框
 - `.home-page__icon-btn`: 图标按钮
 - `.home-page__icon-btn--active`: 图标按钮激活状态（红色背景，用于录音状态）
+- `.home-page__icon-btn--stop`: 图标按钮终止状态（红色背景，用于停止流式生成）
 - `.home-page__model-selector`: 模型选择器
 - `.chat-scroll-pane`: 聊天滚动面板
 - `.chat-container`: 聊天消息容器

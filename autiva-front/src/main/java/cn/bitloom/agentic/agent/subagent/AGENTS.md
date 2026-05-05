@@ -14,7 +14,7 @@
 - `getName()`: 返回子代理的唯一名称
 - `getDescription()`: 返回子代理能力的描述
 - `getKind()`: 返回类型标识符（如 "CODE"、"A2A"）
-- `getReference()`: 返回用于解析此定义的引用
+- `reference()`: 返回用于解析此定义的引用
 - `toSubagentRegistrations()`: 格式化注册显示，默认格式为 `- **name**: description`
 
 ### SubagentExecutor
@@ -57,15 +57,16 @@
 - `prompt`: 代理要执行的任务
 - `subagent_type`: 用于此任务的专门代理类型
 - `model`: 可选模型覆盖
-- `resume`: 可选恢复代理ID
+- `resume`: 可选恢复代理ID（用于继续之前的子智能体会话）
 - `run_in_background`: 是否在后台运行
+- `sessionId`: 当前会话ID（由系统通过 ToolContext 自动注入，LLM 无需填写）
 
 ## 子包
 
 ### code 包 (`cn.bitloom.agentic.agent.subagent.code`)
 编码子代理实现，详见 [code/AGENTS.md](code/AGENTS.md)
 
-### a2a 包 (`cn.bitloom.agentic.subagent.a2a`)
+### a2a 包 (`cn.bitloom.agentic.agent.subagent.a2a`)
 A2A 协议子代理实现，详见 [a2a/AGENTS.md](a2a/AGENTS.md)
 
 ## 设计模式

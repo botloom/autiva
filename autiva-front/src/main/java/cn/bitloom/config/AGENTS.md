@@ -5,6 +5,34 @@
 
 ## 核心类
 
+### DeepSeekV4CompatConfig
+DeepSeek V4 兼容性配置，解决 DeepSeek V4 默认启用思考模式（thinking mode）导致 Spring AI 1.1.4 多轮工具调用 400 错误的问题。
+
+**问题背景：**
+- DeepSeek V4（2026年4月发布）将 `deepseek-chat` 路由到 `deepseek-v4-flash`，默认启用思考模式
+- 启用思考模式后，模型在工具调用响应中返回 `reasoning_content` 字段
+- Spring AI 1.1.4 的 `DeepSeekChatModel.createRequest()` 在重建 assistant 消息时始终传 `null` 给 `reasoningContent` 参数
+- 后续请求因缺少 `reasoning_content` 导致 DeepSeek API 返回 400 Bad Request
+
+**问题根因：**
+`DeepSeekChatOptions4V4` 上的 `@JsonProperty("thinking")` 注解无效，因为被序列化发送给 DeepSeek API 的类不是 `DeepSeekChatOptions4V4`，而是 Spring AI 内部的 `DeepSeekApi.ChatCompletionRequest` record，后者没有 `thinking` 字段。Spring AI 在 `createRequest()` 中将 options 逐字段拷贝到 `ChatCompletionRequest`，`thinking` 字段在此过程中被丢弃。
+
+**修复方案：**
+通过 `Jackson2ObjectMapperBuilderCustomizer` 将自定义 Jackson `BeanSerializerModifier` 注册到 Spring Boot 的全局 `ObjectMapper` 中，在序列化 `ChatCompletionRequest` 时自动注入 `thinking: {"type": "disabled"}` 参数，禁用思考模式。
+
+**核心类：**
+- `DeepSeekV4CompatConfig`: Spring `@Configuration` 类，声明 `Jackson2ObjectMapperBuilderCustomizer` Bean
+- `ThinkingDisabledBeanSerializerModifier`: 自定义 `BeanSerializerModifier`，通过 `modifySerializer()` 方法精确匹配 `DeepSeekApi$ChatCompletionRequest` 类名
+  - 匹配成功后返回 `ThinkingDisabledSerializer` 包装器
+  - `ThinkingDisabledSerializer` 使用 `TokenBuffer` 捕获原始序列化输出，然后重放并在末尾注入 `thinking` 字段
+  - 仅影响 DeepSeek 的请求，不影响 ZhiPu AI 等其他模型
+
+**注意事项：**
+- 此配置为临时兼容方案，待 Spring AI 修复 `reasoning_content` 处理后可移除
+- 自定义序列化器仅修改 DeepSeek 的 `ChatCompletionRequest`，不影响其他模型的请求
+- 如需启用思考模式，需升级 Spring AI 版本并移除此配置
+- `DeepSeekChatOptions4V4.thinking` 字段（`@JsonProperty`）保留用于未来 Spring AI 原生支持的升级，当前通过序列化器方案生效
+
 ### ConfigManager
 配置管理器，使用 Spring Boot 的 @Value 注解注入配置。
 

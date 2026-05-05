@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 /**
@@ -38,6 +39,7 @@ public class SessionManager {
     private final String MESSAGES_FILE = "messages.jsonl";
     private final ConfigManager configManager;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private final AtomicInteger subagentIdCounter = new AtomicInteger(0);
 
     /**
      * Init.
@@ -47,8 +49,33 @@ public class SessionManager {
         try {
             Files.createDirectories(AppConstants.Base.SESSION_DIR);
             this.loadAllSessions();
+            this.recoverSubagentCounter();
         } catch (IOException e) {
             log.error("初始化SessionManager失败", e);
+        }
+    }
+
+    private void recoverSubagentCounter() {
+        int maxCounter = this.sessions.values().stream()
+                .filter(s -> s.getParentId() != null)
+                .mapToInt(s -> {
+                    String id = s.getId();
+                    int lastUnderscore = id.lastIndexOf('_');
+                    if (lastUnderscore >= 0) {
+                        try {
+                            return Integer.parseInt(id.substring(lastUnderscore + 1));
+                        } catch (NumberFormatException e) {
+                            return -1;
+                        }
+                    }
+                    return -1;
+                })
+                .filter(c -> c >= 0)
+                .max()
+                .orElse(-1);
+        if (maxCounter >= 0) {
+            this.subagentIdCounter.set(maxCounter + 1);
+            log.info("恢复子智能体计数器: {}", this.subagentIdCounter.get());
         }
     }
 
@@ -141,14 +168,18 @@ public class SessionManager {
                         .target(target)
                         .build();
 
-                Files.createDirectory(AppConstants.Base.SESSION_DIR.resolve(sessionId));
+                Files.createDirectories(AppConstants.Base.SESSION_DIR.resolve(sessionId));
 
                 Path metadataFile = AppConstants.Base.SESSION_DIR.resolve(sessionId).resolve(this.METADATA_FILE);
-                Files.createFile(metadataFile);
+                if (!Files.exists(metadataFile)) {
+                    Files.createFile(metadataFile);
+                }
                 Files.writeString(metadataFile, JSON.toJSONString(session));
 
                 Path messagesFile = AppConstants.Base.SESSION_DIR.resolve(sessionId).resolve(this.MESSAGES_FILE);
-                Files.createFile(messagesFile);
+                if (!Files.exists(messagesFile)) {
+                    Files.createFile(messagesFile);
+                }
 
                 this.sessions.put(sessionId, session);
                 return session;
@@ -240,6 +271,45 @@ public class SessionManager {
      *
      * @param sessionId the session id
      */
+    public Session forkSession(String parentSessionId, String subagentType) {
+        String childSessionId = parentSessionId + "_" + subagentIdCounter.getAndIncrement();
+        Session parentSession = this.getById(parentSessionId);
+        Session childSession = Session.builder()
+                .id(childSessionId)
+                .agentId(parentSession != null ? parentSession.getAgentId() : AgentIdentityEnum.MAIN)
+                .type(parentSession != null ? parentSession.getType() : SessionTypeEnum.DM)
+                .respType(SessionRespTypeEnum.STREAM)
+                .source(parentSession != null ? parentSession.getSource() : "subagent")
+                .target(subagentType)
+                .parentId(parentSessionId)
+                .build();
+
+        try {
+            Path sessionDir = AppConstants.Base.SESSION_DIR.resolve(childSessionId);
+            Files.createDirectories(sessionDir);
+            Path metadataFile = sessionDir.resolve(this.METADATA_FILE);
+            if (!Files.exists(metadataFile)) {
+                Files.createFile(metadataFile);
+            }
+            Files.writeString(metadataFile, JSON.toJSONString(childSession));
+            Path messagesFile = sessionDir.resolve(this.MESSAGES_FILE);
+            if (!Files.exists(messagesFile)) {
+                Files.createFile(messagesFile);
+            }
+            this.sessions.put(childSessionId, childSession);
+            log.info("Fork子会话: {} -> {}", parentSessionId, childSessionId);
+            return childSession;
+        } catch (IOException e) {
+            throw new RuntimeException("Fork子会话失败: " + childSessionId, e);
+        }
+    }
+
+    public List<Session> getChildSessions(String parentSessionId) {
+        return this.sessions.values().stream()
+                .filter(s -> parentSessionId.equals(s.getParentId()))
+                .toList();
+    }
+
     public void clearSessionMessages(String sessionId) {
         try {
             Session session = this.getById(sessionId);

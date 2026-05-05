@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.agent.subagent.code;
+package cn.bitloom.agentic.agent.subagent.generic;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,7 +13,7 @@ import cn.bitloom.agentic.agent.subagent.SubagentReference;
 
 import org.springframework.core.io.Resource;
 
-public class CodeSubagentReferences {
+public class GenericSubagentReferences {
 
 	public static List<SubagentReference> fromRootDirectories(List<String> taskRootDirectories) {
 
@@ -31,11 +31,11 @@ public class CodeSubagentReferences {
 		Path rootPath = Paths.get(rootDirectory);
 
 		if (!Files.exists(rootPath)) {
-			throw new RuntimeException("根目录不存在: " + rootDirectory);
+			throw new RuntimeException("根目录不存在: " + rootPath);
 		}
 
 		if (!Files.isDirectory(rootPath)) {
-			throw new RuntimeException("路径不是目录: " + rootDirectory);
+			throw new RuntimeException("路径不是目录: " + rootPath);
 		}
 
 		List<SubagentReference> subagentReferences = new ArrayList<>();
@@ -46,7 +46,7 @@ public class CodeSubagentReferences {
 					.filter(path -> path.getFileName().toString().endsWith(".md"))
 					.forEach(path -> {
 						subagentReferences.add(new SubagentReference(path.toAbsolutePath().toString(),
-								CodeSubagentDefinition.KIND, null));
+								GenericSubagentDefinition.KIND, null));
 					});
 			}
 		}
@@ -58,11 +58,11 @@ public class CodeSubagentReferences {
 	}
 
 	public static List<SubagentReference> fromResources(Resource... resources) {
-		return Arrays.stream(resources).map(CodeSubagentReferences::fromResource).flatMap(List::stream).toList();
+		return Arrays.stream(resources).map(GenericSubagentReferences::fromResource).flatMap(List::stream).toList();
 	}
 
 	public static List<SubagentReference> fromResources(List<Resource> resources) {
-		return resources.stream().map(CodeSubagentReferences::fromResource).flatMap(List::stream).toList();
+		return resources.stream().map(GenericSubagentReferences::fromResource).flatMap(List::stream).toList();
 	}
 
 	public static List<SubagentReference> fromResource(Resource agentRootPath) {
@@ -72,7 +72,7 @@ public class CodeSubagentReferences {
 				return fromRootDirectory(path);
 			}
 
-			return List.of(new SubagentReference(path, CodeSubagentDefinition.KIND, null));
+			return List.of(new SubagentReference(path, GenericSubagentDefinition.KIND, null));
 		}
 		catch (IOException ex) {
 			throw new RuntimeException("从目录加载任务失败: " + agentRootPath, ex);

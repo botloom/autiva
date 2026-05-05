@@ -38,7 +38,11 @@ public class ConpactChatMemory implements ChatMemory {
     @NonNull
     @Override
     public List<Message> get(@NonNull String conversationId) {
-        List<Message> messages = sessionManager.getById(conversationId).getMessages();
+        var session = sessionManager.getById(conversationId);
+        if (session == null) {
+            return List.of();
+        }
+        List<Message> messages = session.getMessages();
 
         if (messages.isEmpty()) {
             return messages;
@@ -56,7 +60,10 @@ public class ConpactChatMemory implements ChatMemory {
 
     @Override
     public void clear(@NonNull String conversationId) {
-        sessionManager.getById(conversationId).getMessages().clear();
+        var session = sessionManager.getById(conversationId);
+        if (session != null) {
+            session.getMessages().clear();
+        }
     }
 
     private List<Message> microCompact(List<Message> messages) {

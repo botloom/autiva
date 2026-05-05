@@ -22,7 +22,7 @@ public record Skill(String basePath, Map<String, Object> frontMatter, String con
                 .map(e -> "  <%s>%s</%s>".formatted(e.getKey(), e.getValue(), e.getKey()))
                 .collect(Collectors.joining("\n"));
 
-        return "<skill>\n%s\n</skill>".formatted(frontMatterXml);
+        return "<skill>\n  <basePath>%s</basePath>\n%s\n</skill>".formatted(this.basePath, frontMatterXml);
     }
 
 }

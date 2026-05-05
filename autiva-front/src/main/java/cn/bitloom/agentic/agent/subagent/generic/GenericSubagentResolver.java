@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.agent.subagent.code;
+package cn.bitloom.agentic.agent.subagent.generic;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -11,19 +11,19 @@ import cn.bitloom.agentic.util.MarkdownParser;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.util.Assert;
 
-public class CodeSubagentResolver implements SubagentResolver {
+public class GenericSubagentResolver implements SubagentResolver {
 
 	@Override
 	public boolean canResolve(SubagentReference subagentRef) {
 		Assert.notNull(subagentRef, "SubagentReference不能为null");
-		return subagentRef.kind().equals(CodeSubagentDefinition.KIND);
+		return subagentRef.kind().equals(GenericSubagentDefinition.KIND);
 	}
 
 	@Override
 	public SubagentDefinition resolve(SubagentReference subagentRef) {
 		Assert.notNull(subagentRef, "SubagentReference不能为null");
-		Assert.isTrue(subagentRef.kind().equals(CodeSubagentDefinition.KIND),
-				"CodeSubagentResolver只能解析类型为 " + CodeSubagentDefinition.KIND + " 的子代理");
+		Assert.isTrue(subagentRef.kind().equals(GenericSubagentDefinition.KIND),
+				"GenericSubagentResolver只能解析类型为 " + GenericSubagentDefinition.KIND + " 的子代理");
 
 		try {
 			String uri = (subagentRef.uri().startsWith("/")) ? "file:" + subagentRef.uri() : subagentRef.uri();
@@ -31,7 +31,7 @@ public class CodeSubagentResolver implements SubagentResolver {
 			String markdown = resource.getContentAsString(StandardCharsets.UTF_8);
 			MarkdownParser parser = new MarkdownParser(markdown);
 
-			return new CodeSubagentDefinition(subagentRef, parser.getFrontMatter(), parser.getContent());
+			return new GenericSubagentDefinition(subagentRef, parser.getFrontMatter(), parser.getContent());
 		}
 		catch (IOException e) {
 			throw new RuntimeException("读取任务文件失败: " + subagentRef.uri(), e);

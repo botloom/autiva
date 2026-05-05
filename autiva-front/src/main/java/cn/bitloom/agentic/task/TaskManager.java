@@ -1,13 +1,22 @@
 package cn.bitloom.agentic.task;
 
 import cn.bitloom.agentic.agent.subagent.*;
-import cn.bitloom.agentic.agent.subagent.code.CodeSubagentDefinition;
+import cn.bitloom.agentic.agent.subagent.generic.GenericSubagentDefinition;
+import cn.bitloom.node.TaskCard;
+import cn.bitloom.agentic.session.Session;
+import cn.bitloom.agentic.session.SessionManager;
 import cn.bitloom.agentic.task.repository.BackgroundTask;
 import cn.bitloom.agentic.task.repository.DefaultTaskRepository;
 import cn.bitloom.agentic.task.repository.TaskRepository;
 import cn.bitloom.constant.AppConstants;
+import cn.bitloom.store.ToolUIBridge;
+import com.alibaba.fastjson2.JSONObject;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -40,11 +49,7 @@ public class TaskManager {
             使用Task工具时，必须指定subagent_type参数来选择使用哪种代理类型。
             
             如何选择子智能体：
-            - 编写/修改代码、创建文件、修复bug → 使用 Code 子智能体
-            - 搜索代码、探索代码库结构 → 使用 Explore 子智能体
-            - 制定实现计划、设计架构 → 使用 Plan 子智能体
             - 执行Shell命令、构建、部署 → 使用 Bash 子智能体
-            - 复杂多步骤研究任务 → 使用 General Purpose 子智能体
             
             何时不应使用Task工具：
             - 简单的网页内容获取，可以直接使用WebFetch工具
@@ -69,20 +74,8 @@ public class TaskManager {
             示例用法：
             
             <example>
-            user: "请编写一个检查数字是否为质数的函数"
-            assistant: 好的，我将使用 Code 子智能体来编写这个函数
-            assistant: 使用Task工具，subagent_type="Code"，prompt="编写一个检查数字是否为质数的函数"
-            </example>
-            
-            <example>
-            user: "帮我找到处理用户认证的代码"
-            assistant: 我将使用 Explore 子智能体来搜索相关代码
-            assistant: 使用Task工具，subagent_type="Explore"，prompt="搜索处理用户认证的代码，包括认证中间件、登录控制器等"
-            </example>
-            
-            <example>
             user: "运行构建并修复任何类型错误"
-            assistant: 我将先使用 Bash 子智能体运行构建，然后根据结果使用 Code 子智能体修复错误
+            assistant: 我将使用 Bash 子智能体运行构建
             assistant: 使用Task工具，subagent_type="Bash"，prompt="运行构建命令"
             </example>
             """;
@@ -105,6 +98,18 @@ public class TaskManager {
     private Map<String, SubagentDefinition> subagentDefinitions;
 
     private Map<String, SubagentExecutor> subagentExecutors;
+
+    private SessionManager sessionManager;
+
+    private ToolUIBridge toolUIBridge;
+
+    public void setSessionManager(SessionManager sessionManager) {
+        this.sessionManager = sessionManager;
+    }
+
+    public void setToolUIBridge(ToolUIBridge toolUIBridge) {
+        this.toolUIBridge = toolUIBridge;
+    }
 
     @PostConstruct
     public void init() {
@@ -137,7 +142,9 @@ public class TaskManager {
     }
 
     private void resolveAndIndex() {
-        if (this.subagentTypes.stream().anyMatch(st -> st.kind().equals(CodeSubagentDefinition.KIND))) {
+        if (this.subagentTypes.stream().anyMatch(st -> st.kind().equals(GenericSubagentDefinition.KIND))) {
+            this.subagentReferences.removeIf(ref ->
+                    ref.kind().equals(GenericSubagentDefinition.KIND) && ref.uri().startsWith("file:"));
             loadWorkspaceSubagentReferences();
         }
 
@@ -165,7 +172,7 @@ public class TaskManager {
                     .forEach(p -> {
                         String uri = p.toUri().toString();
                         if (this.subagentReferences.stream().noneMatch(r -> r.uri().equals(uri))) {
-                            this.subagentReferences.add(new SubagentReference(uri, CodeSubagentDefinition.KIND));
+                            this.subagentReferences.add(new SubagentReference(uri, GenericSubagentDefinition.KIND));
                         }
                     });
         } catch (IOException e) {
@@ -196,16 +203,77 @@ public class TaskManager {
             throw new RuntimeException("未找到子代理类型 " + subagent.getKind() + " 的执行器");
         }
 
+        Session childSession = null;
+        if (this.sessionManager != null && taskCall.sessionId() != null) {
+            childSession = this.sessionManager.forkSession(taskCall.sessionId(), subagentName);
+        }
+
+        final TaskCall resolvedTaskCall;
+        if (childSession != null) {
+            resolvedTaskCall = new TaskCall(
+                    taskCall.description(), taskCall.prompt(), taskCall.subagent_type(),
+                    taskCall.model(), taskCall.resume(), taskCall.run_in_background(),
+                    taskCall.sessionId(), childSession.getId());
+        } else {
+            resolvedTaskCall = taskCall;
+        }
+
+        String taskCardId = "task_" + (childSession != null ? childSession.getId() : UUID.randomUUID());
+
+        if (this.toolUIBridge != null) {
+            JSONObject taskJson = new JSONObject();
+            taskJson.put("subagentType", subagentName);
+            taskJson.put("description", taskCall.description());
+            taskJson.put("taskId", taskCardId);
+            TaskCard taskCard = this.toolUIBridge.createTaskCard(taskCardId, taskJson.toJSONString());
+            if (childSession != null && taskCard != null) {
+                taskCard.subscribeSession(childSession.getId());
+            }
+        }
+
         if (Boolean.TRUE.equals(taskCall.run_in_background())) {
-            var bgTask = this.taskRepository.putTask("task_" + UUID.randomUUID(),
-                    () -> subagentExecutor.execute(taskCall, subagent));
+            String finalTaskCardId = taskCardId;
+            var bgTask = this.taskRepository.putTask(finalTaskCardId,
+                    () -> {
+                        try {
+                            String result = subagentExecutor.execute(resolvedTaskCall, subagent, chunk -> {
+                                if (this.toolUIBridge != null) {
+                                    this.toolUIBridge.appendTaskOutput(finalTaskCardId, chunk);
+                                }
+                            });
+                            if (this.toolUIBridge != null) {
+                                this.toolUIBridge.completeTaskCard(finalTaskCardId, null);
+                            }
+                            return result;
+                        } catch (Exception e) {
+                            if (this.toolUIBridge != null) {
+                                this.toolUIBridge.failTaskCard(finalTaskCardId, e.getMessage());
+                            }
+                            throw e;
+                        }
+                    });
 
             return String.format(
                     "task_id: %s\n\n后台任务已启动，ID: %s\n使用TaskOutput工具并传入task_id='%s'来获取结果。",
                     bgTask.getTaskId(), bgTask.getTaskId(), bgTask.getTaskId());
         }
 
-        return subagentExecutor.execute(taskCall, subagent);
+        try {
+            String result = subagentExecutor.execute(resolvedTaskCall, subagent, chunk -> {
+                if (this.toolUIBridge != null) {
+                    this.toolUIBridge.appendTaskOutput(taskCardId, chunk);
+                }
+            });
+            if (this.toolUIBridge != null) {
+                this.toolUIBridge.completeTaskCard(taskCardId, null);
+            }
+            return result;
+        } catch (Exception e) {
+            if (this.toolUIBridge != null) {
+                this.toolUIBridge.failTaskCard(taskCardId, e.getMessage());
+            }
+            throw new RuntimeException("子代理执行失败: " + e.getMessage(), e);
+        }
     }
 
     public String getTaskOutput(String taskId, Boolean block, Long timeout) {
@@ -251,11 +319,13 @@ public class TaskManager {
                 .map(SubagentDefinition::toSubagentRegistrations)
                 .collect(Collectors.joining("\n"));
 
-        return FunctionToolCallback
+        ToolCallback baseCallback = FunctionToolCallback
                 .builder("Task", new TaskFunction(this))
                 .description(TASK_DESCRIPTION_TEMPLATE.formatted(subagentRegistrations))
                 .inputType(TaskCall.class)
                 .build();
+
+        return new SessionAwareTaskToolCallback(baseCallback);
     }
 
     public ToolCallback buildTaskOutputToolCallback() {
@@ -301,6 +371,45 @@ public class TaskManager {
         @Override
         public String apply(TaskOutputCall taskOutputCall) {
             return this.taskManager.getTaskOutput(taskOutputCall.task_id(), taskOutputCall.block(), taskOutputCall.timeout());
+        }
+
+    }
+
+    private static class SessionAwareTaskToolCallback implements ToolCallback {
+
+        private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+        private final ToolCallback delegate;
+
+        SessionAwareTaskToolCallback(ToolCallback delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+            return delegate.getToolDefinition();
+        }
+
+        @Override
+        public String call(String toolInput) {
+            return delegate.call(toolInput);
+        }
+
+        @Override
+        public String call(String toolInput, ToolContext toolContext) {
+            if (toolContext != null && toolContext.getContext().containsKey("sessionId")) {
+                try {
+                    JsonNode tree = OBJECT_MAPPER.readTree(toolInput);
+                    if (tree.isObject()) {
+                        ObjectNode objectNode = (ObjectNode) tree;
+                        objectNode.put("sessionId", toolContext.getContext().get("sessionId").toString());
+                        return delegate.call(OBJECT_MAPPER.writeValueAsString(objectNode));
+                    }
+                } catch (Exception e) {
+                    log.warn("注入sessionId到TaskCall失败，使用原始输入", e);
+                }
+            }
+            return delegate.call(toolInput);
         }
 
     }

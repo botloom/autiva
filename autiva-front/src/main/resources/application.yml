@@ -16,6 +16,11 @@ spring:
         options:
           model: glm-4.7
           thinking: disabled
+    deepseek:
+      chat:
+        options:
+          model: deepseek-v4-pro
+
     chat:
       client:
         enabled: false
@@ -28,8 +33,6 @@ logging:
   level:
     root: info
     cn.bitloom: debug
-    org.springframework.web.reactive.function.client.ExchangeFunctions: DEBUG
-    reactor.netty.http.client: DEBUG
 
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

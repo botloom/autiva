@@ -57,6 +57,14 @@
                     <Insets right="8" bottom="8"/>
                 </HBox.margin>
             </Button>
+            <Button fx:id="stopButton" visible="false" managed="false" styleClass="home-page__icon-btn,home-page__icon-btn--stop" prefWidth="37" prefHeight="37">
+                <graphic>
+                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/stop.svg"/>
+                </graphic>
+                <HBox.margin>
+                    <Insets right="8" bottom="8"/>
+                </HBox.margin>
+            </Button>
         </HBox>
     </VBox>
 

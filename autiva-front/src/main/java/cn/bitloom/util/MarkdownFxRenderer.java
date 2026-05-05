@@ -294,9 +294,8 @@ public class MarkdownFxRenderer {
         } else if (inline instanceof Link link) {
             Hyperlink hyperlink = new Hyperlink();
             hyperlink.getStyleClass().add("md-link");
-            TextFlow linkContent = new TextFlow();
-            renderInlines(link, linkContent, fontWeight, fontSize);
-            hyperlink.setGraphic(linkContent);
+            hyperlink.setFocusTraversable(false);
+            hyperlink.setText(extractNodeText(link));
             String dest = link.getDestination();
             hyperlink.setOnAction(e -> {
                 try {
@@ -477,6 +476,22 @@ public class MarkdownFxRenderer {
                     }
                     emphChild = emphChild.getNext();
                 }
+            }
+            child = child.getNext();
+        }
+        return sb.toString();
+    }
+
+    private static String extractNodeText(org.commonmark.node.Node node) {
+        StringBuilder sb = new StringBuilder();
+        org.commonmark.node.Node child = node.getFirstChild();
+        while (child != null) {
+            if (child instanceof org.commonmark.node.Text textNode) {
+                sb.append(textNode.getLiteral());
+            } else if (child instanceof Code code) {
+                sb.append(code.getLiteral());
+            } else if (child instanceof Emphasis || child instanceof StrongEmphasis) {
+                sb.append(extractNodeText(child));
             }
             child = child.getNext();
         }

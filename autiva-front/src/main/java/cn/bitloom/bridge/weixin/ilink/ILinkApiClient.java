@@ -187,10 +187,6 @@ public class ILinkApiClient implements AutoCloseable {
         }
     }
 
-    public LoginContext getLoginContext() {
-        return loginContext;
-    }
-
     public void clearContext(String userId) {
         contextTokenMap.remove(userId);
     }

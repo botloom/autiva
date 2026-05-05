@@ -23,7 +23,8 @@ VBox (homePage)
         ├── Button - 添加按钮
         ├── Button - 语音按钮
         ├── ComboBox (modelSelector) - 模型选择器（胶囊形状）
-        └── Button (searchButton) - 发送按钮
+        ├── Button (searchButton) - 发送按钮
+        └── Button (stopButton) - 终止按钮（流式生成时显示，红色，替代发送按钮）
 ```
 
 **特性：**
@@ -37,6 +38,7 @@ VBox (homePage)
 - 语音按钮支持语音输入，点击开始录音（红色），再次点击停止并识别
 - 使用本地 Whisper medium 模型进行语音识别，需下载模型到 ~/.autiva/models/
 - 识别结果自动转换为简体中文
+- 终止按钮：流式生成时自动切换显示（替代发送按钮），红色圆形按钮，点击中止当前生成
 
 ### SettingsPage.fxml
 设置页面视图。
