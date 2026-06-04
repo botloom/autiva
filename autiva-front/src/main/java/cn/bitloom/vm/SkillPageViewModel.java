@@ -26,11 +26,10 @@ public class SkillPageViewModel {
         skills.setAll(skillManager.getAllSkills());
     }
 
-    public Skill importSkillFromZip(Path zipPath) throws IOException {
-        Skill importedSkill = skillManager.importSkillFromZip(zipPath);
+    public void importSkillFromZip(Path zipPath) throws IOException {
+        skillManager.importSkillFromZip(zipPath);
         skillManager.loadSkills();
         loadSkills();
-        return importedSkill;
     }
 
     public void deleteSkill(String name) {

@@ -1,9 +1,25 @@
-# 钉钉配置
+# Application Settings
+app.session.isolation=PER_PEER
+
+# DingTalk Configuration
 dingtalk.app.client-id=your-client-id
 dingtalk.app.client-secret=your-client-secret
+dingtalk.app.agent-id=your-agent-id
 
-# DeepSeek API Key
-spring.ai.deepseek.api-key=your-deepseek-api-key
+# DeepSeek Configuration
+spring.ai.deepseek.chat.base-url=https://api.deepseek.com
+spring.ai.deepseek.chat.completions-path=/v1/chat/completions
+spring.ai.deepseek.chat.api-key=your-deepseek-api-key
+spring.ai.deepseek.chat.options.model=deepseek-chat
 
-# 智谱 AI API Key
+# ZhiPu AI Configuration
+spring.ai.zhipuai.chat.base-url=https://open.bigmodel.cn/api/paas/v4
+spring.ai.zhipuai.chat.completions-path=/chat/completions
 spring.ai.zhipuai.api-key=your-zhipuai-api-key
+spring.ai.zhipuai.chat.options.model=glm-4-flash
+
+# WeChat iLink Configuration
+weixin.ilink.enabled=false
+
+# Search Configuration
+app.search.bocha-api-key=your-bocha-api-key

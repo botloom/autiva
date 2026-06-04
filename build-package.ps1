@@ -3,20 +3,68 @@ $ErrorActionPreference = "Stop"
 $JDK = "D:\jdk-17"
 $MVN = "D:\apache-maven-3.9.12\bin\mvn.cmd"
 $PROJECT = "D:\project\autiva"
-$MODULES = "java.base,java.desktop,java.net.http,java.sql,java.naming,java.management,java.instrument,java.scripting,jdk.jsobject,jdk.unsupported,jdk.crypto.ec"
 
-Write-Host "=== Step 1: Build Spring Boot Fat JAR ===" -ForegroundColor Green
-& $MVN package -pl autiva-front -am -DskipTests org.springframework.boot:spring-boot-maven-plugin:3.5.12:repackage
+$JDK_MODULES = "java.base,java.desktop,java.net.http,java.logging,java.xml,java.sql,java.naming,java.management,java.instrument,java.scripting,java.prefs,java.security.sasl,java.transaction.xa,jdk.jsobject,jdk.unsupported,jdk.crypto.ec,jdk.xml.dom"
+
+Write-Host "=== Step 1: Build thin JAR + copy dependencies ===" -ForegroundColor Green
+& $MVN package -pl autiva-front -am -DskipTests
 if ($LASTEXITCODE -ne 0) { throw "Maven build failed" }
 
+& $MVN dependency:copy-dependencies -pl autiva-front -DincludeScope=runtime -DexcludeArtifactIds=lombok
+if ($LASTEXITCODE -ne 0) { throw "dependency:copy-dependencies failed" }
+
 Write-Host "=== Step 2: Create custom JRE with jlink ===" -ForegroundColor Green
-Remove-Item -Recurse -Force autiva-front\target\custom-jre -ErrorAction SilentlyContinue
-& "$JDK\bin\jlink" --add-modules $MODULES --output autiva-front\target\custom-jre --strip-debug --compress 2 --no-header-files --no-man-pages
+$jlinkOutput = "$PROJECT\autiva-front\target\custom-jre"
+Remove-Item -Recurse -Force $jlinkOutput -ErrorAction SilentlyContinue
+
+$depDir = "$PROJECT\autiva-front\target\dependency"
+$javafxJars = (Get-ChildItem "$depDir\javafx-*-win.jar" -ErrorAction SilentlyContinue)
+$javafxModulePath = ($javafxJars.FullName -join ";")
+
+$javafxModules = "javafx.controls,javafx.fxml"
+$allModules = "$JDK_MODULES,$javafxModules"
+
+Write-Host "  JavaFX module path: $javafxModulePath" -ForegroundColor DarkGray
+Write-Host "  Adding modules: $javafxModules" -ForegroundColor DarkGray
+
+& "$JDK\bin\jlink" `
+  --module-path "$javafxModulePath" `
+  --add-modules $allModules `
+  --output $jlinkOutput `
+  --strip-debug `
+  --no-man-pages `
+  --no-header-files `
+  --compress=2
 if ($LASTEXITCODE -ne 0) { throw "jlink failed" }
 
+$jreSize = "{0:N2} MB" -f ((Get-ChildItem $jlinkOutput -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB)
+Write-Host "  Custom JRE size: $jreSize" -ForegroundColor Cyan
+
 Write-Host "=== Step 3: Prepare jpackage input ===" -ForegroundColor Green
-New-Item -ItemType Directory -Force -Path autiva-front\target\jpackage-input | Out-Null
-Copy-Item autiva-front\target\autiva-front-1.0-SNAPSHOT.jar autiva-front\target\jpackage-input\ -Force
+$jpackageInput = "$PROJECT\autiva-front\target\jpackage-input"
+Remove-Item -Recurse -Force $jpackageInput -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $jpackageInput | Out-Null
+
+Copy-Item autiva-front\target\autiva-front-1.0-SNAPSHOT.jar $jpackageInput\ -Force
+Get-ChildItem "$depDir\*.jar" | Where-Object { $_.Name -notmatch '^javafx-.*-win\.jar$' } | Copy-Item -Destination $jpackageInput\ -Force
+
+Write-Host "  Removing platform-irrelevant JARs..." -ForegroundColor Cyan
+$removePatterns = @(
+    "netty-transport-native-epoll-*.jar",
+    "netty-transport-classes-epoll-*.jar",
+    "netty-resolver-dns-native-macos-*.jar",
+    "netty-resolver-dns-classes-macos-*.jar"
+)
+$removedSize = 0.0
+foreach ($pattern in $removePatterns) {
+    $files = Get-ChildItem "$jpackageInput\$pattern" -ErrorAction SilentlyContinue
+    foreach ($file in $files) {
+        $removedSize += $file.Length / 1MB
+        Write-Host "    Removed: $($file.Name)" -ForegroundColor DarkGray
+        Remove-Item $file.FullName -Force
+    }
+}
+Write-Host "  Freed: $([math]::Round($removedSize, 2)) MB" -ForegroundColor Cyan
 
 Add-Type -AssemblyName System.Drawing
 
@@ -72,19 +120,25 @@ for ($i = 0; $i -lt $entryCount; $i++) {
 }
 
 $bw.Flush()
-[System.IO.File]::WriteAllBytes("$PROJECT\autiva-front\target\jpackage-input\icon.ico", $icoStream.ToArray())
+[System.IO.File]::WriteAllBytes("$jpackageInput\icon.ico", $icoStream.ToArray())
 $bw.Dispose()
 $icoStream.Dispose()
 
-Write-Host "=== Step 4: Run jpackage ===" -ForegroundColor Green
+Write-Host "=== Step 4: Run jpackage with custom JRE ===" -ForegroundColor Green
 Remove-Item -Recurse -Force autiva-front\target\jpackage-output -ErrorAction SilentlyContinue
 & "$JDK\bin\jpackage" `
   --type app-image `
   --name Autiva `
   --input autiva-front\target\jpackage-input `
   --main-jar autiva-front-1.0-SNAPSHOT.jar `
-  --main-class org.springframework.boot.loader.launch.JarLauncher `
-  --runtime-image autiva-front\target\custom-jre `
+  --main-class cn.bitloom.AutivaApplication `
+  --runtime-image $jlinkOutput `
+  --java-options "-Xms128m" `
+  --java-options "-Xmx512m" `
+  --java-options "-XX:SharedArchiveFile=`$APPDIR/app-cds.jsa" `
+  --java-options "-XX:+UseCompressedOops" `
+  --java-options "-XX:+UseCompressedClassPointers" `
+  --java-options "-XX:+UseStringDeduplication" `
   --dest autiva-front\target\jpackage-output `
   --app-version 1.0.0 `
   --vendor "Bitloom" `
@@ -92,8 +146,41 @@ Remove-Item -Recurse -Force autiva-front\target\jpackage-output -ErrorAction Sil
   --icon autiva-front\target\jpackage-input\icon.ico
 if ($LASTEXITCODE -ne 0) { throw "jpackage failed" }
 
+Write-Host "=== Step 5: Generate CDS archive ===" -ForegroundColor Green
+$appDir = "$PROJECT\autiva-front\target\jpackage-output\Autiva"
+$cdsArchive = "$appDir\app-cds.jsa"
+
+$proc = Start-Process "$appDir\Autiva.exe" -ArgumentList "-XX:ArchiveClassesAtExit=$cdsArchive" -PassThru
+
+Write-Host "  Waiting for app to start and load classes..." -ForegroundColor Cyan
+Start-Sleep -Seconds 15
+
+if ($proc.HasExited -and $proc.ExitCode -ne 0) {
+    Write-Host "  WARNING: App exited with error code $($proc.ExitCode)" -ForegroundColor Yellow
+    Write-Host "  CDS archive not generated. Check console output above for errors." -ForegroundColor Yellow
+} else {
+    if (!$proc.HasExited) {
+        Write-Host "  App is running, generating CDS archive..." -ForegroundColor Cyan
+        Start-Sleep -Seconds 5
+        $proc.Kill()
+        $proc.WaitForExit(5000)
+    }
+
+    if (Test-Path $cdsArchive) {
+        $cdsSize = "{0:N2} MB" -f ((Get-Item $cdsArchive).Length / 1MB)
+        Write-Host "  CDS archive generated: $cdsSize" -ForegroundColor Cyan
+    } else {
+        Write-Host "  WARNING: CDS archive not generated" -ForegroundColor Yellow
+        Write-Host "  You can generate it manually by running:" -ForegroundColor Yellow
+        Write-Host "    $appDir\Autiva.exe -XX:ArchiveClassesAtExit=$cdsArchive" -ForegroundColor Yellow
+        Write-Host "  Then close the app normally." -ForegroundColor Yellow
+    }
+}
+
 $size = "{0:N2} MB" -f ((Get-ChildItem autiva-front\target\jpackage-output\Autiva -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB)
 Write-Host ""
 Write-Host "=== Build Complete ===" -ForegroundColor Green
 Write-Host "Output: autiva-front\target\jpackage-output\Autiva\Autiva.exe"
 Write-Host "Size: $size"
+Write-Host ""
+Write-Host "NOTE: Remove --win-console from this script for production builds." -ForegroundColor Yellow

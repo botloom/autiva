@@ -78,6 +78,14 @@
 - `.sidebar__option--active`: 激活状态
 - `.sidebar__icon`: 图标
 - `.sidebar__label`: 标签
+- `.sidebar__divider`: 分隔线
+- `.sidebar__section-label`: 区域标题（如"历史对话"）
+- `.sidebar__history-scroll`: 历史对话滚动面板
+- `.sidebar__history-list`: 历史对话列表
+- `.sidebar__history-item`: 历史对话项
+- `.sidebar__history-item--active`: 当前活跃对话高亮
+- `.sidebar__history-item-title`: 对话标题
+- `.sidebar__history-item-time`: 对话时间
 
 ### home-page.css
 主页样式。
@@ -90,8 +98,11 @@
 - `.home-page__search-field`: 搜索输入框
 - `.home-page__icon-btn`: 图标按钮
 - `.home-page__icon-btn--active`: 图标按钮激活状态（红色背景，用于录音状态）
-- `.home-page__icon-btn--stop`: 图标按钮终止状态（红色背景，用于停止流式生成）
+- `.home-page__icon-btn--stop`: 图标按钮终止状态（红色背景，用于暂停流式生成）
 - `.home-page__model-selector`: 模型选择器
+- `.home-page__agent-selector`: 智能体选择器（胶囊形状，与 modelSelector 风格一致）
+- `.home-page__agent-selector:hover`: 智能体选择器悬停状态
+- `.home-page__agent-selector:pressed`: 智能体选择器按下状态
 - `.chat-scroll-pane`: 聊天滚动面板
 - `.chat-container`: 聊天消息容器
 - `.chat-message`: 消息卡片基础样式
@@ -100,8 +111,27 @@
 - `.chat-message--streaming`: 流式输出状态
 - `.chat-message--tool`: 工具消息
 - `.chat-message--tool-request`: 工具请求（蓝色背景）
-- `.chat-message--tool-response`: 工具响应（绿色背景）
+- `.chat-message--tool-response`: 工具响应（绿色背景，降级模式）
+- `.chat-message--tool-success`: 工具成功响应（绿色背景 #f0fff4）
+- `.chat-message--tool-error`: 工具错误响应（红色背景 #fef2f2）
+- `.chat-message--tool-warning`: 工具警告响应（黄色背景 #fffbeb）
+- `.chat-message__tool-status-dot`: 状态圆点（默认绿色）
+- `.chat-message__tool-status-dot--success`: 成功状态圆点（#22c55e）
+- `.chat-message__tool-status-dot--error`: 错误状态圆点（#ef4444）
+- `.chat-message__tool-status-dot--warning`: 警告状态圆点（#f59e0b）
+- `.chat-message__tool-summary`: 摘要文本（12px，灰色 #86868b）
+- `.chat-message__tool-data`: 结构化数据区
+- `.chat-message__tool-data-item`: 数据条目（浅色背景 pill）
+- `.chat-message__tool-data-key`: 数据键名（11px 粗体灰色等宽字体）
+- `.chat-message__tool-data-value`: 数据值（11px 深色等宽字体）
+- `.chat-message__tool-output-divider`: 输出区分割线
+- `.chat-message__tool-output`: 输出区（12px 等宽字体）
+- `.chat-message__task-messages .chat-message--tool`: 子智能体内嵌工具消息（无阴影、紧凑内边距、8px圆角）
+- `.chat-message__task-messages .chat-message__tool-header`: 子智能体内嵌工具标题（底部1px分割线，与主聊天框工具卡片一致）
 - `.chat-message--question`: 问题卡片（紫色渐变）
+- `.chat-message__question-option--other`: "其他"选项按钮（虚线边框）
+- `.chat-message__question-other-input`: "其他"文本输入框
+- `.chat-message__question-other-input:focused`: "其他"文本输入框聚焦状态
 - `.chat-message--todo`: 待办事项卡片（黄色渐变）
 - `.md-*`: Markdown 渲染样式（段落、标题、代码块、列表、引用等）
 
@@ -120,6 +150,11 @@
 - `.settings-page__path-row`: 路径行
 - `.settings-page__path-field`: 路径输入框
 - `.settings-page__secondary-btn`: 次要按钮
+- `.settings-page__qr-stack`: 二维码 StackPane 容器（180x180）
+- `.settings-page__qr-image`: 二维码图片（180x180，带阴影）
+- `.settings-page__qr-overlay`: 二维码覆盖层（半透明白色背景，180x180）
+- `.settings-page__qr-hint`: 二维码提示文案
+- `.settings-page__rebind-btn`: 重新加载按钮（蓝色文字，浅灰背景）
 
 ### skill-page.css
 技能页面样式。
@@ -133,19 +168,6 @@
 - `.skill-page__card-header`: 卡片头部
 - `.skill-page__card-title`: 卡片标题
 - `.skill-page__card-btn`: 卡片按钮
-
-### mcp-page.css
-MCP 页面样式。
-
-**样式类：**
-- `.mcp-page`: MCP 页容器
-- `.mcp-page__scroll-pane`: 滚动面板
-- `.mcp-page__list`: 列表容器
-- `.mcp-page__card`: 服务器卡片
-- `.mcp-page__card-header`: 卡片头部
-- `.mcp-page__card-title`: 卡片标题
-- `.mcp-page__card-type`: 类型标签
-- `.mcp-page__card-btn`: 卡片按钮
 
 ### task-page.css
 任务页面样式。
@@ -227,6 +249,69 @@ Markdown 编辑器对话框样式。
 - `.browser-dialog__webview`: WebView
 - `.browser-dialog__status-bar`: 状态栏
 - `.browser-dialog__status`: 状态
+
+### canvas-page.css
+画布页面样式，Apple 风格。
+
+**样式类：**
+- `.canvas-page`: 画布页容器
+- `.canvas-page__floating-toolbar`: 悬浮工具栏（半透明毛玻璃 rgba(255,255,255,0.92)，12px圆角）
+- `.canvas-page__tool-btn`: 工具按钮（8px圆角，选中时 Apple Blue 高亮）
+- `.canvas-page__property-panel`: 左侧属性面板（悬浮卡片）
+- `.canvas-page__panel-title`: 面板标题
+- `.canvas-page__prop-label`: 属性标签
+- `.canvas-page__color-swatch-row`: 色块行
+- `.canvas-page__option-btn`: 选项按钮（6px圆角，选中时 Apple Blue）
+- `.canvas-page__slider`: 滑块
+- `.canvas-page__layer-panel`: 图层面板
+- `.canvas-page__layer-list`: 图层列表
+
+### gep-page.css
+基因进化管理页面样式。
+
+**样式类：**
+- `.gep-page`: 页面容器（白色背景）
+- `.gep-page__scroll-pane`: 滚动面板（6px 滚动条）
+- `.gep-page__content`: 内容区域
+- `.gep-page__section-label`: 分节标签
+- `.gep-page__card`: 卡片（白色，12px圆角，微阴影）
+- `.gep-page__row`: 行
+- `.gep-page__row-title`: 行标题
+- `.gep-page__action-btn`: 操作按钮（蓝色主按钮）
+- `.gep-page__strategy-select`: 策略选择器
+- `.gep-page__gene-item`: 基因列表项（分割线分隔）
+- `.gep-page__gene-header`: 基因头部
+- `.gep-page__gene-id`: 基因ID
+- `.gep-page__gene-tag`: 标签（分类/状态）
+- `.gep-page__gene-tag--REPAIR`: 修复分类（橙色）
+- `.gep-page__gene-tag--OPTIMIZE`: 优化分类（蓝色）
+- `.gep-page__gene-tag--INNOVATE`: 创新分类（紫色）
+- `.gep-page__gene-tag--enabled`: 启用状态（绿色）
+- `.gep-page__gene-tag--disabled`: 禁用状态（灰色）
+- `.gep-page__gene-boost`: 表观权重
+- `.gep-page__gene-summary`: 基因摘要
+- `.gep-page__gene-signals`: 信号列表
+- `.gep-page__gene-actions`: 操作按钮区
+- `.gep-page__gene-action-btn`: 操作按钮
+- `.gep-page__gene-action-btn--danger`: 危险操作按钮（红色）
+- `.gep-page__capsule-item`: 胶囊列表项
+- `.gep-page__capsule-header`: 胶囊头部
+- `.gep-page__capsule-id`: 胶囊ID
+- `.gep-page__capsule-score`: 胶囊分数
+- `.gep-page__capsule-genes`: 包含基因列表
+- `.gep-page__capsule-actions`: 胶囊操作区
+- `.gep-page__event-item`: 事件列表项
+- `.gep-page__event-header`: 事件头部
+- `.gep-page__event-tag`: 事件状态标签
+- `.gep-page__event-tag--success`: 成功状态（绿色）
+- `.gep-page__event-tag--pending`: 待定状态（橙色）
+- `.gep-page__event-tag--failed`: 失败状态（红色）
+- `.gep-page__event-tag--unknown`: 未知状态（灰色）
+- `.gep-page__event-id`: 事件ID
+- `.gep-page__event-details`: 事件详情
+- `.gep-page__event-time`: 事件时间
+- `.gep-page__empty`: 空状态提示
+- `.gep-page__spacer`: 底部间距
 
 ### scroll-bar.css
 滚动条样式。

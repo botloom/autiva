@@ -7,14 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
 @Slf4j
 @Component
 public class Router {
-
-    private static final String ACTIVE_CSS_CLASS = "sidebar__option--active";
 
     private final IndexController indexController;
     private final RouteConfig routeConfig;
@@ -27,14 +26,13 @@ public class Router {
         this.routeConfig.init();
         this.currentRoute = RouteConfig.Path.HOME;
 
-        this.buttonBarHolderMap = Map.of(
-                RouteConfig.Path.HOME, IndexController::getHomePageController,
-                RouteConfig.Path.AGENT, IndexController::getAgentPageController,
-                RouteConfig.Path.SETTINGS, IndexController::getSettingsPageController,
-                RouteConfig.Path.SKILLS, IndexController::getSkillPageController,
-                RouteConfig.Path.MCP, IndexController::getMcpPageController,
-                RouteConfig.Path.TASK, IndexController::getTaskPageController
-        );
+        Map<String, Function<IndexController, ButtonBarHolder>> map = new HashMap<>();
+        map.put(RouteConfig.Path.HOME, IndexController::getHomePageController);
+        map.put(RouteConfig.Path.AGENT, IndexController::getAgentPageController);
+        map.put(RouteConfig.Path.SETTINGS, IndexController::getSettingsPageController);
+        map.put(RouteConfig.Path.SKILLS, IndexController::getSkillPageController);
+        map.put(RouteConfig.Path.TASK, IndexController::getTaskPageController);
+        this.buttonBarHolderMap = map;
     }
 
     public void navigate(String path) {

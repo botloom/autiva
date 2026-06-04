@@ -37,6 +37,13 @@ BaaS 服务配置属性（新增）。
 
 **配置前缀：** `baas`
 
+### WebFluxConfig
+WebFlux 配置类，实现 WebFluxConfigurer。
+
+**功能：**
+- 静态资源处理：将 `/**` 映射到 `classpath:/static/`，用于服务 autiva-web 构建产物
+- CORS 配置：允许所有来源访问 `/api/**` 端点，支持开发时跨域调用
+
 ## 配置示例
 
 ```yaml

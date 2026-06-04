@@ -12,33 +12,17 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.*;
 import javafx.scene.text.Font;
-import javafx.scene.text.FontPosture;
-import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
-import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
 import lombok.extern.slf4j.Slf4j;
-import org.commonmark.node.BlockQuote;
-import org.commonmark.node.BulletList;
-import org.commonmark.node.Code;
-import org.commonmark.node.Emphasis;
-import org.commonmark.node.FencedCodeBlock;
-import org.commonmark.node.HardLineBreak;
-import org.commonmark.node.Heading;
-import org.commonmark.node.HtmlBlock;
-import org.commonmark.node.HtmlInline;
+import org.commonmark.ext.gfm.tables.TableCell;
+import org.commonmark.ext.gfm.tables.TableRow;
+import org.commonmark.node.*;
 import org.commonmark.node.Image;
-import org.commonmark.node.IndentedCodeBlock;
-import org.commonmark.node.Link;
-import org.commonmark.node.ListItem;
-import org.commonmark.node.OrderedList;
-import org.commonmark.node.Paragraph;
-import org.commonmark.node.SoftLineBreak;
-import org.commonmark.node.StrongEmphasis;
-import org.commonmark.node.ThematicBreak;
 
-import java.awt.Desktop;
+import java.awt.*;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -343,12 +327,11 @@ public class MarkdownFxRenderer {
         
         if (head != null) {
             org.commonmark.node.Node rowNode = head.getFirstChild();
-            if (rowNode instanceof org.commonmark.ext.gfm.tables.TableRow) {
-                org.commonmark.ext.gfm.tables.TableRow headerTableRow = (org.commonmark.ext.gfm.tables.TableRow) rowNode;
+            if (rowNode instanceof TableRow headerTableRow) {
                 org.commonmark.node.Node cell = headerTableRow.getFirstChild();
                 while (cell != null) {
-                    if (cell instanceof org.commonmark.ext.gfm.tables.TableCell) {
-                        String headerText = extractText((org.commonmark.ext.gfm.tables.TableCell) cell);
+                    if (cell instanceof TableCell) {
+                        String headerText = extractText((TableCell) cell);
                         double width = Math.max(150, headerText.length() * 10.0 + 32);
                         columnWidths.add(width);
                     }
@@ -360,13 +343,12 @@ public class MarkdownFxRenderer {
         if (body != null) {
             org.commonmark.node.Node rowNode = body.getFirstChild();
             while (rowNode != null) {
-                if (rowNode instanceof org.commonmark.ext.gfm.tables.TableRow) {
-                    org.commonmark.ext.gfm.tables.TableRow row = (org.commonmark.ext.gfm.tables.TableRow) rowNode;
+                if (rowNode instanceof TableRow row) {
                     org.commonmark.node.Node cell = row.getFirstChild();
                     int colIndex = 0;
                     while (cell != null) {
-                        if (cell instanceof org.commonmark.ext.gfm.tables.TableCell) {
-                            String cellText = extractText((org.commonmark.ext.gfm.tables.TableCell) cell);
+                        if (cell instanceof TableCell) {
+                            String cellText = extractText((TableCell) cell);
                             double width = Math.max(150, cellText.length() * 8.0 + 32);
                             if (colIndex < columnWidths.size()) {
                                 columnWidths.set(colIndex, Math.max(columnWidths.get(colIndex), width));
@@ -386,8 +368,7 @@ public class MarkdownFxRenderer {
             HBox headerRow = new HBox();
             headerRow.getStyleClass().add("md-table-header-row");
             org.commonmark.node.Node rowNode = head.getFirstChild();
-            if (rowNode instanceof org.commonmark.ext.gfm.tables.TableRow) {
-                org.commonmark.ext.gfm.tables.TableRow headerTableRow = (org.commonmark.ext.gfm.tables.TableRow) rowNode;
+            if (rowNode instanceof TableRow headerTableRow) {
                 org.commonmark.node.Node cell = headerTableRow.getFirstChild();
                 int colIndex = 0;
                 while (cell != null) {
@@ -412,8 +393,7 @@ public class MarkdownFxRenderer {
             org.commonmark.node.Node rowNode = body.getFirstChild();
             List<HBox> rows = new ArrayList<>();
             while (rowNode != null) {
-                if (rowNode instanceof org.commonmark.ext.gfm.tables.TableRow) {
-                    org.commonmark.ext.gfm.tables.TableRow row = (org.commonmark.ext.gfm.tables.TableRow) rowNode;
+                if (rowNode instanceof TableRow row) {
                     HBox dataRow = new HBox();
                     dataRow.getStyleClass().add("md-table-row");
                     if (rows.size() % 2 == 1) {
@@ -566,7 +546,7 @@ public class MarkdownFxRenderer {
             char c = line.charAt(i);
             
             if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
-                if (current.length() > 0) {
+                if (!current.isEmpty()) {
                     texts.addAll(parseAndHighlight(current.toString(), keywords, "java"));
                     current = new StringBuilder();
                 }
@@ -578,7 +558,7 @@ public class MarkdownFxRenderer {
             }
             
             if (c == '"') {
-                if (current.length() > 0) {
+                if (!current.isEmpty()) {
                     texts.addAll(parseAndHighlight(current.toString(), keywords, "java"));
                     current = new StringBuilder();
                 }
@@ -595,7 +575,7 @@ public class MarkdownFxRenderer {
             current.append(c);
         }
         
-        if (current.length() > 0) {
+        if (!current.isEmpty()) {
             texts.addAll(parseAndHighlight(current.toString(), keywords, "java"));
         }
         
@@ -613,7 +593,7 @@ public class MarkdownFxRenderer {
             char c = line.charAt(i);
             
             if (c == '#') {
-                if (current.length() > 0) {
+                if (!current.isEmpty()) {
                     texts.addAll(parseAndHighlight(current.toString(), keywords, "python"));
                     current = new StringBuilder();
                 }
@@ -625,7 +605,7 @@ public class MarkdownFxRenderer {
             }
             
             if (c == '"' || c == '\'') {
-                if (current.length() > 0) {
+                if (!current.isEmpty()) {
                     texts.addAll(parseAndHighlight(current.toString(), keywords, "python"));
                     current = new StringBuilder();
                 }
@@ -642,7 +622,7 @@ public class MarkdownFxRenderer {
             current.append(c);
         }
         
-        if (current.length() > 0) {
+        if (!current.isEmpty()) {
             texts.addAll(parseAndHighlight(current.toString(), keywords, "python"));
         }
         
@@ -661,7 +641,7 @@ public class MarkdownFxRenderer {
             char c = line.charAt(i);
             
             if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
-                if (current.length() > 0) {
+                if (!current.isEmpty()) {
                     texts.addAll(parseAndHighlight(current.toString(), keywords, "js"));
                     current = new StringBuilder();
                 }
@@ -673,7 +653,7 @@ public class MarkdownFxRenderer {
             }
             
             if (c == '"' || c == '\'' || c == '`') {
-                if (current.length() > 0) {
+                if (!current.isEmpty()) {
                     texts.addAll(parseAndHighlight(current.toString(), keywords, "js"));
                     current = new StringBuilder();
                 }
@@ -690,7 +670,7 @@ public class MarkdownFxRenderer {
             current.append(c);
         }
         
-        if (current.length() > 0) {
+        if (!current.isEmpty()) {
             texts.addAll(parseAndHighlight(current.toString(), keywords, "js"));
         }
         

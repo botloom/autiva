@@ -6,6 +6,7 @@ import com.alibaba.fastjson2.JSONObject;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -22,6 +23,8 @@ import java.util.function.BiConsumer;
 public class QuestionCard extends VBox {
 
     private final Map<String, Object> selectedAnswers = new LinkedHashMap<>();
+    private final Map<String, TextField> otherTextFields = new LinkedHashMap<>();
+    private final Map<String, Boolean> otherSelected = new LinkedHashMap<>();
 
     public QuestionCard(String questionsJson, BiConsumer<String, String> onAnswered) {
         this(questionsJson, UUID.randomUUID().toString(), onAnswered);
@@ -49,6 +52,7 @@ public class QuestionCard extends VBox {
         List<JSONObject> questions = parseQuestions(questionsJson);
         List<FlowPane> optionGroups = new ArrayList<>();
         List<Button> submitButtons = new ArrayList<>();
+        List<VBox> otherInputContainers = new ArrayList<>();
 
         for (int qIdx = 0; qIdx < questions.size(); qIdx++) {
             JSONObject q = questions.get(qIdx);
@@ -100,11 +104,12 @@ public class QuestionCard extends VBox {
                             });
                             optionBtn.getStyleClass().add("chat-message__question-option--selected");
                             selectedAnswers.put(questionText, optLabel);
+                            hideOtherInput(questionText);
 
-                            if (questions.size() == 1) {
-                                submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons);
+                            if (questions.size() == 1 && !otherSelected.getOrDefault(questionText, false)) {
+                                submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons, otherInputContainers);
                             } else if (allQuestionsAnswered(questions)) {
-                                submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons);
+                                submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons, otherInputContainers);
                             }
                         }
                     });
@@ -113,23 +118,142 @@ public class QuestionCard extends VBox {
                 }
             }
 
+            Button otherBtn = new Button("其他");
+            otherBtn.getStyleClass().add("chat-message__question-option");
+            otherBtn.getStyleClass().add("chat-message__question-option--other");
+
+            TextField otherField = new TextField();
+            otherField.getStyleClass().add("chat-message__question-other-input");
+            otherField.setPromptText("请输入...");
+            otherField.setVisible(false);
+            otherField.setManaged(false);
+
+            VBox otherContainer = new VBox(4);
+            otherContainer.getChildren().add(otherField);
+            otherInputContainers.add(otherContainer);
+            otherTextFields.put(questionText, otherField);
+            otherSelected.put(questionText, false);
+
+            otherBtn.setOnAction(e -> {
+                if (multiSelect) {
+                    boolean wasSelected = otherBtn.getStyleClass().contains("chat-message__question-option--selected");
+                    if (wasSelected) {
+                        otherBtn.getStyleClass().remove("chat-message__question-option--selected");
+                        hideOtherInput(questionText);
+                        Object current = selectedAnswers.get(questionText);
+                        if (current instanceof List) {
+                            ((List<String>) current).removeIf(s -> true);
+                            if (((List<String>) current).isEmpty()) {
+                                selectedAnswers.remove(questionText);
+                            }
+                        }
+                        otherSelected.put(questionText, false);
+                    } else {
+                        otherBtn.getStyleClass().add("chat-message__question-option--selected");
+                        showOtherInput(questionText);
+                        selectedAnswers.computeIfAbsent(questionText, k -> new ArrayList<String>());
+                        otherSelected.put(questionText, true);
+                    }
+                } else {
+                    optionsPane.getChildren().forEach(node -> {
+                        if (node instanceof Button && node != otherBtn) {
+                            node.getStyleClass().remove("chat-message__question-option--selected");
+                        }
+                    });
+                    otherBtn.getStyleClass().add("chat-message__question-option--selected");
+                    showOtherInput(questionText);
+                    otherField.requestFocus();
+                    otherSelected.put(questionText, true);
+                }
+            });
+
+            optionsPane.getChildren().add(otherBtn);
+
+            otherField.setOnAction(e -> {
+                String text = otherField.getText().trim();
+                if (!text.isEmpty()) {
+                    if (multiSelect) {
+                        Object current = selectedAnswers.get(questionText);
+                        if (current instanceof List) {
+                            ((List<String>) current).clear();
+                            ((List<String>) current).add(text);
+                        } else {
+                            List<String> list = new ArrayList<>();
+                            list.add(text);
+                            selectedAnswers.put(questionText, list);
+                        }
+                    } else {
+                        selectedAnswers.put(questionText, text);
+                    }
+
+                    if (questions.size() == 1) {
+                        submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons, otherInputContainers);
+                    } else if (allQuestionsAnswered(questions)) {
+                        submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons, otherInputContainers);
+                    }
+                }
+            });
+
             questionItem.getChildren().add(optionsPane);
+            questionItem.getChildren().add(otherContainer);
             body.getChildren().add(questionItem);
         }
 
         boolean hasMultiSelect = questions.stream().anyMatch(q -> q.getBooleanValue("multiSelect"));
         boolean hasMultipleQuestions = questions.size() > 1;
-        if (hasMultiSelect || hasMultipleQuestions) {
+        boolean hasOtherSelected = true;
+        if (hasMultiSelect || hasMultipleQuestions || hasOtherSelected) {
             Button submitBtn = new Button("提交");
             submitBtn.getStyleClass().add("chat-message__question-submit");
             submitButtons.add(submitBtn);
             submitBtn.setOnAction(e -> {
-                submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons);
+                for (Map.Entry<String, TextField> entry : otherTextFields.entrySet()) {
+                    String qText = entry.getKey();
+                    TextField field = entry.getValue();
+                    if (field.isVisible() && !field.getText().trim().isEmpty()) {
+                        String text = field.getText().trim();
+                        boolean isMulti = questions.stream()
+                                .filter(q -> q.getString("question").equals(qText))
+                                .anyMatch(q -> q.getBooleanValue("multiSelect"));
+                        if (isMulti) {
+                            Object current = selectedAnswers.get(qText);
+                            if (current instanceof List) {
+                                ((List<String>) current).clear();
+                                ((List<String>) current).add(text);
+                            } else {
+                                List<String> list = new ArrayList<>();
+                                list.add(text);
+                                selectedAnswers.put(qText, list);
+                            }
+                        } else {
+                            selectedAnswers.put(qText, text);
+                        }
+                    }
+                }
+                submitAnswers(questions, questionId, onAnswered, optionGroups, submitButtons, otherInputContainers);
             });
             body.getChildren().add(submitBtn);
         }
 
         this.getChildren().add(body);
+    }
+
+    private void showOtherInput(String questionText) {
+        TextField field = otherTextFields.get(questionText);
+        if (field != null) {
+            field.setVisible(true);
+            field.setManaged(true);
+        }
+    }
+
+    private void hideOtherInput(String questionText) {
+        TextField field = otherTextFields.get(questionText);
+        if (field != null) {
+            field.setVisible(false);
+            field.setManaged(false);
+            field.clear();
+        }
+        otherSelected.put(questionText, false);
     }
 
     private boolean allQuestionsAnswered(List<JSONObject> questions) {
@@ -166,7 +290,8 @@ public class QuestionCard extends VBox {
     @SuppressWarnings("unchecked")
     private void submitAnswers(List<JSONObject> questions, String questionId,
                                BiConsumer<String, String> onAnswered,
-                               List<FlowPane> optionGroups, List<Button> submitButtons) {
+                               List<FlowPane> optionGroups, List<Button> submitButtons,
+                               List<VBox> otherInputContainers) {
         Map<String, String> answers = new LinkedHashMap<>();
         for (JSONObject q : questions) {
             String questionText = q.getString("question");
@@ -184,6 +309,12 @@ public class QuestionCard extends VBox {
             if (node instanceof Button btn) {
                 btn.setDisable(true);
                 btn.setOpacity(0.7);
+            }
+        }));
+        otherInputContainers.forEach(container -> container.getChildren().forEach(node -> {
+            if (node instanceof TextField field) {
+                field.setDisable(true);
+                field.setOpacity(0.7);
             }
         }));
         submitButtons.forEach(btn -> {

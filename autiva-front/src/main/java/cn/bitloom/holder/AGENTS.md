@@ -81,7 +81,7 @@ public class SettingsPageController implements ButtonBarHolder {
 **实现示例：**
 ```java
 @Component
-public class FileEditorController implements WindowManager.StageAware, DialogHolder {
+public class MyDialogController implements WindowManager.StageAware, DialogHolder {
     
     @Override
     public boolean isResizable() {

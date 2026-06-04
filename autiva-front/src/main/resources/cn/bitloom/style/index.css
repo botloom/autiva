@@ -1,5 +1,5 @@
-.window-container {
-    -fx-background-color: transparent;
+.index-root {
+    -fx-background-color: #ffffff;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 

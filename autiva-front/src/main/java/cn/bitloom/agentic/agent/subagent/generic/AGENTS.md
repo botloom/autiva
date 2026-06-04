@@ -9,7 +9,7 @@
 从 Markdown 前置元数据解析的通用子代理定义。
 
 **常量：**
-- `KIND = "GENERIC"`: 类型标识符
+- `IDENTITY = AgentIdentityEnum.GENERIC`: 类型标识符（统一使用 AgentIdentityEnum）
 
 **前置元数据字段：**
 - `name`（必需）: 子代理名称
@@ -34,6 +34,7 @@
 - **对话记忆支持**：通过 ChatMemory + MessageChatMemoryAdvisor 实现子智能体对话记忆
 - **resume 支持**：通过 TaskCall.resume 参数恢复之前的子智能体会话上下文
 - **agent_id 返回**：每次执行返回 agent_id，可用于后续 resume
+- **停止支持**：通过 `takeUntil` 检查 `EventBus.isStop(sessionId)` 实现子智能体流式中断，停止时显示 `[已停止]` 而非 `[完成]`。停止信号由 HomePageViewModel 在用户点击停止按钮时通过 `EventBus.stop(childSessionId)` 设置
 
 **对话记忆机制（Session 集成）：**
 - 使用 `subagent_` 前缀的 conversationId 隔离子智能体与主智能体的记忆
@@ -62,19 +63,21 @@ GenericSubagentExecutor 使用 sessionId 构建 conversationId
 Builder 模式，配置通用子代理类型。
 
 **Builder 参数：**
-- `braveApiKey(String)`: Brave 搜索 API Key
+- `bochaApiKey(String)`: 博查搜索 API Key
 - `chatClientBuilder(String, ChatClient.Builder)`: 按模型ID注册 ChatClient Builder
 - `chatClientBuilders(Map)`: 批量注册 ChatClient Builder
 - `skillsDirectories(List<String>)`: 技能目录列表
 - `deployTool(DeployTool)`: 部署工具实例
+- `projectManagementTool(ProjectManagementTool)`: 项目管理工具实例（允许子智能体与后端项目管理系统交互）
 - `chatMemory(ChatMemory)`: 对话记忆实例（必需）
 - `sessionManager(SessionManager)`: 会话管理器实例
 
 **默认子代理工具集：**
-- TodoWriteTool、GrepTool、GlobTool、ShellTools、FileSystemTools、WebFetchTool
+- TodoWriteTool、GrepTool、GlobTool、CommandTools、FileSystemTools、WebFetchTool
 - SkillTool（如果配置了 skillManager 且有已加载的技能）
 - DeployTool（如果配置了 deployTool）
-- WebSearchTool（如果配置了 braveApiKey）
+- ProjectManagementTool（如果配置了 projectManagementTool）
+- WebSearchTool（如果配置了 bochaApiKey）
 
 ### GenericSubagentReferences
 工厂方法，从目录/资源发现 .md 代理文件。
@@ -99,6 +102,23 @@ Builder 模式，配置通用子代理类型。
 
 ## 资源文件
 子代理 Markdown 文件位于 `~/.autiva/workspace/subagents/`，首次启动从 classpath `agent/` 目录复制。
+
+## DeepSeek 兼容性
+
+DeepSeek API 在工具调用时存在以下兼容性问题：
+
+### 1. 消息序列校验（核心问题）
+DeepSeek 严格要求：**带有 tool_calls 的 AssistantMessage 必须被对应的 ToolResponseMessage 跟随**，否则返回 400 Bad Request。
+
+**根因：** Spring AI 的 `MessageChatMemoryAdvisor.after()` 只保存 `AssistantMessage`，不保存 `ToolResponseMessage`，导致 ChatMemory 中出现孤立的 tool_calls。子智能体必现是因为其 ChatMemory 中继承了父会话的不完整消息序列。
+
+**修复：** 在 `ConpactChatMemory.get()` 中添加 `sanitizeToolCallPairs()` 清洗逻辑，确保消息序列中 tool_calls/tool_response 配对完整。
+
+### 2. `parallel_tool_calls` 不支持
+DeepSeek API 不支持 `parallel_tool_calls` 参数，需在 `OpenAiChatOptions` 中显式设置 `parallelToolCalls(false)`。
+
+### 3. `thinking` 参数
+`deepseek-chat` 模型默认已关闭思考模式，不需要通过 `extraBody` 注入 `thinking: {type: disabled}`。
 
 ## 设计模式
 - 策略模式：不同子代理类型通过统一的接口执行

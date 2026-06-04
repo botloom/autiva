@@ -9,11 +9,11 @@
       stylesheets="@../style/side-bar.css"
 >
 
-    <VBox styleClass="sidebar__content">
+    <VBox styleClass="sidebar__content" VBox.vgrow="ALWAYS">
         <HBox fx:id="homeOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
             <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/home.svg"/>
-            <Label text="首页" styleClass="sidebar__label"/>
+                          svgPath="/cn/bitloom/images/chat-new.svg"/>
+            <Label text="新对话" styleClass="sidebar__label"/>
         </HBox>
 
         <HBox fx:id="agentOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
@@ -25,13 +25,13 @@
         <HBox fx:id="skillOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
             <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
                           svgPath="/cn/bitloom/images/lightning.svg"/>
-            <Label text="SKILL" styleClass="sidebar__label"/>
+            <Label text="技能" styleClass="sidebar__label"/>
         </HBox>
 
-        <HBox fx:id="mcpOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
+        <HBox fx:id="gepOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
             <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/plug.svg"/>
-            <Label text="MCP" styleClass="sidebar__label"/>
+                          svgPath="/cn/bitloom/images/dna.svg"/>
+            <Label text="进化" styleClass="sidebar__label"/>
         </HBox>
 
         <HBox fx:id="taskOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
@@ -40,7 +40,15 @@
             <Label text="任务" styleClass="sidebar__label"/>
         </HBox>
 
-        <Region styleClass="sidebar__spacer" VBox.vgrow="ALWAYS"/>
+        <Region styleClass="sidebar__divider"/>
+
+        <Label text="历史对话" styleClass="sidebar__section-label"/>
+
+        <ScrollPane fx:id="historyScrollPane" styleClass="sidebar__history-scroll"
+                    fitToWidth="true" VBox.vgrow="ALWAYS"
+                    hbarPolicy="NEVER">
+            <VBox fx:id="historyList" styleClass="sidebar__history-list"/>
+        </ScrollPane>
 
         <HBox fx:id="settingsOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
             <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"

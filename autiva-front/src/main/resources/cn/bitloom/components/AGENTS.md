@@ -35,6 +35,8 @@ HBox (button-bar)
 - 页面导航菜单
 - 显示/隐藏切换
 - 当前页面高亮
+- "新聊天"按钮：创建新 session
+- 历史对话列表：显示桌面端所有 session，点击切换
 
 **控制器：** SideBarController
 
@@ -42,21 +44,33 @@ HBox (button-bar)
 ```
 VBox (sideBar)
 └── VBox (sidebar__content)
-    ├── HBox (homeOption) - 首页
+    ├── HBox (homeOption) - 新聊天
+    ├── HBox (agentOption) - 智能体
     ├── HBox (skillOption) - 技能
-    ├── HBox (mcpOption) - MCP
+    ├── HBox (gepOption) - 进化
     ├── HBox (taskOption) - 任务
-    ├── HBox (workflowOption) - 工作流
-    ├── Region (sidebar__spacer) - 弹性空间
+    ├── Region (sidebar__divider) - 分隔线
+    ├── Label - "历史对话"标题
+    ├── ScrollPane (historyScrollPane) - 历史对话滚动区域
+    │   └── VBox (historyList) - 历史对话列表
     └── HBox (settingsOption) - 设置
 ```
 
 **样式类：**
 - `.sidebar`: 容器样式
+- `.sidebar__content`: 内容区域
 - `.sidebar__option`: 菜单项样式
 - `.sidebar__option--active`: 激活状态样式
 - `.sidebar__icon`: 图标样式
 - `.sidebar__label`: 标签样式
+- `.sidebar__divider`: 分隔线样式
+- `.sidebar__section-label`: 区域标题样式（如"历史对话"）
+- `.sidebar__history-scroll`: 历史对话滚动面板样式
+- `.sidebar__history-list`: 历史对话列表样式
+- `.sidebar__history-item`: 历史对话项样式
+- `.sidebar__history-item--active`: 当前活跃对话高亮样式
+- `.sidebar__history-item-title`: 对话标题样式
+- `.sidebar__history-item-time`: 对话时间样式
 
 ## 使用方式
 

@@ -61,3 +61,109 @@
 .sidebar__spacer {
     -fx-min-height: 0;
 }
+
+/* 分隔线 */
+.sidebar__divider {
+    -fx-background-color: rgba(0, 0, 0, 0.08);
+    -fx-pref-height: 1;
+    -fx-margin: 4 0;
+}
+
+/* 历史对话区域标题 */
+.sidebar__section-label {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+    -fx-padding: 8 12 4 12;
+}
+
+/* 历史对话滚动面板 */
+.sidebar__history-scroll {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-fit-to-width: true;
+}
+
+.sidebar__history-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.sidebar__history-scroll > .scroll-bar:vertical {
+    -fx-opacity: 0;
+    -fx-padding: 0;
+}
+
+.sidebar__history-scroll:hover > .scroll-bar:vertical {
+    -fx-opacity: 0.4;
+}
+
+/* 历史对话列表 */
+.sidebar__history-list {
+    -fx-spacing: 2;
+    -fx-padding: 0;
+}
+
+/* 历史对话项 */
+.sidebar__history-item {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8px;
+    -fx-cursor: hand;
+    -fx-padding: 6 12;
+    -fx-spacing: 4;
+    -fx-alignment: center-left;
+}
+
+.sidebar__history-item:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar__history-item--active {
+    -fx-background-color: rgba(0, 113, 227, 0.1);
+}
+
+.sidebar__history-item--active .sidebar__history-item-title {
+    -fx-text-fill: #0071e3;
+}
+
+.sidebar__history-text {
+    -fx-spacing: 1;
+}
+
+.sidebar__history-item-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+    -fx-wrap-text: false;
+}
+
+.sidebar__history-item-time {
+    -fx-font-size: 11px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+}
+
+/* 历史对话删除按钮 */
+.sidebar__history-delete-btn {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6;
+    -fx-padding: 4;
+    -fx-pref-width: 24;
+    -fx-pref-height: 24;
+    -fx-min-width: 24;
+    -fx-min-height: 24;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-cursor: hand;
+    -fx-alignment: CENTER;
+    -fx-content-display: GRAPHIC_ONLY;
+    -fx-opacity: 0.5;
+}
+
+.sidebar__history-delete-btn:hover {
+    -fx-opacity: 1;
+    -fx-background-color: rgba(255, 59, 48, 0.1);
+}

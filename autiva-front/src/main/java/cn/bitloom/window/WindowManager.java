@@ -6,7 +6,6 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
-import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -63,10 +62,6 @@ public class WindowManager {
             }
 
             dialogStage.setScene(scene);
-
-            if (stageStyle == StageStyle.TRANSPARENT) {
-                scene.setFill(Color.TRANSPARENT);
-            }
 
             if (controller instanceof StageAware stageAware) {
                 stageAware.setStage(dialogStage);

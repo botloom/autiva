@@ -152,7 +152,7 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
         lines.add(BORDER_MID);
 
         ChatResponse chatResponse = response.chatResponse();
-        if (chatResponse != null && chatResponse.getResult() != null) {
+        if (chatResponse != null) {
             var output = chatResponse.getResult().getOutput();
             String text = output.getText();
             var toolCalls = output.getToolCalls();

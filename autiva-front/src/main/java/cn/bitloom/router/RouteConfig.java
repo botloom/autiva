@@ -19,7 +19,7 @@ public class RouteConfig {
         public static final String AGENT = "/agent";
         public static final String SETTINGS = "/settings";
         public static final String SKILLS = "/skills";
-        public static final String MCP = "/mcp";
+        public static final String GEP = "/gep";
         public static final String TASK = "/task";
     }
 
@@ -42,9 +42,9 @@ public class RouteConfig {
                 ic -> safeCall(ic.getSkillPageController(), PageHolder::show),
                 ic -> safeCall(ic.getSkillPageController(), PageHolder::hide));
 
-        registerRoute(Path.MCP, "MCP", McpPageController.class,
-                ic -> safeCall(ic.getMcpPageController(), PageHolder::show),
-                ic -> safeCall(ic.getMcpPageController(), PageHolder::hide));
+        registerRoute(Path.GEP, "进化引擎", GepPageController.class,
+                ic -> safeCall(ic.getGepPageController(), PageHolder::show),
+                ic -> safeCall(ic.getGepPageController(), PageHolder::hide));
 
         registerRoute(Path.TASK, "任务", TaskPageController.class,
                 ic -> safeCall(ic.getTaskPageController(), PageHolder::show),

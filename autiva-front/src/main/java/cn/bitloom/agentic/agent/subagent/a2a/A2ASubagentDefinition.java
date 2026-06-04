@@ -17,6 +17,7 @@ package cn.bitloom.agentic.agent.subagent.a2a;
 
 
 import io.a2a.spec.AgentCard;
+import cn.bitloom.agentic.agent.AgentIdentityEnum;
 import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
 import cn.bitloom.agentic.agent.subagent.SubagentReference;
 
@@ -29,7 +30,7 @@ import cn.bitloom.agentic.agent.subagent.SubagentReference;
  */
 public class A2ASubagentDefinition implements SubagentDefinition {
 
-	public static final String KIND = "A2A";
+	public static final AgentIdentityEnum IDENTITY = AgentIdentityEnum.A2A;
 
 	private final SubagentReference subagentRef;
 
@@ -52,7 +53,7 @@ public class A2ASubagentDefinition implements SubagentDefinition {
 
 	@Override
 	public String getKind() {
-		return KIND;
+		return IDENTITY.name();
 	}
 
 	@Override

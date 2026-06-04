@@ -56,3 +56,120 @@ CREATE TABLE IF NOT EXISTS deployment_records (
     INDEX idx_service_id (service_id),
     INDEX idx_deployed_at (deployed_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='部署记录表';
+
+-- ========================================
+-- 项目管理系统表
+-- ========================================
+
+-- 项目表
+CREATE TABLE IF NOT EXISTS projects (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL COMMENT '项目名称',
+    description TEXT COMMENT '项目描述',
+    status VARCHAR(32) NOT NULL DEFAULT 'PLANNING' COMMENT '状态: PLANNING, IN_PROGRESS, REVIEW, COMPLETED, ARCHIVED',
+    owner_id VARCHAR(50) NOT NULL COMMENT '项目所有者ID',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_name (name),
+    INDEX idx_owner_id (owner_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目表';
+
+-- 需求表
+CREATE TABLE IF NOT EXISTS requirements (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL COMMENT '关联项目ID',
+    title VARCHAR(200) NOT NULL COMMENT '需求标题',
+    description TEXT NOT NULL COMMENT '需求描述',
+    priority VARCHAR(16) NOT NULL DEFAULT 'MEDIUM' COMMENT '优先级: LOW, MEDIUM, HIGH, CRITICAL',
+    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT' COMMENT '状态: DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, IMPLEMENTING, DONE',
+    submitter_id VARCHAR(50) NOT NULL COMMENT '提交者ID',
+    reviewer_id VARCHAR(50) COMMENT '评审者ID',
+    review_comment TEXT COMMENT '评审意见',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    INDEX idx_project_id (project_id),
+    INDEX idx_status (status),
+    INDEX idx_submitter_id (submitter_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求表';
+
+-- 设计方案表
+CREATE TABLE IF NOT EXISTS design_proposals (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL COMMENT '关联项目ID',
+    requirement_id BIGINT COMMENT '关联需求ID',
+    title VARCHAR(200) NOT NULL COMMENT '方案标题',
+    content TEXT NOT NULL COMMENT '方案内容',
+    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT' COMMENT '状态: DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED',
+    submitter_id VARCHAR(50) NOT NULL COMMENT '提交者ID',
+    reviewer_id VARCHAR(50) COMMENT '评审者ID',
+    review_comment TEXT COMMENT '评审意见',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE SET NULL,
+    INDEX idx_project_id (project_id),
+    INDEX idx_requirement_id (requirement_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='设计方案表';
+
+-- 测试用例表
+CREATE TABLE IF NOT EXISTS test_cases (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL COMMENT '关联项目ID',
+    requirement_id BIGINT COMMENT '关联需求ID',
+    title VARCHAR(200) NOT NULL COMMENT '用例标题',
+    preconditions TEXT COMMENT '前置条件',
+    steps TEXT NOT NULL COMMENT '测试步骤',
+    expected_result TEXT NOT NULL COMMENT '预期结果',
+    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT' COMMENT '状态: DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED',
+    submitter_id VARCHAR(50) NOT NULL COMMENT '提交者ID',
+    reviewer_id VARCHAR(50) COMMENT '评审者ID',
+    review_comment TEXT COMMENT '评审意见',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE SET NULL,
+    INDEX idx_project_id (project_id),
+    INDEX idx_requirement_id (requirement_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试用例表';
+
+-- Bug表
+CREATE TABLE IF NOT EXISTS bugs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL COMMENT '关联项目ID',
+    title VARCHAR(200) NOT NULL COMMENT 'Bug标题',
+    description TEXT NOT NULL COMMENT 'Bug描述',
+    severity VARCHAR(16) NOT NULL DEFAULT 'MINOR' COMMENT '严重程度: TRIVIAL, MINOR, MAJOR, CRITICAL, BLOCKER',
+    status VARCHAR(32) NOT NULL DEFAULT 'OPEN' COMMENT '状态: OPEN, ASSIGNED, FIXING, FIXED, VERIFIED, CLOSED, REOPENED',
+    reporter_id VARCHAR(50) NOT NULL COMMENT '报告者ID',
+    assignee_id VARCHAR(50) COMMENT '处理者ID',
+    fix_description TEXT COMMENT '修复描述',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    INDEX idx_project_id (project_id),
+    INDEX idx_status (status),
+    INDEX idx_severity (severity)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Bug表';
+
+-- 通知队列表（Web→Agent 通知通道）
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    type VARCHAR(50) NOT NULL COMMENT '通知类型: REQUIREMENT_SUBMITTED, REQUIREMENT_APPROVED, BUG_SUBMITTED, BUG_ASSIGNED, REVIEW_REQUEST, IMPLEMENT_DONE',
+    project_id BIGINT NOT NULL COMMENT '关联项目ID',
+    entity_type VARCHAR(32) NOT NULL COMMENT '实体类型: REQUIREMENT, DESIGN_PROPOSAL, TEST_CASE, BUG',
+    entity_id BIGINT NOT NULL COMMENT '实体ID',
+    title VARCHAR(200) NOT NULL COMMENT '通知标题',
+    content TEXT COMMENT '通知内容',
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT '状态: PENDING, SENT, ACKNOWLEDGED',
+    target_client_id VARCHAR(50) COMMENT '目标客户端ID',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP NULL COMMENT '发送时间',
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    INDEX idx_status (status),
+    INDEX idx_target_client_id (target_client_id),
+    INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知队列表';

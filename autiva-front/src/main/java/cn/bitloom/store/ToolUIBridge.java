@@ -5,6 +5,7 @@ import cn.bitloom.node.TaskCard;
 import cn.bitloom.node.TodoCard;
 import javafx.application.Platform;
 import javafx.scene.Node;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -20,11 +21,8 @@ public class ToolUIBridge {
 
     private final Map<String, CompletableFuture<String>> pendingQuestions = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> activeTaskCards = new ConcurrentHashMap<>();
+    @Setter
     private Consumer<Node> onNodeAdded;
-
-    public void setOnNodeAdded(Consumer<Node> callback) {
-        this.onNodeAdded = callback;
-    }
 
     public void showQuestions(String questionsJson, CompletableFuture<String> answerFuture) {
         String questionId = UUID.randomUUID().toString();

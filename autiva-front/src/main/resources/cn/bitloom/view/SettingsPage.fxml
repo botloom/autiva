@@ -2,6 +2,7 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import javafx.scene.image.ImageView?>
 
 <VBox fx:id="settingsPage" styleClass="settings-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
       xmlns="http://javafx.com/javafx"
@@ -12,21 +13,6 @@
     <ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="NEVER" VBox.vgrow="ALWAYS"
                 styleClass="settings-page__scroll-pane" prefWidth="600" maxWidth="700">
         <VBox styleClass="settings-page__content">
-            <VBox>
-                <Label text="浏览器" styleClass="settings-page__section-label"/>
-                <VBox styleClass="settings-page__card">
-                    <VBox styleClass="settings-page__row">
-                        <Label text="浏览器路径" styleClass="settings-page__row-title"/>
-                        <HBox alignment="CENTER_LEFT" spacing="12" styleClass="settings-page__path-row">
-                            <TextField fx:id="browserPathTextField" styleClass="settings-page__path-field" HBox.hgrow="ALWAYS"
-                                       promptText="选择浏览器可执行文件"/>
-                            <Button fx:id="browseBrowserButton" text="更改" styleClass="settings-page__secondary-btn"/>
-                        </HBox>
-                        <Label text="用于抓取的浏览器路径" styleClass="settings-page__row-subtitle" wrapText="true"/>
-                    </VBox>
-                </VBox>
-            </VBox>
-
             <VBox>
                 <Label text="钉钉配置" styleClass="settings-page__section-label"/>
                 <VBox styleClass="settings-page__card">
@@ -48,44 +34,59 @@
             <VBox>
                 <Label text="微信配置" styleClass="settings-page__section-label"/>
                 <VBox styleClass="settings-page__card">
-                    <VBox styleClass="settings-page__row">
-                        <Label text="iLink 接入" styleClass="settings-page__row-title"/>
-                        <HBox alignment="CENTER_LEFT" spacing="12" styleClass="settings-page__path-row">
-                            <CheckBox fx:id="weixinEnabledCheckBox" text="启用" styleClass="settings-page__tool-checkbox"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <Label fx:id="weixinStatusLabel" text="未连接" styleClass="settings-page__row-subtitle"/>
-                            <Button fx:id="weixinLoginButton" text="扫码登录" styleClass="settings-page__secondary-btn"/>
-                        </HBox>
-                        <Label text="启用后通过微信 iLink 协议接入，扫码登录即可对话" styleClass="settings-page__row-subtitle" wrapText="true"/>
+                    <VBox fx:id="weixinQrRow" styleClass="settings-page__row" alignment="CENTER">
+                        <StackPane styleClass="settings-page__qr-stack">
+                            <ImageView fx:id="weixinQrImageView" styleClass="settings-page__qr-image"/>
+                            <VBox fx:id="weixinConnectedOverlay" styleClass="settings-page__qr-overlay" alignment="CENTER" visible="false">
+                                <Button fx:id="weixinRebindButton" text="重新加载" styleClass="settings-page__rebind-btn"/>
+                            </VBox>
+                            <VBox fx:id="weixinExpiredOverlay" styleClass="settings-page__qr-overlay" alignment="CENTER" visible="false">
+                                <Button fx:id="weixinRefreshButton" text="重新加载" styleClass="settings-page__rebind-btn"/>
+                            </VBox>
+                        </StackPane>
+                        <Label fx:id="weixinQrHintLabel" text="扫码即可绑定微信" styleClass="settings-page__qr-hint" wrapText="true"/>
                     </VBox>
                 </VBox>
             </VBox>
 
             <VBox>
-                <Label text="AI 配置" styleClass="settings-page__section-label"/>
+                <Label text="搜索配置" styleClass="settings-page__section-label"/>
                 <VBox styleClass="settings-page__card">
                     <VBox styleClass="settings-page__row">
-                        <Label text="DeepSeek API Key" styleClass="settings-page__row-title"/>
+                        <Label text="博查 API Key" styleClass="settings-page__row-title"/>
+                        <PasswordField fx:id="bochaApiKeyField" styleClass="settings-page__path-field"
+                                       promptText="博查搜索 API Key"/>
+                        <Label text="博查搜索平台的 API Key，用于 WebSearch 工具" styleClass="settings-page__row-subtitle" wrapText="true"/>
+                    </VBox>
+                </VBox>
+            </VBox>
+
+            <VBox>
+                <Label text="DeepSeek 配置" styleClass="settings-page__section-label"/>
+                <VBox styleClass="settings-page__card">
+                    <VBox styleClass="settings-page__row">
+                        <Label text="API Key" styleClass="settings-page__row-title"/>
                         <PasswordField fx:id="deepseekApiKeyField" styleClass="settings-page__path-field"
                                        promptText="DeepSeek API Key"/>
                         <Label text="DeepSeek 平台的 API Key" styleClass="settings-page__row-subtitle" wrapText="true"/>
                     </VBox>
                     <VBox styleClass="settings-page__row">
-                        <Label text="智谱 AI API Key" styleClass="settings-page__row-title"/>
-                        <PasswordField fx:id="zApiKeyField" styleClass="settings-page__path-field"
-                                       promptText="智谱 AI API Key"/>
-                        <Label text="智谱 AI 平台的 API Key" styleClass="settings-page__row-subtitle" wrapText="true"/>
+                        <Label text="Base URL" styleClass="settings-page__row-title"/>
+                        <TextField fx:id="deepseekBaseUrlField" styleClass="settings-page__path-field"
+                                   promptText="https://api.deepseek.com"/>
+                        <Label text="DeepSeek API 基础地址" styleClass="settings-page__row-subtitle" wrapText="true"/>
                     </VBox>
-                </VBox>
-            </VBox>
-
-            <VBox>
-                <Label text="关于" styleClass="settings-page__section-label"/>
-                <VBox>
-                    <VBox styleClass="settings-page__about-content" spacing="4">
-                        <Label text="IdeaForge" styleClass="settings-page__app-name"/>
-                        <Label text="版本 1.0.0" styleClass="settings-page__app-version"/>
-                        <Label text="© 2026 bitloom" styleClass="settings-page__app-copyright"/>
+                    <VBox styleClass="settings-page__row">
+                        <Label text="Completions Path" styleClass="settings-page__row-title"/>
+                        <TextField fx:id="deepseekCompletionsPathField" styleClass="settings-page__path-field"
+                                   promptText="/v1/chat/completions"/>
+                        <Label text="API 补全路径" styleClass="settings-page__row-subtitle" wrapText="true"/>
+                    </VBox>
+                    <VBox styleClass="settings-page__row">
+                        <Label text="模型" styleClass="settings-page__row-title"/>
+                        <TextField fx:id="deepseekChatModelField" styleClass="settings-page__path-field"
+                                   promptText="deepseek-chat"/>
+                        <Label text="聊天模型名称" styleClass="settings-page__row-subtitle" wrapText="true"/>
                     </VBox>
                 </VBox>
             </VBox>

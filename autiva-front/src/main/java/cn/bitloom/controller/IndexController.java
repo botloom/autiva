@@ -4,7 +4,6 @@ import cn.bitloom.router.Router;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -20,12 +19,6 @@ public class IndexController implements Initializable {
     @FXML
     @Getter
     private BorderPane rootContainer;
-    @FXML
-    @Getter
-    private HBox toolbar;
-    @FXML
-    @Getter
-    private HBox windowControls;
     @FXML
     @Getter
     private ButtonBarController buttonBarController;
@@ -46,7 +39,7 @@ public class IndexController implements Initializable {
     private SkillPageController skillPageController;
     @FXML
     @Getter
-    private McpPageController mcpPageController;
+    private GepPageController gepPageController;
     @FXML
     @Getter
     private TaskPageController taskPageController;
@@ -66,7 +59,7 @@ public class IndexController implements Initializable {
         this.agentPageController.setIndexController(this);
         this.settingsPageController.setIndexController(this);
         this.skillPageController.setIndexController(this);
-        this.mcpPageController.setIndexController(this);
+        this.gepPageController.setIndexController(this);
         this.taskPageController.setIndexController(this);
 
         this.initializeButtonBar();

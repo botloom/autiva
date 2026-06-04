@@ -40,23 +40,36 @@
 - Order: 1（执行顺序）
 - 使用 Lombok `@Builder` 手动实例化，`requestSeq` 为实例字段
 
-### AutoMemoryToolsAdvisor
-实现 BaseChatMemoryAdvisor 接口，自动将记忆工具注入到 ChatClient 请求中（来自 spring-ai-agent-utils）。
+### AutoMemoryToolsAdvisor（已废弃）
+此 Advisor 已被移除。记忆工具现在通过 `defaultTools()` 直接注册，核心记忆通过 `AgentManager.buildSystemPrompt()` 静态注入。动态上下文注入由 ProactiveContextAdvisor 负责。
+
+### ProactiveContextAdvisor
+实现 StreamAdvisor 和 CallAdvisor 接口，在每次 LLM 请求前自动注入动态上下文，让智能体"不需要主动查也能看到"关键信息。
 
 **功能：**
-- 在 `before()` 阶段注入记忆系统提示和记忆工具回调
-- 支持记忆整合触发器（`memoryConsolidationTrigger`）
-- Builder 模式配置：memoriesRootDirectory、memorySystemPrompt、order
+- 自动注入近期日志摘要（情景记忆，最近2天）
+- 基于用户消息自动搜索相关记忆（自动召回）
+- 检测进化信号并注入提示（引导智能体使用进化工具）
+
+**依赖组件：**
+- `JournalManager`: 每日日志管理
+- `MemorySearchService`: 记忆搜索服务
+- `EvolutionHintProvider`: 进化信号检测与提示
 
 **配置：**
-- 默认 Order: BaseAdvisor.HIGHEST_PRECEDENCE + 200（在 ToolCallAdvisor 之前）
-- 默认系统提示模板：`classpath:/prompt/AUTO_MEMORY_TOOLS_SYSTEM_PROMPT.md`
+- Order: 200（在 ToolCallAdvisor 之前执行）
+- 在 ChatClientConfig 中注册
+- 使用 `ChatClientRequest.builder()` 直接构建请求，避免 `request.mutate()` 触发 `prompt.copy()` → `instructionsCopy()` 对消息类型做 instanceof 检查
 
-**Builder 参数：**
-- `order(int)`: Advisor 执行顺序
-- `memoriesRootDirectory(String)`: 记忆文件根目录（必填）
-- `memorySystemPrompt(Resource)`: 记忆系统提示模板
-- `memoryConsolidationTrigger(BiPredicate)`: 记忆整合触发器
+### EvolutionHintProvider
+进化信号检测与提示生成器，分析用户消息检测进化信号，返回提示信息引导智能体使用进化工具。
+
+**功能：**
+- 使用 SignalExtractor 从用户消息中提取信号
+- 节流策略：同一类型信号在30分钟内只提醒一次
+- 返回 `<system-reminder>` 格式的提示信息
+
+**Spring 注解：** `@Component`
 
 ## 使用方式
 
@@ -68,13 +81,17 @@ ChatClient chatClient = ChatClient.builder(chatModel)
     .build();
 ```
 
-### AutoMemoryToolsAdvisor
-通过 Builder 创建：
+### AutoMemoryToolsAdvisor（已废弃）
+此 Advisor 已被移除，无需使用。
+
+### ProactiveContextAdvisor
+通过构造函数创建，在 ChatClientConfig 中注册：
 ```java
-AutoMemoryToolsAdvisor advisor = AutoMemoryToolsAdvisor.builder()
-    .memoriesRootDirectory("/path/to/memories")
-    .build();
+new ProactiveContextAdvisor(journalManager, memorySearchService, evolutionHintProvider)
 ```
+
+### EvolutionHintProvider
+Spring Bean 自动注入。
 
 ## 扩展指南
 可以创建其他 Advisor 实现：
@@ -87,5 +104,6 @@ AutoMemoryToolsAdvisor advisor = AutoMemoryToolsAdvisor.builder()
 1. Advisor 的 Order 决定执行顺序
 2. 流式处理需要注意线程安全
 3. 日志记录可能包含敏感信息，生产环境需谨慎
-4. AutoMemoryToolsAdvisor 的 order 必须小于 ToolCallAdvisor（300）
+4. AutoMemoryToolsAdvisor 已废弃，由 ProactiveContextAdvisor 替代
 5. 如果同时需要支持 `.call()` 和 `.stream()`，Advisor 必须同时实现 CallAdvisor 和 StreamAdvisor 接口。只实现 StreamAdvisor 的 Advisor 在同步调用中不会被触发
+6. ProactiveContextAdvisor 的 Order 为 200，必须在 ToolCallAdvisor (300) 之前执行

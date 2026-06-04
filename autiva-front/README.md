@@ -19,10 +19,14 @@ Autiva 桌面客户端，基于 JavaFX + Spring AI 构建的 AI 智能体应用�
 - 对话记忆与自动压缩
 
 ### 工具系统
-- 文件操作：read、write、edit
-- 命令执行：exec、进程管理
-- 网络操作：web_search、web_fetch
-- 定时任务：cron_create、cron_list、cron_delete、cron_trigger
+- 文件操作：Read、Write、Edit（精确字符串替换）
+- 文件搜索：Glob（模式匹配）、Grep（正则搜索）
+- 命令执行：Command、CommandOutput、KillCommand
+- 网络操作：WebSearch、WebFetch
+- 任务管理：Task、TaskOutput、SessionQuery
+- 用户交互：AskUserQuestion、TodoWrite
+- 配置管理：AppConfig、SkillConfig、McpConfig、SubagentConfig、MemoryManage
+- 进化系统：EvolveApply、EvolveConfig、EvolveCycle、EvolveGeneManage、EvolveQuery
 
 ### 技能系统
 - 动态加载专业知识
@@ -32,6 +36,16 @@ Autiva 桌面客户端，基于 JavaFX + Spring AI 构建的 AI 智能体应用�
 ### MCP 集成
 - 支持 STDIO、SSE、STREAMABLE_HTTP 传输协议
 - 动态注册 MCP 服务器
+
+### 进化系统
+- EvolverAgent：智能体自我进化引擎
+- 基因管理：创建、查询、应用进化基因
+- 进化周期：自动触发进化流程
+- 金丝雀检查：进化稳定性验证
+
+### 第三方接入
+- 钉钉 Stream 模式：单聊/群聊机器人
+- 微信 iLink 协议：扫码登录、消息收发
 
 ## 项目结构
 
@@ -47,9 +61,14 @@ src/main/java/cn/bitloom/
 │   ├── skill/              # 技能管理
 │   ├── task/               # 任务管理
 │   ├── tool/               # 工具系统
+│   │   ├── core/           # 核心工具（文件、命令、网络）
+│   │   ├── manage/         # 管理工具（配置、进化）
+│   │   └── command/        # 命令执行实现
 │   └── workflow/           # 工作流引擎
+│   └── evolve/             # 进化系统
 ├── bridge/                  # 第三方桥接
-│   └── dingtalk/           # 钉钉机器人
+│   ├── dingtalk/           # 钉钉机器人
+│   └── weixin/             # 微信 iLink 接入
 ├── config/                  # 配置管理
 ├── constant/                # 常量定义
 ├── controller/              # JavaFX 控制器
@@ -70,15 +89,28 @@ src/main/java/cn/bitloom/
 
 ```properties
 # Application Settings
-app.browser-path=C:\Program Files\Google\Chrome\Application\chrome.exe
 app.session.isolation=PER_PEER
 
-# AI API Keys
-spring.ai.deepseek.api-key=your-deepseek-api-key
-spring.ai.zhipuai.api-key=your-zhipuai-api-key
+# DingTalk Configuration
+dingtalk.app.client-id=your-client-id
+dingtalk.app.client-secret=your-client-secret
+dingtalk.app.agent-id=your-agent-id
 
-# Agent Configuration
-app.agent.main.tools=read,write,edit,exec,web_search,web_fetch,cron_create,cron_list,cron_delete,cron_trigger
+# DeepSeek Configuration
+spring.ai.deepseek.chat.base-url=https://api.deepseek.com
+spring.ai.deepseek.chat.api-key=your-deepseek-api-key
+spring.ai.deepseek.chat.options.model=deepseek-chat
+
+# ZhiPu AI Configuration
+spring.ai.zhipuai.chat.base-url=https://open.bigmodel.cn/api/paas/v4
+spring.ai.zhipuai.api-key=your-zhipuai-api-key
+spring.ai.zhipuai.chat.options.model=glm-4-flash
+
+# WeChat iLink Configuration
+weixin.ilink.enabled=false
+
+# Search Configuration
+app.search.bocha-api-key=your-bocha-api-key
 ```
 
 ## 数据目录
@@ -127,12 +159,12 @@ java -jar target/autiva-front-1.0-SNAPSHOT.jar
 
 | 页面 | 功能 |
 |------|------|
-| 主页 | 聊天交互、模型选择 |
-| 智能体页 | 智能体配置、工具开关 |
-| 技能页 | 技能导入、管理 |
-| MCP 页 | MCP 服务器配置 |
-| 任务页 | 定时任务管理 |
-| 设置页 | 应用配置 |
+| 主页 | 聊天交互、模型选择、任务卡片 |
+| 智能体页 | 智能体配置、工具开关、子智能体管理 |
+| 技能页 | 技能导入、管理、ZIP 包导入 |
+| MCP 页 | MCP 服务器配置、动态注册 |
+| 任务页 | 后台任务管理、任务输出查看 |
+| 设置页 | 应用配置、API Key 管理、扫码登录 |
 
 ## 扩展开发
 

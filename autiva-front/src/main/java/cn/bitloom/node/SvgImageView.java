@@ -2,14 +2,13 @@ package cn.bitloom.node;
 
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
-import javafx.embed.swing.SwingFXUtils;
+import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import lombok.Getter;
 import org.apache.batik.transcoder.TranscoderInput;
 import org.apache.batik.transcoder.TranscoderOutput;
 import org.apache.batik.transcoder.image.PNGTranscoder;
 
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -71,8 +70,8 @@ public class SvgImageView extends ImageView {
 
             transcoder.transcode(new TranscoderInput(bais), new TranscoderOutput(baos));
 
-            BufferedImage bufferedImage = javax.imageio.ImageIO.read(new ByteArrayInputStream(baos.toByteArray()));
-            setImage(SwingFXUtils.toFXImage(bufferedImage, null));
+            Image fxImage = new Image(new ByteArrayInputStream(baos.toByteArray()));
+            setImage(fxImage);
         } catch (Exception e) {
             System.err.println("Failed to load SVG: " + svgPath + ", " + e.getMessage());
         }

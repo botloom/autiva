@@ -1,8 +1,3 @@
-app:
-  browser-path: C:/Program Files/Google/Chrome/Application/chrome.exe
-  session:
-    isolation: PER_PEER
-
 spring:
   application:
     name: autiva
@@ -11,16 +6,6 @@ spring:
   main:
     web-application-type: none
   ai:
-    zhipuai:
-      chat:
-        options:
-          model: glm-4.7
-          thinking: disabled
-    deepseek:
-      chat:
-        options:
-          model: deepseek-v4-pro
-
     chat:
       client:
         enabled: false
@@ -28,23 +13,19 @@ spring:
       client:
         type: async
         name: autiva
-
+        stdio:
+          servers-configuration: file:${user.home}/.autiva/mcp/mcp-servers.json
+    openai:
+      api-key: not-required
 logging:
   level:
     root: info
     cn.bitloom: debug
-
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: ${user.home}/.autiva/logs/autiva-front.log
   logback:
     rollingpolicy:
       file-name-pattern: ${user.home}/.autiva/logs/autiva-front.%d{yyyy-MM-dd}.%i.log
       max-history: 30
       max-file-size: 10MB
-
-weixin:
-  ilink:
-    enabled: true

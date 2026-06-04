@@ -1,19 +1,25 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.bridge.weixin.WeixinILinkClient;
+import cn.bitloom.bridge.wechat.WechatILinkClient;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.vm.SettingsPageViewModel;
-import cn.bitloom.window.WindowManager;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.PixelFormat;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -21,13 +27,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
-import java.util.Objects;
 import java.util.ResourceBundle;
 
 @Slf4j
@@ -41,74 +42,53 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
     @FXML
     private VBox settingsPage;
     @FXML
-    private TextField browserPathTextField;
-    @FXML
-    private Button browseBrowserButton;
-    @FXML
     private TextField dingTalkClientIdField;
     @FXML
     private PasswordField dingTalkClientSecretField;
     @FXML
-    private CheckBox weixinEnabledCheckBox;
+    private ImageView weixinQrImageView;
     @FXML
-    private Label weixinStatusLabel;
+    private VBox weixinQrRow;
     @FXML
-    private Button weixinLoginButton;
+    private Label weixinQrHintLabel;
+    @FXML
+    private VBox weixinConnectedOverlay;
+    @FXML
+    private VBox weixinExpiredOverlay;
+    @FXML
+    private Button weixinRebindButton;
+    @FXML
+    private Button weixinRefreshButton;
+    @FXML
+    private PasswordField bochaApiKeyField;
     @FXML
     private PasswordField deepseekApiKeyField;
     @FXML
-    private PasswordField zApiKeyField;
+    private TextField deepseekBaseUrlField;
+    @FXML
+    private TextField deepseekCompletionsPathField;
+    @FXML
+    private TextField deepseekChatModelField;
 
     @Getter
     @Setter
     private IndexController indexController;
 
+    private ChangeListener<WechatILinkClient.State> weixinStateListener;
+
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-
-        this.browseBrowserButton.setOnAction(event -> {
-            FileChooser fileChooser = new FileChooser();
-            fileChooser.setTitle("选择浏览器可执行文件");
-            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("可执行文件", "*.exe"));
-            Path path = Paths.get(this.browserPathTextField.getText());
-            if (Files.exists(path)) {
-                fileChooser.setInitialDirectory(path.getParent().toFile());
-            }
-            File selectedFile = fileChooser.showOpenDialog(this.settingsPage.getScene().getWindow());
-            if (Objects.nonNull(selectedFile)) {
-                this.browserPathTextField.setText(selectedFile.getAbsolutePath());
-            }
-        });
-
-        this.weixinLoginButton.setOnAction(event -> openWeixinLoginDialog());
-
         this.bindViewModel();
     }
 
-    private void openWeixinLoginDialog() {
-        try {
-            WeixinILinkClient client = applicationContext.getBean(WeixinILinkClient.class);
-            WindowManager windowManager = applicationContext.getBean(WindowManager.class);
-            windowManager.showDialog(
-                    "cn/bitloom/view/WeixinLoginDialog.fxml",
-                    settingsPage.getScene().getWindow(),
-                    controller -> {
-                        WeixinLoginController loginController = (WeixinLoginController) controller;
-                        loginController.setWeixinILinkClient(client);
-                    }
-            );
-        } catch (Exception e) {
-            log.warn("微信 iLink 未启用，请先在配置中启用", e);
-        }
-    }
-
     private void bindViewModel() {
-        browserPathTextField.textProperty().bindBidirectional(viewModel.getBrowserPath());
         dingTalkClientIdField.textProperty().bindBidirectional(viewModel.getDingTalkClientId());
         dingTalkClientSecretField.textProperty().bindBidirectional(viewModel.getDingTalkClientSecret());
-        weixinEnabledCheckBox.selectedProperty().bindBidirectional(viewModel.getWeixinEnabled());
+        bochaApiKeyField.textProperty().bindBidirectional(viewModel.getBochaApiKey());
         deepseekApiKeyField.textProperty().bindBidirectional(viewModel.getDeepseekApiKey());
-        zApiKeyField.textProperty().bindBidirectional(viewModel.getZApiKey());
+        deepseekBaseUrlField.textProperty().bindBidirectional(viewModel.getDeepseekBaseUrl());
+        deepseekCompletionsPathField.textProperty().bindBidirectional(viewModel.getDeepseekCompletionsPath());
+        deepseekChatModelField.textProperty().bindBidirectional(viewModel.getDeepseekChatModel());
     }
 
     @Override
@@ -126,27 +106,82 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
     }
 
     private void updateWeixinStatus() {
-        try {
-            WeixinILinkClient client = applicationContext.getBean(WeixinILinkClient.class);
-            if (client.isConnected()) {
-                weixinStatusLabel.setText("已连接");
-                weixinStatusLabel.setStyle("-fx-text-fill: #34c759;");
-            } else {
-                weixinStatusLabel.setText("未连接");
-                weixinStatusLabel.setStyle("-fx-text-fill: #86868b;");
+        if (weixinStateListener != null) {
+            try {
+                WechatILinkClient oldClient = applicationContext.getBean(WechatILinkClient.class);
+                oldClient.stateProperty().removeListener(weixinStateListener);
+            } catch (Exception ignored) {
             }
-            client.connectedProperty().addListener((obs, oldVal, newVal) -> {
-                if (newVal) {
-                    weixinStatusLabel.setText("已连接");
-                    weixinStatusLabel.setStyle("-fx-text-fill: #34c759;");
-                } else {
-                    weixinStatusLabel.setText("未连接");
-                    weixinStatusLabel.setStyle("-fx-text-fill: #86868b;");
-                }
-            });
+            weixinStateListener = null;
+        }
+
+        try {
+            WechatILinkClient client = applicationContext.getBean(WechatILinkClient.class);
+            updateWeixinUi(client.getState(), client);
+
+            weixinStateListener = (obs, oldVal, newVal) ->
+                    Platform.runLater(() -> updateWeixinUi(newVal, client));
+            client.stateProperty().addListener(weixinStateListener);
+
+            weixinRebindButton.setOnAction(event -> handleRebind(client));
+            weixinRefreshButton.setOnAction(event -> handleRefresh(client));
         } catch (Exception e) {
-            weixinStatusLabel.setText("未启用");
-            weixinStatusLabel.setStyle("-fx-text-fill: #86868b;");
+            weixinQrRow.setVisible(false);
+            weixinQrRow.setManaged(false);
+        }
+    }
+
+    private void updateWeixinUi(WechatILinkClient.State state, WechatILinkClient client) {
+        weixinConnectedOverlay.setVisible(false);
+        weixinExpiredOverlay.setVisible(false);
+
+        switch (state) {
+            case CONNECTED -> {
+                weixinConnectedOverlay.setVisible(true);
+                weixinQrHintLabel.setText("微信已绑定，点击重新加载可更换账号");
+            }
+            case CONNECTING -> {
+                weixinQrHintLabel.setText("连接中...");
+            }
+            case DISCONNECTED -> {
+                String qrContent = client.getQrCodeContent();
+                if (qrContent != null) {
+                    renderQrCode(qrContent);
+                }
+                weixinQrHintLabel.setText("扫码即可绑定微信");
+            }
+            case QR_EXPIRED -> {
+                weixinExpiredOverlay.setVisible(true);
+                weixinQrHintLabel.setText("二维码已过期，请点击重新加载");
+            }
+        }
+    }
+
+    private void handleRebind(WechatILinkClient client) {
+        client.restartLogin();
+    }
+
+    private void handleRefresh(WechatILinkClient client) {
+        client.startLogin();
+    }
+
+    private void renderQrCode(String content) {
+        try {
+            QRCodeWriter writer = new QRCodeWriter();
+            BitMatrix matrix = writer.encode(content, BarcodeFormat.QR_CODE, 160, 160);
+            int width = matrix.getWidth();
+            int height = matrix.getHeight();
+            int[] pixels = new int[width * height];
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    pixels[y * width + x] = matrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+                }
+            }
+            WritableImage fxImage = new WritableImage(width, height);
+            fxImage.getPixelWriter().setPixels(0, 0, width, height, PixelFormat.getIntArgbInstance(), pixels, 0, width);
+            weixinQrImageView.setImage(fxImage);
+        } catch (WriterException e) {
+            log.error("生成二维码失败", e);
         }
     }
 

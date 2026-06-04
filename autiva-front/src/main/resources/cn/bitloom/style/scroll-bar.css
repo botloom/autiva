@@ -1,20 +1,20 @@
 .scroll-bar {
     -fx-background-color: transparent;
-    -fx-pref-width: 8;
-    -fx-pref-height: 8;
+    -fx-pref-width: 6;
+    -fx-pref-height: 6;
 }
 
 .scroll-bar .thumb {
-    -fx-background-color: rgba(0, 0, 0, 0.2);
-    -fx-background-radius: 4;
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+    -fx-background-radius: 3;
 }
 
 .scroll-bar .thumb:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.35);
+    -fx-background-color: rgba(0, 0, 0, 0.25);
 }
 
 .scroll-bar .thumb:pressed {
-    -fx-background-color: rgba(0, 0, 0, 0.5);
+    -fx-background-color: rgba(0, 0, 0, 0.4);
 }
 
 .scroll-bar .track {
@@ -36,17 +36,17 @@
 
 .custom-text-area .scroll-bar {
     -fx-background-color: transparent;
-    -fx-pref-width: 8;
-    -fx-pref-height: 8;
+    -fx-pref-width: 6;
+    -fx-pref-height: 6;
 }
 
 .custom-text-area .scroll-bar .thumb {
     -fx-background-color: rgba(0, 0, 0, 0.15);
-    -fx-background-radius: 4;
+    -fx-background-radius: 3;
 }
 
 .custom-text-area .scroll-bar .thumb:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.3);
+    -fx-background-color: rgba(0, 0, 0, 0.25);
 }
 
 .browser-nav-button {

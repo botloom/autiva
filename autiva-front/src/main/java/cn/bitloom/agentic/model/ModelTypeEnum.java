@@ -6,6 +6,5 @@ package cn.bitloom.agentic.model;
  * @author ningyu
  */
 public enum ModelTypeEnum {
-    DEEPSEEK,
-    GLM,
+    DEEPSEEK
 }

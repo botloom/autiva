@@ -1,7 +1,58 @@
 # Node 包
 
 ## 概述
-本包定义了自定义 JavaFX 节点组件，包括通用 SVG 组件和聊天消息卡片组件。
+本包定义了自定义 JavaFX 节点组件，包括通用 SVG 组件、聊天消息卡片组件和画布相关组件。
+
+## 子包
+
+### canvas
+画布相关组件，包含以下子包：
+
+#### canvas/model
+画布数据模型，定义画布元素和场景。
+
+**核心类：**
+- `CanvasElement`: 画布元素基类（描边/填充/线宽/粗糙度/透明度/线条样式/圆角等属性）
+- `CanvasScene`: 画布场景（元素列表、图层管理）
+- `CanvasSceneSerializer`: 场景序列化/反序列化
+- `Layer`: 图层数据模型
+- `Point`: 2D 点
+- `RectangleElement/DiamondElement/EllipseElement`: 形状元素
+- `ArrowElement/LineElement`: 线条元素
+- `FreehandElement`: 手绘路径元素
+- `TextElement`: 文字元素
+
+#### canvas/render
+画布渲染器，负责将元素绘制到 Canvas。
+
+**核心类：**
+- `CanvasRenderer`: 主渲染器（脏标记、重绘、缩放/平移变换、手写字体）
+- `ElementRenderer`: 元素渲染工具（形状/线条/手绘路径/文字的绘制方法）
+- `RoughRenderer`: 手绘风格渲染器（基于 rough.js 算法）
+- `SelectionRenderer`: 选中状态渲染器（边框/手柄/旋转指示器）
+
+#### canvas/tool
+画布工具，处理鼠标交互。
+
+**核心类：**
+- `CanvasTool`: 工具基类（鼠标事件处理、光标设置）
+- `SelectTool`: 选择工具（点击选中、框选、拖拽移动、缩放手柄）
+- `RectangleTool/DiamondTool/EllipseTool`: 形状工具
+- `ArrowTool/LineTool`: 线条工具
+- `FreehandTool`: 手绘工具
+- `TextTool`: 文字工具（双击编辑）
+- `PanTool`: 平移工具（中键拖拽）
+- `DiagramExportTool`: 图表导出工具
+- `DiagramGenerateTool`: AI 图表生成工具
+
+#### canvas/CanvasView
+画布视图组件，管理 Canvas 和工具交互。
+
+**核心功能：**
+- Canvas 渲染循环（dirty 标记 + requestLayout 重绘）
+- 工具切换和鼠标事件分发
+- 缩放/平移变换（Ctrl+滚轮缩放、中键平移）
+- 选中元素回调通知
 
 ## 核心类
 
@@ -43,6 +94,13 @@
 - 圆角气泡样式（右下角小圆角）
 - 禁用焦点遍历（`setFocusTraversable(false)`），防止点击时焦点环导致布局偏移
 
+**外部操作按钮：**
+- 由 HomePageController 在卡片外部创建操作按钮栏（chat-message__actions），位于卡片下方
+- 用户消息的操作按钮右对齐（chat-message__actions--user）
+- 复制按钮：点击将消息文本复制到系统剪贴板，复制后短暂显示蓝色高亮状态
+- 喜欢按钮：点击切换喜欢状态（蓝色高亮），与不喜欢互斥
+- 不喜欢按钮：点击切换不喜欢状态（红色高亮），与喜欢互斥
+
 ### AssistantMessageCard
 助手消息卡片，显示助手回复的消息，支持 Markdown 渲染和流式更新。
 
@@ -56,17 +114,86 @@
 - 禁用焦点遍历（`disableFocusRecursively()`），递归遍历所有后代节点，对 Control 子类设置 `setFocusTraversable(false)`，防止点击时焦点环导致 MD 内容缩进偏移
 - 布局偏移根因：JavaFX Modena 主题 `:focused` 伪类会改变 ScrollPane 的 `-fx-background-insets`，导致 viewport 宽度变化，进而使 TextFlow 重新换行。需在 CSS 中为 `.chat-scroll-pane:focused` 显式设置 `-fx-background-insets: 0`，并在 Controller 中设置 `chatScrollPane.setFocusTraversable(false)` 双重保障
 
-### ToolMessageCard
-工具消息卡片，显示工具调用请求或响应，支持折叠展开。
+**外部操作按钮：**
+- 由 HomePageController 在卡片外部创建操作按钮栏（chat-message__actions），位于卡片下方
+- 助手消息的操作按钮左对齐
+- 流式输出期间操作栏隐藏（visible=false, managed=false），输出完成后自动显示
+- 复制按钮：点击将消息原始 Markdown 文本复制到系统剪贴板，复制后短暂显示蓝色高亮状态
+- 喜欢按钮：点击切换喜欢状态（蓝色高亮），与不喜欢互斥
+- 不喜欢按钮：点击切换不喜欢状态（红色高亮），与喜欢互斥
 
-**样式类：** `chat-message`, `chat-message--tool`, `chat-message--tool-request` / `chat-message--tool-response`
+### ToolMessageCard
+工具消息卡片，显示工具调用请求或响应，支持折叠展开和结构化渲染。
+
+**样式类：** `chat-message`, `chat-message--tool`, `chat-message--tool-request` / `chat-message--tool-success` / `chat-message--tool-error` / `chat-message--tool-warning`
+
+**请求卡片（isRequest=true）：**
+- 蓝色背景，工具名 + JSON 格式化参数
+- 点击 header 展开/折叠内容
+
+**响应卡片（isRequest=false）— 结构化渲染：**
+- 尝试 `ToolResult.fromJson(arguments)` 解析
+- 解析成功：
+  - 根据状态添加样式：SUCCESS=绿色、ERROR=红色、WARNING=黄色
+  - Header：状态圆点 + 工具名 + 摘要文本（message）
+  - Content（可折叠）：data 标签区（key-value pill）+ rawOutput 区域
+- 解析失败：降级到纯文本展示（绿色背景，与原有行为一致）
+
+**组件结构（结构化响应）：**
+```
+ToolMessageCard (VBox)
+├── header (HBox, clickable)
+│   ├── statusDot (Circle, 4px)
+│   ├── nameLabel (Label: 工具名)
+│   └── summaryLabel (Label: 摘要)
+└── contentBox (VBox, collapsible)
+    ├── dataPane (FlowPane)
+    │   ├── dataItem (HBox: keyLabel + valueLabel)
+    │   └── ...
+    ├── divider (Region)
+    └── outputFlow (TextFlow: rawOutput)
+```
 
 **特性：**
-- 可折叠的 JSON 内容区域
-- 点击标题栏切换展开/折叠
-- JSON 自动格式化（使用 fastjson2 PrettyFormat）
-- 请求和响应有不同的背景色
-- 禁用焦点遍历（`setFocusTraversable(false)`），卡片、header、Label、TextFlow 均禁用焦点
+- 状态圆点颜色：SUCCESS=#22c55e、ERROR=#ef4444、WARNING=#f59e0b
+- 工具名颜色随状态变化：SUCCESS=绿色、ERROR=红色、WARNING=琥珀色
+- data 标签使用浅色背景 pill 样式
+- rawOutput 使用等宽字体展示
+- 禁用焦点遍历（`setFocusTraversable(false)`）
+
+### ToolGroupCard
+工具分组卡片，将连续的工具调用自动分组到一个可折叠容器中，减少纵向空间占用。
+
+**样式类：** `chat-message`, `chat-message--tool-group`
+
+**特性：**
+- 默认折叠，仅显示摘要行（工具数量 + 工具名称列表）
+- 折叠态示例：`▶ 3 个工具调用 · SearchCodebase · Grep · Read`
+- 展开态示例：`▼ 3 个工具调用` + 各 ToolMessageCard 列表
+- 点击 header 切换展开/折叠（与项目中 ToolMessageCard、TaskCard 的折叠模式一致，使用 visible/managed 切换）
+- 支持动态添加 ToolMessageCard（流式场景下工具逐个到达时自动追加到当前分组）
+- 工具名称去重（使用 LinkedHashSet 保持插入顺序）
+- 单个工具调用也使用 ToolGroupCard 包裹，保持一致性
+
+**组件结构：**
+```
+ToolGroupCard (VBox)
+├── header (HBox, clickable)
+│   ├── chevronLabel (Label: "▶" / "▼")
+│   ├── countLabel (Label: "N 个工具调用")
+│   ├── separatorLabel (Label: "·")
+│   └── namesLabel (Label: "工具名称列表")
+└── body (VBox, collapsible)
+    ├── ToolMessageCard
+    ├── ToolMessageCard
+    └── ...
+```
+
+**分组逻辑（在 HomePageController 中）：**
+- 连续的 TOOL 类型消息自动归入同一个 ToolGroupCard
+- 非 TOOL 类型消息（USER/ASSISTANT）中断当前分组，下次 TOOL 消息创建新分组
+- 通过 `currentToolGroup` 字段追踪当前活跃的工具分组
+- 清除对话时重置 `currentToolGroup = null`
 
 ### QuestionCard
 问题交互卡片，用于 AskUserQuestionTool 的用户交互。
@@ -76,11 +203,15 @@
 **特性：**
 - 支持单选和多选模式
 - 选项按钮点击切换选中状态
+- 每个问题自动添加"其他"选项，点击后显示文本输入框，支持自由文本输入
+- "其他"选项使用虚线边框样式（`chat-message__question-option--other`）区分
+- 文本输入框按 Enter 键可提交答案
 - **提交逻辑：**
-  - 单问题单选：点击选项后立即提交
+  - 单问题单选（选择预设选项）：点击选项后立即提交
+  - 单问题单选（选择"其他"）：显示文本输入框，按 Enter 或点击"提交"按钮提交
   - 单问题多选：需要点击"提交"按钮
   - 多问题（无论单选/多选）：需要回答所有问题后点击"提交"按钮
-- 提交后禁用选项，显示已回答区域
+- 提交后禁用选项和文本输入框，显示已回答区域
 - 通过 BiConsumer 回调通知 ToolUIBridge
 
 ### TodoCard
@@ -94,6 +225,24 @@
 - 已完成项显示删除线
 - 进行中项显示 activeForm
 - 进度条和完成统计
+
+### TaskCard
+任务卡片，用于子智能体任务的流式输出展示。
+
+**样式类：** `chat-message`, `chat-message--tool`, `chat-message--task`
+
+**特性：**
+- Header 显示脉冲动画点、子智能体名称、任务描述、运行状态
+- 可折叠的 body 区域，包含消息容器
+- 通过 `EventBus.outBoxSubscribe()` 订阅子会话消息流，实时处理子智能体输出
+- 使用 `MarkdownFxRenderer` 将 Markdown 渲染为 JavaFX Node
+- 支持流式输出（`appendOutput`）和事件订阅（`subscribeSession`）两种内容更新方式
+- `onContentChanged` 回调：内容变化时通知外层 HomePageController 触发 ScrollPane 自动滚动，与 AssistantMessageCard 的回调模式一致
+- 脉冲动画：运行中时脉冲点闪烁，完成/失败时停止
+- 内嵌工具卡片宽度约束：工具卡片用 HBox 包裹后添加到 messageContainer，HBox 的 `fillHeight=true` 但不拉伸卡片宽度，使工具卡片按内容自然宽度显示（折叠时仅为工具名标签宽度，展开后按内容撑开），与主智能体中独立工具卡片的布局方式一致
+
+**回调：**
+- `onContentChanged(Consumer<String>)`: 内容变化时触发，由 HomePageController 在 `addChatNode()` 中设置为 `scrollToBottom()`，确保流式输出时 ScrollPane 自动向下滚动
 
 **字段：**
 - `svgPath`: SVG 文件路径
@@ -131,8 +280,8 @@ imageView.setSvgPath("/cn/bitloom/images/icon.svg");
 1. 读取 SVG 文件内容
 2. 使用 Apache Batik 的 PNGTranscoder 转换
 3. 设置目标宽高
-4. 转换为 BufferedImage
-5. 使用 SwingFXUtils 转换为 JavaFX Image
+4. 输出 PNG 字节流
+5. 直接从 PNG 字节流创建 JavaFX Image（无需 AWT/SwingFXUtils 中间层）
 
 ### 依赖库
 - Apache Batik: SVG 解析和转换

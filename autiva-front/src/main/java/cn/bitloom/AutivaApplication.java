@@ -1,30 +1,94 @@
 package cn.bitloom;
 
+import cn.bitloom.bootstrap.AppBootstrap;
+import cn.bitloom.bootstrap.SplashScreen;
 import cn.bitloom.constant.AppConstants;
 import cn.bitloom.util.ExecutorManager;
-import cn.bitloom.window.WindowChromeHelper;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
 import javafx.scene.image.Image;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Region;
-import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration;
+import org.springframework.boot.autoconfigure.dao.PersistenceExceptionTranslationAutoConfiguration;
+import org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration;
+import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.*;
+import org.springframework.boot.autoconfigure.jmx.JmxAutoConfiguration;
+import org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration;
+import org.springframework.boot.autoconfigure.mail.MailSenderValidatorAutoConfiguration;
+import org.springframework.boot.autoconfigure.mustache.MustacheAutoConfiguration;
+import org.springframework.boot.autoconfigure.rsocket.RSocketMessagingAutoConfiguration;
+import org.springframework.boot.autoconfigure.rsocket.RSocketRequesterAutoConfiguration;
+import org.springframework.boot.autoconfigure.rsocket.RSocketServerAutoConfiguration;
+import org.springframework.boot.autoconfigure.rsocket.RSocketStrategiesAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.boot.autoconfigure.sendgrid.SendGridAutoConfiguration;
+import org.springframework.boot.autoconfigure.session.SessionAutoConfiguration;
+import org.springframework.boot.autoconfigure.ssl.SslAutoConfiguration;
+import org.springframework.boot.autoconfigure.thymeleaf.ThymeleafAutoConfiguration;
+import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
+import org.springframework.boot.autoconfigure.transaction.jta.JtaAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.reactive.*;
+import org.springframework.boot.autoconfigure.web.reactive.error.ErrorWebFluxAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.servlet.*;
+import org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration;
+import org.springframework.boot.autoconfigure.websocket.reactive.WebSocketReactiveAutoConfiguration;
+import org.springframework.boot.autoconfigure.websocket.servlet.WebSocketMessagingAutoConfiguration;
+import org.springframework.boot.autoconfigure.websocket.servlet.WebSocketServletAutoConfiguration;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
-import java.nio.file.Files;
 import java.util.Objects;
 
 @Slf4j
-@EnableScheduling
-@SpringBootApplication
+@SpringBootApplication(exclude = {
+        DataSourceAutoConfiguration.class,
+        DataSourceTransactionManagerAutoConfiguration.class,
+        JdbcTemplateAutoConfiguration.class,
+        JdbcClientAutoConfiguration.class,
+        XADataSourceAutoConfiguration.class,
+        JmxAutoConfiguration.class,
+        ReactiveWebServerFactoryAutoConfiguration.class,
+        HttpHandlerAutoConfiguration.class,
+        WebFluxAutoConfiguration.class,
+        ErrorWebFluxAutoConfiguration.class,
+        ReactiveMultipartAutoConfiguration.class,
+        WebSessionIdResolverAutoConfiguration.class,
+        DispatcherServletAutoConfiguration.class,
+        ServletWebServerFactoryAutoConfiguration.class,
+        WebMvcAutoConfiguration.class,
+        HttpEncodingAutoConfiguration.class,
+        MultipartAutoConfiguration.class,
+        ErrorMvcAutoConfiguration.class,
+        WebSocketReactiveAutoConfiguration.class,
+        WebSocketServletAutoConfiguration.class,
+        WebSocketMessagingAutoConfiguration.class,
+        ReactiveSecurityAutoConfiguration.class,
+        SecurityAutoConfiguration.class,
+        SessionAutoConfiguration.class,
+        MailSenderAutoConfiguration.class,
+        MailSenderValidatorAutoConfiguration.class,
+        FreeMarkerAutoConfiguration.class,
+        ThymeleafAutoConfiguration.class,
+        MustacheAutoConfiguration.class,
+        GroovyTemplateAutoConfiguration.class,
+        CacheAutoConfiguration.class,
+        TransactionAutoConfiguration.class,
+        JtaAutoConfiguration.class,
+        PersistenceExceptionTranslationAutoConfiguration.class,
+        RSocketServerAutoConfiguration.class,
+        RSocketMessagingAutoConfiguration.class,
+        RSocketRequesterAutoConfiguration.class,
+        RSocketStrategiesAutoConfiguration.class,
+        SslAutoConfiguration.class,
+        SendGridAutoConfiguration.class,
+})
 public class AutivaApplication extends Application {
 
     private ConfigurableApplicationContext springContext;
@@ -35,59 +99,55 @@ public class AutivaApplication extends Application {
 
     @Override
     public void init() {
-        springContext = SpringApplication.run(AutivaApplication.class);
     }
 
     @Override
-    public void start(Stage stage) throws Exception {
-        this.createAppDirsIfNotExist();
-        FXMLLoader loader = new FXMLLoader(getClass().getResource(AppConstants.Stage.FXML));
-        loader.setControllerFactory(springContext::getBean);
-        Scene scene = new Scene(loader.load(), AppConstants.Stage.WIDTH, AppConstants.Stage.HEIGHT);
-        scene.setFill(Color.TRANSPARENT);
-        stage.setScene(scene);
-        stage.initStyle(StageStyle.TRANSPARENT);
-        stage.getIcons().add(new Image(Objects.requireNonNull(this.getClass().getResourceAsStream(AppConstants.Stage.ICON))));
+    public void start(Stage stage) {
+        Image icon = new Image(Objects.requireNonNull(getClass().getResourceAsStream(AppConstants.Stage.ICON)));
+        SplashScreen splash = new SplashScreen(icon);
+        Stage splashStage = splash.show();
 
-        HBox toolbar = (HBox) scene.lookup("#toolbar");
-        Region rootContainer = (Region) scene.lookup("#rootContainer");
-        Button minimizeBtn = (Button) scene.lookup("#minimizeBtn");
-        Button maximizeBtn = (Button) scene.lookup("#maximizeBtn");
-        Button closeBtn = (Button) scene.lookup("#closeBtn");
+        Thread loadingThread = new Thread(() -> {
+            try {
+                AppBootstrap.initialize();
+                springContext = SpringApplication.run(AutivaApplication.class);
+            } catch (Exception e) {
+                log.error("启动失败", e);
+                Platform.exit();
+                return;
+            }
 
-        WindowChromeHelper.setup(stage, toolbar, rootContainer, minimizeBtn, maximizeBtn, closeBtn, 600, 400);
+            // Spring 就绪后，在 FX 线程加载 FXML 并切换窗口
+            Platform.runLater(() -> {
+                try {
+                    FXMLLoader loader = new FXMLLoader(getClass().getResource(AppConstants.Stage.FXML));
+                    loader.setControllerFactory(springContext::getBean);
+                    Scene mainScene = new Scene(loader.load(), AppConstants.Stage.WIDTH, AppConstants.Stage.HEIGHT);
 
-        stage.show();
+                    splash.close();
+                    splashStage.close();
+
+                    stage.initStyle(StageStyle.UNIFIED);
+                    stage.setScene(mainScene);
+                    stage.getIcons().add(icon);
+                    stage.setMinWidth(600);
+                    stage.setMinHeight(400);
+                    stage.show();
+                } catch (Exception e) {
+                    log.error("主界面加载失败", e);
+                }
+            });
+        }, "app-bootstrap");
+        loadingThread.setDaemon(true);
+        loadingThread.start();
     }
 
     @Override
     public void stop() {
         ExecutorManager.close();
         springContext.close();
-    }
-
-    private void createAppDirsIfNotExist() {
-        try {
-            if (!Files.exists(AppConstants.Base.APP_DIR)) {
-                Files.createDirectories(AppConstants.Base.APP_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.LOGS_DIR)) {
-                Files.createDirectories(AppConstants.Base.LOGS_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.SKILL_DIR)) {
-                Files.createDirectories(AppConstants.Base.SKILL_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.MCP_DIR)) {
-                Files.createDirectories(AppConstants.Base.MCP_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.WORKSPACE_DIR)) {
-                Files.createDirectories(AppConstants.Base.WORKSPACE_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.MCP_CONFIG_FILE)) {
-                Files.createFile(AppConstants.Base.MCP_CONFIG_FILE);
-            }
-        } catch (Exception e) {
-            log.error("创建应用目录失败", e);
-        }
+        // 钉钉 Stream SDK 的 NetworkSharedResources 创建了静态 NioEventLoopGroup（非守护线程），
+        // SDK 的 stop() 不会关闭它，导致 JVM 无法正常退出
+        System.exit(0);
     }
 }

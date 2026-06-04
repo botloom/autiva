@@ -14,7 +14,7 @@
 >
 
     <VBox fx:id="icon" styleClass="home-page__icon" alignment="CENTER">
-        <SvgImageView fitWidth="100" fitHeight="100" svgPath="/cn/bitloom/images/icon.svg"/>
+        <SvgImageView fitWidth="120" fitHeight="120" svgPath="/cn/bitloom/images/icon.svg"/>
     </VBox>
 
     <ScrollPane fx:id="chatScrollPane"
@@ -31,14 +31,29 @@
           styleClass="home-page__search-box"
           alignment="TOP_CENTER"
           prefWidth="600" maxWidth="1000" minWidth="300"
-          prefHeight="110" minHeight="110" maxHeight="110"
     >
-        <TextField fx:id="searchField" promptText="输入消息与智能体对话..." styleClass="home-page__search-field"
-                   prefHeight="56" maxWidth="1000" minWidth="300" prefWidth="600"/>
+        <FlowPane fx:id="fileTagsPane" styleClass="home-page__file-tags"
+                  prefWidth="600" maxWidth="1000" minWidth="300"
+                  visible="false" managed="false"/>
+        <TextArea fx:id="searchField" promptText="输入消息与智能体对话..." styleClass="home-page__search-field"
+                  prefRowCount="1" maxWidth="1000" minWidth="300" prefWidth="600" wrapText="true"/>
         <HBox alignment="BOTTOM_RIGHT" spacing="8">
-            <Button styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+            <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37">
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </ComboBox>
+            <Button fx:id="addFileButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
                     <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/plus.svg"/>
+                </graphic>
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </Button>
+            <Button fx:id="canvasButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+                <graphic>
+                    <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/canvas.svg"/>
                 </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>

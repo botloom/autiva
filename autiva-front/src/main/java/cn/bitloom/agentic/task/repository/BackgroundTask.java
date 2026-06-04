@@ -1,8 +1,9 @@
 package cn.bitloom.agentic.task.repository;
 
+import lombok.Getter;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * 使用CompletableFuture管理后台任务的执行。此类提供线程安全的任务状态、
@@ -13,13 +14,23 @@ import java.util.concurrent.TimeoutException;
  * 检查完成状态、等待完成、取消任务以及检索结果或错误。
  * </p>
  *
- * @author Christian Tzolov
  */
+@Getter
 public class BackgroundTask {
 
-	private final String taskId;
+    /**
+     * -- GETTER --
+     *  获取任务ID。
+     *
+     */
+    private final String taskId;
 
-	private final CompletableFuture<String> future;
+    /**
+     * -- GETTER --
+     *  获取底层的CompletableFuture用于高级操作。
+     *
+     */
+    private final CompletableFuture<String> future;
 
 	/**
 	 * 使用现有Future创建BackgroundTask的内部构造函数。
@@ -110,26 +121,21 @@ public class BackgroundTask {
 
 	/**
 	 * 在指定超时时间内等待任务完成。
+	 *
 	 * @param timeoutMs 最大等待时间，单位毫秒
-	 * @return 如果任务在超时时间内完成则返回true，超时则返回false
 	 * @throws InterruptedException 如果当前线程在等待时被中断
 	 */
-	public boolean waitForCompletion(long timeoutMs) throws InterruptedException {
+	public void waitForCompletion(long timeoutMs) throws InterruptedException {
 		if (this.future.isDone()) {
-			return true;
+			return;
 		}
 		try {
 			this.future.get(timeoutMs, TimeUnit.MILLISECONDS);
-			return true;
 		}
 		catch (InterruptedException e) {
 			throw e;
 		}
-		catch (TimeoutException e) {
-			return false;
-		}
-		catch (Exception e) {
-			return true;
+		catch (Exception ignored) {
 		}
 	}
 
@@ -148,22 +154,6 @@ public class BackgroundTask {
 	 */
 	public boolean isCancelled() {
 		return this.future.isCancelled();
-	}
-
-	/**
-	 * 获取任务ID。
-	 * @return 任务ID
-	 */
-	public String getTaskId() {
-		return this.taskId;
-	}
-
-	/**
-	 * 获取底层的CompletableFuture用于高级操作。
-	 * @return 支持此任务的CompletableFuture
-	 */
-	public CompletableFuture<String> getFuture() {
-		return this.future;
 	}
 
 }

@@ -43,8 +43,10 @@
 - `stopService(clientId, projectName)`: 停止服务
 - `listServices(clientId)`: 列出用户所有服务
 - `getLogs(clientId, projectName)`: 获取服务日志
+- `restartProject(clientId, projectName)`: 重启项目（停止旧沙箱并创建新沙箱）
 - `getServiceBySubdomain(subdomain)`: 通过子域名查询服务
 - `getServiceDetails(subdomain)`: 获取服务及 BaaS 资源详情
+- `getProjectDetails(clientId, projectName)`: 通过 clientId + projectName 获取服务及 BaaS 资源详情
 
 **部署流程：**
 1. 检查子域名是否已存在
@@ -67,6 +69,11 @@
 沙箱信息记录类。
 
 **字段：** sandboxId, projectName, runtime, subdomain, status
+
+### RestartResult
+重启结果记录类。
+
+**字段：** url, sandboxId, subdomain
 
 ### SubdomainRouter
 子域名路由解析器，直接注入 SandboxService 查询服务信息。

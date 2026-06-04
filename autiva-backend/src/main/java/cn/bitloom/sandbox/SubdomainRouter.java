@@ -13,6 +13,7 @@ public class SubdomainRouter {
 
     private final GatewayProperties properties;
     private final SandboxService sandboxService;
+    private final SandboxManager sandboxManager;
 
     public Mono<RouteTarget> resolve(String host) {
         if (!host.endsWith("." + properties.getBaseDomain())) {
@@ -28,6 +29,11 @@ public class SubdomainRouter {
     }
 
     private String buildTargetUrl(SandboxInfo info) {
+        String endpoint = sandboxManager.getEndpoint(info.containerId(), info.runtime());
+        if (endpoint != null) {
+            return endpoint;
+        }
+        // fallback: 使用默认端口
         return "http://localhost:" + getPortForRuntime(info.runtime());
     }
 

@@ -1,19 +1,7 @@
-/*
-* Copyright 2025 - 2025 the original author or authors.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* https://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+
 package cn.bitloom.agentic.util;
+
+import lombok.Getter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -46,7 +34,6 @@ import java.util.Map;
  * <li>空或null的markdown输入</li>
  * </ul>
  *
- * @author Christian Tzolov
  */
 public class MarkdownParser {
 
@@ -57,8 +44,17 @@ public class MarkdownParser {
 
 	/**
 	 * markdown文档的内容（前置元数据之后的所有内容）。
-	 */
-	private String content;
+     * -- GETTER --
+     *  返回markdown文档的内容部分。
+     *  <p>
+     *  这是关闭前置元数据分隔符（---）之后的所有内容，已去除前导和尾随空白。
+     *  如果没有前置元数据，则返回整个文档。如果输入为null或空，则返回空字符串。
+     *
+     * @return markdown内容字符串
+
+     */
+	@Getter
+    private String content;
 
 	/**
 	 * 构造新的MarkdownParser并解析提供的markdown内容。解析markdown内容以提取
@@ -138,14 +134,4 @@ public class MarkdownParser {
 		return new HashMap<>(frontMatter);
 	}
 
-	/**
-	 * 返回markdown文档的内容部分。
-	 * <p>
-	 * 这是关闭前置元数据分隔符（---）之后的所有内容，已去除前导和尾随空白。
-	 * 如果没有前置元数据，则返回整个文档。如果输入为null或空，则返回空字符串。
-	 * @return markdown内容字符串
-	 */
-	public String getContent() {
-		return content;
-	}
 }

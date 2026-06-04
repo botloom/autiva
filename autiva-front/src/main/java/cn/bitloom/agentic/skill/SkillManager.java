@@ -2,6 +2,7 @@ package cn.bitloom.agentic.skill;
 
 import cn.bitloom.agentic.util.MarkdownParser;
 import cn.bitloom.constant.AppConstants;
+import cn.bitloom.exception.StorageException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
@@ -41,21 +42,21 @@ public class SkillManager {
 
     private static final String TOOL_DESCRIPTION_TEMPLATE = """
             执行技能
-
+            
             <skills_instructions>
             当用户要求你执行任务时，检查以下可用技能中是否有任何技能可以更有效地帮助完成任务。技能提供专门的能力和领域知识。
-
+            
             如何使用技能：
             - 使用此工具仅传入技能名称调用技能（不带参数）
             - 当你调用技能时，你将看到 <command-message>"{name}"技能正在加载</command-message>
             - 技能的提示将展开并提供关于如何完成任务的详细说明
-
+            
             重要：
             - 每个技能的响应都会包含其根目录（basePath），执行脚本或引用技能内的文件时必须使用该根目录作为基准路径
             - 仅使用<available_skills>下面列出的技能
             - 不要调用已经在运行的技能
             </skills_instructions>
-
+            
             <available_skills>
             %s
             </available_skills>
@@ -65,7 +66,7 @@ public class SkillManager {
 
     @PostConstruct
     public void init() {
-        loadSkills();
+        this.loadSkills();
     }
 
     public void loadSkills() {
@@ -102,7 +103,10 @@ public class SkillManager {
     }
 
     public ToolCallback buildToolCallback() {
-        Assert.notEmpty(this.skills, "必须至少配置一个技能");
+        if (this.skills.isEmpty()) {
+            log.debug("未配置任何技能，跳过技能工具注册");
+            return null;
+        }
 
         String skillsXml = this.skills.values().stream()
                 .map(Skill::toXml)
@@ -140,6 +144,7 @@ public class SkillManager {
                     .forEach(path -> {
                         try {
                             String markdown = Files.readString(path, StandardCharsets.UTF_8);
+                            markdown = markdown.replaceAll("[\\uFEFF\\u200B\\u200C\\u200D]", "");
                             MarkdownParser parser = new MarkdownParser(markdown);
                             result.add(new Skill(path.getParent().toString(), parser.getFrontMatter(), parser.getContent()));
                         } catch (IOException e) {
@@ -355,7 +360,7 @@ public class SkillManager {
     }
 
     public void saveSkill(Skill skill) {
-        Path skillDir = AppConstants.Base.SKILL_DIR.resolve(skill.name());
+        Path skillDir = AppConstants.Base.SKILL_DIR.resolve(Objects.requireNonNull(skill.name()));
 
         try {
             if (!Files.exists(skillDir)) {
@@ -367,7 +372,7 @@ public class SkillManager {
             Files.writeString(skillFile, content);
         } catch (IOException e) {
             log.error("Failed to save skill: {}", skill.name(), e);
-            throw new RuntimeException("Failed to save skill: " + skill.name(), e);
+            throw StorageException.writeError("skill-" + skill.name(), e);
         }
     }
 
@@ -380,7 +385,7 @@ public class SkillManager {
             }
         } catch (IOException e) {
             log.error("Failed to delete skill: {}", name, e);
-            throw new RuntimeException("Failed to delete skill: " + name, e);
+            throw StorageException.writeError("skill-" + name, e);
         }
     }
 
@@ -494,10 +499,10 @@ public class SkillManager {
             if (skill != null) {
                 return """
                         技能根目录: %s
-
+                        
                         重要：执行脚本或引用技能内的文件时，请使用以上根目录作为基准路径。
                         例如，如果技能内容中提到 script.py，实际路径为: %s/script.py
-
+                        
                         %s
                         """.formatted(skill.basePath(), skill.basePath(), skill.content());
             }

@@ -1,7 +1,7 @@
 package cn.bitloom.agentic.util;
 
-import cn.bitloom.agentic.tool.TodoWriteTool.TodoEventHandler;
-import cn.bitloom.agentic.tool.TodoWriteTool.Todos;
+import cn.bitloom.agentic.tool.core.TodoWriteTool.TodoEventHandler;
+import cn.bitloom.agentic.tool.core.TodoWriteTool.Todos;
 import cn.bitloom.store.ToolUIBridge;
 import com.alibaba.fastjson2.JSON;
 import lombok.RequiredArgsConstructor;

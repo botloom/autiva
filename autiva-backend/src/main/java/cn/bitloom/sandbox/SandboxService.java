@@ -13,6 +13,7 @@ import com.alibaba.opensandbox.sandbox.Sandbox;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -242,6 +243,17 @@ public class SandboxService {
                 .collectList();
     }
 
+    public Flux<SandboxInfo> listAllServices() {
+        return userServiceRepository.findAll()
+                .map(service -> new SandboxInfo(
+                        service.getSandboxId(),
+                        service.getProjectName(),
+                        service.getRuntime(),
+                        service.getSubdomain(),
+                        service.getStatus()
+                ));
+    }
+
     public Mono<String> getLogs(String clientId, String projectName) {
         return userServiceRepository.findByClientId(clientId)
                 .filter(service -> service.getProjectName().equals(projectName))
@@ -276,6 +288,72 @@ public class SandboxService {
 
     public Mono<Map<String, Object>> getServiceDetails(String subdomain) {
         return userServiceRepository.findBySubdomain(subdomain)
+                .flatMap(service -> baasResourceRepository.findByServiceId(service.getId())
+                        .collectList()
+                        .map(resources -> Map.<String, Object>of(
+                                "service", service,
+                                "resources", resources
+                        )));
+    }
+
+    public Mono<RestartResult> restartProject(String clientId, String projectName) {
+        return userServiceRepository.findByClientId(clientId)
+                .filter(service -> service.getProjectName().equals(projectName))
+                .next()
+                .switchIfEmpty(Mono.error(new RuntimeException("Service not found: " + projectName)))
+                .flatMap(service -> {
+                    String oldSandboxId = service.getSandboxId();
+                    String runtime = service.getRuntime();
+                    String subdomain = service.getSubdomain();
+
+                    // Stop old sandbox
+                    return Mono.fromRunnable(() -> {
+                        if (oldSandboxId != null) {
+                            sandboxManager.kill(oldSandboxId);
+                        }
+                    })
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .then(Mono.fromCallable(() -> {
+                        // Create new sandbox
+                        String newSandboxId = sandboxManager.generateSandboxId();
+                        Sandbox sandbox = sandboxManager.create(newSandboxId, runtime);
+
+                        // Recreate app directory and restart application
+                        sandboxManager.execute(sandbox, "mkdir -p /app");
+
+                        // Re-read files from old sandbox if possible, otherwise just start fresh
+                        // Since we can't easily recover files, we restart the container
+                        // The application files should still be available if using volume mounts
+                        SandboxManager.ExecutionResult startResult = startApplication(sandbox, runtime, List.of());
+                        if (startResult.hasError()) {
+                            log.warn("[Restart] App start may have issues: {}", startResult.stderr());
+                        }
+
+                        return new RestartResult(
+                                "https://" + subdomain + "." + BASE_DOMAIN,
+                                newSandboxId,
+                                subdomain
+                        );
+                    }).subscribeOn(Schedulers.boundedElastic()))
+                    .flatMap(restartResult ->
+                        // Update service entity with new sandbox ID
+                        updateServiceSandboxId(service, restartResult.sandboxId())
+                                .thenReturn(restartResult)
+                    );
+                });
+    }
+
+    private Mono<Void> updateServiceSandboxId(UserServiceEntity service, String newSandboxId) {
+        service.setSandboxId(newSandboxId);
+        service.setStatus("running");
+        service.setUpdatedAt(LocalDateTime.now());
+        return userServiceRepository.save(service).then();
+    }
+
+    public Mono<Map<String, Object>> getProjectDetails(String clientId, String projectName) {
+        return userServiceRepository.findByClientId(clientId)
+                .filter(service -> service.getProjectName().equals(projectName))
+                .next()
                 .flatMap(service -> baasResourceRepository.findByServiceId(service.getId())
                         .collectList()
                         .map(resources -> Map.<String, Object>of(

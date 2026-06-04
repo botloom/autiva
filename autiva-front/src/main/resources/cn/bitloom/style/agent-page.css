@@ -9,7 +9,14 @@
     -fx-background-color: transparent;
     -fx-background: transparent;
     -fx-border-color: transparent;
+    -fx-pref-width: 600;
+    -fx-max-width: 700;
+    -fx-hbar-policy: never;
     -fx-fit-to-width: true;
+}
+
+.agent-page__scroll-pane > .viewport {
+    -fx-background-color: transparent;
 }
 
 .agent-page__scroll-pane .scroll-bar {
@@ -54,7 +61,7 @@
 
 .agent-page__list {
     -fx-background-color: #ffffff;
-    -fx-padding: 16;
+    -fx-padding: 0 32 32 32;
     -fx-spacing: 12;
 }
 

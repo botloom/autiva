@@ -41,7 +41,7 @@
 - `deleteSkill(String)`: 删除技能
 
 **AI 工具功能：**
-- `buildToolCallback()`: 构建 FunctionToolCallback，将技能作为 AI 工具提供给智能体
+- `buildToolCallback()`: 构建 FunctionToolCallback，将技能作为 AI 工具提供给智能体。无技能时返回 null，调用方需处理 null
 - 内部类 `SkillsFunction`: 实现 Function<SkillsInput, String>，处理技能调用
 - 内部类 `SkillsInput`: 工具输入 record，包含 command（技能名称）
 
@@ -49,11 +49,11 @@
 
 技能通过 ToolCallbacks 模式注册，由 SkillManager 直接提供：
 
-- `buildToolCallback()`: 构建 FunctionToolCallback，将技能作为 AI 工具提供给智能体
+- `buildToolCallback()`: 构建 FunctionToolCallback，将技能作为 AI 工具提供给智能体。无技能时返回 null，调用方需处理 null
 - 内部类 `SkillsFunction`: 实现 Function<SkillsInput, String>，处理技能调用
 - 内部类 `SkillsInput`: 工具输入 record，包含 command（技能名称）
 
-在 MainAgent 中通过 `skillManager.buildToolCallback()` 获取 ToolCallback 并注册到 ChatClient。
+在 MainAgent 中通过 `skillManager.buildToolCallback()` 获取 ToolCallback 并注册到 ChatClient，需处理 null 返回值。
 
 ## SKILL.md 格式
 ```markdown

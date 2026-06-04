@@ -89,7 +89,7 @@
 停止图标（方形）。
 
 **用途：**
-- 终止流式生成按钮
+- 暂停流式生成按钮（点击后暂停生成并保留部分响应）
 
 #### file.svg
 文件图标（白色描边，含代码符号）。
@@ -132,6 +132,46 @@
 
 **用途：**
 - 文件编辑器右侧栏"代码格式化"按钮
+
+#### canvas.svg
+画布图标（矩形+山脉+太阳）。
+
+**用途：**
+- 侧边栏画布导航项图标
+
+### 画布工具图标
+
+所有画布工具和属性面板图标以 `canvas-` 前缀命名。
+
+**统一规范：** viewBox `0 0 24 24`，stroke `#1d1d1f`，stroke-width `1.5`，stroke-linecap `round`，stroke-linejoin `round`，fill `none`。
+
+#### 工具栏图标
+| 文件 | 说明 |
+|------|------|
+| canvas-select.svg | 选择工具（鼠标指针箭头） |
+| canvas-rectangle.svg | 矩形工具（圆角矩形） |
+| canvas-diamond.svg | 菱形工具（旋转正方形） |
+| canvas-ellipse.svg | 椭圆工具（椭圆，非正圆） |
+| canvas-arrow.svg | 箭头工具（斜线+箭头） |
+| canvas-line.svg | 线条工具（对角线） |
+| canvas-freehand.svg | 手绘工具（波浪曲线） |
+| canvas-text.svg | 文字工具（T 字形） |
+| canvas-send.svg | 发送按钮（纸飞机） |
+
+#### 属性面板图标
+| 文件 | 说明 |
+|------|------|
+| canvas-stroke-thin.svg | 细线宽 |
+| canvas-stroke-medium.svg | 中线宽 |
+| canvas-stroke-thick.svg | 粗线宽 |
+| canvas-line-solid.svg | 实线样式 |
+| canvas-line-dashed.svg | 虚线样式 |
+| canvas-line-dotted.svg | 点线样式 |
+| canvas-rough-neat.svg | 板正手绘风格 |
+| canvas-rough-rough.svg | 潦草手绘风格 |
+| canvas-rough-messy.svg | 很潦草手绘风格 |
+| canvas-corner-sharp.svg | 直角边角 |
+| canvas-corner-round.svg | 圆角边角 |
 
 ## 使用方式
 

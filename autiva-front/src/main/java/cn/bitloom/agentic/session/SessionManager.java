@@ -2,8 +2,10 @@ package cn.bitloom.agentic.session;
 
 import cn.bitloom.agentic.agent.AgentIdentityEnum;
 import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.config.ConfigManager;
 import cn.bitloom.constant.AppConstants;
+import cn.bitloom.exception.StorageException;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.TypeReference;
@@ -22,28 +24,20 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-/**
- * The type Session manager.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class SessionManager {
 
     private final String METADATA_FILE = "metadata.json";
-    private final String MESSAGES_FILE = "messages.jsonl";
     private final ConfigManager configManager;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final AtomicInteger subagentIdCounter = new AtomicInteger(0);
 
-    /**
-     * Init.
-     */
     @PostConstruct
     public void init() {
         try {
@@ -79,26 +73,38 @@ public class SessionManager {
         }
     }
 
+    private Path getChannelFilePath(String sessionId, MessageChannel channel) {
+        return AppConstants.Base.SESSION_DIR.resolve(sessionId).resolve(channel.name() + ".jsonl");
+    }
+
     private void loadAllSessions() {
         try (Stream<Path> dirs = Files.list(AppConstants.Base.SESSION_DIR)) {
             dirs.filter(Files::isDirectory)
                     .forEach(sessionDir -> {
                         Path metadataFile = sessionDir.resolve(this.METADATA_FILE);
-                        Path messagesFile = sessionDir.resolve(this.MESSAGES_FILE);
                         try {
                             String metadata = Files.readString(metadataFile);
                             Session session = JSON.parseObject(metadata, Session.class);
-                            try (BufferedReader reader = Files.newBufferedReader(messagesFile)) {
-                                ArrayList<Message> messages = new ArrayList<>();
-                                reader.lines().forEach(line -> {
-                                    Message message = deserializeMessage(line);
-                                    if (message != null) {
-                                        messages.add(message);
+                            for (MessageChannel channel : MessageChannel.values()) {
+                                Path channelFile = getChannelFilePath(session.getId(), channel);
+                                if (Files.exists(channelFile)) {
+                                    try (BufferedReader reader = Files.newBufferedReader(channelFile)) {
+                                        ArrayList<Message> messages = new ArrayList<>();
+                                        reader.lines().forEach(line -> {
+                                            Message message = deserializeMessage(line);
+                                            if (message != null) {
+                                                messages.add(message);
+                                            }
+                                        });
+                                        session.getChannelMessages(channel).addAll(messages);
                                     }
-                                });
-                                session.setMessages(messages);
+                                }
                             }
                             sessions.put(session.getId(), session);
+                            if (session.getState() != SessionState.IDLE) {
+                                session.setState(SessionState.IDLE);
+                                persistMetadata(session);
+                            }
                             log.debug("加载会话: {}", session.getId());
                         } catch (IOException e) {
                             log.error("加载会话失败: {}", sessionDir, e);
@@ -132,7 +138,14 @@ public class SessionManager {
                         }))
                         .toolCalls(obj.getList("toolCalls", AssistantMessage.ToolCall.class))
                         .build();
-                case TOOL -> JSON.parseObject(json, ToolResponseMessage.class);
+                case TOOL -> ToolResponseMessage.builder()
+                        .responses(obj.getList("responses", ToolResponseMessage.ToolResponse.class))
+                        .metadata(obj.getObject("metadata", new TypeReference<Map<String, Object>>() {}))
+                        .build();
+                case SYSTEM -> SystemMessage.builder()
+                        .text(obj.getString("text"))
+                        .metadata(obj.getObject("metadata", new TypeReference<Map<String, Object>>() {}))
+                        .build();
                 default -> null;
             };
         } catch (Exception e) {
@@ -141,70 +154,50 @@ public class SessionManager {
         }
     }
 
-    /**
-     * Gets or create.
-     *
-     * @param source   the source
-     * @param type     the type
-     * @param respType the resp type
-     * @param target   the target
-     * @return the or create
-     */
-    public Session getOrCreate(String source, SessionTypeEnum type, SessionRespTypeEnum respType, String target) {
+    public Session getOrCreate(AgentIdentityEnum agentId, String source, SessionTypeEnum type, SessionRespTypeEnum respType, ModelTypeEnum model, String target) {
         try {
-            Optional<String> sessionIdOption = this.sessions.keySet().stream()
-                    .filter(sessionId -> sessionId.contains(type + "-" + source + "-" + target))
-                    .findAny();
-            if (sessionIdOption.isPresent()) {
-                return sessions.get(sessionIdOption.get());
-            } else {
-                String sessionId = AgentIdentityEnum.MAIN + "-" + type + "-" + source + "-" + target;
-                Session session = Session.builder()
-                        .id(sessionId)
-                        .agentId(AgentIdentityEnum.MAIN)
-                        .type(type)
-                        .respType(respType)
-                        .source(source)
-                        .target(target)
-                        .build();
-
-                Files.createDirectories(AppConstants.Base.SESSION_DIR.resolve(sessionId));
-
-                Path metadataFile = AppConstants.Base.SESSION_DIR.resolve(sessionId).resolve(this.METADATA_FILE);
-                if (!Files.exists(metadataFile)) {
-                    Files.createFile(metadataFile);
-                }
-                Files.writeString(metadataFile, JSON.toJSONString(session));
-
-                Path messagesFile = AppConstants.Base.SESSION_DIR.resolve(sessionId).resolve(this.MESSAGES_FILE);
-                if (!Files.exists(messagesFile)) {
-                    Files.createFile(messagesFile);
-                }
-
-                this.sessions.put(sessionId, session);
-                return session;
+            String sessionId = agentId + "-" + type + "-" + source + "-" + target;
+            Session existing = this.sessions.get(sessionId);
+            if (existing != null) {
+                return existing;
             }
+
+            Session session = Session.builder()
+                    .id(sessionId)
+                    .agentId(agentId)
+                    .type(type)
+                    .respType(respType)
+                    .model(model)
+                    .source(source)
+                    .target(target)
+                    .createdAt(System.currentTimeMillis())
+                    .build();
+
+            Files.createDirectories(AppConstants.Base.SESSION_DIR.resolve(sessionId));
+
+            Path metadataFile = AppConstants.Base.SESSION_DIR.resolve(sessionId).resolve(this.METADATA_FILE);
+            if (!Files.exists(metadataFile)) {
+                Files.createFile(metadataFile);
+            }
+            Files.writeString(metadataFile, JSON.toJSONString(session));
+
+            Path userChannelFile = getChannelFilePath(sessionId, MessageChannel.USER);
+            if (!Files.exists(userChannelFile)) {
+                Files.createFile(userChannelFile);
+            }
+
+            this.sessions.put(sessionId, session);
+
+            return session;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw StorageException.readError("session-init", e);
         }
     }
 
-    /**
-     * Gets by id.
-     *
-     * @param sessionId the session id
-     * @return the by id
-     */
     public Session getById(String sessionId) {
         return this.sessions.get(sessionId);
     }
 
-    /**
-     * Gets by target.
-     *
-     * @param target the target
-     * @return the by target
-     */
     public List<Session> getByTarget(String target) {
         ArrayList<Session> subSessionList = new ArrayList<>();
         this.sessions.values().forEach(session -> {
@@ -215,18 +208,43 @@ public class SessionManager {
         return subSessionList;
     }
 
-    /**
-     * Append message.
-     *
-     * @param sessionId the session id
-     * @param messages  the messages
-     */
-    public void appendMessage(String sessionId, List<Message> messages) {
+    public List<Session> getAllUserSessions() {
+        return this.sessions.values().stream()
+                .filter(s ->  s.getParentId() == null)
+                .toList();
+    }
+
+    public List<Session> getDesktopSessions() {
+        return this.sessions.values().stream()
+                .filter(s -> s.getParentId() == null && "desktopApp".equals(s.getSource()))
+                .sorted((a, b) -> {
+                    long timeA = getSessionLastActiveTime(a.getId());
+                    long timeB = getSessionLastActiveTime(b.getId());
+                    return Long.compare(timeB, timeA);
+                })
+                .toList();
+    }
+
+    public long getSessionLastActiveTime(String sessionId) {
+        try {
+            Path userFile = getChannelFilePath(sessionId, MessageChannel.USER);
+            if (Files.exists(userFile)) {
+                return Files.getLastModifiedTime(userFile).toMillis();
+            }
+        } catch (IOException e) {
+            log.warn("获取session最后活跃时间失败: {}", sessionId, e);
+        }
+        Session session = this.getById(sessionId);
+        return session != null ? session.getCreatedAt() : 0L;
+    }
+
+    public void appendMessage(String sessionId, MessageChannel channel, List<Message> messages) {
         List<String> sessionIdList = new ArrayList<>();
         SessionIsolationEnum isolation = configManager.getIsolation();
         switch (isolation) {
             case PER_PEER:
                 Session session = this.getById(sessionId);
+                if (session == null) return;
                 List<Session> sessions = this.getByTarget(session.getTarget());
                 sessions.stream().map(Session::getId).forEach(sessionIdList::add);
                 break;
@@ -237,10 +255,13 @@ public class SessionManager {
                 return;
         }
         for (String id : sessionIdList) {
-            try {
-                this.sessions.get(id).getMessages().addAll(messages);
-                Path sessionPath = AppConstants.Base.SESSION_DIR.resolve(id);
-                Path messagesFile = sessionPath.resolve(this.MESSAGES_FILE);
+            Session targetSession = this.sessions.get(id);
+            if (targetSession == null) {
+                continue;
+            }
+            targetSession.getChannelMessages(channel).addAll(messages);
+
+            if (channel.shouldPublishToOutBox()) {
                 for (Message message : messages) {
                     if (message instanceof AssistantMessage assistantMessage) {
                         if (assistantMessage.getMetadata().get("finishReason").equals("TOOL_CALLS")) {
@@ -257,21 +278,25 @@ public class SessionManager {
                     if (message instanceof ToolResponseMessage toolResponseMessage) {
                         EventBus.outBoxPublish(id, toolResponseMessage);
                     }
-                    Files.writeString(messagesFile, JSON.toJSONString(message), StandardOpenOption.APPEND);
-                    Files.writeString(messagesFile, "\n", StandardOpenOption.APPEND);
+                }
+            }
+
+            try {
+                Path channelFile = getChannelFilePath(id, channel);
+                if (!Files.exists(channelFile)) {
+                    Files.createFile(channelFile);
+                }
+                for (Message message : messages) {
+                    Files.writeString(channelFile, JSON.toJSONString(message), StandardOpenOption.APPEND);
+                    Files.writeString(channelFile, "\n", StandardOpenOption.APPEND);
                 }
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw StorageException.writeError("messages-append", e);
             }
         }
     }
 
-    /**
-     * Clear session messages.
-     *
-     * @param sessionId the session id
-     */
-    public Session forkSession(String parentSessionId, String subagentType) {
+    public Session forkSession(String parentSessionId, String subagentName) {
         String childSessionId = parentSessionId + "_" + subagentIdCounter.getAndIncrement();
         Session parentSession = this.getById(parentSessionId);
         Session childSession = Session.builder()
@@ -280,28 +305,46 @@ public class SessionManager {
                 .type(parentSession != null ? parentSession.getType() : SessionTypeEnum.DM)
                 .respType(SessionRespTypeEnum.STREAM)
                 .source(parentSession != null ? parentSession.getSource() : "subagent")
-                .target(subagentType)
+                .target(subagentName)
                 .parentId(parentSessionId)
                 .build();
 
+        if (parentSession != null && !parentSession.getMessages().isEmpty()) {
+            List<Message> parentMessages = parentSession.getMessages();
+            int lastUserMsgIndex = -1;
+            for (int i = parentMessages.size() - 1; i >= 0; i--) {
+                if (parentMessages.get(i).getMessageType() == MessageType.USER) {
+                    lastUserMsgIndex = i;
+                    break;
+                }
+            }
+            if (lastUserMsgIndex >= 0) {
+                List<Message> inherited = new ArrayList<>(parentMessages.subList(lastUserMsgIndex, parentMessages.size() - 1));
+                childSession.getMessages().addAll(inherited);
+            }
+        }
+
         try {
-            Path sessionDir = AppConstants.Base.SESSION_DIR.resolve(childSessionId);
-            Files.createDirectories(sessionDir);
-            Path metadataFile = sessionDir.resolve(this.METADATA_FILE);
+            Files.createDirectories(AppConstants.Base.SESSION_DIR.resolve(childSessionId));
+
+            Path metadataFile = AppConstants.Base.SESSION_DIR.resolve(childSessionId).resolve(this.METADATA_FILE);
             if (!Files.exists(metadataFile)) {
                 Files.createFile(metadataFile);
             }
             Files.writeString(metadataFile, JSON.toJSONString(childSession));
-            Path messagesFile = sessionDir.resolve(this.MESSAGES_FILE);
-            if (!Files.exists(messagesFile)) {
-                Files.createFile(messagesFile);
+
+            Path userChannelFile = getChannelFilePath(childSessionId, MessageChannel.USER);
+            if (!Files.exists(userChannelFile)) {
+                Files.createFile(userChannelFile);
             }
-            this.sessions.put(childSessionId, childSession);
-            log.info("Fork子会话: {} -> {}", parentSessionId, childSessionId);
-            return childSession;
+
         } catch (IOException e) {
-            throw new RuntimeException("Fork子会话失败: " + childSessionId, e);
+            log.error("子session持久化化失败", e);
+            throw StorageException.writeError("session-fork", e);
         }
+
+        this.sessions.put(childSessionId, childSession);
+        return childSession;
     }
 
     public List<Session> getChildSessions(String parentSessionId) {
@@ -314,17 +357,75 @@ public class SessionManager {
         try {
             Session session = this.getById(sessionId);
             if (session != null) {
-                // 清空内存中的消息列表
-                session.getMessages().clear();
-                // 清空消息文件
+                session.getAllChannelMessages().clear();
                 Path sessionPath = AppConstants.Base.SESSION_DIR.resolve(sessionId);
-                Path messagesFile = sessionPath.resolve(this.MESSAGES_FILE);
-                Files.writeString(messagesFile, "");
+                for (MessageChannel channel : MessageChannel.values()) {
+                    Path channelFile = sessionPath.resolve(channel.name() + ".jsonl");
+                    if (Files.exists(channelFile)) {
+                        Files.writeString(channelFile, "");
+                    }
+                }
                 log.info("清空会话消息记录: {}", sessionId);
             }
         } catch (IOException e) {
             log.error("清空会话消息记录失败: {}", sessionId, e);
-            throw new RuntimeException(e);
+            throw StorageException.writeError("session-clear-" + sessionId, e);
+        }
+    }
+
+    public void deleteSession(String sessionId) {
+        try {
+            Session session = this.getById(sessionId);
+            if (session != null) {
+                this.sessions.remove(sessionId);
+                Path sessionPath = AppConstants.Base.SESSION_DIR.resolve(sessionId);
+                if (Files.exists(sessionPath)) {
+                    try (Stream<Path> walk = Files.walk(sessionPath)) {
+                        walk.sorted(java.util.Comparator.reverseOrder())
+                                .forEach(path -> {
+                                    try {
+                                        Files.delete(path);
+                                    } catch (IOException e) {
+                                        log.warn("删除文件失败: {}", path, e);
+                                    }
+                                });
+                    }
+                }
+
+                log.info("删除会话: {}", sessionId);
+            }
+        } catch (IOException e) {
+            log.error("删除会话失败: {}", sessionId, e);
+            throw StorageException.writeError("session-delete-" + sessionId, e);
+        }
+    }
+
+    public void updateCursor(String sessionId, String cursorField, int value) {
+        Session session = this.getById(sessionId);
+        if (session == null) return;
+
+        switch (cursorField) {
+            case "memoryCursor" -> session.setMemoryCursor(value);
+            case "journalCursor" -> session.setJournalCursor(value);
+        }
+
+        persistMetadata(session);
+    }
+
+    public void updateState(String sessionId, SessionState state) {
+        Session session = this.getById(sessionId);
+        if (session == null) return;
+
+        session.setState(state);
+        persistMetadata(session);
+    }
+
+    private void persistMetadata(Session session) {
+        Path metadataFile = AppConstants.Base.SESSION_DIR.resolve(session.getId()).resolve(this.METADATA_FILE);
+        try {
+            Files.writeString(metadataFile, JSON.toJSONString(session));
+        } catch (IOException e) {
+            log.error("持久化metadata失败: sessionId={}", session.getId(), e);
         }
     }
 

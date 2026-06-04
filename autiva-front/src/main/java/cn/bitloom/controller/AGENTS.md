@@ -28,12 +28,9 @@
 | AgentPageController | AgentPageViewModel | 智能体管理 |
 | SettingsPageController | SettingsPageViewModel | 配置管理 |
 | SkillPageController | SkillPageViewModel | 技能管理 |
-| McpPageController | McpPageViewModel | MCP 服务器管理 |
 | TaskPageController | TaskPageViewModel | 定时任务管理 |
+| CanvasDialogController | CanvasPageViewModel | 画布弹窗（绘图交互） |
 | IndexController | 无 | 纯导航协调 |
-| SideBarController | 无 | 纯 UI 导航 |
-| ButtonBarController | 无 | 纯 UI 渲染 |
-| FileEditorController | 无 | 文件操作与 UI 紧耦合 |
 
 ## 核心控制器
 
@@ -57,7 +54,6 @@
 - `agentPageController`: 智能体页
 - `settingsPageController`: 设置页
 - `skillPageController`: 技能页
-- `mcpPageController`: MCP 页
 - `taskPageController`: 任务页
 
 ### HomePageController
@@ -69,27 +65,34 @@
 - `HomePageViewModel`: 视图模型（消息流处理、历史消息）
 - `SpeechRecognitionService`: 语音识别服务
 - `ToolUIBridge`: 工具UI桥接（直接操作JavaFX组件）
+- `WindowManager`: 窗口管理器（打开画布弹窗）
 
 **职责（仅 UI）：**
 - 管理 ScrollPane + VBox 聊天容器
 - 监听 ViewModel 的 ObservableList 变化，创建消息卡片组件
+- 工具调用分组折叠：连续的 TOOL 类型消息自动归入 `ToolGroupCard`，非 TOOL 消息中断分组。通过 `currentToolGroup` 字段追踪当前活跃的工具分组，清除对话时重置
 - 处理搜索输入框和发送按钮事件
-- 管理停止按钮（流式生成时切换显示，替代发送按钮）
+- 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 管理模型选择 ComboBox
+- 管理智能体选择按钮（agentSelector）：点击弹出 ContextMenu 选择智能体（目前仅 MAIN 可选）
 - 处理语音输入按钮
+- 画布按钮：打开 CanvasDialog 弹窗
 - 动画效果（图标淡出、聊天区域展开）
 - 清除对话时的 UI 重置
-- 自动滚动到底部：通过 `chatContainer.heightProperty()` 监听器 + `scrollToBottom()` 嵌套 `Platform.runLater()` 双重保障
+- 自动滚动到底部：通过 `shouldScrollToBottom` 标志 + `PostLayoutPulseListener` 实现延迟滚动。AssistantMessageCard 和 TaskCard 均通过 `onContentChanged` 回调在内容变化时通知 `scrollToBottom()`，确保流式输出期间 ScrollPane 自动向下滚动
 - 防止 ScrollPane 焦点导致布局偏移：`chatScrollPane.setFocusTraversable(false)`，阻止 ScrollPane 获得焦点
 - 防止 TextFlow 重新换行导致布局偏移：`fitToWidth="false"` + `chatContainer.prefWidthProperty().bind(chatScrollPane.widthProperty())`。根因：`fitToWidth=true` 使内容宽度跟随 viewport 宽度，而 viewport 宽度在垂直滚动条出现/消失时会变化（vbarPolicy=AS_NEEDED），导致 TextFlow 重新换行产生"缩进"效果。改为手动绑定 ScrollPane 整体宽度（稳定不变），彻底切断 viewport 宽度变化对内容的影响
 
 **ViewModel 委托：**
 - `viewModel.sendMessage()` - 发送消息
-- `viewModel.stopGeneration()` - 停止生成
+- `viewModel.pauseGeneration()` - 暂停生成（终止按钮触发）
 - `viewModel.clear()` - 清除对话
 - `viewModel.addUserMessage()` - 添加用户消息到列表
 - `viewModel.prepareHistoricalMessages()` - 准备历史消息
 - `viewModel.getMessages()` - 监听消息列表变化
+- `viewModel.createNewSession()` - 创建新会话（SideBarController 调用）
+- `viewModel.switchToSession()` - 切换会话（SideBarController 调用）
+- `viewModel.getAgentProperty()` - 获取当前智能体属性
 
 ### AgentPageController
 智能体配置页控制器。
@@ -98,11 +101,10 @@
 
 **依赖注入：**
 - `AgentPageViewModel`: 视图模型
-- `WindowManager`: 窗口管理器
 
 **职责（仅 UI）：**
 - 渲染智能体卡片（TitledPane）
-- 打开文件编辑器对话框（使用 FileEditorDialog 编辑 ~/.autiva/workspace/ 目录）
+- 通过系统文件管理器打开配置目录（`Desktop.getDesktop().open()`）
 - 删除确认弹窗
 
 **ViewModel 委托：**
@@ -122,16 +124,26 @@
 
 **依赖注入：**
 - `SettingsPageViewModel`: 视图模型
+- `ApplicationContext`: 获取 WechatILinkClient Bean
 
 **职责（仅 UI）：**
-- 浏览器路径文件选择器
 - 双向绑定 ViewModel 属性到 UI 字段
+- 监听 WechatILinkClient 状态变化，更新微信扫码区域 UI
+- 渲染二维码图片（ZXing）
+- 处理重新绑定按钮事件（调用 `client.restartLogin()`）
+- 处理刷新二维码按钮事件（调用 `client.startLogin()`）
+
+**微信扫码区域 UI 状态（StackPane 覆盖层设计）：**
+- `CONNECTED`：显示已连接覆盖层（"重新加载"按钮），提示文案"微信已绑定，点击重新加载可更换账号"
+- `CONNECTING`：隐藏所有覆盖层，提示文案显示"连接中..."
+- `DISCONNECTED`：隐藏所有覆盖层，显示二维码，提示文案"扫码即可绑定微信"
+- `QR_EXPIRED`：显示过期覆盖层（"重新加载"按钮），提示文案"二维码已过期，请点击重新加载"
+- 未启用：隐藏整个微信扫码区域
 
 **ViewModel 委托：**
 - `viewModel.loadFromStore()` - 加载配置
 - `viewModel.save()` - 保存配置
 - `viewModel.reset()` - 重置配置
-- `viewModel.getBrowserPath()` 等属性 - 双向绑定
 
 ### SkillPageController
 技能页控制器。
@@ -140,11 +152,10 @@
 
 **依赖注入：**
 - `SkillPageViewModel`: 视图模型
-- `WindowManager`: 窗口管理器
 
 **职责（仅 UI）：**
 - 渲染技能卡片
-- 打开文件编辑器对话框
+- 通过系统文件管理器打开技能目录（`Desktop.getDesktop().open()`）
 - ZIP 导入文件选择器
 
 **ViewModel 委托：**
@@ -152,27 +163,6 @@
 - `viewModel.getSkills()` - 获取技能列表
 - `viewModel.importSkillFromZip()` - 导入技能
 - `viewModel.deleteSkill()` - 删除技能
-
-### McpPageController
-MCP 页控制器。
-
-**Spring 注解：** `@Component`
-
-**依赖注入：**
-- `McpPageViewModel`: 视图模型
-- `WindowManager`: 窗口管理器
-
-**职责（仅 UI）：**
-- 渲染 MCP 服务器卡片
-- 打开文件编辑器对话框（使用 FileEditorDialog 编辑 ~/.autiva/mcp/ 目录）
-
-**ViewModel 委托：**
-- `viewModel.loadServers()` - 加载服务器列表
-- `viewModel.getServers()` - 获取服务器列表
-- `viewModel.buildServerDescription()` - 构建服务器描述
-- `viewModel.addServer()` - 添加服务器
-- `viewModel.updateServer()` - 更新服务器
-- `viewModel.deleteServer()` - 删除服务器
 
 ### TaskPageController
 任务页控制器。
@@ -200,14 +190,35 @@ MCP 页控制器。
 ### SideBarController
 侧边栏控制器。
 
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `SessionManager`: 会话管理器
+- `HomePageViewModel`: 主页视图模型
+
 **职责：**
 - 导航到不同页面
 - 更新当前选中状态
 - 显示/隐藏侧边栏
+- "新聊天"按钮：创建新 session 并导航到首页
+- 历史对话列表：加载和渲染桌面端 session 列表，点击切换 session
+- 当前活跃对话高亮显示
+- 监听 currentSessionId 变化自动刷新历史列表
+
+**FXML 字段：**
+- `historyScrollPane`: 历史对话滚动面板
+- `historyList`: 历史对话列表容器（VBox）
+
+**核心方法：**
+- `refreshHistoryList()`: 刷新历史对话列表
+- `createHistoryItem(Session)`: 创建历史对话项 UI
+- `updateHistoryActiveState(HBox)`: 更新历史对话选中状态
+- `formatTime(long)`: 格式化时间戳（今天显示 HH:mm，其他显示 MM/dd HH:mm）
 
 **设计优化：**
 - 使用 `routeOptionMap`（Map<String, HBox>）替代 if-else 链管理路由选项
 - CSS 类名 `sidebar__option--active` 提取为常量 `ACTIVE_CSS_CLASS`
+- CSS 类名 `sidebar__history-item--active` 提取为常量 `HISTORY_ACTIVE_CSS_CLASS`
 - 鼠标点击事件通过 Map 遍历统一注册
 
 ### ButtonBarController
@@ -220,6 +231,24 @@ MCP 页控制器。
 
 ## 对话框控制器
 
+### CanvasDialogController
+画布弹窗控制器，实现 Initializable、StageAware、DialogHolder。
+
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `CanvasPageViewModel`: 视图模型（画布属性管理、元素操作）
+
+**职责：**
+- 管理悬浮工具栏切换（8个绘图工具）
+- 管理工具专属属性面板（按工具动态显示/隐藏属性行）
+- 管理图层面板
+- 双击编辑文字
+
+**ViewModel 委托：**
+- `viewModel.applyPropertiesToSelection()` - 应用属性到选中元素
+- `viewModel.syncSelectionProperties()` - 从选中元素同步属性
+
 ### BrowserDialogController
 浏览器对话框控制器。
 
@@ -227,26 +256,6 @@ MCP 页控制器。
 - 显示网页内容
 - 导航控制（前进、后退、刷新）
 - URL 输入和加载
-
-### FileEditorController
-通用文件编辑器对话框控制器，系统中所有需要编辑文件的地方都使用此控制器。
-
-**Spring 注解：** `@Component`
-
-**实现接口：** `WindowManager.StageAware`
-
-**职责：**
-- 编辑文件和文件夹
-- 管理文件夹结构
-- 文件树展示和操作
-- 多文件Tab编辑
-
-**UI 布局（IDEA风格）：**
-- 顶部工具栏：新建文件、新建文件夹按钮
-- 左侧面板：文件树（TreeView）
-- 中间编辑器面板：TabPane多文件编辑 + 行号 + 代码编辑器
-- 右侧按钮栏：预览按钮、格式化按钮
-- 底部状态栏：文件路径、编码和行号
 
 ## 接口
 
@@ -275,7 +284,7 @@ public interface ButtonBarHolder {
 ## 设计模式
 - MVVM 模式：Controller 负责 UI，ViewModel 负责数据和业务逻辑
 - 组合模式：IndexController 管理子控制器
-- 策略模式：不同页面有不同的按钮配置
+- 策略模式：不同页面有不同的按钮配置（ButtonBarHolder）
 - 观察者模式：Controller 监听 ViewModel 属性变化更新 UI
 - 双向绑定：SettingsPageController 与 SettingsPageViewModel 属性双向绑定
 

@@ -12,6 +12,7 @@
 - `DingTalkProperties`: 钉钉配置属性类
 - `BotEchoTextListener`: 钉钉 Stream 客户端启动器
 - `BotMessageConsumer`: 消息消费者，处理钉钉消息并与智能体交互
+- `DingTalkNotifier`: 主动消息通知器，通过工作通知 API 主动发送消息
 
 **条件注册：**
 所有钉钉相关组件都使用 `@ConditionalOnProperty` 注解，只有当配置了 `dingtalk.app.client-id` 和 `dingtalk.app.client-secret` 时才会注册到 Spring 容器中。
@@ -68,6 +69,34 @@ dingtalk:
 3. 如果没有，创建新会话并订阅回复
 4. 将消息发布到 EventBus（使用 `inBoxPublishBlocked` 非流式模式）
 5. 智能体处理消息后，通过 `BotReplier` 发送回复
+
+### DingTalkNotifier
+主动消息通知器，通过钉钉工作通知 API 主动向用户发送消息。
+
+**核心功能：**
+- 使用 clientId/clientSecret 获取 access_token（自动缓存和续期）
+- 通过工作通知 API 发送文本消息（`sendText`）
+- 通过工作通知 API 发送 Markdown 消息（`sendMarkdown`）
+- 错误时记录日志但不抛出异常
+
+**配置要求：**
+- `dingtalk.app.client-id`: 钉钉应用 Client ID（即 AppKey）
+- `dingtalk.app.client-secret`: 钉钉应用 Client Secret（即 AppSecret）
+- `dingtalk.app.agent-id`: 钉钉应用 AgentId（工作通知必需）
+
+**条件注册：**
+与 BotMessageConsumer 相同，使用 `@ConditionalOnProperty(prefix = "dingtalk.app", name = {"client-id", "client-secret"})`，只有配置了 clientId 和 clientSecret 时才会注册。
+
+**注意：** 即使组件注册成功，如果未配置 `agent-id`，`sendText` 和 `sendMarkdown` 方法会返回 false 并记录错误日志。
+
+**API 调用流程：**
+1. 获取 access_token：GET `https://oapi.dingtalk.com/gettoken?appkey=xxx&appsecret=xxx`
+2. 发送工作通知：POST `https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token=xxx`
+3. access_token 自动缓存，提前 5 分钟续期
+
+**与 BotMessageConsumer 的区别：**
+- `BotMessageConsumer`：被动回复，仅能回复用户发来的消息（通过 sessionWebhook）
+- `DingTalkNotifier`：主动通知，可主动向任意用户发送消息（通过工作通知 API）
 
 ## 配置说明
 
@@ -170,6 +199,13 @@ export DINGTALK_APP_CLIENT_SECRET="your-client-secret"
    - 消息处理完成后记录日志
    - 异常时抛出 `RuntimeException`
 
+6. **生命周期与关闭问题**：
+   - 钉钉 Stream SDK 的 `NetworkSharedResources` 创建了静态 `NioEventLoopGroup`（Netty 非守护线程）
+   - SDK 的 `stop()` 只关闭了 `ScheduledExecutorService` 和 WebSocket sessions，但不会关闭静态的 `NioEventLoopGroup`
+   - 这是 SDK 的 bug，导致 JVM 无法正常退出
+   - 因此在 `AutivaApplication.stop()` 末尾添加了 `System.exit(0)` 强制终止 JVM
+   - 确保关闭应用时进程能完全退出，不会出现 UI 关闭但进程仍在运行的问题
+
 ## API 文档参考
 - 钉钉开放平台：https://open.dingtalk.com/
 - Stream 模式文档：https://open.dingtalk.com/document/orgapp/stream-mode
@@ -185,6 +221,7 @@ export DINGTALK_APP_CLIENT_SECRET="your-client-secret"
 - `WeixinILinkClient`: iLink 客户端管理器，负责登录、消息轮询和生命周期管理
 - `WeixinILinkMessageHandler`: 消息处理器，处理消息与 EventBus 的集成
 - `ILinkApiClient`: iLink 协议 HTTP 客户端，封装所有 iLink API 调用
+- `WeixinNotifier`: 主动消息通知器，通过 iLink 协议主动发送消息
 - `ilink.model`: iLink 数据模型包（WeixinMessage、MessageItem、TextItem、LoginContext 等）
 
 **条件注册：**
@@ -233,30 +270,47 @@ iLink 客户端管理器，负责 ILinkApiClient 的完整生命周期管理。
 
 **核心功能：**
 - 创建 `ILinkApiClient` 并管理其生命周期
+- 启动时尝试恢复已保存的登录会话，失败则走二维码登录流程
 - 执行二维码登录流程（异步）
-- 登录成功后启动消息长轮询
+- 登录成功后持久化 LoginContext 并启动消息长轮询
 - 管理客户端生命周期（启动、关闭）
 - 暴露 `connectedProperty()` 供 UI 绑定连接状态
 - 暴露 `getQrCodeContent()` 供 UI 渲染二维码
+- `restartLogin()`: 重新绑定功能，停止轮询、删除会话、重置状态后重新走二维码登录流程
+- `startLogin()`: 公开方法，供 UI 刷新二维码时调用（重新获取二维码并轮询）
+
+**状态枚举：**
+- `CONNECTING`: 连接中（初始化或重新绑定时的过渡状态）
+- `CONNECTED`: 已连接（扫码登录成功或会话恢复成功）
+- `DISCONNECTED`: 未连接（二维码已生成，等待扫码）
+- `QR_EXPIRED`: 二维码已过期（登录轮询超时或失败，需刷新二维码）
+
+**会话持久化：**
+- 登录成功后将 `LoginContext`（botToken、userId、botId、baseUrl）保存到 `~/.autiva/wechat-session.json`
+- 启动时优先尝试恢复已保存的会话（调用 `ILinkApiClient.tryRestoreSession()`）
+- 恢复成功则直接进入消息轮询，无需重新扫码
+- 恢复失败（会话过期）则删除会话文件，走二维码登录流程
+- 会话过期时自动删除会话文件并重新登录
 
 **登录流程：**
-1. `@PostConstruct` 初始化 ILinkApiClient 并调用 `startLogin()`
-2. `startLogin()` 在独立线程中调用 `apiClient.getQRCode()` 获取二维码
-3. 二维码内容存储在 `qrCodeContent` 字段，供 UI 读取
-4. 用户在设置页点击"扫码登录"按钮，弹出登录对话框
-5. 登录对话框使用 ZXing 将二维码内容渲染为图片
-6. `apiClient.pollLoginStatus()` 轮询扫码状态，登录成功后更新 `connected` 属性
-7. 自动启动消息轮询循环
+1. `@PostConstruct` 初始化 ILinkApiClient 并调用 `tryRestoreOrLogin()`
+2. `tryRestoreOrLogin()` 先尝试从 `wechat-session.json` 恢复会话
+3. 恢复成功：直接设置 `connected=true` 并启动消息轮询
+4. 恢复失败或无会话文件：调用 `startLogin()` 走二维码登录
+5. `startLogin()` 在独立线程中调用 `apiClient.getQRCode()` 获取二维码
+6. 二维码内容存储在 `qrCodeContent` 字段，供设置页直接渲染
+7. `apiClient.pollLoginStatus()` 轮询扫码状态，登录成功后保存会话并更新 `connected` 属性
+8. 自动启动消息轮询循环
 
 **消息轮询：**
 - 使用 `apiClient.getUpdates()` 长轮询获取消息（约 35 秒挂起）
 - 轮询在独立线程中运行
 - 异常时自动退避重试（5 秒间隔）
-- 会话过期时自动重新登录
+- 会话过期时删除会话文件并自动重新登录
 - 连接断开或重连失败时停止轮询
 
 **会话过期处理：**
-- 当 `getUpdates()` 返回 `errcode: -14` 时，自动清除状态并重新发起登录流程
+- 当 `getUpdates()` 返回 `errcode: -14` 时，删除会话文件并重新发起登录流程
 
 ### WeixinILinkMessageHandler
 消息处理器，处理微信消息与 EventBus 的集成。
@@ -278,6 +332,26 @@ iLink 客户端管理器，负责 ILinkApiClient 的完整生命周期管理。
 3. 如果没有，创建新会话并订阅回复
 4. 将消息发布到 EventBus（使用 `inBoxPublish` 模式）
 5. 智能体处理消息后，通过 `ILinkApiClient.sendText()` 发送回复
+
+### WeixinNotifier
+主动消息通知器，通过微信 iLink 协议主动向用户发送消息。
+
+**核心功能：**
+- 通过 `WeixinILinkClient.sendText()` 发送文本消息
+- 检查客户端连接状态，未连接时返回 false
+- 使用 `@Lazy` 注入 `WeixinILinkClient`，避免循环依赖
+- 错误时记录日志但不抛出异常
+
+**条件注册：**
+与 WeixinILinkClient 相同，使用 `@ConditionalOnProperty(prefix = "weixin.ilink", name = "enabled", havingValue = "true")`。
+
+**限制：**
+- 只能向曾经给 bot 发过消息的用户发送消息（需要 context_token）
+- 需要客户端已连接（已扫码登录）
+
+**与 WeixinILinkMessageHandler 的区别：**
+- `WeixinILinkMessageHandler`：被动回复，订阅 EventBus outBox 并发送回复
+- `WeixinNotifier`：主动通知，供 NotifyTool 等外部组件调用
 
 ### iLink 协议说明
 
@@ -354,6 +428,9 @@ iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
 - `pollLoginStatus()`: 轮询扫码状态，等待用户确认登录
 - `getUpdates()`: 长轮询获取消息，自动管理 cursor 和 context_token
 - `sendText()`: 发送文本消息，自动使用缓存的 context_token
+- `restoreLogin()`: 恢复已保存的登录上下文
+- `tryRestoreSession()`: 尝试使用已保存的登录上下文恢复会话（调用 getUpdates 验证）
+- `getLoginContext()`: 获取当前登录上下文
 - `clearState()`: 清除所有状态（cursor、context_token、loginContext）
 
 **请求头：**
@@ -392,9 +469,10 @@ iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
    - 启动时自动获取二维码并等待扫码
    - 登录状态通过 `connectedProperty()` 暴露给 UI
    - 二维码内容通过 `getQrCodeContent()` 供 UI 渲染
-   - 设置页提供"扫码登录"按钮，弹出二维码登录对话框
-   - 登录对话框使用 ZXing 生成二维码图片
-   - 登录状态失效后可通过"刷新二维码"重新登录
+   - 设置页直接嵌入二维码区域，无需弹窗
+   - 登录成功后自动保存会话到 `~/.autiva/wechat-session.json`
+   - 重启应用时自动尝试恢复会话，无需重新扫码
+   - 会话过期时自动删除会话文件并重新获取二维码
 
 3. **消息轮询**：
    - 使用长轮询模式（约 35 秒挂起）

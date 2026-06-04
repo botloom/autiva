@@ -1,6 +1,6 @@
 package cn.bitloom.node;
 
-import cn.bitloom.agentic.event.Event;
+import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.util.MarkdownFxRenderer;
 import com.alibaba.fastjson2.JSON;
@@ -8,7 +8,6 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
-import javafx.animation.PauseTransition;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -24,20 +23,21 @@ import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
+import lombok.Setter;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import reactor.core.Disposable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class TaskCard extends VBox {
 
     private final Label statusLabel;
     private final VBox body;
-    private final PauseTransition scrollPause = new PauseTransition(Duration.millis(50));
     private Timeline pulseTimeline;
-    private Circle pulseDot;
+    private final Circle pulseDot;
 
     private final VBox messageContainer;
     private final StringBuilder streamBuffer = new StringBuilder();
@@ -46,6 +46,9 @@ public class TaskCard extends VBox {
     private Disposable eventSubscription;
     private String childSessionId;
     private boolean userCollapsed = false;
+
+    @Setter
+    private Consumer<String> onContentChanged;
 
     public TaskCard(String taskJson) {
         this.getStyleClass().add("chat-message");
@@ -62,7 +65,7 @@ public class TaskCard extends VBox {
         pulseDot.getStyleClass().add("chat-message__task-pulse");
         startPulseAnimation();
 
-        Label typeLabel = new Label(getSubagentDisplayName(task.getString("subagentType")));
+        Label typeLabel = new Label(getSubagentDisplayName(task.getString("subagentName")));
         typeLabel.getStyleClass().add("chat-message__task-type");
 
         Label separatorLabel = new Label("·");
@@ -99,16 +102,18 @@ public class TaskCard extends VBox {
 
         this.getChildren().add(body);
 
-        scrollPause.setOnFinished(e -> requestLayout());
+        header.setOnMouseClicked(e -> toggleBody());
     }
 
     public void subscribeSession(String sessionId) {
         this.childSessionId = sessionId;
-        if (sessionId == null) return;
+        if (sessionId == null) {
+            return;
+        }
 
         eventSubscription = EventBus.outBoxSubscribe()
                 .filter(event -> event.getSessionId().equals(sessionId))
-                .map(Event::getMessage)
+                .map(MessageEvent::getMessage)
                 .subscribe(
                         message -> Platform.runLater(() -> processMessage(message)),
                         error -> {},
@@ -143,6 +148,7 @@ public class TaskCard extends VBox {
         }
 
         ensureBodyVisible();
+        notifyContentChanged();
     }
 
     private void processAssistantMessage(JSONObject jsonObject) {
@@ -239,14 +245,16 @@ public class TaskCard extends VBox {
 
     private void appendToolCallCard(String toolName, String arguments) {
         ToolMessageCard card = new ToolMessageCard(toolName, arguments, true);
-        card.setMaxWidth(Double.MAX_VALUE);
-        messageContainer.getChildren().add(card);
+        HBox wrapper = new HBox(card);
+        wrapper.setAlignment(Pos.CENTER_LEFT);
+        messageContainer.getChildren().add(wrapper);
     }
 
     private void appendToolResponseCard(String toolName, String responseData) {
         ToolMessageCard card = new ToolMessageCard(toolName, responseData, false);
-        card.setMaxWidth(Double.MAX_VALUE);
-        messageContainer.getChildren().add(card);
+        HBox wrapper = new HBox(card);
+        wrapper.setAlignment(Pos.CENTER_LEFT);
+        messageContainer.getChildren().add(wrapper);
     }
 
     private void ensureBodyVisible() {
@@ -292,6 +300,7 @@ public class TaskCard extends VBox {
                 messageContainer.getChildren().add(currentStreamBox);
             }
             renderStreamContent(currentStreamBox, streamBuffer.toString());
+            notifyContentChanged();
         });
     }
 
@@ -321,6 +330,12 @@ public class TaskCard extends VBox {
             setStatus("completed");
             dispose();
         });
+    }
+
+    private void notifyContentChanged() {
+        if (onContentChanged != null) {
+            onContentChanged.accept(streamBuffer.toString());
+        }
     }
 
     private JSONObject parseTask(String taskJson) {

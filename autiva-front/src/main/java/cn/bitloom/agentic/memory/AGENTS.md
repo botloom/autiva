@@ -1,7 +1,7 @@
 # Memory 包
 
 ## 概述
-本包实现了对话记忆管理，实现 Spring AI 的 ChatMemory 接口，通过 SessionManager 进行消息的持久化和加载，并提供自动压缩功能。
+本包实现了对话记忆管理和持久化记忆服务，实现 Spring AI 的 ChatMemory 接口，通过 SessionManager 进行消息的持久化和加载，并提供自动压缩功能。同时提供每日日志管理和记忆搜索服务。
 
 ## 核心类
 
@@ -16,12 +16,50 @@
 - `TOKEN_THRESHOLD = 8000`: Token 数量阈值
 
 **核心方法：**
-- `add(conversationId, messages)`: 添加消息到会话
+- `add(conversationId, messages)`: 添加消息到会话（追加前自动清理孤儿工具调用消息）
 - `get(conversationId)`: 获取会话消息（带压缩处理）
 - `clear(conversationId)`: 清除会话消息
 
 **conversationId：**
 直接使用 sessionId，格式为 `{agentId}-{type}-{source}-{target}`
+
+### JournalManager
+每日日志管理器，参考 OpenClaw 的每日日志机制，在会话结束时自动追加日志条目，在 ProactiveContextAdvisor 中自动注入近期日志摘要。
+
+**Spring 注解：** `@Component`
+
+**存储路径：** `~/.autiva/workspace/MAIN/memories/journal/YYYY-MM-DD.md`
+
+**核心方法：**
+- `getRecentJournalsSummary(int days)`: 获取最近N天的日志摘要（用于自动注入）
+- `appendFromSession(String sessionId, String sessionSummary)`: 从会话消息中提取关键信息追加到当日日志
+
+**日志格式：**
+```markdown
+---
+date: 2026-05-15
+agent: MAIN
+---
+
+# 2026-05-15
+
+## 会话 14:30
+[会话摘要内容]
+```
+
+### MemorySearchService
+记忆搜索服务，提供基于关键词的记忆搜索能力，用于 ProactiveContextAdvisor 的自动召回功能。
+
+**Spring 注解：** `@Component`
+
+**搜索路径：** `~/.autiva/workspace/MAIN/memories/`
+
+**核心方法：**
+- `searchAndFormat(String query, int limit)`: 搜索记忆并格式化返回结果
+
+**搜索策略：**
+- 基础方案：遍历记忆文件，匹配文件名和内容关键词
+- 返回格式：文件名 + 描述 + 内容片段
 
 ## 记忆处理流程
 

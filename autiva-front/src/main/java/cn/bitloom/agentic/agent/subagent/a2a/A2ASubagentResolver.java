@@ -52,7 +52,7 @@ public class A2ASubagentResolver implements SubagentResolver {
 		if (subagentRef == null) {
 			throw new IllegalArgumentException("SubagentReference不能为null");
 		}
-		return subagentRef.kind().equals(A2ASubagentDefinition.KIND);
+		return subagentRef.kind().equals(A2ASubagentDefinition.IDENTITY.name());
 	}
 
 	@Override

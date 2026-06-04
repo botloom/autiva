@@ -2,14 +2,19 @@ package cn.bitloom.baas;
 
 import cn.bitloom.config.BaasProperties;
 import com.alibaba.fastjson2.JSONObject;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoDatabase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.Document;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -61,50 +66,79 @@ public class BaasManager {
     }
 
     public Mono<BaasResource> createRedisNamespace(String serviceId) {
-        String namespace = "ns_" + sanitizeName(serviceId);
-        String password = generatePassword();
-
+        String keyPrefix = sanitizeName(serviceId) + ":";
         BaasProperties.Redis redis = baasProperties.getRedis();
+
+        String url;
+        if (redis.getPassword() != null && !redis.getPassword().isEmpty()) {
+            url = String.format("redis://:%s@%s:%d", redis.getPassword(), redis.getHost(), redis.getPort());
+        } else {
+            url = String.format("redis://%s:%d", redis.getHost(), redis.getPort());
+        }
 
         return Mono.just(new BaasResource(
                 "redis",
-                namespace,
+                keyPrefix,
                 new JSONObject(Map.of(
                         "host", redis.getHost(),
                         "port", redis.getPort(),
-                        "password", password,
-                        "namespace", namespace,
-                        "url", String.format("redis://:%s@%s:%d", password, redis.getHost(), redis.getPort())
+                        "password", redis.getPassword(),
+                        "keyPrefix", keyPrefix,
+                        "url", url
                 ))
         ));
     }
 
     public Mono<BaasResource> createMongodbDatabase(String serviceId) {
-        String dbName = "db_" + sanitizeName(serviceId);
+        String dbName = sanitizeName(serviceId);
         String username = "user_" + sanitizeName(serviceId);
         String password = generatePassword();
 
         BaasProperties.Mongodb mongodb = baasProperties.getMongodb();
 
-        return Mono.just(new BaasResource(
-                "mongodb",
-                dbName,
-                new JSONObject(Map.of(
-                        "host", mongodb.getHost(),
-                        "port", mongodb.getPort(),
-                        "database", dbName,
-                        "username", username,
-                        "password", password,
-                        "uri", String.format("mongodb://%s:%s@%s:%d/%s",
-                                username, password, mongodb.getHost(), mongodb.getPort(), dbName)
-                ))
-        ));
+        return Mono.fromCallable(() -> {
+                    try {
+                        String adminUri;
+                        if (mongodb.getUsername() != null && !mongodb.getUsername().isEmpty()) {
+                            adminUri = String.format("mongodb://%s:%s@%s:%d/admin",
+                                    mongodb.getUsername(), mongodb.getPassword(),
+                                    mongodb.getHost(), mongodb.getPort());
+                        } else {
+                            adminUri = String.format("mongodb://%s:%d/admin",
+                                    mongodb.getHost(), mongodb.getPort());
+                        }
+
+                        try (MongoClient mongoClient = MongoClients.create(adminUri)) {
+                            MongoDatabase adminDb = mongoClient.getDatabase("admin");
+                            adminDb.runCommand(new Document("createUser", username)
+                                    .append("pwd", password)
+                                    .append("roles", Arrays.asList(
+                                            new Document("role", "readWrite").append("db", dbName)
+                                    )));
+                            log.info("MongoDB database and user created: {}", dbName);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to create MongoDB database, generating config only: {}", e.getMessage());
+                    }
+                    return true;
+                })
+                .thenReturn(new BaasResource(
+                        "mongodb",
+                        dbName,
+                        new JSONObject(Map.of(
+                                "host", mongodb.getHost(),
+                                "port", mongodb.getPort(),
+                                "database", dbName,
+                                "username", username,
+                                "password", password,
+                                "uri", String.format("mongodb://%s:%s@%s:%d/%s",
+                                        username, password, mongodb.getHost(), mongodb.getPort(), dbName)
+                        ))
+                ));
     }
 
     public Mono<BaasResource> createMinioBucket(String serviceId) {
-        String bucketName = "bucket-" + sanitizeName(serviceId);
-        String accessKey = "ak_" + generatePassword().substring(0, 20);
-        String secretKey = "sk_" + generatePassword();
+        String bucketName = sanitizeName(serviceId).replace("_", "-");
 
         BaasProperties.Minio minio = baasProperties.getMinio();
 
@@ -134,8 +168,8 @@ public class BaasManager {
                         new JSONObject(Map.of(
                                 "endpoint", minio.getEndpoint(),
                                 "bucket", bucketName,
-                                "accessKey", accessKey,
-                                "secretKey", secretKey,
+                                "accessKey", minio.getAccessKey(),
+                                "secretKey", minio.getSecretKey(),
                                 "region", "us-east-1"
                         ))
                 ));
@@ -167,10 +201,30 @@ public class BaasManager {
         Map<String, BaasResource> resources = new HashMap<>();
 
         return Mono.when(
-                createMysqlDatabase(serviceId).map(r -> resources.put("mysql", r)),
-                createRedisNamespace(serviceId).map(r -> resources.put("redis", r)),
-                createMongodbDatabase(serviceId).map(r -> resources.put("mongodb", r)),
-                createMinioBucket(serviceId).map(r -> resources.put("minio", r))
+                createMysqlDatabase(serviceId)
+                        .doOnNext(r -> resources.put("mysql", r))
+                        .onErrorResume(e -> {
+                            log.warn("Failed to create MySQL resource, skipping: {}", e.getMessage());
+                            return Mono.empty();
+                        }),
+                createRedisNamespace(serviceId)
+                        .doOnNext(r -> resources.put("redis", r))
+                        .onErrorResume(e -> {
+                            log.warn("Failed to create Redis resource, skipping: {}", e.getMessage());
+                            return Mono.empty();
+                        }),
+                createMongodbDatabase(serviceId)
+                        .doOnNext(r -> resources.put("mongodb", r))
+                        .onErrorResume(e -> {
+                            log.warn("Failed to create MongoDB resource, skipping: {}", e.getMessage());
+                            return Mono.empty();
+                        }),
+                createMinioBucket(serviceId)
+                        .doOnNext(r -> resources.put("minio", r))
+                        .onErrorResume(e -> {
+                            log.warn("Failed to create MinIO resource, skipping: {}", e.getMessage());
+                            return Mono.empty();
+                        })
         ).then(Mono.just(resources));
     }
 
@@ -200,6 +254,7 @@ public class BaasManager {
             envVars.put("REDIS_PORT", String.valueOf(info.getIntValue("port")));
             envVars.put("REDIS_PASSWORD", info.getString("password"));
             envVars.put("REDIS_URL", info.getString("url"));
+            envVars.put("REDIS_KEY_PREFIX", info.getString("keyPrefix"));
         }
 
         BaasResource mongodb = resources.get("mongodb");

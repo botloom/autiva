@@ -1,5 +1,6 @@
 package cn.bitloom.agentic.agent.subagent.generic;
 
+import cn.bitloom.agentic.agent.AgentIdentityEnum;
 import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
 import cn.bitloom.agentic.agent.subagent.SubagentReference;
 import org.springframework.util.StringUtils;
@@ -10,7 +11,7 @@ import java.util.stream.Stream;
 
 public record GenericSubagentDefinition(SubagentReference reference, Map<String, Object> frontMatter, String content) implements SubagentDefinition {
 
-	public static final String KIND = "GENERIC";
+	public static final AgentIdentityEnum IDENTITY = AgentIdentityEnum.GENERIC;
 
 	private static final String FRONTMATTER_NAME_KEY = "name";
 
@@ -38,7 +39,7 @@ public record GenericSubagentDefinition(SubagentReference reference, Map<String,
 
 	@Override
 	public String getKind() {
-		return KIND;
+		return IDENTITY.name();
 	}
 
 	public String getModel() {

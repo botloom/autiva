@@ -13,7 +13,6 @@ target/
 *.iws
 *.iml
 *.ipr
-.idea/workspace.xml
 .idea/tasks.xml
 .idea/usage.statistics.xml
 .idea/dictionaries
@@ -78,3 +77,4 @@ playwright_data/
 ### Sensitive configuration files ###
 settings.properties
 .autiva/
+/autiva-web/node_modules/

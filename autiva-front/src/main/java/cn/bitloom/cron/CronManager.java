@@ -1,6 +1,8 @@
 package cn.bitloom.cron;
 
 import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.event.EventType;
+import cn.bitloom.agentic.session.MessageChannel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -106,6 +108,10 @@ public class CronManager {
         log.info("[CronManager] 删除成功: name={}", name);
     }
 
+    public boolean taskExists(String name) {
+        return taskMap.containsKey(name);
+    }
+
     public void triggerTask(String sessionId, String name) {
         log.info("[CronManager] 手动触发定时任务: name={}, sessionId={}", name, sessionId);
 
@@ -175,7 +181,7 @@ public class CronManager {
 
     private void triggerTaskInternal(CronTaskInfo taskInfo) {
         UserMessage userMessage = new UserMessage(taskInfo.getMessage());
-        EventBus.inBoxPublish(taskInfo.getSessionId(), userMessage);
+        EventBus.inBoxPublish(taskInfo.getSessionId(), userMessage, EventType.MESSAGE, MessageChannel.SYSTEM);
         log.info("[CronManager] 任务消息已发送到EventBus: name={}, sessionId={}",
                 taskInfo.getName(), taskInfo.getSessionId());
     }

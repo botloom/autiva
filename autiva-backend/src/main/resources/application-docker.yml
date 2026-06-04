@@ -12,17 +12,17 @@ spring:
 
 baas:
   mysql:
-    host: mysql
+    host: autiva-mysql
     port: 3306
   redis:
-    host: redis
+    host: autiva-redis
     port: 6379
-    password: autiva_redis_2024
+    password:
   mongodb:
-    host: mongodb
+    host: autiva-mongodb
     port: 27017
   minio:
-    endpoint: http://minio:9000
+    endpoint: http://autiva-minio:9000
     access-key: autiva_admin
     secret-key: autiva_minio_2024
 

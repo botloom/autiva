@@ -5,7 +5,6 @@ import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.util.AlertUtil;
 import cn.bitloom.vm.SkillPageViewModel;
-import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
@@ -35,7 +34,6 @@ import java.util.ResourceBundle;
 public class SkillPageController implements Initializable, ButtonBarHolder, PageHolder {
 
     private final SkillPageViewModel viewModel;
-    private final WindowManager windowManager;
 
     @FXML
     private VBox skillPage;
@@ -87,10 +85,6 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         Region spacer = new Region();
         HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
 
-        Button editButton = new Button("编辑");
-        editButton.getStyleClass().add("skill-page__card-btn");
-        editButton.setOnAction(event -> openFileEditor(skill));
-
         Button deleteButton = new Button("删除");
         deleteButton.getStyleClass().add("skill-page__card-btn");
         deleteButton.setStyle("-fx-text-fill: #ff3b30;");
@@ -99,7 +93,7 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
             renderSkills();
         });
 
-        header.getChildren().addAll(nameLabel, spacer, editButton, deleteButton);
+        header.getChildren().addAll(nameLabel, spacer, deleteButton);
 
         String description = skill.description() != null ? skill.description() : "";
         Label descLabel = new Label(description);
@@ -109,20 +103,6 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         card.getChildren().addAll(header, descLabel);
 
         return card;
-    }
-
-    private void openFileEditor(Skill skill) {
-        try {
-            Path skillPath = Path.of(skill.basePath());
-            windowManager.<FileEditorController>showDialog(
-                    "cn/bitloom/view/FileEditorDialog.fxml",
-                    skillPage.getScene().getWindow(),
-                    controller -> controller.initRootPath(skillPath)
-            );
-        } catch (Exception e) {
-            log.error("Failed to open file editor", e);
-            AlertUtil.showError("打开编辑器失败", e.getMessage(), null);
-        }
     }
 
     private void importSkillFromZip() {

@@ -1,71 +1,146 @@
 package cn.bitloom.agentic.agent;
 
-import cn.bitloom.agentic.advisor.LoggingAdvisor;
+import cn.bitloom.agentic.agent.subagent.doctor.DoctorSubagentType;
+import cn.bitloom.agentic.agent.subagent.generic.GenericSubagentReferences;
 import cn.bitloom.agentic.agent.subagent.generic.GenericSubagentType;
-import cn.bitloom.agentic.deploy.DeployTool;
-import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.event.EventType;
+import cn.bitloom.agentic.event.MessageEvent;
+import cn.bitloom.agentic.evolve.EvolutionEngine;
+import cn.bitloom.agentic.memory.JournalManager;
 import cn.bitloom.agentic.model.ModelTypeEnum;
+import cn.bitloom.agentic.session.MessageChannel;
 import cn.bitloom.agentic.session.Session;
-import cn.bitloom.agentic.session.SessionManager;
-import cn.bitloom.agentic.session.SessionRespTypeEnum;
-import cn.bitloom.agentic.skill.SkillManager;
-import cn.bitloom.agentic.task.TaskManager;
-import cn.bitloom.agentic.tool.*;
+import cn.bitloom.agentic.task.repository.DefaultTaskRepository;
+import cn.bitloom.agentic.tool.command.CommandTools;
+import cn.bitloom.agentic.tool.core.*;
+import cn.bitloom.agentic.tool.cron.CronTool;
+import cn.bitloom.agentic.tool.manage.EvolveApplyTool;
+import cn.bitloom.agentic.tool.manage.EvolveQueryTool;
+import cn.bitloom.agentic.tool.memory.AutoMemoryTools;
+import cn.bitloom.agentic.tool.serach.BochaSearchProvider;
+import cn.bitloom.agentic.tool.serach.WebSearchTool;
 import cn.bitloom.agentic.util.GuiQuestionHandler;
 import cn.bitloom.agentic.util.GuiTodoEventHandler;
 import cn.bitloom.constant.AppConstants;
-import cn.bitloom.cron.CronManager;
-import cn.bitloom.store.ToolUIBridge;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
-import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.model.tool.ToolCallingManager;
-import org.springframework.ai.template.st.StTemplateRenderer;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Schedulers;
 
-import java.util.EnumMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.Set;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
-public class MainAgent {
-
-    private final EnumMap<ModelTypeEnum, ChatClient> chatClientMap = new EnumMap<>(ModelTypeEnum.class);
+public class MainAgent extends AbstractAgent {
 
     @Resource
-    private ChatClient.Builder deepSeekChatClientBuilder;
-    @Resource
-    private ChatClient.Builder zhiPuChatClientBuilder;
-    private final SkillManager skillManager;
-    private final ChatMemory chatMemory;
-    private final ToolCallingManager toolCallingManager;
-    private final SessionManager sessionManager;
-    private final AgentManager agentManager;
-    private final ToolUIBridge toolUIBridge;
-    private final TaskManager taskManager;
-    private final CronManager cronManager;
+    private EvolutionEngine evolutionEngine;
 
-    @PostConstruct
-    public void init() {
-        StTemplateRenderer stTemplateRenderer = StTemplateRenderer.builder()
-                .startDelimiterToken('$')
-                .endDelimiterToken('$')
+    @Resource
+    private JournalManager journalManager;
+
+    @Override
+    protected AgentIdentityEnum getIdentity() {
+        return AgentIdentityEnum.MAIN;
+    }
+
+    @Override
+    protected Set<EventType> getHandledEventTypes() {
+        return Set.of(EventType.MESSAGE, EventType.MEMORY_CONSOLIDATE, EventType.JOURNAL);
+    }
+
+    @Override
+    protected Flux<Void> handleAgentEvent(EventType type, MessageEvent event) {
+        return switch (type) {
+            case MEMORY_CONSOLIDATE -> handleMemoryConsolidate(event);
+            case JOURNAL -> handleJournal(event);
+            default -> Flux.empty();
+        };
+    }
+
+    private Flux<Void> handleMemoryConsolidate(MessageEvent event) {
+        String sessionId = event.getSessionId();
+        Session session = sessionManager.getById(sessionId);
+        if (session == null) {
+            log.warn("[MainAgent] 记忆整理：会话不存在, sessionId={}", sessionId);
+            return Flux.empty();
+        }
+
+        int cursor = session.getMemoryCursor() != null ? session.getMemoryCursor() : 0;
+        List<Message> userMessages = session.getChannelMessages(MessageChannel.USER);
+        if (cursor >= userMessages.size()) {
+            log.debug("[MainAgent] 记忆整理：无新消息需要整理, sessionId={}, cursor={}", sessionId, cursor);
+            return Flux.empty();
+        }
+
+        List<Message> unprocessed = userMessages.subList(cursor, userMessages.size());
+
+        log.info("[MainAgent] 记忆整理：开始处理, sessionId={}, cursor={}, unprocessedCount={}",
+                sessionId, cursor, unprocessed.size());
+
+        UserMessage consolidateMessage = UserMessage.builder()
+                .text("[系统触发] 请整理以下会话片段的记忆，提取关键信息并保存到记忆文件中。")
+                .metadata(Map.of("trigger", "memory_consolidate", "cursor", cursor))
                 .build();
-        String systemPrompt = this.getSystemPrompt();
 
-        WebFetchTool webFetchTool = WebFetchTool.builder(deepSeekChatClientBuilder.clone().build()).build();
+        String channelAwareConversationId = sessionId + "#" + MessageChannel.MEMORY.name();
+
+        return this.model(session.getModel())
+                .prompt()
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, channelAwareConversationId)
+                        .param("model", session.getModel()))
+                .toolContext(Map.of("sessionId", sessionId, "model", session.getModel()))
+                .toolCallbacks(this.getTools())
+                .messages(consolidateMessage)
+                .stream()
+                .chatResponse()
+                .doOnComplete(() -> {
+                    sessionManager.updateCursor(sessionId, "memoryCursor", userMessages.size());
+                    log.info("[MainAgent] 记忆整理：完成, sessionId={}, newCursor={}", sessionId, userMessages.size());
+                })
+                .doOnError(e -> log.error("[MainAgent] 记忆整理失败: sessionId={}", sessionId, e))
+                .then().flux();
+    }
+
+    private Flux<Void> handleJournal(MessageEvent event) {
+        String sessionId = event.getSessionId();
+        Session session = sessionManager.getById(sessionId);
+        if (session == null) {
+            log.warn("[MainAgent] 日记处理：会话不存在, sessionId={}", sessionId);
+            return Flux.empty();
+        }
+
+        String summary = event.getMessage() != null ? event.getMessage().getText() : "";
+        if (summary == null || summary.isBlank()) {
+            return Flux.empty();
+        }
+
+        log.info("[MainAgent] 日记处理：开始, sessionId={}", sessionId);
+
+        journalManager.appendFromSession(sessionId, summary);
+        sessionManager.updateCursor(sessionId, "journalCursor", session.getJournalCursor() + 1);
+
+        return Flux.empty();
+    }
+
+    @Override
+    protected String getDefaultSystemPrompt() {
+        return this.agentManager.buildSystemPrompt(getIdentity());
+    }
+
+    @Override
+    protected List<ToolCallback> getDefaultTools() {
+        WebFetchTool webFetchTool = WebFetchTool.builder().build();
+        WebSearchTool webSearchTool = WebSearchTool.builder(new BochaSearchProvider(configManager.getBochaApiKey())).build();
+        CommandTools commandTools = CommandTools.builder().build();
         AskUserQuestionTool askUserQuestionTool = AskUserQuestionTool.builder()
                 .questionHandler(new GuiQuestionHandler(this.toolUIBridge))
                 .build();
@@ -73,132 +148,62 @@ public class MainAgent {
                 .todoEventHandler(new GuiTodoEventHandler(this.toolUIBridge))
                 .build();
         CronTool cronTool = CronTool.builder(this.cronManager).build();
-
-        DeployTool deployTool = DeployTool.builder()
-                .backendUrl("http://localhost:9527")
-                .clientId("autiva-user")
+        EvolveQueryTool evolveQueryTool = EvolveQueryTool.builder()
+                .evolutionEngine(evolutionEngine)
+                .build();
+        EvolveApplyTool evolveApplyTool = EvolveApplyTool.builder()
+                .evolutionEngine(evolutionEngine)
+                .build();
+        AutoMemoryTools autoMemoryTools = AutoMemoryTools.builder()
+                .memoriesDir(AppConstants.Base.WORKSPACE_DIR.resolve(getIdentity().name()).resolve("memories"))
                 .build();
 
-        this.taskManager.setSessionManager(this.sessionManager);
-        this.taskManager.setToolUIBridge(this.toolUIBridge);
-
-        this.taskManager.registerSubagentTypes(GenericSubagentType.builder()
-                .chatClientBuilder("default", zhiPuChatClientBuilder.clone().defaultAdvisors(LoggingAdvisor.builder().build()))
-                .skillManager(this.skillManager)
-                .deployTool(deployTool)
-                .chatMemory(this.chatMemory)
+        DefaultTaskRepository defaultTaskRepository = new DefaultTaskRepository();
+        ToolCallback taskToolCallBack = TaskTool.builder()
+                .taskRepository(defaultTaskRepository)
                 .sessionManager(this.sessionManager)
-                .build());
-
-        Consumer<ChatClient.AdvisorSpec> advisorSpecConsumer = a -> a.advisors(
-                MessageChatMemoryAdvisor.builder(this.chatMemory).build(),
-                LoggingAdvisor.builder().build(),
-                ToolCallAdvisor.builder()
-                        .toolCallingManager(toolCallingManager)
-                        .advisorOrder(BaseAdvisor.HIGHEST_PRECEDENCE + 300)
-                        .conversationHistoryEnabled(true)
-                        .disableMemory()
-                        .build()
-        );
-
-        List<Object> mainAgentTools = List.of(webFetchTool, askUserQuestionTool, todoWriteTool, cronTool);
-
-        this.chatClientMap.put(ModelTypeEnum.DEEPSEEK,
-                buildChatClient(deepSeekChatClientBuilder, stTemplateRenderer, systemPrompt,
-                        mainAgentTools, advisorSpecConsumer));
-        this.chatClientMap.put(ModelTypeEnum.GLM,
-                buildChatClient(zhiPuChatClientBuilder, stTemplateRenderer, systemPrompt,
-                        mainAgentTools, advisorSpecConsumer));
-        this.run();
-    }
-
-    public void run() {
-        EventBus.inBoxSubscribe()
-                .concatMap(event -> {
-                    Session session = sessionManager.getById(event.getSessionId());
-                    if (EventBus.isCancelled(event.getSessionId())) {
-                        EventBus.clearCancelFlag(event.getSessionId());
-                        return Flux.empty();
-                    }
-                    if (session.getRespType().equals(SessionRespTypeEnum.STREAM)) {
-                        return this.model(session.getModel())
-                                .prompt()
-                                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, event.getSessionId()))
-                                .toolContext(Map.of("sessionId", event.getSessionId()))
-                                .messages(event.getMessage())
-                                .stream()
-                                .chatResponse()
-                                .publishOn(Schedulers.boundedElastic())
-                                .takeUntil(x -> EventBus.isCancelled(event.getSessionId()))
-                                .doOnNext(message -> EventBus.outBoxPublish(event.getSessionId(), message.getResult().getOutput()))
-                                .doOnError(e -> log.error(e.getMessage(), e))
-                                .doOnComplete(() -> EventBus.clearCancelFlag(event.getSessionId()));
-                    } else {
-                        ChatResponse chatResponse = this.model(session.getModel())
-                                .prompt()
-                                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, event.getSessionId()))
-                                .toolContext(Map.of("sessionId", event.getSessionId()))
-                                .messages(event.getMessage())
-                                .call()
-                                .chatResponse();
-                        if (chatResponse != null) {
-                            EventBus.outBoxPublish(event.getSessionId(), chatResponse.getResult().getOutput());
-                        }
-                        return Flux.empty();
-                    }
-                })
-                .subscribe();
-    }
-
-    private AgentIdentityEnum getIdentity() {
-        return AgentIdentityEnum.MAIN;
-    }
-
-    private String getSystemPrompt() {
-        StringBuilder sb = new StringBuilder();
-
-        String workspaceContext = this.agentManager.getDescription(this.getIdentity().name());
-        if (!workspaceContext.isBlank()) {
-            sb.append(workspaceContext);
-        }
-
-        sb.append("""
-                
-                # 运行环境
-                
-                - 工作目录: %s
-                - 当前时间: $time$
-                - 智能体: %s
-                - 平台: %s (%s)
-                """.formatted(
-                AppConstants.Base.WORKSPACE_DIR.resolve(this.getIdentity().name()),
-                this.getIdentity(),
-                System.getProperty("os.name"),
-                System.getProperty("os.version")
-        ));
-
-        String skillDesc = this.skillManager.getDescription();
-        if (!skillDesc.isBlank()) {
-            sb.append("\n# 可用技能\n\n").append(skillDesc).append("\n");
-        }
-
-        return sb.toString();
-    }
-
-    private ChatClient model(ModelTypeEnum model) {
-        return this.chatClientMap.getOrDefault(model, this.chatClientMap.get(ModelTypeEnum.GLM));
-    }
-
-    private ChatClient buildChatClient(ChatClient.Builder builder, StTemplateRenderer renderer, String systemPrompt,
-                                       List<Object> tools, Consumer<ChatClient.AdvisorSpec> advisorSpec) {
-        return builder
-                .defaultTemplateRenderer(renderer)
-                .defaultSystem(systemPrompt)
-                .defaultTools(tools.toArray())
-                .defaultToolCallbacks(this.taskManager.buildToolCallbacks())
-                .defaultToolCallbacks(this.skillManager.buildToolCallback())
-                .defaultAdvisors(advisorSpec)
+                .toolUIBridge(this.toolUIBridge)
+                .subagentTypes(
+                        GenericSubagentType.builder()
+                                .chatClientBuilder(
+                                        ModelTypeEnum.DEEPSEEK,
+                                        chatClientBuilderFactory.model(ModelTypeEnum.DEEPSEEK).clone()
+                                )
+                                .bochaApiKey(configManager.getBochaApiKey())
+                                .skillManager(this.skillManager)
+                                .build(),
+                        DoctorSubagentType.builder()
+                                .chatClientBuilder(
+                                        ModelTypeEnum.DEEPSEEK,
+                                        chatClientBuilderFactory.model(ModelTypeEnum.DEEPSEEK).clone()
+                                )
+                                .skillManager(this.skillManager)
+                                .agentManager(this.agentManager)
+                                .configManager(this.configManager)
+                                .toolUIBridge(this.toolUIBridge)
+                                .build()
+                )
+                .subagentReferences(GenericSubagentReferences.fromSubagentDirectories(AppConstants.Base.WORKSPACE_DIR))
                 .build();
+        ToolCallback taskOutputToolCallback = TaskOutputTool.builder()
+                .taskRepository(defaultTaskRepository)
+                .build();
+
+        List<ToolCallback> toolCallbacks = new ArrayList<>(List.of(ToolCallbacks.from(webFetchTool, askUserQuestionTool, todoWriteTool, cronTool, webSearchTool, commandTools, evolveQueryTool, evolveApplyTool, autoMemoryTools)));
+        toolCallbacks.add(taskToolCallBack);
+        toolCallbacks.add(taskOutputToolCallback);
+        return toolCallbacks;
+    }
+
+    @Override
+    protected List<ToolCallback> getTools() {
+        ArrayList<ToolCallback> toolCallbacks = new ArrayList<>();
+        ToolCallback skillToolCallback = this.skillManager.buildToolCallback();
+        if (skillToolCallback != null) {
+            toolCallbacks.add(skillToolCallback);
+        }
+        toolCallbacks.addAll(List.of(this.mcpToolCallbackProvider.getToolCallbacks()));
+        return toolCallbacks;
     }
 
 }

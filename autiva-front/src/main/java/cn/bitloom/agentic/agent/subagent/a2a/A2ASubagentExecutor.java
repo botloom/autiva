@@ -15,28 +15,26 @@
 */
 package cn.bitloom.agentic.agent.subagent.a2a;
 
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
-
+import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
+import cn.bitloom.agentic.agent.subagent.SubagentExecutor;
+import cn.bitloom.agentic.agent.subagent.TaskCall;
+import cn.bitloom.agentic.event.EventBus;
 import io.a2a.client.Client;
 import io.a2a.client.ClientEvent;
 import io.a2a.client.TaskEvent;
 import io.a2a.client.config.ClientConfig;
 import io.a2a.client.transport.jsonrpc.JSONRPCTransport;
 import io.a2a.client.transport.jsonrpc.JSONRPCTransportConfig;
-import io.a2a.spec.AgentCard;
-import io.a2a.spec.Artifact;
-import io.a2a.spec.Message;
-import io.a2a.spec.Part;
-import io.a2a.spec.Task;
-import io.a2a.spec.TextPart;
+import io.a2a.spec.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
-import cn.bitloom.agentic.agent.subagent.SubagentExecutor;
-import cn.bitloom.agentic.agent.subagent.TaskCall;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * 通过A2A协议执行任务，向远程代理发送消息。
@@ -51,13 +49,14 @@ public class A2ASubagentExecutor implements SubagentExecutor {
 
 	@Override
 	public String getKind() {
-		return A2ASubagentDefinition.KIND;
+		return A2ASubagentDefinition.IDENTITY.name();
 	}
 
 	@Override
-	public String execute(TaskCall taskCall, SubagentDefinition subagent) {
+	public String execute(TaskCall taskCall, Map<String, Object> context, SubagentDefinition subagent, Consumer<String> onChunk) {
 
 		AgentCard agentCard = ((A2ASubagentDefinition) subagent).getAgentCard();
+		String sessionId = (String) context.get("sessionId");
 
 		try {
 			// 创建消息
@@ -103,8 +102,35 @@ public class A2ASubagentExecutor implements SubagentExecutor {
 
 			client.sendMessage(message);
 
-			// 等待响应（带超时）
-			String result = responseFuture.get(60, java.util.concurrent.TimeUnit.SECONDS);
+			// 轮询等待响应，同时检查停止信号
+			long timeoutMs = 60_000;
+			long pollIntervalMs = 200;
+			long elapsed = 0;
+			String result = null;
+
+			while (elapsed < timeoutMs) {
+				if (sessionId != null && EventBus.isStop(sessionId)) {
+					responseFuture.cancel(true);
+					EventBus.clearStopFlag(sessionId);
+					if (onChunk != null) {
+						onChunk.accept("\n[已停止]");
+					}
+					return "[已停止]";
+				}
+				try {
+					result = responseFuture.get(pollIntervalMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+					break;
+				} catch (java.util.concurrent.TimeoutException e) {
+					elapsed += pollIntervalMs;
+				}
+			}
+
+			if (result == null) {
+				responseFuture.cancel(true);
+				logger.warn("代理'{}'响应超时", subagent.getName());
+				return String.format("与代理'%s'通信超时", subagent.getName());
+			}
+
 			logger.info("代理'{}'的响应：{}", subagent.getName(), result);
 			return result;
 		}

@@ -33,31 +33,43 @@ DeepSeek V4 兼容性配置，解决 DeepSeek V4 默认启用思考模式（thin
 - 如需启用思考模式，需升级 Spring AI 版本并移除此配置
 - `DeepSeekChatOptions4V4.thinking` 字段（`@JsonProperty`）保留用于未来 Spring AI 原生支持的升级，当前通过序列化器方案生效
 
+### SchedulingConfig
+任务调度配置，提供 `TaskScheduler` Bean。
+
+**问题背景：**
+应用使用 `spring.main.web-application-type=none`，Spring Boot 的 `TaskSchedulingAutoConfiguration` 不会自动创建 `TaskScheduler` Bean，导致 `CronManager` 和 `HeartbeatRunner` 无法注入依赖。
+
+**核心方法：**
+- `taskScheduler()`: 创建 `ThreadPoolTaskScheduler` Bean，线程池大小4，守护线程
+
 ### ConfigManager
 配置管理器，使用 Spring Boot 的 @Value 注解注入配置。
 
 **配置项：**
-- `browserPath`: 浏览器可执行文件路径
-- `savePath`: 保存目录路径
 - `isolation`: 会话隔离模式
 - `dingTalkClientId`: 钉钉应用 Client ID
 - `dingTalkClientSecret`: 钉钉应用 Client Secret
+- `deepseekBaseUrl`: DeepSeek API 基础地址（默认空，未配置时为空字符串）
+- `deepseekCompletionsPath`: DeepSeek API 补全路径（默认 `/v1/chat/completions`）
+- `deepseekApiKey`: DeepSeek API Key（默认空，未配置时为空字符串）
+- `deepseekChatModel`: DeepSeek 聊天模型名称（默认 `deepseek-chat`）
+- `zhipuaiBaseUrl`: 智谱 AI API 基础地址（默认空，未配置时为空字符串）
+- `zhipuaiCompletionsPath`: 智谱 AI API 补全路径（默认 `/chat/completions`）
+- `zhipuaiApiKey`: 智谱 AI API Key（默认空，未配置时为空字符串）
+- `zhipuaiChatModel`: 智谱 AI 聊天模型名称（默认 `glm-4-flash`）
 - `weixinILinkEnabled`: 是否启用微信 iLink 接入
-- `deepseekApiKey`: DeepSeek API Key
-- `zApiKey`: 智谱 AI API Key
+- `bochaApiKey`: 博查搜索 API Key
 
 **核心方法：**
 - `save()`: 保存配置到文件
-- `getBrowserPath()`: 获取浏览器路径
-- `getSavePath()`: 获取保存路径
+- `isDeepseekConfigured()`: 判断 DeepSeek 是否已配置（apiKey 和 baseUrl 非空）
+- `isZhipuaiConfigured()`: 判断智谱 AI 是否已配置（apiKey 和 baseUrl 非空）
 
 ## 配置文件
 
 ### application.yml
 ```yaml
 app:
-  browser-path: C:\Program Files\Google\Chrome\Application\chrome.exe
-  save-path: ${user.home}/.autiva/output
   session:
     isolation: PER_PEER
 
@@ -69,8 +81,18 @@ dingtalk:
 spring:
   ai:
     deepseek:
-      api-key: your-deepseek-api-key
+      chat:
+        base-url: https://api.deepseek.com
+        completions-path: /v1/chat/completions
+        api-key: your-deepseek-api-key
+        options:
+          model: deepseek-chat
     zhipuai:
+      chat:
+        base-url: https://open.bigmodel.cn/api/paas/v4
+        completions-path: /chat/completions
+        options:
+          model: glm-4-flash
       api-key: your-zhipuai-api-key
 ```
 
@@ -80,17 +102,23 @@ spring:
 ```properties
 # Autiva Settings
 # Application Settings
-app.browser-path=C:\Program Files\Google\Chrome\Application\chrome.exe
-app.save-path=C:\Users\{user}\.autiva\output
 app.session.isolation=PER_PEER
 
 # DingTalk Configuration
 dingtalk.app.client-id=your-client-id
 dingtalk.app.client-secret=your-client-secret
 
-# AI API Keys
-spring.ai.deepseek.api-key=your-deepseek-api-key
+# DeepSeek Configuration
+spring.ai.deepseek.chat.base-url=https://api.deepseek.com
+spring.ai.deepseek.chat.completions-path=/v1/chat/completions
+spring.ai.deepseek.chat.api-key=your-deepseek-api-key
+spring.ai.deepseek.chat.options.model=deepseek-chat
+
+# ZhiPu AI Configuration
+spring.ai.zhipuai.chat.base-url=https://open.bigmodel.cn/api/paas/v4
+spring.ai.zhipuai.chat.completions-path=/chat/completions
 spring.ai.zhipuai.api-key=your-zhipuai-api-key
+spring.ai.zhipuai.chat.options.model=glm-4-flash
 ```
 
 ## 使用示例
@@ -103,8 +131,6 @@ public class MyComponent {
     private final ConfigManager configManager;
     
     public void useConfig() {
-        String browserPath = configManager.getBrowserPath();
-        String savePath = configManager.getSavePath();
         String dingTalkClientId = configManager.getDingTalkClientId();
     }
 }
@@ -112,8 +138,6 @@ public class MyComponent {
 
 ### 保存配置
 ```java
-configManager.setBrowserPath("new/path/to/browser");
-configManager.setSavePath("new/save/path");
 configManager.setDingTalkClientId("your-client-id");
 configManager.save();
 ```
@@ -126,6 +150,7 @@ configManager.save();
 1. 配置修改后需要调用 save() 持久化
 2. 配置文件保存在用户目录下
 3. 使用 @Value 注解自动注入配置
-4. 配置变更不会自动刷新，需要重启应用
+4. 配置变更后通过 HotReloadPublisher.publishConfigChanged() 触发热更新，无需重启应用
 5. 敏感信息（如 API Key）使用 PasswordField 在 UI 中显示
 6. 所有配置项都支持 null 值，使用默认值处理
+7. isDeepseekConfigured()/isZhipuaiConfigured() 可判断 API 是否已正确配置

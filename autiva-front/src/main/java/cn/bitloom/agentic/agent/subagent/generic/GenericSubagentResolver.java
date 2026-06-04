@@ -1,32 +1,29 @@
 package cn.bitloom.agentic.agent.subagent.generic;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-
 import cn.bitloom.agentic.agent.subagent.SubagentDefinition;
 import cn.bitloom.agentic.agent.subagent.SubagentReference;
 import cn.bitloom.agentic.agent.subagent.SubagentResolver;
 import cn.bitloom.agentic.util.MarkdownParser;
-
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.util.Assert;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 public class GenericSubagentResolver implements SubagentResolver {
 
 	@Override
 	public boolean canResolve(SubagentReference subagentRef) {
-		Assert.notNull(subagentRef, "SubagentReference不能为null");
-		return subagentRef.kind().equals(GenericSubagentDefinition.KIND);
+		return subagentRef.kind().equals(GenericSubagentDefinition.IDENTITY.name());
 	}
 
 	@Override
 	public SubagentDefinition resolve(SubagentReference subagentRef) {
-		Assert.notNull(subagentRef, "SubagentReference不能为null");
-		Assert.isTrue(subagentRef.kind().equals(GenericSubagentDefinition.KIND),
-				"GenericSubagentResolver只能解析类型为 " + GenericSubagentDefinition.KIND + " 的子代理");
-
 		try {
-			String uri = (subagentRef.uri().startsWith("/")) ? "file:" + subagentRef.uri() : subagentRef.uri();
+			String uri = subagentRef.uri();
+			if (new File(uri).isAbsolute()) {
+				uri = "file:" + uri;
+			}
 			var resource = new DefaultResourceLoader().getResource(uri);
 			String markdown = resource.getContentAsString(StandardCharsets.UTF_8);
 			MarkdownParser parser = new MarkdownParser(markdown);

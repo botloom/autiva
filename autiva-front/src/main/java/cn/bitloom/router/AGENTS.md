@@ -32,7 +32,6 @@ public static class Path {
     public static final String HOME = "/";
     public static final String SETTINGS = "/settings";
     public static final String SKILLS = "/skills";
-    public static final String MCP = "/mcp";
     public static final String TASK = "/task";
 }
 ```
@@ -66,7 +65,7 @@ registerRoute(Path.HOME, "主页", HomePageController.class,
 | /agent | 智能体 | AgentPageController |
 | /settings | 设置 | SettingsPageController |
 | /skills | 技能管理 | SkillPageController |
-| /mcp | MCP | McpPageController |
+| /gep | 进化引擎 | GepPageController |
 | /task | 任务 | TaskPageController |
 
 ## 使用示例

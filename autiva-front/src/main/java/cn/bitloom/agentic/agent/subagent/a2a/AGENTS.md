@@ -9,7 +9,7 @@
 A2A 协议子代理定义，封装 AgentCard。
 
 **常量：**
-- `KIND = "A2A"`: 类型标识符
+- `IDENTITY = AgentIdentityEnum.A2A`: 类型标识符（统一使用 AgentIdentityEnum）
 
 **方法：**
 - `getName()`: 返回代理名称（来自 AgentCard）
@@ -26,6 +26,7 @@ A2A 协议子代理定义，封装 AgentCard。
 - 使用 JSON-RPC 传输
 - 支持 60 秒超时
 - 从 Task 工件中提取文本响应
+- **停止支持**：轮询检查 `EventBus.isStop(sessionId)` 实现子智能体中断，停止时返回 `[已停止]`。停止信号由 HomePageViewModel 在用户点击停止按钮时通过 `EventBus.stop(childSessionId)` 设置
 
 ### A2ASubagentResolver
 从远程端点获取 AgentCard 解析 A2A 子代理。

@@ -1,82 +1,99 @@
 package cn.bitloom.agentic.agent.subagent.generic;
 
+import cn.bitloom.agentic.agent.AgentIdentityEnum;
+import cn.bitloom.agentic.agent.subagent.SubagentReference;
+import cn.bitloom.agentic.util.MarkdownParser;
+import cn.bitloom.exception.StorageException;
+
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
-import cn.bitloom.agentic.agent.subagent.SubagentReference;
-
-import org.springframework.core.io.Resource;
-
 public class GenericSubagentReferences {
 
-	public static List<SubagentReference> fromRootDirectories(List<String> taskRootDirectories) {
+    public static List<SubagentReference> fromSubagentDirectories(Path workspaceDir) {
+        List<SubagentReference> subagentReferences = new ArrayList<>();
 
-		List<SubagentReference> subagentReferences = new ArrayList<>();
+        for (AgentIdentityEnum identity : AgentIdentityEnum.values()) {
+            if (!identity.isSubagent() || identity == AgentIdentityEnum.A2A) {
+                continue;
+            }
+            Path dir = workspaceDir.resolve(identity.name());
+            if (!Files.exists(dir) || !Files.isDirectory(dir)) {
+                continue;
+            }
+            try (Stream<Path> paths = Files.list(dir)) {
+                paths.filter(Files::isRegularFile)
+                        .filter(path -> path.getFileName().toString().endsWith(".md"))
+                        .forEach(path -> {
+                            String kind = resolveKind(path);
+                            subagentReferences.add(new SubagentReference(path.toAbsolutePath().toString(), kind, null));
+                        });
+            } catch (IOException ex) {
+                throw StorageException.readError(dir.toString(), ex);
+            }
+        }
 
-		for (String taskRootDirectory : taskRootDirectories) {
-			subagentReferences.addAll(fromRootDirectory(taskRootDirectory));
-		}
+        return subagentReferences;
+    }
 
-		return subagentReferences;
-	}
+    public static List<SubagentReference> fromRootDirectory(Path rootPath) {
 
-	public static List<SubagentReference> fromRootDirectory(String rootDirectory) {
+        if (!Files.exists(rootPath)) {
+            throw StorageException.dirNotFound(rootPath.toString());
+        }
 
-		Path rootPath = Paths.get(rootDirectory);
+        if (!Files.isDirectory(rootPath)) {
+            throw StorageException.notADir(rootPath.toString());
+        }
 
-		if (!Files.exists(rootPath)) {
-			throw new RuntimeException("根目录不存在: " + rootPath);
-		}
+        List<SubagentReference> subagentReferences = new ArrayList<>();
 
-		if (!Files.isDirectory(rootPath)) {
-			throw new RuntimeException("路径不是目录: " + rootPath);
-		}
+        try {
+            try (Stream<Path> paths = Files.walk(rootPath)) {
+                paths.filter(Files::isRegularFile)
+                        .filter(path -> path.getFileName().toString().endsWith(".md"))
+                        .forEach(path -> {
+                            String kind = resolveKind(path);
+                            subagentReferences.add(new SubagentReference(path.toAbsolutePath().toString(), kind, null));
+                        });
+            }
+        } catch (IOException ex) {
+            throw StorageException.readError(rootPath.toString(), ex);
+        }
 
-		List<SubagentReference> subagentReferences = new ArrayList<>();
+        return subagentReferences;
+    }
 
-		try {
-			try (Stream<Path> paths = Files.walk(rootPath)) {
-				paths.filter(Files::isRegularFile)
-					.filter(path -> path.getFileName().toString().endsWith(".md"))
-					.forEach(path -> {
-						subagentReferences.add(new SubagentReference(path.toAbsolutePath().toString(),
-								GenericSubagentDefinition.KIND, null));
-					});
-			}
-		}
-		catch (IOException ex) {
-			throw new RuntimeException("从目录读取任务失败: " + rootDirectory, ex);
-		}
+    public static List<SubagentReference> fromResource(org.springframework.core.io.Resource agentRootPath) {
+        try {
+            Path path = agentRootPath.getFile().toPath().toAbsolutePath();
+            if (agentRootPath.getFile().isDirectory()) {
+                return fromRootDirectory(path);
+            }
 
-		return subagentReferences;
-	}
+            String kind = resolveKind(path);
+            return List.of(new SubagentReference(path.toAbsolutePath().toString(), kind, null));
+        } catch (IOException ex) {
+            throw StorageException.readError(agentRootPath.toString(), ex);
+        }
+    }
 
-	public static List<SubagentReference> fromResources(Resource... resources) {
-		return Arrays.stream(resources).map(GenericSubagentReferences::fromResource).flatMap(List::stream).toList();
-	}
-
-	public static List<SubagentReference> fromResources(List<Resource> resources) {
-		return resources.stream().map(GenericSubagentReferences::fromResource).flatMap(List::stream).toList();
-	}
-
-	public static List<SubagentReference> fromResource(Resource agentRootPath) {
-		try {
-			String path = agentRootPath.getFile().toPath().toAbsolutePath().toString();
-			if (agentRootPath.getFile().isDirectory()) {
-				return fromRootDirectory(path);
-			}
-
-			return List.of(new SubagentReference(path, GenericSubagentDefinition.KIND, null));
-		}
-		catch (IOException ex) {
-			throw new RuntimeException("从目录加载任务失败: " + agentRootPath, ex);
-		}
-	}
-
+    private static String resolveKind(Path path) {
+        try {
+            String content = Files.readString(path, StandardCharsets.UTF_8);
+            MarkdownParser parser = new MarkdownParser(content);
+            Object kindValue = parser.getFrontMatter().get("kind");
+            if (kindValue != null && !kindValue.toString().isBlank()) {
+                return kindValue.toString().trim();
+            }
+        } catch (IOException e) {
+            // ignore, fallback to GENERIC
+        }
+        return AgentIdentityEnum.GENERIC.name();
+    }
 }

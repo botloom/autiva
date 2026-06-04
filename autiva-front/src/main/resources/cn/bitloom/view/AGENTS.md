@@ -14,17 +14,17 @@
 ```
 VBox (homePage)
 ├── VBox (icon) - 应用图标
-│   └── SvgImageView - SVG 图标
+│   └── ImageView - 应用图标
 ├── ScrollPane (chatScrollPane) - 聊天内容滚动容器
 │   └── VBox (chatContainer) - 聊天消息容器
 └── VBox (searchBox) - 搜索输入框
-    ├── TextField (searchField) - 输入框
+    ├── FlowPane (fileTagsPane) - 文件标签容器（默认隐藏，添加文件后显示）
+    ├── TextArea (searchField) - 输入框（支持多行、自动换行、自动调整高度）
     └── HBox - 按钮组
-        ├── Button - 添加按钮
-        ├── Button - 语音按钮
+        ├── Button (addFileButton) - 添加文件按钮
         ├── ComboBox (modelSelector) - 模型选择器（胶囊形状）
         ├── Button (searchButton) - 发送按钮
-        └── Button (stopButton) - 终止按钮（流式生成时显示，红色，替代发送按钮）
+        └── Button (stopButton) - 终止按钮（流式生成时显示，红色，点击暂停生成并保留部分响应）
 ```
 
 **特性：**
@@ -33,12 +33,14 @@ VBox (homePage)
 - 图标在首次发送后动画上移
 - 响应式宽度设计
 - 搜索框具有悬浮阴影效果（hover 时加深），样式与 MCP 卡片一致
+- 输入区域使用 TextArea 替代 TextField，支持多行输入和自动换行
+- TextArea 根据内容自动调整高度（最小 48px，最大 200px）
+- Enter 键发送消息，Shift+Enter 换行
+- 添加文件按钮打开 FileChooser，选中的文件以标签形式显示在输入区域上方
+- 文件标签显示文件图标、文件名和关闭按钮，支持逐个移除
 - 模型选择器使用胶囊形状的 ComboBox，直接显示模型名称，点击下拉选择
 - 无下拉箭头，宽度自适应模型名称，最小宽度为圆形（37px）
-- 语音按钮支持语音输入，点击开始录音（红色），再次点击停止并识别
-- 使用本地 Whisper medium 模型进行语音识别，需下载模型到 ~/.autiva/models/
-- 识别结果自动转换为简体中文
-- 终止按钮：流式生成时自动切换显示（替代发送按钮），红色圆形按钮，点击中止当前生成
+- 终止按钮：流式生成时自动切换显示（替代发送按钮），红色圆形按钮，点击暂停当前生成并保留部分响应，暂停后发送按钮重新显示
 
 ### SettingsPage.fxml
 设置页面视图。
@@ -56,8 +58,11 @@ VBox (settingsPage)
 ```
 
 **设置项：**
-- 浏览器路径
-- 保存目录
+- 钉钉配置（Client ID / Client Secret）
+- 微信配置（StackPane 二维码区域，覆盖层设计：已连接绿色对号 / 二维码过期刷新）
+- 搜索配置（博查 API Key）
+- DeepSeek 配置（API Key / Base URL / Completions Path / 模型）
+- 关于
 
 **滚动条样式：**
 - 宽度 6px，符合 Apple 设计规范
@@ -159,6 +164,80 @@ VBox (taskPage)
 - 半透明圆角滑块，悬停时加深
 - 透明轨道和按钮，极简风格
 
+### CanvasDialog.fxml
+画布弹窗视图，包含画布内容（已合并 CanvasPage）。
+
+**控制器：** cn.bitloom.controller.CanvasDialogController
+
+**结构：**
+```
+BorderPane (rootContainer) - 主内容区
+└── VBox (canvasPage) - 画布内容
+    └── AnchorPane (canvasAnchor)
+        ├── StackPane (canvasContainer) - 画布容器
+        ├── HBox - 悬浮工具栏容器（顶部居中）
+        │   └── HBox (floatingToolbar) - 悬浮工具栏
+        │       ├── ToggleButton (selectBtn) - 选择工具
+        │       ├── ToggleButton (rectangleBtn) - 矩形工具
+        │       ├── ToggleButton (diamondBtn) - 菱形工具
+        │       ├── ToggleButton (ellipseBtn) - 椭圆工具
+        │       ├── ToggleButton (arrowBtn) - 箭头工具
+        │       ├── ToggleButton (lineBtn) - 线条工具
+        │       ├── ToggleButton (freehandBtn) - 手绘工具
+        │       └── ToggleButton (textBtn) - 文字工具
+        ├── VBox (propertyPanel) - 左侧属性面板（悬浮卡片）
+        │   ├── 描边颜色色块
+        │   ├── 填充颜色色块
+        │   ├── 线宽选项
+        │   ├── 边框样式选项
+        │   ├── 手绘风格选项
+        │   ├── 边角选项
+        │   └── 透明度滑块
+        └── VBox (layerPanel) - 右下角图层面板
+            ├── Label - "图层" 标题
+            └── ListView (layerListView) - 图层列表
+```
+
+**特性：**
+- 使用 WindowManager 创建弹窗，使用操作系统默认标题栏（StageStyle.UNIFIED）
+- 可调整大小，最小 800x500，默认 1100x750
+- 工具栏使用 ToggleGroup 实现工具互斥选择，仅包含8个绘图工具按钮
+- 悬浮工具栏采用 Apple 风格，半透明毛玻璃背景，圆角12px
+- 属性面板按工具动态显示：选中工具时立即显示该工具的属性配置
+  - 选择工具：仅在有选中元素时显示全部属性
+  - 矩形/菱形/椭圆：描边、填充、线宽、样式、手绘、边角、透明度
+  - 箭头/线条：描边、线宽、样式、手绘、透明度
+  - 手绘：描边、线宽、透明度
+  - 文字：描边（文字颜色）、透明度
+- 画布区域使用 StackPane 支持叠加层
+- 文字渲染使用手写字体（Segoe Script/Bradley Hand/Comic Sans MS）
+- 缩放通过 Ctrl+滚轮操作
+
+### GepPage.fxml
+基因进化管理页面视图。
+
+**控制器：** GepPageController
+
+**结构：**
+```
+VBox (gepPage)
+└── ScrollPane
+    └── VBox (gep-page__content)
+        ├── 进化策略卡片
+        │   └── HBox - 策略选择 + 执行按钮
+        ├── 基因库卡片
+        │   └── VBox (genesContainer) - 基因列表项
+        ├── 胶囊库卡片
+        │   └── VBox (capsulesContainer) - 胶囊列表项
+        └── 进化事件卡片
+            └── VBox (eventsContainer) - 事件列表项
+```
+
+**滚动条样式：**
+- 宽度 6px，符合 Apple 设计规范
+- 半透明圆角滑块，悬停时加深
+- 透明轨道和按钮，极简风格
+
 ### WorkflowPage.fxml
 工作流管理页面视图。
 
@@ -172,66 +251,6 @@ VBox (workflowPage)
 ```
 
 ## 对话框视图
-
-### FileEditorDialog.fxml
-通用文件编辑器对话框，IDEA风格布局，无系统标题栏。
-
-**控制器：** FileEditorController
-
-**结构：**
-```
-StackPane (window-chrome) - 透明窗口容器（8px padding，为阴影留空间）
-└── BorderPane (window-chrome__content) - 主内容区（圆角8px，阴影效果）
-    ├── HBox (top) - 工具栏（可拖拽移动窗口）
-    │   ├── HBox (iconArea) - 应用图标区域（40px宽，与左侧栏对齐）
-    │   ├── HBox (toolbar-buttons) - 工具栏按钮
-    │   │   ├── Button - 新建文件
-    │   │   └── Button - 新建文件夹
-    │   ├── Region (spacer) - 弹性空间（可拖拽移动窗口）
-    │   └── HBox (windowControls) - Windows风格窗口控制按钮
-    │       ├── Button - 最小化
-    │       ├── Button - 最大化/还原
-    │       └── Button - 关闭（悬停变红色）
-    ├── HBox (center) - 主内容区
-    │   ├── VBox (leftBar) - 左侧按钮栏（窄条形）
-    │   │   └── ToggleButton (treeToggleBtn) - 文件树切换
-    │   ├── SplitPane (splitPane) - 分割面板
-    │   │   ├── VBox (treePanel) - 文件树面板
-    │   │   │   └── TreeView (fileTree) - 文件树
-    │   │   └── VBox (editorPanel) - 编辑器面板
-    │   │       ├── TabPane (tabPane) - 文件Tab页
-    │   │       └── VBox (emptyState) - 空状态提示
-    │   └── VBox (rightBar) - 右侧按钮栏（窄条形）
-    │       ├── Button (previewBtn) - Markdown预览按钮（默认隐藏）
-    │       └── Button (formatBtn) - 代码格式化按钮（默认隐藏）
-    └── HBox (footer) - 底部状态栏
-        ├── Label (filePathLabel) - 文件路径
-        ├── Region - 弹性空间
-        ├── Label (encodingLabel) - 编码
-        └── Label (lineColLabel) - 行号列号
-```
-
-**窗口特性：**
-- 使用 `StageStyle.TRANSPARENT` 创建无系统标题栏窗口
-- Scene 背景透明，BorderPane 有圆角和阴影
-- 工具栏支持拖拽移动窗口（通过 WindowChromeHelper）
-- 双击工具栏切换最大化/还原
-- 边缘拖拽调整窗口大小（6px 边缘检测区域，8个方向）
-- Windows 风格窗口控制按钮（最小化/最大化/关闭）
-- 关闭按钮悬停变红色（#e81123）
-- 窗口最小尺寸 600x400
-- 从最大化状态拖拽工具栏自动还原窗口
-- 使用 WindowChromeHelper 封装通用能力
-
-**样式特性：**
-- IDEA风格布局，左侧/右侧/顶部有按钮栏
-- 编辑器区域深色背景，其他区域浅色
-- 左侧目录树和右侧编辑器都是圆角卡片
-- Tab多文件编辑，Tab有图标、文件名、关闭按钮
-- 代码编辑器带行号显示
-- 自定义新建/重命名/删除弹窗（无系统栏，StageStyle.TRANSPARENT）
-- 工具栏按钮与系统风格一致（8px圆角、浅灰背景）
-- 引入 window-chrome.css 公共样式
 
 ### BrowserDialog.fxml
 浏览器对话框。

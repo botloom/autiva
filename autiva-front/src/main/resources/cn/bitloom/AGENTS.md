@@ -6,34 +6,28 @@
 ## 文件列表
 
 ### index.fxml
-应用主布局文件，无系统标题栏设计。
+应用主布局文件，使用系统默认标题栏。
 
 **控制器：** IndexController
 
 **结构：**
 ```
-StackPane (window-chrome) - 透明窗口容器
-└── BorderPane (rootContainer, window-chrome__content) - 主内容区
-    ├── HBox (top) - 工具栏
-    │   ├── HBox (iconArea) - 应用图标区域
-    │   ├── Region (spacer) - 弹性空间
-    │   └── HBox (windowControls) - 窗口控制按钮
-    └── HBox (center) - 内容区
-        ├── fx:include (SideBar.fxml) - 侧边栏
-        └── VBox
-            ├── fx:include (ButtonBar.fxml) - 底部按钮栏
-            ├── fx:include (HomePage.fxml) - 主页
-            ├── fx:include (SettingsPage.fxml) - 设置页
-            ├── fx:include (SkillPage.fxml) - 技能页
-            ├── fx:include (McpPage.fxml) - MCP 页
-            └── fx:include (TaskPage.fxml) - 任务页
+BorderPane (rootContainer) - 主内容区
+└── HBox (center) - 内容区
+    ├── fx:include (SideBar.fxml) - 侧边栏
+    └── VBox
+        ├── fx:include (ButtonBar.fxml) - 底部按钮栏
+        ├── fx:include (HomePage.fxml) - 主页
+        ├── fx:include (SettingsPage.fxml) - 设置页
+        ├── fx:include (SkillPage.fxml) - 技能页
+        ├── fx:include (GepPage.fxml) - 基因进化页
+        └── fx:include (TaskPage.fxml) - 任务页
 ```
 
-**样式表：** `@style/window-chrome.css,@style/index.css`
+**样式表：** `@style/index.css`
 
 **特点：**
-- 使用 StageStyle.TRANSPARENT 无系统标题栏
-- 使用 WindowChromeHelper 封装拖拽移动、边缘缩放、窗口控制
+- 使用系统默认标题栏
 - 使用 fx:include 引入子组件
 - 水平布局：侧边栏 + 主内容区
 - 所有页面默认只显示主页
@@ -55,7 +49,6 @@ cn/bitloom/
 │   ├── ButtonBar.fxml
 │   └── SideBar.fxml
 ├── style/                 # 样式文件
-│   ├── window-chrome.css  # 无系统栏窗口公共样式
 │   ├── index.css
 │   ├── button-bar.css
 │   ├── side-bar.css
@@ -84,6 +77,7 @@ cn/bitloom/
 │   ├── SkillPage.fxml
 │   ├── McpPage.fxml
 │   ├── TaskPage.fxml
+│   ├── CanvasDialog.fxml
 │   ├── BrowserDialog.fxml
 │   ├── SkillEditorDialog.fxml
 │   └── chat.html
@@ -106,8 +100,9 @@ stylesheets="@./css/home-page.css"
 ```
 
 ### 图像加载
+
 ```java
-Image image = new Image(getClass().getResourceAsStream("/cn/bitloom/images/icon.png"));
+Image image = new Image(getClass().getResourceAsStream("/cn/bitloom/images/icon_bak.png"));
 ```
 
 ## 注意事项

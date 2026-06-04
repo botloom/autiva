@@ -13,7 +13,7 @@
 **方法：**
 - `getName()`: 返回子代理的唯一名称
 - `getDescription()`: 返回子代理能力的描述
-- `getKind()`: 返回类型标识符（如 "CODE"、"A2A"）
+- `getKind()`: 返回类型标识符（如 "GENERIC"、"DOCTOR"、"A2A"），所有类型标识符统一由 `AgentIdentityEnum` 定义
 - `reference()`: 返回用于解析此定义的引用
 - `toSubagentRegistrations()`: 格式化注册显示，默认格式为 `- **name**: description`
 
@@ -46,7 +46,7 @@
 
 **字段：**
 - `uri`: 资源URI（classpath或文件路径）
-- `kind`: 子代理类型（如 "CODE"）
+- `kind`: 子代理类型（如 "GENERIC"），所有类型标识符统一由 `AgentIdentityEnum` 定义
 - `metadata`: 可选的键值元数据
 
 ### TaskCall

@@ -51,6 +51,30 @@ public class SandboxController {
                 .map(logs -> ResponseEntity.ok(Map.of("logs", logs)));
     }
 
+    @PostMapping("/restart")
+    public Mono<ResponseEntity<Map<String, Object>>> restartProject(
+            @RequestParam String clientId,
+            @RequestParam String projectName) {
+        return sandboxService.restartProject(clientId, projectName)
+                .map(result -> ResponseEntity.ok(Map.<String, Object>of(
+                        "success", true,
+                        "url", result.url(),
+                        "sandboxId", result.sandboxId(),
+                        "subdomain", result.subdomain()
+                )))
+                .onErrorResume(e -> Mono.just(ResponseEntity.internalServerError()
+                        .body(Map.<String, Object>of("success", false, "message", e.getMessage()))));
+    }
+
+    @GetMapping("/details")
+    public Mono<ResponseEntity<Map<String, Object>>> getProjectDetails(
+            @RequestParam String clientId,
+            @RequestParam String projectName) {
+        return sandboxService.getProjectDetails(clientId, projectName)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/{subdomain}")
     public Mono<ResponseEntity<SandboxInfo>> getSandboxBySubdomain(@PathVariable String subdomain) {
         return sandboxService.getServiceBySubdomain(subdomain)

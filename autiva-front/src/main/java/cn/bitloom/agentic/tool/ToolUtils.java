@@ -2,10 +2,9 @@ package cn.bitloom.agentic.tool;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
 import java.util.Set;
 
-final class ToolUtils {
+public final class ToolUtils {
 
     private static final Set<String> IGNORED_DIR_NAMES = Set.of(
             ".git", "node_modules", "target", "build", ".idea",
@@ -15,7 +14,7 @@ final class ToolUtils {
     private ToolUtils() {
     }
 
-    static boolean isIgnoredPath(Path path) {
+    public static boolean isIgnoredPath(Path path) {
         for (Path part : path) {
             if (IGNORED_DIR_NAMES.contains(part.toString())) {
                 return true;
@@ -24,7 +23,7 @@ final class ToolUtils {
         return false;
     }
 
-    static Path resolveWorkingDirectory(String path, Path workingDirectory) {
+    public static Path resolveWorkingDirectory(String path, Path workingDirectory) {
         if (path != null && !path.isBlank()) {
             return Paths.get(path);
         }
@@ -34,7 +33,7 @@ final class ToolUtils {
         return Paths.get(System.getProperty("user.dir"));
     }
 
-    static int countOccurrences(String text, String substring) {
+    public static int countOccurrences(String text, String substring) {
         int count = 0;
         int index = 0;
         while ((index = text.indexOf(substring, index)) != -1) {
@@ -44,7 +43,7 @@ final class ToolUtils {
         return count;
     }
 
-    static String replaceFirst(String text, String oldStr, String newStr) {
+    public static String replaceFirst(String text, String oldStr, String newStr) {
         int index = text.indexOf(oldStr);
         if (index == -1) {
             return text;
@@ -52,7 +51,7 @@ final class ToolUtils {
         return text.substring(0, index) + newStr + text.substring(index + oldStr.length());
     }
 
-    static String replaceAll(String text, String oldStr, String newStr) {
+    public static String replaceAll(String text, String oldStr, String newStr) {
         StringBuilder result = new StringBuilder();
         int index = 0;
         int lastIndex = 0;
@@ -67,7 +66,7 @@ final class ToolUtils {
         return result.toString();
     }
 
-    static String generateEditSnippet(String fileContent, String newString) {
+    public static String generateEditSnippet(String fileContent, String newString) {
         String[] lines = fileContent.split("\n", -1);
         String[] newLines = newString.split("\n", -1);
 

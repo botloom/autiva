@@ -20,6 +20,8 @@ public class ChatMessage {
     private final ObservableList<ToolCallInfo> toolCalls = FXCollections.observableArrayList();
     @Getter
     private final ObservableList<ToolResponseInfo> responses = FXCollections.observableArrayList();
+    @Getter
+    private final ObservableList<String> attachments = FXCollections.observableArrayList();
 
     public ChatMessage(Type type) {
         this.type = type;
