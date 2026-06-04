@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import cn.bitloom.node.SvgImageView?>
+
+<BorderPane fx:id="rootContainer"
+      stylesheets="@../style/canvas-page.css"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.CanvasDialogController"
+      prefWidth="1100" prefHeight="750">
+
+    <center>
+        <VBox fx:id="canvasPage" styleClass="canvas-page"
+              VBox.vgrow="ALWAYS">
+
+            <AnchorPane fx:id="canvasAnchor" styleClass="canvas-page__anchor" VBox.vgrow="ALWAYS">
+                <!-- 画布区域 - 底层，填满整个区域 -->
+                <StackPane fx:id="canvasContainer" styleClass="canvas-page__canvas-container"
+                           AnchorPane.topAnchor="0" AnchorPane.rightAnchor="0"
+                           AnchorPane.bottomAnchor="0" AnchorPane.leftAnchor="0"/>
+
+                <!-- 悬浮工具栏 - 顶部居中 -->
+                <HBox alignment="CENTER"
+                      AnchorPane.topAnchor="12" AnchorPane.leftAnchor="0" AnchorPane.rightAnchor="0">
+                    <HBox fx:id="floatingToolbar" styleClass="canvas-page__floating-toolbar"
+                          alignment="CENTER" spacing="2">
+                        <!-- 工具按钮 - 图形图标，text留空由代码设置 -->
+                        <ToggleButton fx:id="selectBtn" styleClass="canvas-page__tool-btn" selected="true"/>
+                        <ToggleButton fx:id="rectangleBtn" styleClass="canvas-page__tool-btn"/>
+                        <ToggleButton fx:id="diamondBtn" styleClass="canvas-page__tool-btn"/>
+                        <ToggleButton fx:id="ellipseBtn" styleClass="canvas-page__tool-btn"/>
+                        <ToggleButton fx:id="arrowBtn" styleClass="canvas-page__tool-btn"/>
+                        <ToggleButton fx:id="lineBtn" styleClass="canvas-page__tool-btn"/>
+                        <ToggleButton fx:id="freehandBtn" styleClass="canvas-page__tool-btn"/>
+                        <ToggleButton fx:id="textBtn" styleClass="canvas-page__tool-btn"/>
+                        <Separator fx:id="toolbarSeparator" styleClass="canvas-page__toolbar-separator" orientation="VERTICAL"/>
+                        <Button fx:id="sendToChatBtn" styleClass="canvas-page__send-btn" contentDisplay="GRAPHIC_ONLY"/>
+                    </HBox>
+                </HBox>
+
+                <!-- 左侧属性面板 - 悬浮卡片，按工具动态显示/隐藏属性行 -->
+                <VBox fx:id="propertyPanel" styleClass="canvas-page__property-panel"
+                      visible="false" managed="false" prefWidth="180"
+                      AnchorPane.topAnchor="60" AnchorPane.leftAnchor="12">
+                    <!-- 描边颜色 -->
+                    <HBox fx:id="strokeColorRow" styleClass="canvas-page__prop-row" alignment="CENTER_LEFT">
+                        <Label styleClass="canvas-page__prop-label" text="描边"/>
+                        <HBox fx:id="strokeColorBox" styleClass="canvas-page__color-swatch-row" spacing="3"/>
+                    </HBox>
+
+                    <!-- 背景填充 -->
+                    <HBox fx:id="fillColorRow" styleClass="canvas-page__prop-row" alignment="CENTER_LEFT">
+                        <Label styleClass="canvas-page__prop-label" text="填充"/>
+                        <HBox fx:id="fillColorBox" styleClass="canvas-page__color-swatch-row" spacing="3"/>
+                    </HBox>
+
+                    <Separator fx:id="propSeparator1" styleClass="canvas-page__prop-separator"/>
+
+                    <!-- 描边宽度 -->
+                    <HBox fx:id="strokeWidthRow" styleClass="canvas-page__prop-row" alignment="CENTER_LEFT">
+                        <Label styleClass="canvas-page__prop-label" text="线宽"/>
+                        <ToggleButton fx:id="strokeThinBtn" styleClass="canvas-page__option-btn"/>
+                        <ToggleButton fx:id="strokeMediumBtn" styleClass="canvas-page__option-btn"/>
+                        <ToggleButton fx:id="strokeThickBtn" styleClass="canvas-page__option-btn"/>
+                    </HBox>
+
+                    <!-- 边框样式 -->
+                    <HBox fx:id="lineStyleRow" styleClass="canvas-page__prop-row" alignment="CENTER_LEFT">
+                        <Label styleClass="canvas-page__prop-label" text="样式"/>
+                        <ToggleButton fx:id="lineSolidBtn" styleClass="canvas-page__option-btn"/>
+                        <ToggleButton fx:id="lineDashedBtn" styleClass="canvas-page__option-btn"/>
+                        <ToggleButton fx:id="lineDottedBtn" styleClass="canvas-page__option-btn"/>
+                    </HBox>
+
+                    <!-- 手绘风格 -->
+                    <HBox fx:id="roughnessRow" styleClass="canvas-page__prop-row" alignment="CENTER_LEFT">
+                        <Label styleClass="canvas-page__prop-label" text="手绘"/>
+                        <ToggleButton fx:id="roughNeatBtn" styleClass="canvas-page__option-btn"/>
+                        <ToggleButton fx:id="roughRoughBtn" styleClass="canvas-page__option-btn"/>
+                        <ToggleButton fx:id="roughMessyBtn" styleClass="canvas-page__option-btn"/>
+                    </HBox>
+
+                    <!-- 边角 -->
+                    <HBox fx:id="cornerRow" styleClass="canvas-page__prop-row" alignment="CENTER_LEFT">
+                        <Label styleClass="canvas-page__prop-label" text="边角"/>
+                        <ToggleButton fx:id="cornerSharpBtn" styleClass="canvas-page__option-btn"/>
+                        <ToggleButton fx:id="cornerRoundBtn" styleClass="canvas-page__option-btn"/>
+                    </HBox>
+
+                    <Separator fx:id="propSeparator2" styleClass="canvas-page__prop-separator"/>
+
+                    <!-- 透明度 -->
+                    <HBox fx:id="opacityRow" styleClass="canvas-page__prop-row" alignment="CENTER_LEFT">
+                        <Label styleClass="canvas-page__prop-label" text="透明"/>
+                        <Slider fx:id="opacitySlider" max="1" value="1" styleClass="canvas-page__slider" HBox.hgrow="ALWAYS"/>
+                    </HBox>
+
+                </VBox>
+
+                <!-- 右下角图层面板 -->
+                <VBox fx:id="layerPanel" styleClass="canvas-page__layer-panel"
+                      prefWidth="200" prefHeight="240"
+                      AnchorPane.bottomAnchor="12" AnchorPane.rightAnchor="12">
+                    <Label styleClass="canvas-page__panel-title" text="图层"/>
+                    <ListView fx:id="layerListView" styleClass="canvas-page__layer-list" VBox.vgrow="ALWAYS"/>
+                </VBox>
+            </AnchorPane>
+        </VBox>
+    </center>
+
+</BorderPane>

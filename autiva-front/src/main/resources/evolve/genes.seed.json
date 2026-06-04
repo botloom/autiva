@@ -1,0 +1,126 @@
+[
+  {
+    "id": "gene_repair_from_errors",
+    "category": "REPAIR",
+    "signalsMatch": ["log_error", "errsig", "recurring_error"],
+    "preconditions": ["error_signal_detected"],
+    "strategy": [
+      "分析错误信号的来源和模式",
+      "定位导致错误的具体代码或配置",
+      "制定最小化修复方案",
+      "验证修复后错误不再出现",
+      "记录修复策略供未来参考"
+    ],
+    "constraints": {
+      "max_files": 5,
+      "blast_radius_limit": 3,
+      "require_validation": true
+    },
+    "validation": [
+      "错误信号不再出现",
+      "相关测试通过",
+      "无新错误引入"
+    ],
+    "epigeneticBoost": 1.0,
+    "summary": "从错误信号中学习修复策略",
+    "antiPatterns": [
+      "不要同时修复多个不相关的错误",
+      "不要在没有理解错误原因的情况下盲目修改",
+      "不要跳过验证步骤"
+    ],
+    "enabled": true
+  },
+  {
+    "id": "gene_optimize_prompt_and_assets",
+    "category": "OPTIMIZE",
+    "signalsMatch": ["perf_bottleneck", "high_tool_usage", "stable_success_plateau"],
+    "preconditions": ["system_stable"],
+    "strategy": [
+      "分析当前性能指标和资源使用情况",
+      "识别性能瓶颈和优化机会",
+      "制定优化方案（提示词精简、缓存策略、工具调用优化）",
+      "实施优化并测量效果",
+      "记录优化前后的对比数据"
+    ],
+    "constraints": {
+      "max_files": 8,
+      "blast_radius_limit": 6,
+      "require_before_after_comparison": true
+    },
+    "validation": [
+      "性能指标有可测量的改善",
+      "功能完整性不受影响",
+      "资源使用效率提升"
+    ],
+    "epigeneticBoost": 1.0,
+    "summary": "优化提示词和资产以提升系统性能",
+    "antiPatterns": [
+      "不要在系统不稳定时进行优化",
+      "不要过度优化导致可读性下降",
+      "不要忽略优化的副作用"
+    ],
+    "enabled": true
+  },
+  {
+    "id": "gene_innovate_from_opportunity",
+    "category": "INNOVATE",
+    "signalsMatch": ["user_feature_request", "capability_gap", "explore_opportunity"],
+    "preconditions": ["opportunity_identified"],
+    "strategy": [
+      "分析用户需求或能力缺口",
+      "探索可能的解决方案和创新方向",
+      "评估每个方案的风险和收益",
+      "选择最优方案进行原型验证",
+      "根据验证结果决定是否固化"
+    ],
+    "constraints": {
+      "max_files": 12,
+      "blast_radius_limit": 8,
+      "require_user_feedback": true
+    },
+    "validation": [
+      "新能力确实解决了用户需求",
+      "没有引入新的问题",
+      "用户体验有可感知的改善"
+    ],
+    "epigeneticBoost": 1.0,
+    "summary": "从机会信号中探索新能力",
+    "antiPatterns": [
+      "不要在修复循环期间进行创新",
+      "不要忽视用户反馈",
+      "不要一次性引入过多新功能"
+    ],
+    "enabled": true
+  },
+  {
+    "id": "gene_tool_integrity",
+    "category": "REPAIR",
+    "signalsMatch": ["tool_bypass", "memory_missing", "session_logs_missing"],
+    "preconditions": ["tool_integrity_issue"],
+    "strategy": [
+      "检测工具完整性问题（绕过、缺失、异常）",
+      "分析问题根因（配置错误、权限不足、依赖缺失）",
+      "恢复工具的正常功能",
+      "增加防护措施防止问题再次发生",
+      "验证工具链完整性"
+    ],
+    "constraints": {
+      "max_files": 3,
+      "blast_radius_limit": 2,
+      "require_tool_chain_validation": true
+    },
+    "validation": [
+      "工具功能恢复正常",
+      "防护措施已生效",
+      "工具链完整性检查通过"
+    ],
+    "epigeneticBoost": 1.0,
+    "summary": "维护工具链完整性和可靠性",
+    "antiPatterns": [
+      "不要忽略工具绕过行为",
+      "不要在未理解原因的情况下重试",
+      "不要降低安全标准来绕过问题"
+    ],
+    "enabled": true
+  }
+]

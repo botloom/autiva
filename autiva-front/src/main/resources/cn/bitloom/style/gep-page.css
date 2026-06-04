@@ -1,0 +1,434 @@
+.gep-page {
+    -fx-background-color: #ffffff;
+    -fx-padding: 24;
+    -fx-alignment: top-center;
+    -fx-vgrow: always;
+}
+
+.gep-page__scroll-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-pref-width: 600;
+    -fx-max-width: 700;
+    -fx-hbar-policy: never;
+    -fx-fit-to-width: true;
+    -fx-fit-to-height: true;
+}
+
+.gep-page__scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.gep-page__scroll-pane .scroll-bar {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6;
+    -fx-pref-height: 6;
+}
+
+.gep-page__scroll-pane .scroll-bar .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+    -fx-background-radius: 3;
+}
+
+.gep-page__scroll-pane .scroll-bar .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.25);
+}
+
+.gep-page__scroll-pane .scroll-bar .thumb:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.4);
+}
+
+.gep-page__scroll-pane .scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+.gep-page__scroll-pane .scroll-bar .increment-button,
+.gep-page__scroll-pane .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.gep-page__scroll-pane .scroll-bar .increment-arrow,
+.gep-page__scroll-pane .scroll-bar .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.gep-page__scroll-pane .corner {
+    -fx-background-color: transparent;
+}
+
+.gep-page__content {
+    -fx-spacing: 32;
+    -fx-padding: 0 32 32 32;
+}
+
+.gep-page__section-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+    -fx-padding: 0 0 4 0;
+}
+
+.gep-page__card {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12px;
+    -fx-background-insets: 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.04), 12, 0, 0, 2);
+    -fx-border-color: rgba(0, 0, 0, 0.08);
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+    -fx-border-insets: 0;
+    -fx-padding: 16;
+    -fx-spacing: 12;
+}
+
+.gep-page__row {
+    -fx-padding: 4 0;
+    -fx-spacing: 12;
+    -fx-alignment: center-left;
+}
+
+.gep-page__row-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.gep-page__action-btn {
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 26px;
+    -fx-padding: 4 10px;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.gep-page__action-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}
+
+.gep-page__action-btn:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+}
+
+.gep-page__strategy-select {
+    -fx-pref-width: 160;
+    -fx-pref-height: 26px;
+    -fx-background-color: rgba(0, 0, 0, 0.03);
+    -fx-background-radius: 4px;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.gep-page__strategy-select:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.06);
+}
+
+.gep-page__strategy-select .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #1d1d1f;
+    -fx-padding: 0 8;
+}
+
+.gep-page__strategy-select .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 6;
+}
+
+.gep-page__strategy-select .arrow {
+    -fx-background-color: #86868b;
+    -fx-padding: 0;
+}
+
+.gep-page__strategy-select .combo-box-popup .list-view {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12px;
+    -fx-border-color: rgba(0, 0, 0, 0.08);
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 16, 0, 0, 4);
+    -fx-padding: 4;
+}
+
+.gep-page__strategy-select .combo-box-popup .list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #1d1d1f;
+    -fx-padding: 8 12;
+    -fx-cursor: hand;
+    -fx-background-radius: 8px;
+}
+
+.gep-page__strategy-select .combo-box-popup .list-view .list-cell:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.04);
+}
+
+.gep-page__strategy-select .combo-box-popup .list-view .list-cell:selected {
+    -fx-background-color: rgba(0, 122, 255, 0.1);
+    -fx-text-fill: #007aff;
+}
+
+/* ========== Gene Item ========== */
+
+.gep-page__gene-item {
+    -fx-background-color: rgba(0, 0, 0, 0.02);
+    -fx-background-radius: 8px;
+    -fx-padding: 12 16;
+    -fx-spacing: 6;
+}
+
+.gep-page__gene-header {
+    -fx-alignment: center-left;
+    -fx-spacing: 8;
+}
+
+.gep-page__gene-id {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.gep-page__gene-tag {
+    -fx-font-size: 10px;
+    -fx-font-weight: 600;
+    -fx-padding: 1 6;
+    -fx-background-radius: 3;
+    -fx-text-fill: white;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.gep-page__gene-tag--REPAIR {
+    -fx-background-color: #ff9500;
+}
+
+.gep-page__gene-tag--OPTIMIZE {
+    -fx-background-color: #007aff;
+}
+
+.gep-page__gene-tag--INNOVATE {
+    -fx-background-color: #af52de;
+}
+
+.gep-page__gene-tag--enabled {
+    -fx-background-color: rgba(52, 199, 89, 0.12);
+    -fx-text-fill: #34c759;
+}
+
+.gep-page__gene-tag--disabled {
+    -fx-background-color: rgba(142, 142, 147, 0.12);
+    -fx-text-fill: #8e8e93;
+}
+
+.gep-page__gene-boost {
+    -fx-font-size: 11px;
+    -fx-font-family: "SF Mono", Monaco, monospace;
+    -fx-text-fill: #86868b;
+}
+
+.gep-page__gene-summary {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #6e6e73;
+    -fx-wrap-text: true;
+}
+
+.gep-page__gene-signals {
+    -fx-font-size: 11px;
+    -fx-font-family: "SF Mono", Monaco, monospace;
+    -fx-text-fill: #86868b;
+    -fx-wrap-text: true;
+}
+
+.gep-page__gene-footer {
+    -fx-alignment: center-left;
+    -fx-spacing: 8;
+    -fx-padding: 2 0 0 0;
+}
+
+.gep-page__gene-actions {
+    -fx-spacing: 6;
+}
+
+.gep-page__gene-action-btn {
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 26px;
+    -fx-padding: 4 10px;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.gep-page__gene-action-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}
+
+.gep-page__gene-action-btn--danger {
+    -fx-text-fill: #ff3b30;
+}
+
+.gep-page__gene-action-btn--danger:hover {
+    -fx-background-color: rgba(255, 59, 48, 0.08);
+}
+
+/* ========== Capsule Item ========== */
+
+.gep-page__capsule-item {
+    -fx-padding: 12 0;
+    -fx-spacing: 8;
+    -fx-border-color: rgba(0, 0, 0, 0.06);
+    -fx-border-width: 0 0 1px 0;
+    -fx-border-insets: 0;
+}
+
+.gep-page__capsule-item:last-child {
+    -fx-border-width: 0;
+    -fx-padding: 12 0 0 0;
+}
+
+.gep-page__capsule-item:first-child {
+    -fx-padding: 0 0 12 0;
+}
+
+.gep-page__capsule-item:only-child {
+    -fx-padding: 0;
+    -fx-border-width: 0;
+}
+
+.gep-page__capsule-header {
+    -fx-alignment: center-left;
+    -fx-spacing: 8;
+}
+
+.gep-page__capsule-id {
+    -fx-font-size: 15px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.gep-page__capsule-score {
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Mono", Monaco, monospace;
+    -fx-text-fill: #86868b;
+}
+
+.gep-page__capsule-genes {
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Mono", Monaco, monospace;
+    -fx-text-fill: #86868b;
+    -fx-wrap-text: true;
+}
+
+.gep-page__capsule-actions {
+    -fx-spacing: 8;
+    -fx-padding: 4 0 0 0;
+}
+
+/* ========== Event Item ========== */
+
+.gep-page__event-item {
+    -fx-padding: 12 0;
+    -fx-spacing: 6;
+    -fx-border-color: rgba(0, 0, 0, 0.06);
+    -fx-border-width: 0 0 1px 0;
+    -fx-border-insets: 0;
+}
+
+.gep-page__event-item:last-child {
+    -fx-border-width: 0;
+    -fx-padding: 12 0 0 0;
+}
+
+.gep-page__event-item:first-child {
+    -fx-padding: 0 0 12 0;
+}
+
+.gep-page__event-item:only-child {
+    -fx-padding: 0;
+    -fx-border-width: 0;
+}
+
+.gep-page__event-header {
+    -fx-alignment: center-left;
+    -fx-spacing: 8;
+}
+
+.gep-page__event-tag {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-padding: 2 8;
+    -fx-background-radius: 4;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.gep-page__event-tag--success {
+    -fx-background-color: rgba(52, 199, 89, 0.12);
+    -fx-text-fill: #34c759;
+}
+
+.gep-page__event-tag--pending {
+    -fx-background-color: rgba(255, 149, 0, 0.12);
+    -fx-text-fill: #ff9500;
+}
+
+.gep-page__event-tag--failed {
+    -fx-background-color: rgba(255, 59, 48, 0.12);
+    -fx-text-fill: #ff3b30;
+}
+
+.gep-page__event-tag--unknown {
+    -fx-background-color: rgba(142, 142, 147, 0.12);
+    -fx-text-fill: #8e8e93;
+}
+
+.gep-page__event-id {
+    -fx-font-size: 15px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.gep-page__event-details {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #6e6e73;
+    -fx-wrap-text: true;
+}
+
+.gep-page__event-time {
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Mono", Monaco, monospace;
+    -fx-text-fill: #86868b;
+}
+
+/* ========== Empty & Spacer ========== */
+
+.gep-page__empty {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+    -fx-padding: 16 0;
+}
+
+.gep-page__spacer {
+    -fx-min-height: 40;
+}

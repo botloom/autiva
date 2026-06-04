@@ -1,0 +1,355 @@
+/* Canvas Page - Excalidraw Style */
+
+.canvas-page {
+    -fx-background-color: #ffffff;
+}
+
+.canvas-page__anchor {
+    -fx-background-color: #ffffff;
+}
+
+/* 画布容器 */
+.canvas-page__canvas-container {
+    -fx-background-color: #ffffff;
+}
+
+/* ========== Send to Chat 按钮 ========== */
+.canvas-page__send-btn {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8;
+    -fx-padding: 5 6;
+    -fx-cursor: hand;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-content-display: GRAPHIC_ONLY;
+    -fx-min-width: 34;
+    -fx-min-height: 30;
+    -fx-pref-width: 34;
+    -fx-pref-height: 30;
+}
+
+.canvas-page__send-btn:hover {
+    -fx-background-color: rgba(0,113,227,0.08);
+}
+
+.canvas-page__send-btn:pressed {
+    -fx-background-color: rgba(0,113,227,0.16);
+}
+
+/* 工具栏竖线分隔符 */
+.canvas-page__toolbar-separator {
+    -fx-padding: 4 2;
+}
+
+.canvas-page__toolbar-separator .line {
+    -fx-border-color: rgba(0,0,0,0.12);
+    -fx-border-width: 0.5;
+}
+
+/* ========== 悬浮卡片通用样式 ========== */
+.canvas-page__floating-toolbar,
+.canvas-page__property-panel,
+.canvas-page__layer-panel {
+    -fx-background-color: rgba(255,255,255,0.92);
+    -fx-background-radius: 12;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 16, 0.4, 0, 4);
+    -fx-border-color: rgba(0,0,0,0.04);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 12;
+}
+
+/* ========== 悬浮工具栏 ========== */
+.canvas-page__floating-toolbar {
+    -fx-padding: 4 6;
+    -fx-spacing: 2;
+    -fx-alignment: CENTER;
+}
+
+/* 工具按钮 - 精致 Apple 风格 */
+.canvas-page__tool-btn {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8;
+    -fx-padding: 5 6;
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+    -fx-cursor: hand;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-content-display: GRAPHIC_ONLY;
+    -fx-min-width: 34;
+    -fx-min-height: 30;
+    -fx-pref-width: 34;
+    -fx-pref-height: 30;
+}
+
+.canvas-page__tool-btn:hover {
+    -fx-background-color: rgba(0,0,0,0.04);
+}
+
+.canvas-page__tool-btn:pressed {
+    -fx-background-color: rgba(0,0,0,0.08);
+}
+
+.canvas-page__tool-btn:selected {
+    -fx-background-color: rgba(0,113,227,0.1);
+    -fx-border-color: rgba(0,113,227,0.3);
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+}
+
+.canvas-page__tool-btn:selected:hover {
+    -fx-background-color: rgba(0,113,227,0.16);
+}
+
+/* 选中工具按钮时图标变色 */
+.canvas-page__tool-btn:selected > * {
+    -fx-stroke: #0071e3;
+    -fx-fill: transparent;
+}
+
+/* ========== 左侧属性面板（悬浮卡片） ========== */
+.canvas-page__property-panel {
+    -fx-padding: 10 10;
+    -fx-spacing: 3;
+}
+
+.canvas-page__panel-title {
+    -fx-font-size: 11px;
+    -fx-font-weight: 700;
+    -fx-font-family: "SF Pro Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #222;
+    -fx-padding: 0 0 4 0;
+}
+
+/* 属性行 - 标签和控件在同一行 */
+.canvas-page__prop-row {
+    -fx-spacing: 4;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 2 0;
+}
+
+/* 行内标签 */
+.canvas-page__prop-label {
+    -fx-font-size: 10px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #999;
+    -fx-pref-width: 28;
+    -fx-min-width: 28;
+    -fx-padding: 0;
+}
+
+/* 分隔线 */
+.canvas-page__prop-separator {
+    -fx-padding: 2 0;
+}
+
+/* 色块行 */
+.canvas-page__color-swatch-row {
+    -fx-padding: 0;
+    -fx-alignment: CENTER_LEFT;
+    -fx-spacing: 3;
+}
+
+/* 选项按钮（描边宽度、线条风格等） */
+.canvas-page__option-btn {
+    -fx-background-color: rgba(0,0,0,0.03);
+    -fx-background-radius: 6;
+    -fx-padding: 2 4;
+    -fx-font-size: 10px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #555;
+    -fx-cursor: hand;
+    -fx-border-color: rgba(0,0,0,0.06);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 6;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-min-width: 26;
+    -fx-pref-width: 26;
+    -fx-content-display: GRAPHIC_ONLY;
+}
+
+.canvas-page__option-btn:hover {
+    -fx-background-color: rgba(0,0,0,0.06);
+    -fx-text-fill: #333;
+}
+
+.canvas-page__option-btn:selected {
+    -fx-background-color: rgba(0,113,227,0.1);
+    -fx-text-fill: #0071e3;
+    -fx-font-weight: 600;
+    -fx-border-color: rgba(0,113,227,0.3);
+    -fx-border-width: 1;
+}
+
+/* Slider - 精细轨道 */
+.canvas-page__slider {
+    -fx-pref-width: 120;
+    -fx-padding: 0;
+}
+
+.canvas-page__slider .track {
+    -fx-background-color: rgba(0,0,0,0.08);
+    -fx-background-radius: 2;
+    -fx-pref-height: 3;
+}
+
+.canvas-page__slider .thumb {
+    -fx-background-color: #fff;
+    -fx-border-color: #0071e3;
+    -fx-border-width: 1.5;
+    -fx-border-radius: 6;
+    -fx-pref-width: 12;
+    -fx-pref-height: 12;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(0,113,227,0.2), 4, 0, 0, 1);
+}
+
+.canvas-page__slider .thumb:hover {
+    -fx-background-color: rgba(0,113,227,0.08);
+}
+
+/* ComboBox - 紧凑下拉 */
+.canvas-page__combo {
+    -fx-pref-width: 120;
+    -fx-pref-height: 22;
+    -fx-background-color: #fff;
+    -fx-background-radius: 6;
+    -fx-border-color: rgba(0,0,0,0.08);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 6;
+    -fx-font-size: 10px;
+    -fx-font-family: "SF Pro Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.canvas-page__combo:hover {
+    -fx-border-color: rgba(0,0,0,0.15);
+}
+
+.canvas-page__combo:focused {
+    -fx-border-color: #0071e3;
+    -fx-border-width: 1.5;
+    -fx-background-color: #fff;
+}
+
+.canvas-page__combo .list-cell {
+    -fx-padding: 2 6;
+    -fx-font-size: 10px;
+}
+
+.canvas-page__combo .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 4;
+}
+
+.canvas-page__combo .arrow {
+    -fx-padding: 0;
+    -fx-background-color: #888;
+}
+
+/* ========== 图层面板（悬浮卡片） ========== */
+.canvas-page__layer-panel {
+    -fx-padding: 10;
+    -fx-spacing: 4;
+}
+
+.canvas-page__layer-list {
+    -fx-background-color: #fff;
+    -fx-border-color: rgba(0,0,0,0.06);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-pref-height: 180;
+}
+
+.canvas-page__layer-list .list-cell {
+    -fx-padding: 5 10;
+    -fx-font-size: 11px;
+    -fx-font-family: "SF Pro Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #333;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.canvas-page__layer-list .list-cell:hover {
+    -fx-background-color: rgba(0,0,0,0.03);
+}
+
+.canvas-page__layer-list .list-cell:selected {
+    -fx-background-color: rgba(0,113,227,0.08);
+    -fx-text-fill: #0071e3;
+}
+
+.canvas-page__layer-list .list-cell:empty {
+    -fx-background-color: transparent;
+}
+
+/* CheckBox in layer list */
+.canvas-page__layer-list .check-box {
+    -fx-pref-width: 14;
+    -fx-pref-height: 14;
+}
+
+.canvas-page__layer-list .check-box .box {
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-border-color: rgba(0,0,0,0.12);
+    -fx-border-width: 1;
+    -fx-background-color: #fff;
+}
+
+.canvas-page__layer-list .check-box:selected .box {
+    -fx-background-color: #0071e3;
+    -fx-border-color: #0071e3;
+}
+
+.canvas-page__layer-list .check-box:selected .mark {
+    -fx-background-color: #fff;
+}
+
+/* ========== Context Menu ========== */
+.context-menu {
+    -fx-background-color: rgba(255,255,255,0.95);
+    -fx-background-radius: 10;
+    -fx-border-color: rgba(0,0,0,0.06);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 12, 0, 0, 4);
+    -fx-padding: 4 0;
+}
+
+.context-menu .menu-item {
+    -fx-padding: 6 16;
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Pro Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.context-menu .menu-item:hover {
+    -fx-background-color: rgba(0,113,227,0.08);
+    -fx-background-radius: 6;
+}
+
+/* ========== ScrollBar ========== */
+.canvas-page__layer-list .scroll-bar:vertical {
+    -fx-pref-width: 6;
+    -fx-background-color: transparent;
+}
+
+.canvas-page__layer-list .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(0,0,0,0.12);
+    -fx-background-radius: 3;
+}
+
+.canvas-page__layer-list .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.canvas-page__layer-list .scroll-bar:vertical .increment-button,
+.canvas-page__layer-list .scroll-bar:vertical .decrement-button {
+    -fx-padding: 0;
+    -fx-pref-width: 0;
+}

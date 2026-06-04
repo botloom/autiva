@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:id="gepPage" styleClass="gep-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.GepPageController"
+      alignment="TOP_CENTER"
+      stylesheets="@../style/gep-page.css"
+>
+    <ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="NEVER" VBox.vgrow="ALWAYS"
+                styleClass="gep-page__scroll-pane" prefWidth="600" maxWidth="700">
+        <VBox styleClass="gep-page__content">
+            <!-- 进化策略 -->
+            <VBox>
+                <Label text="进化策略" styleClass="gep-page__section-label"/>
+                <VBox styleClass="gep-page__card">
+                    <HBox styleClass="gep-page__row" alignment="CENTER_LEFT" spacing="12">
+                        <Label text="当前策略" styleClass="gep-page__row-title"/>
+                        <ComboBox fx:id="strategyComboBox" styleClass="gep-page__strategy-select"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="runBtn" text="执行" styleClass="gep-page__action-btn" onAction="#runEvolutionCycle"/>
+                    </HBox>
+                </VBox>
+            </VBox>
+
+            <!-- 基因库 -->
+            <VBox>
+                <Label text="基因库" styleClass="gep-page__section-label"/>
+                <VBox fx:id="genesContainer" styleClass="gep-page__card"/>
+            </VBox>
+
+            <!-- 胶囊库 -->
+            <VBox>
+                <Label text="胶囊库" styleClass="gep-page__section-label"/>
+                <VBox fx:id="capsulesContainer" styleClass="gep-page__card"/>
+            </VBox>
+
+            <!-- 进化事件 -->
+            <VBox>
+                <Label text="进化事件" styleClass="gep-page__section-label"/>
+                <VBox fx:id="eventsContainer" styleClass="gep-page__card"/>
+            </VBox>
+
+            <Region VBox.vgrow="ALWAYS" styleClass="gep-page__spacer"/>
+        </VBox>
+    </ScrollPane>
+</VBox>
