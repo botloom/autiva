@@ -38,11 +38,4 @@ public class AgentException extends AutivaException {
         return new AgentException("SUBAGENT_EXECUTION_FAILED", "子智能体执行失败: " + name, cause);
     }
 
-    public static AgentException subagentResolverNotFound(String reference) {
-        return new AgentException("SUBAGENT_RESOLVER_NOT_FOUND", "未找到能够解析子代理引用的SubagentResolver: " + reference);
-    }
-
-    public static AgentException subagentExecutorNotFound(String kind) {
-        return new AgentException("SUBAGENT_EXECUTOR_NOT_FOUND", "未找到子代理类型 " + kind + " 的执行器");
-    }
 }

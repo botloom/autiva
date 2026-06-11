@@ -110,6 +110,7 @@
 - 灰色背景，左对齐
 - 使用 MarkdownFxRenderer 将 Markdown 渲染为 JavaFX Node
 - 监听 ChatMessage.content 属性变化，自动重新渲染
+- **流式渲染优化**：流式输出期间（streaming=true）使用轻量 TextFlow 纯文本渲染，避免每次更新都做完整 Markdown 解析和节点重建；流式结束后（streaming=false）一次性做完整 Markdown 渲染，确保最终显示效果美观
 - 流式输出时添加 streaming 样式类
 - 禁用焦点遍历（`disableFocusRecursively()`），递归遍历所有后代节点，对 Control 子类设置 `setFocusTraversable(false)`，防止点击时焦点环导致 MD 内容缩进偏移
 - 布局偏移根因：JavaFX Modena 主题 `:focused` 伪类会改变 ScrollPane 的 `-fx-background-insets`，导致 viewport 宽度变化，进而使 TextFlow 重新换行。需在 CSS 中为 `.chat-scroll-pane:focused` 显式设置 `-fx-background-insets: 0`，并在 Controller 中设置 `chatScrollPane.setFocusTraversable(false)` 双重保障
@@ -234,9 +235,12 @@ ToolGroupCard (VBox)
 **特性：**
 - Header 显示脉冲动画点、子智能体名称、任务描述、运行状态
 - 可折叠的 body 区域，包含消息容器
-- 通过 `EventBus.outBoxSubscribe()` 订阅子会话消息流，实时处理子智能体输出
+- 通过 `session.getEventBus().outBoxSubscribe()` 订阅子会话消息流，实时处理子智能体输出
 - 使用 `MarkdownFxRenderer` 将 Markdown 渲染为 JavaFX Node
+- **空白消息过滤**：流式累积内容为空白时不创建流式容器，STOP/TOOL_CALLS 完成时内容为空白则移除容器，避免出现空白区域
+- **流式渲染优化**：流式输出期间使用轻量 TextFlow 纯文本渲染（`renderLightweightStream`），避免高频 Markdown 解析；STOP/TOOL_CALLS 完成时做完整 Markdown 渲染（`renderStreamContent`），确保最终显示效果美观
 - 支持流式输出（`appendOutput`）和事件订阅（`subscribeSession`）两种内容更新方式
+- **线程安全设计**：`appendOutput()`、`setStatus()`、`complete()` 公开方法内部包裹 `Platform.runLater()`，确保从任意线程调用安全；内部实现方法 `doAppendOutput()`、`doSetStatus()` 不包含 `Platform.runLater()`，供 `complete()` 在 FX 线程内直接调用，避免嵌套 `Platform.runLater()`
 - `onContentChanged` 回调：内容变化时通知外层 HomePageController 触发 ScrollPane 自动滚动，与 AssistantMessageCard 的回调模式一致
 - 脉冲动画：运行中时脉冲点闪烁，完成/失败时停止
 - 内嵌工具卡片宽度约束：工具卡片用 HBox 包裹后添加到 messageContainer，HBox 的 `fillHeight=true` 但不拉伸卡片宽度，使工具卡片按内容自然宽度显示（折叠时仅为工具名标签宽度，展开后按内容撑开），与主智能体中独立工具卡片的布局方式一致

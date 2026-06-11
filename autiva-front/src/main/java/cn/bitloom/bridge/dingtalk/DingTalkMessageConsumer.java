@@ -1,8 +1,6 @@
 package cn.bitloom.bridge.dingtalk;
 
-import cn.bitloom.agentic.agent.AgentIdentityEnum;
-import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.agent.AgentManager;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.session.Session;
 import cn.bitloom.agentic.session.SessionManager;
@@ -28,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DingTalkMessageConsumer implements OpenDingTalkCallbackListener<ChatbotMessage, Void> {
 
     private final SessionManager sessionManager;
+    private final AgentManager agentManager;
     private static final String SOURCE = "dingTalk";
     private final Map<String, Session> sessionMap = new ConcurrentHashMap<>();
 
@@ -39,7 +38,7 @@ public class DingTalkMessageConsumer implements OpenDingTalkCallbackListener<Cha
         } else {
             session = this.bindSession(message);
         }
-        EventBus.inBoxPublish(
+        sessionManager.publishMessage(
                 session.getId(),
                 UserMessage.builder()
                         .text(message.getText().getContent().trim())
@@ -49,10 +48,9 @@ public class DingTalkMessageConsumer implements OpenDingTalkCallbackListener<Cha
     }
 
     private Session bindSession(ChatbotMessage botMessage) {
-        Session session = sessionManager.getOrCreate(AgentIdentityEnum.MAIN, SOURCE, SessionTypeEnum.DM, SessionRespTypeEnum.BLOCK, ModelTypeEnum.DEEPSEEK, botMessage.getConversationId());
-        EventBus.outBoxSubscribe()
-                .filter(event -> event.getSessionId().equals(session.getId()))
-                .map(MessageEvent::getMessage)
+        Session session = sessionManager.getOrCreate("default", botMessage.getConversationId(), SOURCE, SessionTypeEnum.DM, SessionRespTypeEnum.BLOCK, ModelTypeEnum.DEEPSEEK);
+        // SessionManager 自动绑定 Agent，无需手动 bindAgentAndStart
+        session.getMessageBus().outBoxSubscribe()
                 .subscribe(
                         message -> {
                             try {

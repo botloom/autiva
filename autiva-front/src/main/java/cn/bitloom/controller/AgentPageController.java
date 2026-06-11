@@ -44,26 +44,26 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
     }
 
     private void renderAgents() {
-        viewModel.loadAgents();
         agentListContainer.getChildren().clear();
+        viewModel.loadAgentsAsync(() -> {
+            VBox cardsContainer = new VBox();
+            cardsContainer.getStyleClass().add("agent-page__cards-container");
+            cardsContainer.setSpacing(16);
 
-        VBox cardsContainer = new VBox();
-        cardsContainer.getStyleClass().add("agent-page__cards-container");
-        cardsContainer.setSpacing(16);
-
-        List<AgentManager.AgentFolder> agents = viewModel.getAgents();
-        if (agents.isEmpty()) {
-            Label emptyLabel = new Label("暂无智能体配置");
-            emptyLabel.getStyleClass().add("agent-page__empty-text");
-            cardsContainer.getChildren().add(emptyLabel);
-        } else {
-            for (AgentManager.AgentFolder agent : agents) {
-                TitledPane card = createAgentCard(agent);
-                cardsContainer.getChildren().add(card);
+            List<AgentManager.AgentFolder> agents = viewModel.getAgents();
+            if (agents.isEmpty()) {
+                Label emptyLabel = new Label("暂无智能体配置");
+                emptyLabel.getStyleClass().add("agent-page__empty-text");
+                cardsContainer.getChildren().add(emptyLabel);
+            } else {
+                for (AgentManager.AgentFolder agent : agents) {
+                    TitledPane card = createAgentCard(agent);
+                    cardsContainer.getChildren().add(card);
+                }
             }
-        }
 
-        agentListContainer.getChildren().add(cardsContainer);
+            agentListContainer.getChildren().add(cardsContainer);
+        });
     }
 
     private TitledPane createAgentCard(AgentManager.AgentFolder agent) {

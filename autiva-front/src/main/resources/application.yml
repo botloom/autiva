@@ -13,8 +13,6 @@ spring:
       client:
         type: async
         name: autiva
-        stdio:
-          servers-configuration: file:${user.home}/.autiva/mcp/mcp-servers.json
     openai:
       api-key: not-required
 logging:

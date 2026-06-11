@@ -3,6 +3,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import javafx.scene.image.ImageView?>
+<?import javafx.scene.image.Image?>
 
 <VBox fx:id="settingsPage" styleClass="settings-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
       xmlns="http://javafx.com/javafx"
@@ -13,6 +14,29 @@
     <ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="NEVER" VBox.vgrow="ALWAYS"
                 styleClass="settings-page__scroll-pane" prefWidth="600" maxWidth="700">
         <VBox styleClass="settings-page__content">
+            <!-- 用户登录卡片 -->
+            <VBox>
+                <Label text="用户" styleClass="settings-page__section-label"/>
+                <VBox styleClass="settings-page__card" fx:id="userCard">
+                    <HBox styleClass="settings-page__user-row" alignment="CENTER_LEFT">
+                        <StackPane styleClass="settings-page__avatar-stack">
+                            <ImageView fx:id="userAvatar" styleClass="settings-page__avatar" fitWidth="48" fitHeight="48">
+                                <Image url="@../images/icon.png"/>
+                            </ImageView>
+                        </StackPane>
+                        <VBox styleClass="settings-page__user-info" HBox.hgrow="ALWAYS">
+                            <Label fx:id="userNameLabel" text="点击登录" styleClass="settings-page__user-name"/>
+                            <Label fx:id="userIdLabel" text="未登录" styleClass="settings-page__user-id"/>
+                        </VBox>
+                        <Button fx:id="loginButton" text="登录" styleClass="settings-page__login-btn"
+                                onAction="#handleLogin"/>
+                        <Button fx:id="logoutButton" text="退出" styleClass="settings-page__logout-btn"
+                                visible="false" managed="false"
+                                onAction="#handleLogout"/>
+                    </HBox>
+                </VBox>
+            </VBox>
+
             <VBox>
                 <Label text="钉钉配置" styleClass="settings-page__section-label"/>
                 <VBox styleClass="settings-page__card">

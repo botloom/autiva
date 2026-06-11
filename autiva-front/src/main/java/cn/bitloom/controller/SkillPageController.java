@@ -3,7 +3,6 @@ package cn.bitloom.controller;
 import cn.bitloom.agentic.skill.Skill;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.util.AlertUtil;
 import cn.bitloom.vm.SkillPageViewModel;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -22,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.List;
@@ -50,22 +48,14 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
     }
 
     private void renderSkills() {
-        viewModel.loadSkills();
         skillListContainer.getChildren().clear();
-        List<Skill> skills = viewModel.getSkills();
-
-        if (skills.isEmpty()) {
-            Label emptyLabel = new Label("暂无技能，点击上方\"导入\"按钮选择ZIP包导入技能");
-            emptyLabel.getStyleClass().add("skill-page__empty");
-            VBox.setMargin(emptyLabel, new Insets(40, 0, 0, 0));
-            skillListContainer.getChildren().add(emptyLabel);
-            return;
-        }
-
-        for (Skill skill : skills) {
-            VBox card = createSkillCard(skill);
-            skillListContainer.getChildren().add(card);
-        }
+        viewModel.loadSkillsAsync(() -> {
+            List<Skill> skills = viewModel.getSkills();
+            for (Skill skill : skills) {
+                VBox card = createSkillCard(skill);
+                skillListContainer.getChildren().add(card);
+            }
+        });
     }
 
     private VBox createSkillCard(Skill skill) {
@@ -117,14 +107,10 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
             return;
         }
 
-        try {
-            Path zipPath = selectedFile.toPath();
-            viewModel.importSkillFromZip(zipPath);
+        Path zipPath = selectedFile.toPath();
+        viewModel.importSkillFromZipAsync(zipPath, () -> {
             renderSkills();
-        } catch (IOException e) {
-            log.error("Failed to import skill from zip", e);
-            AlertUtil.showError("导入失败", e.getMessage(), null);
-        }
+        });
     }
 
     @Override

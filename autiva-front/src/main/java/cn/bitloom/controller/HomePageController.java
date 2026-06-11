@@ -1,6 +1,6 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.agent.AgentIdentityEnum;
+import cn.bitloom.agentic.agent.AgentManager;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
@@ -19,6 +19,7 @@ import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -49,6 +50,9 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 
@@ -56,6 +60,7 @@ import java.io.File;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
 
 @Slf4j
@@ -88,11 +93,12 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private ComboBox<ModelTypeEnum> modelSelector;
     @FXML
-    private ComboBox<AgentIdentityEnum> agentSelector;
+    private ComboBox<String> agentSelector;
 
     private final List<File> attachedFiles = new ArrayList<>();
     private final BooleanProperty shouldScrollToBottom = new SimpleBooleanProperty(false);
     private ToolGroupCard currentToolGroup = null;
+    private boolean isLoadingMore = false;
 
     @Getter
     private final HomePageViewModel viewModel;
@@ -100,6 +106,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private final ToolUIBridge toolUIBridge;
     @Getter
     private final WindowManager windowManager;
+    private final AgentManager agentManager;
 
     @Getter
     @Setter
@@ -107,7 +114,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        this.modelSelector.valueProperty().bindBidirectional(this.viewModel.getModelProperty());
+        this.modelSelector.valueProperty().bindBidirectional(Store.selectedModel);
 
         this.searchButton.setOnAction(event -> this.handleSendMessage());
         this.stopButton.setOnAction(event -> this.viewModel.pauseGeneration());
@@ -129,9 +136,9 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         // 画布按钮
         this.canvasButton.setOnAction(event -> this.handleOpenCanvas());
 
-        this.viewModel.getIsStreaming().addListener((obs, oldVal, newVal) -> {
+        Store.isStreaming.addListener((obs, oldVal, newVal) -> {
             boolean streaming = newVal != null && newVal;
-            boolean paused = this.viewModel.getIsPaused().get();
+            boolean paused = Store.isPaused.get();
             boolean showSend = !streaming || paused;
             this.searchButton.setVisible(showSend);
             this.searchButton.setManaged(showSend);
@@ -139,8 +146,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             this.stopButton.setManaged(streaming && !paused);
         });
 
-        this.viewModel.getIsPaused().addListener((obs, oldVal, newVal) -> {
-            boolean streaming = this.viewModel.getIsStreaming().get();
+        Store.isPaused.addListener((obs, oldVal, newVal) -> {
+            boolean streaming = Store.isStreaming.get();
             boolean paused = newVal != null && newVal;
             boolean showSend = !streaming || paused;
             this.searchButton.setVisible(showSend);
@@ -157,6 +164,13 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                         chatScrollPane.setVvalue(1.0);
                     }
                 });
+            }
+        });
+
+        // 滚动到顶部时加载更多历史消息
+        chatScrollPane.vvalueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal.doubleValue() <= 0.01 && !isLoadingMore && viewModel.hasMoreMessages()) {
+                loadMoreMessages();
             }
         });
 
@@ -412,7 +426,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         this.viewModel.addUserMessage(text, filePaths);
         StringBuilder messageBuilder = new StringBuilder();
         if (!filePaths.isEmpty()) {
-            messageBuilder.append("用户上传了以下文件：\n");
             for (String path : filePaths) {
                 messageBuilder.append("- ").append(path).append("\n");
             }
@@ -510,6 +523,87 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         shouldScrollToBottom.set(true);
     }
 
+    private void loadMoreMessages() {
+        isLoadingMore = true;
+        List<Message> olderMessages = viewModel.loadMoreMessages(30);
+        if (olderMessages.isEmpty()) {
+            isLoadingMore = false;
+            return;
+        }
+
+        // 记录当前滚动位置和内容高度，用于恢复位置
+        double oldVvalue = chatScrollPane.getVvalue();
+        double oldContentHeight = chatContainer.getHeight();
+
+        // 在头部插入消息卡片（逆序插入，因为 olderMessages 是从旧到新）
+        int insertIndex = 0;
+        for (Message msg : olderMessages) {
+            ChatMessage chatMsg = convertToChatMessage(msg);
+            if (chatMsg != null) {
+                Node card = createMessageCard(chatMsg);
+                if (card != null) {
+                    if (card instanceof Region region) {
+                        region.maxWidthProperty().bind(
+                                Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.75))
+                        );
+                    }
+                    VBox messageWrapper = new VBox();
+                    messageWrapper.getStyleClass().add("chat-message-wrapper");
+                    messageWrapper.getChildren().add(card);
+                    HBox actionBar = createActionBar(chatMsg);
+                    messageWrapper.getChildren().add(actionBar);
+                    if (chatMsg.getType() == ChatMessage.Type.ASSISTANT) {
+                        actionBar.setVisible(false);
+                        actionBar.setManaged(false);
+                    }
+                    HBox row = createMessageRow(messageWrapper, chatMsg.getType());
+                    chatContainer.getChildren().add(insertIndex, row);
+                    insertIndex++;
+                }
+            }
+        }
+
+        // 恢复滚动位置：保持视觉位置不变
+        Platform.runLater(() -> {
+            double newContentHeight = chatContainer.getHeight();
+            double heightDiff = newContentHeight - oldContentHeight;
+            if (heightDiff > 0 && oldContentHeight > 0) {
+                double newVvalue = (oldVvalue * oldContentHeight + heightDiff) / newContentHeight;
+                chatScrollPane.setVvalue(Math.min(1.0, newVvalue));
+            }
+            isLoadingMore = false;
+        });
+    }
+
+    private ChatMessage convertToChatMessage(Message msg) {
+        if (msg instanceof UserMessage userMsg) {
+            ChatMessage chatMsg = new ChatMessage(ChatMessage.Type.USER);
+            chatMsg.setContent(userMsg.getText());
+            return chatMsg;
+        } else if (msg instanceof AssistantMessage assistantMsg) {
+            Map<String, Object> metadata = assistantMsg.getMetadata();
+            String finishReason = (String) metadata.get("finishReason");
+            String text = assistantMsg.getText();
+            ChatMessage chatMsg = new ChatMessage(ChatMessage.Type.ASSISTANT);
+            chatMsg.setContent(text);
+            if ("TOOL_CALLS".equals(finishReason)) {
+                chatMsg.setFinishReason(ChatMessage.FinishReason.TOOL_CALLS);
+            } else {
+                chatMsg.setFinishReason(ChatMessage.FinishReason.STOP);
+            }
+            return chatMsg;
+        } else if (msg instanceof ToolResponseMessage toolMsg) {
+            ChatMessage chatMsg = new ChatMessage(ChatMessage.Type.TOOL);
+            for (ToolResponseMessage.ToolResponse resp : toolMsg.getResponses()) {
+                chatMsg.getResponses().add(new ChatMessage.ToolResponseInfo(resp.name(), resp.responseData()));
+            }
+            if (!chatMsg.getResponses().isEmpty()) {
+                return chatMsg;
+            }
+        }
+        return null;
+    }
+
     private void animateToChatState() {
         Timeline timeline = new Timeline();
         KeyFrame keyFrame = new KeyFrame(Duration.millis(600),
@@ -550,32 +644,32 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     }
 
     private void setupAgentSelector() {
-        // 仅添加 MAIN 类别的智能体（目前仅 MAIN 可用）
-        for (AgentIdentityEnum agent : AgentIdentityEnum.values()) {
-            if (agent.isMain()) {
-                this.agentSelector.getItems().add(agent);
-            }
+        // 从 AgentManager 获取主智能体列表
+        for (AgentManager.AgentFolder agent : agentManager.loadAgentFolders()) {
+            this.agentSelector.getItems().add(agent.getName());
         }
-        this.agentSelector.setValue(AgentIdentityEnum.MAIN);
+        this.agentSelector.setValue("default");
         updateAgentSelectorWidth();
 
         this.agentSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
-                this.viewModel.getAgentProperty().set(newVal);
+                // 切换当前 session 的活跃 agent
+                viewModel.switchAgent(newVal);
                 updateAgentSelectorWidth();
             }
         });
 
-        this.viewModel.getAgentProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && newVal != this.agentSelector.getValue()) {
+        // 反向绑定：Store.currentAgent 变更时同步 agentSelector
+        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !newVal.equals(this.agentSelector.getValue())) {
                 this.agentSelector.setValue(newVal);
             }
         });
     }
 
     private void updateAgentSelectorWidth() {
-        AgentIdentityEnum current = this.agentSelector.getValue();
-        String name = current != null ? current.name() : "MAIN";
+        String current = this.agentSelector.getValue();
+        String name = current != null ? current : "default";
         Text text = new Text(name);
         text.setFont(javafx.scene.text.Font.font("SF Pro Text", 13));
         double textWidth = text.getLayoutBounds().getWidth();
@@ -602,35 +696,12 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
         return List.of(
                 new ButtonBarHolder.ButtonConfig(
-                        "clearButton",
-                        "清除",
+                        "newChatButton",
+                        "新对话",
                         "dynamic-btn",
                         event -> {
-                            Store.statusText.set("正在清除对话...");
-                            this.viewModel.clear();
-                            this.searchField.setText("");
-                            this.clearAttachedFiles();
-                            this.chatContainer.getChildren().clear();
-                            currentToolGroup = null;
-
-                            this.homePage.setAlignment(Pos.CENTER);
-                            VBox.setMargin(this.searchBox, new Insets(0, 0, 0, 0));
-                            this.chatScrollPane.setVisible(false);
-                            this.chatScrollPane.setManaged(false);
-
-                            this.icon.setVisible(true);
-                            this.icon.setManaged(true);
-                            this.icon.setOpacity(0);
-                            this.icon.setTranslateY(-60);
-
-                            Timeline timeline = new Timeline();
-                            KeyFrame keyFrame = new KeyFrame(Duration.millis(600),
-                                    new KeyValue(this.icon.opacityProperty(), 1, Interpolator.EASE_BOTH),
-                                    new KeyValue(this.icon.translateYProperty(), 0, Interpolator.EASE_BOTH));
-
-                            timeline.getKeyFrames().add(keyFrame);
-                            timeline.setOnFinished(e -> Store.statusText.set("就绪"));
-                            timeline.play();
+                            this.viewModel.createNewSession();
+                            resetForNewSession();
                         }));
     }
 

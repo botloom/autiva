@@ -21,7 +21,7 @@ $depDir = "$PROJECT\autiva-front\target\dependency"
 $javafxJars = (Get-ChildItem "$depDir\javafx-*-win.jar" -ErrorAction SilentlyContinue)
 $javafxModulePath = ($javafxJars.FullName -join ";")
 
-$javafxModules = "javafx.controls,javafx.fxml"
+$javafxModules = "javafx.controls,javafx.fxml,javafx.swing"
 $allModules = "$JDK_MODULES,$javafxModules"
 
 Write-Host "  JavaFX module path: $javafxModulePath" -ForegroundColor DarkGray
@@ -142,6 +142,7 @@ Remove-Item -Recurse -Force autiva-front\target\jpackage-output -ErrorAction Sil
   --dest autiva-front\target\jpackage-output `
   --app-version 1.0.0 `
   --vendor "Bitloom" `
+  --win-console `
   --description "Autiva AI Agent Desktop Application" `
   --icon autiva-front\target\jpackage-input\icon.ico
 if ($LASTEXITCODE -ne 0) { throw "jpackage failed" }

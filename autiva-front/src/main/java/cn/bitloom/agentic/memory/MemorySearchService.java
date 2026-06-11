@@ -20,7 +20,7 @@ public class MemorySearchService {
     private final Path memoriesDir;
 
     public MemorySearchService() {
-        this.memoriesDir = AppConstants.Base.WORKSPACE_DIR.resolve("MAIN").resolve("memories");
+        this.memoriesDir = AppConstants.Base.MEMORY_DIR;
     }
 
     public String searchAndFormat(String query, int limit) {

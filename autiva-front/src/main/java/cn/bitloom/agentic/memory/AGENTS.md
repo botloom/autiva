@@ -11,13 +11,9 @@
 **依赖注入：**
 - `SessionManager`: 会话管理器
 
-**配置参数：**
-- `KEEP_RECENT = 3`: 保留最近 N 条工具调用结果
-- `TOKEN_THRESHOLD = 8000`: Token 数量阈值
-
 **核心方法：**
 - `add(conversationId, messages)`: 添加消息到会话（追加前自动清理孤儿工具调用消息）
-- `get(conversationId)`: 获取会话消息（带压缩处理）
+- `get(conversationId)`: 获取会话消息（延迟加载，首次获取时从磁盘加载）
 - `clear(conversationId)`: 清除会话消息
 
 **conversationId：**
@@ -52,13 +48,13 @@ agent: MAIN
 
 **Spring 注解：** `@Component`
 
-**搜索路径：** `~/.autiva/workspace/MAIN/memories/`
+**搜索路径：** `~/.autiva/memory/`（即 `AppConstants.Base.MEMORY_DIR`）
 
 **核心方法：**
 - `searchAndFormat(String query, int limit)`: 搜索记忆并格式化返回结果
 
 **搜索策略：**
-- 基础方案：遍历记忆文件，匹配文件名和内容关键词
+- 基础方案：遍历记忆目录下的 YYYY-MM-DD.md 文件，匹配文件名和内容关键词
 - 返回格式：文件名 + 描述 + 内容片段
 
 ## 记忆处理流程
@@ -76,11 +72,9 @@ ConpactChatMemory.add(conversationId, messages)
 ```
 ConpactChatMemory.get(conversationId)
          │
-         ├── 1. 从 SessionManager 获取消息列表
+         ├── 1. 检查消息是否已加载（session.getMessages().isEmpty()），未加载则调用 SessionManager.loadSessionMessages() 延迟加载
          │
-         ├── 2. microCompact: 压缩工具调用结果
-         │
-         └── 3. autoCompact: Token 超限时的自动归档
+         └── 2. 返回 session.getMessages()
 ```
 
 ## 压缩策略

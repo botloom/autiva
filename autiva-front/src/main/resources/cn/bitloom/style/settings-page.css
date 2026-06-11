@@ -198,6 +198,94 @@
     -fx-min-height: 40;
 }
 
+/* 用户登录卡片 */
+.settings-page__user-row {
+    -fx-padding: 12 16;
+    -fx-spacing: 14;
+    -fx-alignment: center-left;
+}
+
+.settings-page__avatar-stack {
+    -fx-min-width: 48;
+    -fx-min-height: 48;
+    -fx-pref-width: 48;
+    -fx-pref-height: 48;
+    -fx-background-radius: 24px;
+    -fx-background-color: #f5f5f7;
+    -fx-alignment: center;
+    -fx-clip: true;
+}
+
+.settings-page__avatar {
+    -fx-fit-width: 48;
+    -fx-fit-height: 48;
+    -fx-smooth: true;
+}
+
+.settings-page__user-info {
+    -fx-spacing: 2;
+}
+
+.settings-page__user-name {
+    -fx-font-size: 15px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.settings-page__user-id {
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+}
+
+.settings-page__login-btn {
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: #0071e3;
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #ffffff;
+    -fx-cursor: hand;
+    -fx-pref-height: 32px;
+    -fx-padding: 0 16px;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.settings-page__login-btn:hover {
+    -fx-background-color: #0077ed;
+}
+
+.settings-page__login-btn:pressed {
+    -fx-background-color: #006edb;
+}
+
+.settings-page__logout-btn {
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: #f5f5f7;
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #86868b;
+    -fx-cursor: hand;
+    -fx-pref-height: 32px;
+    -fx-padding: 0 16px;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.settings-page__logout-btn:hover {
+    -fx-background-color: #e8e8ed;
+    -fx-text-fill: #1d1d1f;
+}
+
+.settings-page__logout-btn:pressed {
+    -fx-background-color: #d1d5db;
+}
+
 .settings-page__checkbox-container {
     -fx-padding: 8 0 0 0;
     -fx-spacing: 8;

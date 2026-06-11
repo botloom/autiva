@@ -26,6 +26,8 @@ import java.awt.*;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @Slf4j
 public class MarkdownFxRenderer {
@@ -35,16 +37,41 @@ public class MarkdownFxRenderer {
     private static final double BASE_FONT_SIZE = 15;
     private static final double CODE_FONT_SIZE = 13;
 
+    private static final org.commonmark.parser.Parser PARSER = org.commonmark.parser.Parser.builder()
+        .extensions(java.util.List.of(
+            org.commonmark.ext.gfm.tables.TablesExtension.create()
+        ))
+        .build();
+
+    private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d+(\\.\\d+)?");
+    private static final Pattern WORD_SPLIT_PATTERN = Pattern.compile("(?<=[\\s\\[\\]{}(),;.=+\\-*/<>!&|])|(?=[\\s\\[\\]{}(),;.=+\\-*/<>!&|])");
+
+    private static final Set<String> JAVA_KEYWORDS = Set.of(
+        "public", "private", "protected", "class", "interface", "extends", "implements",
+        "void", "int", "long", "double", "float", "boolean", "char", "String", "return", "if", "else",
+        "for", "while", "do", "switch", "case", "break", "continue", "new", "this", "super", "static",
+        "final", "abstract", "try", "catch", "finally", "throw", "throws", "import", "package", "null",
+        "true", "false", "instanceof"
+    );
+
+    private static final Set<String> PYTHON_KEYWORDS = Set.of(
+        "def", "class", "if", "elif", "else", "for", "while", "try", "except",
+        "finally", "with", "as", "import", "from", "return", "yield", "raise", "pass", "break",
+        "continue", "and", "or", "not", "in", "is", "lambda", "True", "False", "None", "self"
+    );
+
+    private static final Set<String> JS_KEYWORDS = Set.of(
+        "function", "const", "let", "var", "if", "else", "for", "while", "do",
+        "switch", "case", "break", "continue", "return", "class", "extends", "new", "this", "super",
+        "import", "export", "from", "async", "await", "try", "catch", "finally", "throw", "typeof",
+        "instanceof", "null", "undefined", "true", "false"
+    );
+
     public static VBox render(String markdown) {
         if (markdown == null || markdown.isBlank()) {
             return new VBox();
         }
-        org.commonmark.parser.Parser parser = org.commonmark.parser.Parser.builder()
-            .extensions(java.util.List.of(
-                org.commonmark.ext.gfm.tables.TablesExtension.create()
-            ))
-            .build();
-        org.commonmark.node.Node document = parser.parse(markdown);
+        org.commonmark.node.Node document = PARSER.parse(markdown);
         VBox container = new VBox(8);
         container.getStyleClass().add("md-content");
         container.setMaxWidth(Double.MAX_VALUE);
@@ -84,18 +111,10 @@ public class MarkdownFxRenderer {
 
     private static Node renderHeading(Heading heading) {
         TextFlow textFlow = new TextFlow();
-        double fontSize = switch (heading.getLevel()) {
-            case 1 -> 24;
-            case 2 -> 20;
-            case 3 -> 18;
-            case 4 -> 16;
-            case 5 -> 15;
-            default -> 14;
-        };
         textFlow.getStyleClass().add("md-heading");
         textFlow.getStyleClass().add("md-heading-" + heading.getLevel());
         textFlow.setMaxWidth(Double.MAX_VALUE);
-        renderInlines(heading, textFlow, FontWeight.BOLD, fontSize);
+        renderInlines(heading, textFlow, FontWeight.BOLD, BASE_FONT_SIZE);
         return textFlow;
     }
 
@@ -210,8 +229,8 @@ public class MarkdownFxRenderer {
 
         Region leftBar = new Region();
         leftBar.getStyleClass().add("md-blockquote-bar");
-        leftBar.setPrefWidth(3);
-        leftBar.setMinWidth(3);
+        leftBar.setPrefWidth(4);
+        leftBar.setMinWidth(4);
         hbox.getChildren().add(leftBar);
 
         VBox content = new VBox(4);
@@ -259,22 +278,11 @@ public class MarkdownFxRenderer {
         } else if (inline instanceof StrongEmphasis) {
             renderInlines(inline, textFlow, FontWeight.BOLD, fontSize);
         } else if (inline instanceof Emphasis) {
-            org.commonmark.node.Node emphasisChild = inline.getFirstChild();
-            while (emphasisChild != null) {
-                if (emphasisChild instanceof org.commonmark.node.Text textNode) {
-                    Text text = new Text(textNode.getLiteral());
-                    text.setFont(Font.font(FONT_FAMILY, fontWeight, FontPosture.ITALIC, fontSize));
-                    textFlow.getChildren().add(text);
-                } else {
-                    renderInline(emphasisChild, textFlow, fontWeight, fontSize);
-                }
-                emphasisChild = emphasisChild.getNext();
-            }
+            renderInlines(inline, textFlow, fontWeight, FontPosture.ITALIC, fontSize);
         } else if (inline instanceof Code codeNode) {
-            Text text = new Text(codeNode.getLiteral());
-            text.setFont(Font.font(CODE_FONT_FAMILY, 13));
-            text.getStyleClass().add("md-inline-code");
-            textFlow.getChildren().add(text);
+            Label codeLabel = new Label(codeNode.getLiteral());
+            codeLabel.getStyleClass().add("md-inline-code");
+            textFlow.getChildren().add(codeLabel);
         } else if (inline instanceof Link link) {
             Hyperlink hyperlink = new Hyperlink();
             hyperlink.getStyleClass().add("md-link");
@@ -306,6 +314,28 @@ public class MarkdownFxRenderer {
         }
     }
 
+    private static void renderInlines(org.commonmark.node.Node parent, TextFlow textFlow, FontWeight fontWeight, FontPosture posture, double fontSize) {
+        org.commonmark.node.Node child = parent.getFirstChild();
+        while (child != null) {
+            if (child instanceof org.commonmark.node.Text textNode) {
+                Text text = new Text(textNode.getLiteral());
+                text.setFont(Font.font(FONT_FAMILY, fontWeight, posture, fontSize));
+                textFlow.getChildren().add(text);
+            } else if (child instanceof StrongEmphasis) {
+                renderInlines(child, textFlow, FontWeight.BOLD, posture, fontSize);
+            } else if (child instanceof Emphasis) {
+                renderInlines(child, textFlow, fontWeight, FontPosture.ITALIC, fontSize);
+            } else if (child instanceof Code codeNode) {
+                Label codeLabel = new Label(codeNode.getLiteral());
+                codeLabel.getStyleClass().add("md-inline-code");
+                textFlow.getChildren().add(codeLabel);
+            } else {
+                renderInline(child, textFlow, fontWeight, fontSize);
+            }
+            child = child.getNext();
+        }
+    }
+
     private static Node renderTable(org.commonmark.ext.gfm.tables.TableBlock table) {
         VBox container = new VBox();
         container.getStyleClass().add("md-table");
@@ -332,7 +362,7 @@ public class MarkdownFxRenderer {
                 while (cell != null) {
                     if (cell instanceof TableCell) {
                         String headerText = extractText((TableCell) cell);
-                        double width = Math.max(150, headerText.length() * 10.0 + 32);
+                        double width = Math.max(150, computeTextWidth(headerText, true) + 32);
                         columnWidths.add(width);
                     }
                     cell = cell.getNext();
@@ -349,7 +379,7 @@ public class MarkdownFxRenderer {
                     while (cell != null) {
                         if (cell instanceof TableCell) {
                             String cellText = extractText((TableCell) cell);
-                            double width = Math.max(150, cellText.length() * 8.0 + 32);
+                            double width = Math.max(150, computeTextWidth(cellText, false) + 32);
                             if (colIndex < columnWidths.size()) {
                                 columnWidths.set(colIndex, Math.max(columnWidths.get(colIndex), width));
                             } else {
@@ -439,6 +469,13 @@ public class MarkdownFxRenderer {
         
         return scrollPane;
     }
+
+    private static double computeTextWidth(String text, boolean bold) {
+        Font font = Font.font(FONT_FAMILY, bold ? FontWeight.BOLD : FontWeight.NORMAL, 13);
+        Text measure = new Text(text);
+        measure.setFont(font);
+        return measure.getLayoutBounds().getWidth();
+    }
     
     private static String extractText(org.commonmark.ext.gfm.tables.TableCell cell) {
         StringBuilder sb = new StringBuilder();
@@ -511,17 +548,17 @@ public class MarkdownFxRenderer {
         
         switch (language) {
             case "java":
-                texts.addAll(highlightJavaLine(line));
+                texts.addAll(highlightLine(line, JAVA_KEYWORDS, '/', '/'));
                 break;
             case "python":
             case "py":
-                texts.addAll(highlightPythonLine(line));
+                texts.addAll(highlightLine(line, PYTHON_KEYWORDS, '#', null));
                 break;
             case "javascript":
             case "js":
             case "typescript":
             case "ts":
-                texts.addAll(highlightJSLine(line));
+                texts.addAll(highlightLine(line, JS_KEYWORDS, '/', '/'));
                 break;
             default:
                 Text text = new Text(line);
@@ -532,22 +569,18 @@ public class MarkdownFxRenderer {
         
         return texts;
     }
-    
-    private static List<Text> highlightJavaLine(String line) {
+
+    private static List<Text> highlightLine(String line, Set<String> keywords, Character singleCommentChar, Character doubleCommentSecondChar) {
         List<Text> texts = new ArrayList<>();
-        String[] keywords = {"public", "private", "protected", "class", "interface", "extends", "implements",
-            "void", "int", "long", "double", "float", "boolean", "char", "String", "return", "if", "else",
-            "for", "while", "do", "switch", "case", "break", "continue", "new", "this", "super", "static",
-            "final", "abstract", "try", "catch", "finally", "throw", "throws", "import", "package", "null",
-            "true", "false", "instanceof"};
-        
         StringBuilder current = new StringBuilder();
+        
         for (int i = 0; i < line.length(); i++) {
             char c = line.charAt(i);
             
-            if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
+            // Check for single-line comment
+            if (doubleCommentSecondChar != null && c == singleCommentChar && i + 1 < line.length() && line.charAt(i + 1) == doubleCommentSecondChar) {
                 if (!current.isEmpty()) {
-                    texts.addAll(parseAndHighlight(current.toString(), keywords, "java"));
+                    texts.addAll(parseAndHighlight(current.toString(), keywords));
                     current = new StringBuilder();
                 }
                 Text comment = new Text(line.substring(i));
@@ -557,44 +590,9 @@ public class MarkdownFxRenderer {
                 return texts;
             }
             
-            if (c == '"') {
+            if (singleCommentChar != null && doubleCommentSecondChar == null && c == singleCommentChar) {
                 if (!current.isEmpty()) {
-                    texts.addAll(parseAndHighlight(current.toString(), keywords, "java"));
-                    current = new StringBuilder();
-                }
-                int end = line.indexOf('"', i + 1);
-                if (end == -1) end = line.length() - 1;
-                Text string = new Text(line.substring(i, end + 1));
-                string.setFont(Font.font(CODE_FONT_FAMILY, CODE_FONT_SIZE));
-                string.getStyleClass().add("md-code-string");
-                texts.add(string);
-                i = end;
-                continue;
-            }
-            
-            current.append(c);
-        }
-        
-        if (!current.isEmpty()) {
-            texts.addAll(parseAndHighlight(current.toString(), keywords, "java"));
-        }
-        
-        return texts;
-    }
-    
-    private static List<Text> highlightPythonLine(String line) {
-        List<Text> texts = new ArrayList<>();
-        String[] keywords = {"def", "class", "if", "elif", "else", "for", "while", "try", "except",
-            "finally", "with", "as", "import", "from", "return", "yield", "raise", "pass", "break",
-            "continue", "and", "or", "not", "in", "is", "lambda", "True", "False", "None", "self"};
-        
-        StringBuilder current = new StringBuilder();
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            
-            if (c == '#') {
-                if (!current.isEmpty()) {
-                    texts.addAll(parseAndHighlight(current.toString(), keywords, "python"));
+                    texts.addAll(parseAndHighlight(current.toString(), keywords));
                     current = new StringBuilder();
                 }
                 Text comment = new Text(line.substring(i));
@@ -604,57 +602,10 @@ public class MarkdownFxRenderer {
                 return texts;
             }
             
-            if (c == '"' || c == '\'') {
-                if (!current.isEmpty()) {
-                    texts.addAll(parseAndHighlight(current.toString(), keywords, "python"));
-                    current = new StringBuilder();
-                }
-                int end = line.indexOf(c, i + 1);
-                if (end == -1) end = line.length() - 1;
-                Text string = new Text(line.substring(i, end + 1));
-                string.setFont(Font.font(CODE_FONT_FAMILY, CODE_FONT_SIZE));
-                string.getStyleClass().add("md-code-string");
-                texts.add(string);
-                i = end;
-                continue;
-            }
-            
-            current.append(c);
-        }
-        
-        if (!current.isEmpty()) {
-            texts.addAll(parseAndHighlight(current.toString(), keywords, "python"));
-        }
-        
-        return texts;
-    }
-    
-    private static List<Text> highlightJSLine(String line) {
-        List<Text> texts = new ArrayList<>();
-        String[] keywords = {"function", "const", "let", "var", "if", "else", "for", "while", "do",
-            "switch", "case", "break", "continue", "return", "class", "extends", "new", "this", "super",
-            "import", "export", "from", "async", "await", "try", "catch", "finally", "throw", "typeof",
-            "instanceof", "null", "undefined", "true", "false"};
-        
-        StringBuilder current = new StringBuilder();
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            
-            if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
-                if (!current.isEmpty()) {
-                    texts.addAll(parseAndHighlight(current.toString(), keywords, "js"));
-                    current = new StringBuilder();
-                }
-                Text comment = new Text(line.substring(i));
-                comment.setFont(Font.font(CODE_FONT_FAMILY, CODE_FONT_SIZE));
-                comment.getStyleClass().add("md-code-comment");
-                texts.add(comment);
-                return texts;
-            }
-            
+            // Check for string literals
             if (c == '"' || c == '\'' || c == '`') {
                 if (!current.isEmpty()) {
-                    texts.addAll(parseAndHighlight(current.toString(), keywords, "js"));
+                    texts.addAll(parseAndHighlight(current.toString(), keywords));
                     current = new StringBuilder();
                 }
                 int end = line.indexOf(c, i + 1);
@@ -671,15 +622,15 @@ public class MarkdownFxRenderer {
         }
         
         if (!current.isEmpty()) {
-            texts.addAll(parseAndHighlight(current.toString(), keywords, "js"));
+            texts.addAll(parseAndHighlight(current.toString(), keywords));
         }
         
         return texts;
     }
     
-    private static List<Text> parseAndHighlight(String text, String[] keywords, String language) {
+    private static List<Text> parseAndHighlight(String text, Set<String> keywords) {
         List<Text> texts = new ArrayList<>();
-        String[] words = text.split("(?<=[\\s\\[\\]{}(),;.=+\\-*/<>!&|])|(?=[\\s\\[\\]{}(),;.=+\\-*/<>!&|])");
+        String[] words = WORD_SPLIT_PATTERN.split(text);
         
         for (String word : words) {
             if (word.isEmpty()) continue;
@@ -687,17 +638,9 @@ public class MarkdownFxRenderer {
             Text t = new Text(word);
             t.setFont(Font.font(CODE_FONT_FAMILY, CODE_FONT_SIZE));
             
-            boolean isKeyword = false;
-            for (String keyword : keywords) {
-                if (word.equals(keyword)) {
-                    isKeyword = true;
-                    break;
-                }
-            }
-            
-            if (isKeyword) {
+            if (keywords.contains(word)) {
                 t.getStyleClass().add("md-code-keyword");
-            } else if (word.matches("\\d+(\\.\\d+)?")) {
+            } else if (NUMBER_PATTERN.matcher(word).matches()) {
                 t.getStyleClass().add("md-code-number");
             } else {
                 t.getStyleClass().add("md-code-text");

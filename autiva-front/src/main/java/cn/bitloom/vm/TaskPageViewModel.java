@@ -2,8 +2,10 @@ package cn.bitloom.vm;
 
 import cn.bitloom.cron.CronManager;
 import cn.bitloom.cron.CronManager.CronTaskInfo;
+import cn.bitloom.util.ExecutorManager;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,21 @@ public class TaskPageViewModel {
     public void loadTasks() {
         Map<String, CronTaskInfo> taskMap = cronManager.getAllTasks(null);
         tasks.setAll(taskMap.values());
+    }
+
+    public void loadTasksAsync(Runnable onLoaded) {
+        Task<Map<String, CronTaskInfo>> task = new Task<>() {
+            @Override
+            protected Map<String, CronTaskInfo> call() {
+                return cronManager.getAllTasks(null);
+            }
+        };
+        task.setOnSucceeded(e -> {
+            tasks.setAll(task.getValue().values());
+            if (onLoaded != null) onLoaded.run();
+        });
+        task.setOnFailed(e -> log.error("加载任务列表失败", task.getException()));
+        ExecutorManager.getPlatformTaskExecutor().execute(task);
     }
 
     public Map<String, List<CronTaskInfo>> getTasksGroupedBySessionId() {

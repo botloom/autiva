@@ -8,6 +8,7 @@ import javafx.animation.Timeline;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -22,16 +23,14 @@ public class SplashScreen {
     private static final double SPLASH_WIDTH = 200;
     private static final double SPLASH_HEIGHT = 200;
 
-    private final javafx.scene.image.Image appIcon;
+    private final ImageView iconView;
 
-    public SplashScreen(javafx.scene.image.Image appIcon) {
-        this.appIcon = appIcon;
+    public SplashScreen(ImageView iconView) {
+        this.iconView = iconView;
     }
 
     public Stage show() {
         // 图标
-        javafx.scene.image.ImageView iconView = new javafx.scene.image.ImageView();
-        iconView.setImage(appIcon);
         iconView.setFitWidth(64);
         iconView.setFitHeight(64);
         iconView.setPreserveRatio(true);
@@ -107,8 +106,8 @@ public class SplashScreen {
         stage.initStyle(StageStyle.TRANSPARENT);
         stage.setScene(scene);
         stage.centerOnScreen();
-        if (appIcon != null) {
-            stage.getIcons().add(appIcon);
+        if (iconView.getImage() != null) {
+            stage.getIcons().add(iconView.getImage());
         }
         stage.show();
 

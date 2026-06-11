@@ -5,14 +5,10 @@ import cn.bitloom.constant.AppConstants;
 import cn.bitloom.exception.StorageException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
-import org.springframework.util.Assert;
 
 import java.io.*;
 import java.net.JarURLConnection;
@@ -26,10 +22,8 @@ import java.nio.file.*;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -40,28 +34,6 @@ public class SkillManager {
 
     private static final String SKILL_FILE_NAME = "SKILL.md";
 
-    private static final String TOOL_DESCRIPTION_TEMPLATE = """
-            执行技能
-            
-            <skills_instructions>
-            当用户要求你执行任务时，检查以下可用技能中是否有任何技能可以更有效地帮助完成任务。技能提供专门的能力和领域知识。
-            
-            如何使用技能：
-            - 使用此工具仅传入技能名称调用技能（不带参数）
-            - 当你调用技能时，你将看到 <command-message>"{name}"技能正在加载</command-message>
-            - 技能的提示将展开并提供关于如何完成任务的详细说明
-            
-            重要：
-            - 每个技能的响应都会包含其根目录（basePath），执行脚本或引用技能内的文件时必须使用该根目录作为基准路径
-            - 仅使用<available_skills>下面列出的技能
-            - 不要调用已经在运行的技能
-            </skills_instructions>
-            
-            <available_skills>
-            %s
-            </available_skills>
-            """;
-
     private final Map<String, Skill> skills = new ConcurrentHashMap<>();
 
     @PostConstruct
@@ -71,7 +43,7 @@ public class SkillManager {
 
     public void loadSkills() {
         skills.clear();
-        List<Skill> loadedSkills = loadDirectory(AppConstants.Base.SKILL_DIR.toString());
+        List<Skill> loadedSkills = loadDirectory(AppConstants.Base.SKILLS_DIR.toString());
         loadedSkills.forEach(skill -> {
             if (skill.name() != null) {
                 skills.put(skill.name(), skill);
@@ -100,22 +72,6 @@ public class SkillManager {
 
     public List<Skill> getAllSkills() {
         return List.copyOf(skills.values());
-    }
-
-    public ToolCallback buildToolCallback() {
-        if (this.skills.isEmpty()) {
-            log.debug("未配置任何技能，跳过技能工具注册");
-            return null;
-        }
-
-        String skillsXml = this.skills.values().stream()
-                .map(Skill::toXml)
-                .collect(Collectors.joining("\n"));
-
-        return FunctionToolCallback.builder("Skill", new SkillsFunction(this.skills))
-                .description(TOOL_DESCRIPTION_TEMPLATE.formatted(skillsXml))
-                .inputType(SkillsInput.class)
-                .build();
     }
 
     public List<Skill> loadDirectory(String rootDirectory) {
@@ -319,7 +275,7 @@ public class SkillManager {
 
             Skill parsedSkill = new Skill(skillDir.toString(), frontMatter, parser.getContent());
 
-            Path targetDir = AppConstants.Base.SKILL_DIR.resolve(name);
+            Path targetDir = AppConstants.Base.SKILLS_DIR.resolve(name);
             if (Files.exists(targetDir)) {
                 deleteDirectory(targetDir);
             }
@@ -360,7 +316,7 @@ public class SkillManager {
     }
 
     public void saveSkill(Skill skill) {
-        Path skillDir = AppConstants.Base.SKILL_DIR.resolve(Objects.requireNonNull(skill.name()));
+        Path skillDir = AppConstants.Base.SKILLS_DIR.resolve(Objects.requireNonNull(skill.name()));
 
         try {
             if (!Files.exists(skillDir)) {
@@ -377,7 +333,7 @@ public class SkillManager {
     }
 
     public void deleteSkill(String name) {
-        Path skillDir = AppConstants.Base.SKILL_DIR.resolve(name);
+        Path skillDir = AppConstants.Base.SKILLS_DIR.resolve(name);
 
         try {
             if (Files.exists(skillDir)) {
@@ -478,38 +434,6 @@ public class SkillManager {
         Skill sample = new Skill(skillDir.resolve("hello").toString(), frontMatter,
                 "This is a sample skill that demonstrates the skill format.\n\nYou can customize this skill to do various tasks.");
         saveSkill(sample);
-    }
-
-    public record SkillsInput(
-            @ToolParam(description = "技能名称（不带参数）。例如，\"pdf\"或\"xlsx\"") String command) {
-    }
-
-    public static class SkillsFunction implements Function<SkillsInput, String> {
-
-        private final Map<String, Skill> skillsMap;
-
-        public SkillsFunction(Map<String, Skill> skillsMap) {
-            this.skillsMap = skillsMap;
-        }
-
-        @Override
-        public String apply(SkillsInput input) {
-            Skill skill = this.skillsMap.get(input.command());
-
-            if (skill != null) {
-                return """
-                        技能根目录: %s
-                        
-                        重要：执行脚本或引用技能内的文件时，请使用以上根目录作为基准路径。
-                        例如，如果技能内容中提到 script.py，实际路径为: %s/script.py
-                        
-                        %s
-                        """.formatted(skill.basePath(), skill.basePath(), skill.content());
-            }
-
-            return "未找到技能：" + input.command();
-        }
-
     }
 
 }

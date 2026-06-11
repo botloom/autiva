@@ -1,40 +1,24 @@
 package cn.bitloom.vm;
 
-import cn.bitloom.agentic.agent.AgentIdentityEnum;
-import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.event.EventBus;
-import cn.bitloom.agentic.model.ModelTypeEnum;
-import cn.bitloom.agentic.session.Session;
-import cn.bitloom.agentic.session.SessionManager;
-import cn.bitloom.agentic.session.SessionRespTypeEnum;
-import cn.bitloom.agentic.session.SessionState;
-import cn.bitloom.agentic.session.SessionTypeEnum;
+import cn.bitloom.agentic.session.*;
 import cn.bitloom.node.ChatMessage;
 import cn.bitloom.store.Store;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import jakarta.annotation.PostConstruct;
 import javafx.application.Platform;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.MessageType;
-import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.messages.*;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -42,50 +26,22 @@ import java.util.List;
 public class HomePageViewModel {
 
     private final SessionManager sessionManager;
-    private static final String SOURCE = "desktopApp";
-    private static final String TARGET = "bitloom";
 
     @Getter
     private final ObservableList<ChatMessage> messages = FXCollections.observableArrayList();
-
-    @Getter
-    private final BooleanProperty isStreaming = new SimpleBooleanProperty(false);
-
-    @Getter
-    private final BooleanProperty isPaused = new SimpleBooleanProperty(false);
-
-    @Getter
-    private ObjectProperty<ModelTypeEnum> modelProperty = new SimpleObjectProperty<>(ModelTypeEnum.DEEPSEEK);
-
-    @Getter
-    private final StringProperty currentSessionId = new SimpleStringProperty();
-
-    @Getter
-    private final ObjectProperty<AgentIdentityEnum> agentProperty = new SimpleObjectProperty<>(AgentIdentityEnum.MAIN);
 
     private Session session;
     private StringBuilder streamMessage = new StringBuilder();
     private ChatMessage currentStreamingMessage = null;
     private Disposable outBoxSubscription;
-
-    @PostConstruct
-    public void init() {
-        this.session = sessionManager.getOrCreate(AgentIdentityEnum.MAIN, SOURCE, SessionTypeEnum.DM, SessionRespTypeEnum.STREAM, this.modelProperty.get(), TARGET);
-        this.currentSessionId.set(this.session.getId());
-        subscribeOutBox();
-
-        if (this.hasHistoricalMessages()) {
-            this.prepareHistoricalMessages();
-        }
-    }
+    private int historicalMessageOffset = 0;
+    private static final int MAX_INITIAL_MESSAGES = 50;
 
     private void subscribeOutBox() {
         if (this.outBoxSubscription != null) {
             this.outBoxSubscription.dispose();
         }
-        this.outBoxSubscription = EventBus.outBoxSubscribe()
-                .filter(event -> event.getSessionId().equals(this.session.getId()))
-                .map(MessageEvent::getMessage)
+        this.outBoxSubscription = this.session.getMessageBus().outBoxSubscribe()
                 .subscribe(
                         message -> Platform.runLater(() -> this.processMessage(message)),
                         error -> {
@@ -95,7 +51,7 @@ public class HomePageViewModel {
                         () -> {
                             log.info("Message processing completed");
                             Platform.runLater(() -> {
-                                if (!isPaused.get()) {
+                                if (!Store.isPaused.get()) {
                                     Store.statusText.set("就绪");
                                 }
                             });
@@ -103,20 +59,23 @@ public class HomePageViewModel {
                 );
     }
 
-    public boolean createNewSession() {
-        if (!this.session.getMessages().isEmpty()) {
-            String newTarget = TARGET + "-" + System.currentTimeMillis();
-            Session newSession = sessionManager.getOrCreate(
-                    this.agentProperty.get(), SOURCE, SessionTypeEnum.DM,
-                    SessionRespTypeEnum.STREAM, this.modelProperty.get(), newTarget);
-            switchToSession(newSession.getId());
-            return true;
+    public void createNewSession() {
+        this.session = null;
+        Store.currentSessionId.set("");
+        messages.clear();
+        streamMessage = new StringBuilder();
+        currentStreamingMessage = null;
+        historicalMessageOffset = 0;
+        Store.isStreaming.set(false);
+        Store.isPaused.set(false);
+        if (this.outBoxSubscription != null) {
+            this.outBoxSubscription.dispose();
+            this.outBoxSubscription = null;
         }
-        return false;
     }
 
     public void switchToSession(String sessionId) {
-        if (sessionId.equals(this.session.getId())) {
+        if (this.session != null && sessionId.equals(this.session.getId())) {
             return;
         }
 
@@ -126,21 +85,34 @@ public class HomePageViewModel {
             return;
         }
 
+        // 激活会话（设置 EventBus、注入 Agent、加载历史消息、恢复上下文）
+        sessionManager.start(sessionId);
+
         this.session = targetSession;
-        this.currentSessionId.set(sessionId);
-        this.modelProperty.set(targetSession.getModel());
+        Store.currentSessionId.set(sessionId);
+        Store.selectedModel.set(targetSession.getModel());
+        Store.currentAgent.set(targetSession.getAgentId());
 
         subscribeOutBox();
 
         messages.clear();
         streamMessage = new StringBuilder();
         currentStreamingMessage = null;
-        isStreaming.set(false);
-        isPaused.set(false);
+        historicalMessageOffset = 0;
+        Store.isStreaming.set(false);
+        Store.isPaused.set(false);
 
         if (hasHistoricalMessages()) {
             prepareHistoricalMessages();
         }
+    }
+
+    /**
+     * 切换智能体：切换到初始态，更新当前 agent
+     */
+    public void switchAgent(String agentId) {
+        Store.currentAgent.set(agentId);
+        createNewSession(); // 切换到初始态
     }
 
     public void prepareHistoricalMessages() {
@@ -148,16 +120,147 @@ public class HomePageViewModel {
         if (historicalMessages.isEmpty()) {
             return;
         }
-        for (Message msg : historicalMessages) {
-            processMessage(msg);
+
+        // 只加载最近 MAX_INITIAL_MESSAGES 条消息
+        int startIndex = Math.max(0, historicalMessages.size() - MAX_INITIAL_MESSAGES);
+        historicalMessageOffset = startIndex;
+        List<Message> recentMessages = historicalMessages.subList(startIndex, historicalMessages.size());
+
+        // 分批加载历史消息，每批 20 条，分帧渲染避免 UI 冻结
+        int batchSize = 20;
+        for (int i = 0; i < recentMessages.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, recentMessages.size());
+            List<Message> batch = recentMessages.subList(i, end);
+            if (i == 0) {
+                // 第一批立即渲染，减少延迟感
+                for (Message msg : batch) {
+                    processMessage(msg);
+                }
+            } else {
+                // 后续批次分帧渲染
+                List<Message> batchCopy = new ArrayList<>(batch);
+                Platform.runLater(() -> {
+                    for (Message msg : batchCopy) {
+                        processMessage(msg);
+                    }
+                });
+            }
         }
     }
 
+    public List<Message> loadMoreMessages(int count) {
+        if (this.session == null || historicalMessageOffset <= 0) return List.of();
+        List<Message> allMessages = this.session.getMessages();
+        // 边界保护：确保 offset 不超过实际消息数量
+        historicalMessageOffset = Math.min(historicalMessageOffset, allMessages.size());
+        if (historicalMessageOffset <= 0) return List.of();
+        int newOffset = Math.max(0, historicalMessageOffset - count);
+        List<Message> olderMessages = new ArrayList<>(allMessages.subList(newOffset, historicalMessageOffset));
+        historicalMessageOffset = newOffset;
+        return olderMessages;
+    }
+
+    public boolean hasMoreMessages() {
+        return historicalMessageOffset > 0;
+    }
+
     public boolean hasHistoricalMessages() {
-        return !this.session.getMessages().isEmpty();
+        return this.session != null && !this.session.getMessages().isEmpty();
     }
 
     private void processMessage(Message msg) {
+        // 优先使用类型判断，避免 JSON 转换开销
+        if (msg instanceof UserMessage userMsg) {
+            streamMessage = new StringBuilder();
+            currentStreamingMessage = null;
+            ChatMessage chatMsg = new ChatMessage(ChatMessage.Type.USER);
+            chatMsg.setContent(userMsg.getText());
+            messages.add(chatMsg);
+        } else if (msg instanceof AssistantMessage assistantMsg) {
+            this.processAssistantMessage(assistantMsg);
+        } else if (msg instanceof ToolResponseMessage toolMsg) {
+            this.processToolMessage(toolMsg);
+        } else {
+            // 降级到 JSON 转换（兼容其他类型）
+            this.processMessageFallback(msg);
+        }
+    }
+
+    private void processAssistantMessage(AssistantMessage msg) {
+        Map<String, Object> metadata = msg.getMetadata();
+        String finishReason = null;
+        finishReason = (String) metadata.get("finishReason");
+        String text = msg.getText();
+
+        if (finishReason == null || finishReason.isBlank()) {
+            if (Store.isPaused.get()) {
+                return;
+            }
+            streamMessage.append(text != null ? text : "");
+            String accumulated = streamMessage.toString();
+            if (accumulated.isBlank()) {
+                return;
+            }
+            if (currentStreamingMessage == null) {
+                currentStreamingMessage = new ChatMessage(ChatMessage.Type.ASSISTANT);
+                currentStreamingMessage.setStreaming(true);
+                messages.add(currentStreamingMessage);
+            }
+            currentStreamingMessage.setContent(accumulated);
+        } else if ("STOP".equals(finishReason)) {
+            Store.isStreaming.set(false);
+            Store.isPaused.set(false);
+            sessionManager.updateState(this.session.getId(), SessionState.IDLE);
+            if (currentStreamingMessage != null) {
+                if (currentStreamingMessage.getContent() != null && !currentStreamingMessage.getContent().isBlank()) {
+                    currentStreamingMessage.setStreaming(false);
+                    currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.STOP);
+                } else {
+                    messages.remove(currentStreamingMessage);
+                }
+                currentStreamingMessage = null;
+            } else if (text != null && !text.isBlank()) {
+                ChatMessage chatMsg = new ChatMessage(ChatMessage.Type.ASSISTANT);
+                chatMsg.setContent(text);
+                chatMsg.setFinishReason(ChatMessage.FinishReason.STOP);
+                messages.add(chatMsg);
+            }
+            streamMessage = new StringBuilder();
+        } else if ("TOOL_CALLS".equals(finishReason)) {
+            if (currentStreamingMessage != null) {
+                if (currentStreamingMessage.getContent() != null && !currentStreamingMessage.getContent().isBlank()) {
+                    currentStreamingMessage.setStreaming(false);
+                    currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.TOOL_CALLS);
+                } else {
+                    messages.remove(currentStreamingMessage);
+                }
+                currentStreamingMessage = null;
+            }
+
+            List<AssistantMessage.ToolCall> toolCalls = msg.getToolCalls();
+            for (AssistantMessage.ToolCall tc : toolCalls) {
+                ChatMessage toolCallMsg = new ChatMessage(ChatMessage.Type.TOOL);
+                toolCallMsg.getToolCalls().add(new ChatMessage.ToolCallInfo(
+                        tc.name(), tc.arguments()));
+                messages.add(toolCallMsg);
+            }
+            streamMessage = new StringBuilder();
+        }
+    }
+
+    private void processToolMessage(ToolResponseMessage msg) {
+        List<ToolResponseMessage.ToolResponse> responses = msg.getResponses();
+        if (!responses.isEmpty()) {
+            ChatMessage toolRespMsg = new ChatMessage(ChatMessage.Type.TOOL);
+            for (ToolResponseMessage.ToolResponse resp : responses) {
+                toolRespMsg.getResponses().add(new ChatMessage.ToolResponseInfo(
+                        resp.name(), resp.responseData()));
+            }
+            messages.add(toolRespMsg);
+        }
+    }
+
+    private void processMessageFallback(Message msg) {
         JSONObject jsonObject = (JSONObject) JSON.toJSON(msg);
 
         String messageType = jsonObject.getString("messageType");
@@ -178,13 +281,13 @@ public class HomePageViewModel {
             chatMsg.setContent(jsonObject.getString("text"));
             messages.add(chatMsg);
         } else if (MessageType.ASSISTANT.name().equals(messageType)) {
-            this.processAssistantMessage(jsonObject);
+            this.processAssistantMessageFallback(jsonObject);
         } else if (MessageType.TOOL.name().equals(messageType)) {
-            this.processToolMessage(jsonObject);
+            this.processToolMessageFallback(jsonObject);
         }
     }
 
-    private void processAssistantMessage(JSONObject jsonObject) {
+    private void processAssistantMessageFallback(JSONObject jsonObject) {
         JSONObject metadata = jsonObject.getJSONObject("metadata");
         String finishReason = null;
         if (metadata != null) {
@@ -196,37 +299,47 @@ public class HomePageViewModel {
         }
 
         if (finishReason == null || finishReason.isBlank()) {
-            if (isPaused.get()) {
+            if (Store.isPaused.get()) {
                 return;
             }
             streamMessage.append(text != null ? text : "");
+            String accumulated = streamMessage.toString();
+            if (accumulated.isBlank()) {
+                return;
+            }
             if (currentStreamingMessage == null) {
                 currentStreamingMessage = new ChatMessage(ChatMessage.Type.ASSISTANT);
                 currentStreamingMessage.setStreaming(true);
                 messages.add(currentStreamingMessage);
             }
-            currentStreamingMessage.setContent(streamMessage.toString());
+            currentStreamingMessage.setContent(accumulated);
         } else if ("STOP".equals(finishReason)) {
-            isStreaming.set(false);
-            isPaused.set(false);
+            Store.isStreaming.set(false);
+            Store.isPaused.set(false);
             sessionManager.updateState(this.session.getId(), SessionState.IDLE);
             if (currentStreamingMessage != null) {
-                currentStreamingMessage.setStreaming(false);
-                currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.STOP);
-                currentStreamingMessage = null;
-            } else {
-                if (StringUtils.isNotBlank(text)){
-                    ChatMessage chatMsg = new ChatMessage(ChatMessage.Type.ASSISTANT);
-                    chatMsg.setContent(text);
-                    chatMsg.setFinishReason(ChatMessage.FinishReason.STOP);
-                    messages.add(chatMsg);
+                if (currentStreamingMessage.getContent() != null && !currentStreamingMessage.getContent().isBlank()) {
+                    currentStreamingMessage.setStreaming(false);
+                    currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.STOP);
+                } else {
+                    messages.remove(currentStreamingMessage);
                 }
+                currentStreamingMessage = null;
+            } else if (text != null && !text.isBlank()) {
+                ChatMessage chatMsg = new ChatMessage(ChatMessage.Type.ASSISTANT);
+                chatMsg.setContent(text);
+                chatMsg.setFinishReason(ChatMessage.FinishReason.STOP);
+                messages.add(chatMsg);
             }
             streamMessage = new StringBuilder();
         } else if ("TOOL_CALLS".equals(finishReason)) {
             if (currentStreamingMessage != null) {
-                currentStreamingMessage.setStreaming(false);
-                currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.TOOL_CALLS);
+                if (currentStreamingMessage.getContent() != null && !currentStreamingMessage.getContent().isBlank()) {
+                    currentStreamingMessage.setStreaming(false);
+                    currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.TOOL_CALLS);
+                } else {
+                    messages.remove(currentStreamingMessage);
+                }
                 currentStreamingMessage = null;
             }
 
@@ -244,7 +357,7 @@ public class HomePageViewModel {
         }
     }
 
-    private void processToolMessage(JSONObject jsonObject) {
+    private void processToolMessageFallback(JSONObject jsonObject) {
         JSONArray responses = jsonObject.getJSONArray("responses");
         if (responses != null && !responses.isEmpty()) {
             ChatMessage toolRespMsg = new ChatMessage(ChatMessage.Type.TOOL);
@@ -267,34 +380,45 @@ public class HomePageViewModel {
     }
 
     public void sendMessage(UserMessage message) {
-        Platform.runLater(() -> Store.statusText.set("正在处理..."));
-        isStreaming.set(true);
-        isPaused.set(false);
-        this.session.setModel(this.modelProperty.get());
+        if (this.session == null) {
+            this.session = sessionManager.create(
+                    Store.currentAgent.get(), Store.source.get(), SessionTypeEnum.DM,
+                    SessionRespTypeEnum.STREAM, Store.selectedModel.get());
+            Store.currentSessionId.set(this.session.getId());
+            subscribeOutBox();
+        }
+        Store.statusText.set("正在处理...");
+        Store.isStreaming.set(true);
+        Store.isPaused.set(false);
         sessionManager.updateState(this.session.getId(), SessionState.GENERATING);
-        EventBus.inBoxPublish(this.session.getId(), message);
+        sessionManager.publishMessage(this.session.getId(), message);
     }
 
     public void clear() {
         messages.clear();
         streamMessage = new StringBuilder();
         currentStreamingMessage = null;
-        isStreaming.set(false);
-        isPaused.set(false);
-        sessionManager.updateState(this.session.getId(), SessionState.IDLE);
-        sessionManager.clearSessionMessages(this.session.getId());
-        sessionManager.getChildSessions(this.session.getId())
-                .forEach(child -> sessionManager.deleteSession(child.getId()));
-        Platform.runLater(() -> Store.statusText.set("就绪"));
+        historicalMessageOffset = 0;
+        Store.isStreaming.set(false);
+        Store.isPaused.set(false);
+        if (this.session != null) {
+            sessionManager.updateState(this.session.getId(), SessionState.IDLE);
+            sessionManager.clearSessionMessages(this.session.getId());
+            sessionManager.getChildSessions(this.session.getId())
+                    .forEach(child -> sessionManager.deleteSession(child.getId()));
+        }
+        Store.statusText.set("就绪");
     }
 
     public void pauseGeneration() {
-        if (isStreaming.get() && !isPaused.get()) {
-            isPaused.set(true);
-            EventBus.stop(this.session.getId());
-            sessionManager.getChildSessions(this.session.getId())
-                    .forEach(child -> EventBus.stop(child.getId()));
-            sessionManager.updateState(this.session.getId(), SessionState.PAUSED);
+        if (Store.isStreaming.get() && !Store.isPaused.get()) {
+            Store.isPaused.set(true);
+            if (this.session != null) {
+                sessionManager.stopSession(this.session.getId());
+                sessionManager.getChildSessions(this.session.getId())
+                        .forEach(child -> sessionManager.stopSession(child.getId()));
+                sessionManager.updateState(this.session.getId(), SessionState.PAUSED);
+            }
 
             if (currentStreamingMessage != null) {
                 currentStreamingMessage.setStreaming(false);
@@ -302,27 +426,8 @@ public class HomePageViewModel {
             }
             streamMessage = new StringBuilder();
 
-            Platform.runLater(() -> Store.statusText.set("已暂停"));
+            Store.statusText.set("已暂停");
         }
     }
 
-    public void stopGeneration() {
-        if (isStreaming.get()) {
-            isStreaming.set(false);
-            isPaused.set(false);
-            EventBus.stop(this.session.getId());
-            sessionManager.getChildSessions(this.session.getId())
-                    .forEach(child -> EventBus.stop(child.getId()));
-            sessionManager.updateState(this.session.getId(), SessionState.IDLE);
-
-            if (currentStreamingMessage != null) {
-                currentStreamingMessage.setStreaming(false);
-                currentStreamingMessage.setFinishReason(ChatMessage.FinishReason.STOP);
-                currentStreamingMessage = null;
-            }
-            streamMessage = new StringBuilder();
-
-            Platform.runLater(() -> Store.statusText.set("已停止"));
-        }
-    }
 }

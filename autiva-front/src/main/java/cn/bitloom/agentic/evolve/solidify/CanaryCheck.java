@@ -9,7 +9,7 @@ import java.util.List;
 public class CanaryCheck {
 
     private static final List<String> CRITICAL_MODULES = List.of(
-            "cn.bitloom.agentic.agent.MainAgent",
+            "cn.bitloom.agentic.agent.Agent",
             "cn.bitloom.agentic.agent.AgentManager",
             "cn.bitloom.agentic.evolve.EvolutionEngine"
     );

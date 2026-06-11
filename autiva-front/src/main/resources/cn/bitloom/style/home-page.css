@@ -1185,7 +1185,6 @@
     -fx-background-color: #282c34;
     -fx-background-radius: 8;
     -fx-padding: 0;
-    -fx-margin: 12 0;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 8, 0, 0, 2);
 }
 
@@ -1253,7 +1252,7 @@
 .md-inline-code {
     -fx-font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
     -fx-font-size: 13px;
-    -fx-fill: #e06c75;
+    -fx-text-fill: #e06c75;
     -fx-background-color: rgba(224, 108, 117, 0.1);
     -fx-background-radius: 3;
     -fx-padding: 2 4;
@@ -1280,7 +1279,6 @@
     -fx-padding: 0;
     -fx-background-color: rgba(0, 122, 255, 0.05);
     -fx-background-radius: 8;
-    -fx-margin: 8 0;
 }
 
 .md-blockquote-bar {
@@ -1338,7 +1336,6 @@
     -fx-border-width: 1;
     -fx-border-radius: 8;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.08), 8, 0, 0, 2);
-    -fx-margin: 12 0;
 }
 
 .md-table-scroll > .viewport {

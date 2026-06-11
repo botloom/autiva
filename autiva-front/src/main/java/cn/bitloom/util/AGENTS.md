@@ -105,33 +105,37 @@ Markdown → JavaFX Node 渲染器，将 Markdown 文本直接渲染为 JavaFX �
 
 **支持的 Markdown 元素：**
 - 段落 → TextFlow（行间距1.6倍，增强可读性）
-- 标题（h1-h6）→ TextFlow（不同字号/粗细/边框装饰）
-  - h1: 28px，底部双线边框
-  - h2: 22px，底部单线边框
-  - h3-h6: 18px-14px，递减字号
-- 粗体/斜体 → Text（FontWeight/FontPosture）
-- 行内代码 → Text（等宽字体 + 红色文字 + 浅红背景）
+- 标题（h1-h6）→ TextFlow（字号由 CSS `.md-heading-1` ~ `.md-heading-6` 控制，Java 代码不再设置字号）
+- 粗体/斜体 → Text（FontWeight/FontPosture），支持嵌套格式（如 `***bold italic***`）
+- 行内代码 → Label（等宽字体 + 红色文字 + 浅红背景），使用 Label 替代 Text 以支持背景色渲染
 - 代码块 → VBox（语言标签 + 复制按钮 + 语法高亮代码）
   - 支持 Java/Python/JavaScript/TypeScript 语法高亮
   - 深色主题（One Dark 风格）
   - 关键字、字符串、数字、注释不同颜色
 - 有序/无序列表 → VBox + HBox（蓝色标记符，加粗）
-- 引用 → HBox（左侧蓝色竖条 + 浅蓝背景 + 圆角）
+- 引用 → HBox（左侧蓝色竖条 4px + 浅蓝背景 + 圆角）
 - 链接 → Hyperlink（蓝色文字，悬停下划线）
 - 图片 → Text（显示标题或占位符）
 - 分隔线 → Separator
 - HTML 块 → TextFlow（等宽字体）
-- 表格 → VBox（表头行 + 数据行，支持样式美化）
+- 表格 → VBox（表头行 + 数据行，支持样式美化，列宽使用 `Text.getLayoutBounds()` 精确计算，适配 CJK 字符）
+
+**性能优化：**
+- Parser 缓存为 `static final` 常量，避免每次渲染重新创建
+- 语法高亮关键字使用 `Set<String>` 做 O(1) 查找，替代线性遍历数组
+- 正则表达式预编译为 `static final Pattern`（数字匹配、代码分词）
+- 三种语言高亮逻辑合并为统一的 `highlightLine(line, keywords, commentChar, doubleCommentSecondChar)` 方法
+- 表格列宽使用 `computeTextWidth()` 基于 `Text.getLayoutBounds()` 精确计算，替代 `length() * 10` 估算
 
 **实现原理：**
 - 使用 commonmark Parser 解析 Markdown 为 AST
 - 支持 GFM 表格扩展（commonmark-ext-gfm-tables）
 - 递归遍历 AST，为每种节点类型创建对应的 JavaFX 节点
 - 块级元素（Paragraph, Heading, CodeBlock 等）创建容器节点
-- 行内元素（Text, Emphasis, Code, Link 等）创建 Text/Hyperlink 节点
+- 行内元素（Text, Emphasis, Code, Link 等）创建 Text/Hyperlink/Label 节点
+- Emphasis 使用 `renderInlines(node, textFlow, fontWeight, FontPosture.ITALIC, fontSize)` 支持嵌套格式
 - 代码块支持语法高亮（基于正则表达式实现）
 - 代码块支持复制到剪贴板功能
-- 根容器 VBox 和表格 ScrollPane 均设置 `setFocusTraversable(false)`，防止点击时焦点环导致内容缩进偏移
 
 **样式类：**
 - `.md-content`: Markdown 容器

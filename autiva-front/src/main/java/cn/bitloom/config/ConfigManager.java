@@ -38,7 +38,7 @@ public class ConfigManager {
     private String deepseekChatModel;
 
     public void save() {
-        try (FileWriter writer = new FileWriter(AppConstants.Base.CONFIG_FILE.toFile())) {
+        try (FileWriter writer = new FileWriter(AppConstants.Base.SETTINGS_FILE.toFile())) {
             writer.write("# Application Settings\n");
             writer.write("app.session.isolation=" + isolation.name() + "\n");
             writer.write("\n");
@@ -62,7 +62,7 @@ public class ConfigManager {
                 writer.write("app.search.bocha-api-key=" + bochaApiKey + "\n");
             }
 
-            log.info("配置保存成功: {}", AppConstants.Base.CONFIG_FILE);
+            log.info("配置保存成功: {}", AppConstants.Base.SETTINGS_FILE);
         } catch (IOException e) {
             log.error("保存配置文件失败", e);
         }

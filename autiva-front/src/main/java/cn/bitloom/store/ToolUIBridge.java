@@ -106,6 +106,7 @@ public class ToolUIBridge {
         if (card != null) {
             card.appendOutput("\n错误: " + error);
             card.setStatus("failed");
+            card.dispose();
         }
     }
 }

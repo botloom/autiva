@@ -1,393 +1,251 @@
 # Agent 包
 
 ## 概述
-本包实现了智能体核心系统，采用**Agent 接口 + 策略模式**架构。Agent 是无状态策略接口，被 Session 持有和委托执行 LLM 调用。主智能体拥有独立身份、工作空间和会话，子智能体通过 Task 工具按需委派。系统提示词设计参考了 OpenClaw 的分层架构，将硬编码的系统级指令与用户可编辑的工作目录文件分离。
+本包实现了统一的智能体核心系统，参考 AgentScope 的设计理念，主智能体和子智能体都是 `Agent` 类的实例，区别仅在 `AgentDefinition` 的配置。智能体定义和长期配置存放在 `agents/` 目录，运行时数据存放在 `workspace/` 目录。
 
-1. **主智能体（MAIN）**：长期记忆，有独立工作目录，作为调度者和协调者，**没有文件读写和Shell执行能力**
-2. **子智能体（SUBAGENT）**：拥有对话记忆（通过 ChatMemory），用于完成子任务，配置存放在 workspace/subagents/ 目录。其中 Code 子智能体是唯一拥有文件操作和Shell执行能力的代理
-
-智能体通过 EventBus 的 Inbox/Outbox 双通道进行消息收发。Session 作为 Actor 订阅 inBox，委托 Agent 执行，将响应发布到 outBox。**消息通过 MessageChannel 进行通道级隔离**，同一会话内不同通道拥有独立的对话历史和 conversationId。
-
-## 目录结构
+## 文件系统结构
 
 ```
-~/.autiva/workspace/
-  MAIN/                    # 主智能体工作目录
-    IDENTITY.md            # 身份定义（自我发现 + 调度者角色 + 安全边界）
-    SOUL.md                # 核心信条 + 边界 + 风格 + 连续性 + 子智能体策略 + 任务管理
-    MEMORY.md              # 长期记忆（含记忆类型和规则）
-    USER.md                # 关于用户（关系建立，非档案）
-    TOOLS.md               # 工具备忘录（环境特定配置）
-    BOOTSTRAP.md           # 首次启动引导（完成后删除）
-  subagents/               # 子智能体配置目录
-    CODE_SUBAGENT.md       # 编码子智能体（唯一拥有文件读写和Shell执行能力）
-    GENERAL_PURPOSE_SUBAGENT.md
-    EXPLORE_SUBAGENT.md
-    PLAN_SUBAGENT.md
-    BASH_SUBAGENT.md
+~/.autiva/
+├── agents/                        ← 智能体定义和长期配置（不随 session 变化）
+│   ├── default/                   ← 默认主智能体
+│   │   ├── agent.md               ← 智能体定义（YAML frontmatter + 提示词正文）
+│   │   ├── config.json            ← MCP + 工具白名单 + skill + subagent
+│   │   ├── AGENTS.md              ← 人格 + 行为约定
+│   │   ├── MEMORY.md              ← 长期记忆
+│   │   ├── BOOTSTRAP.md           ← 首次启动引导
+│   │   └── memory/                ← 每日记忆流水账
+│   │       └── YYYY-MM-DD.md
+│   ├── code/                      ← 编码子智能体（仅 agent.md，无 config.json）
+│   │   └── agent.md
+│   ├── explore/                   ← 探索子智能体
+│   │   └── agent.md
+│   ├── doctor/                    ← 诊断子智能体
+│   │   └── agent.md
+│   └── <agent-id>/                ← 用户复制的主智能体
+│       ├── agent.md
+│       ├── config.json
+│       ├── AGENTS.md
+│       ├── MEMORY.md
+│       ├── BOOTSTRAP.md
+│       ├── memory/
+│       └── xxx.md                 ← 额外提示词片段
+├── workspace/                     ← 运行时数据（仅 session 相关）
+│   ├── default/
+│   │   ├── context/<session-id>   ← 会话快照
+│   │   └── sessions/              ← 会话消息日志
+│   └── <agent-id>/
+│       ├── context/
+│       └── sessions/
+├── skills/                        ← 技能目录
+└── settings.properties
 ```
+
+**关键设计**：
+- `agents/` 存放智能体定义和所有不随 session 变化的长期配置
+- `workspace/` 仅存 session 相关的运行时数据（context/、sessions/）
+- 子智能体是内置的，只有 agent.md，不需要 config.json 和 workspace
+- 用户复制主智能体时，复制 agents/default/ 的所有内容到 agents/<new-id>/
 
 ## 核心类
 
-### AgentManager
-智能体运行时管理器，负责智能体注册、会话绑定、配置 CRUD 和系统提示词构建。初始化逻辑已迁移至 AppBootstrap。
+### AgentKind
+智能体分类枚举，替代原 `AgentType`。
 
-**注册方法：**
-- `init()`: @PostConstruct，注册所有主智能体和子智能体到 agents Map
-- `registerAgents()`: 注册主智能体（遍历 MAIN 类型的 AgentIdentityEnum）和子智能体（从目录加载）
-- `reloadSubagents()`: 重新加载子智能体配置
+- `MAIN`: 主智能体，直接面向用户，拥有 agents/ 下的长期配置和 workspace/ 下的运行时数据
+- `SUBAGENT`: 子智能体，被其他 Agent 通过 Task 工具调用，内置不可配置
 
-**系统提示词方法：**
-- `buildSystemPrompt(identity, skillManager)`: 构建主智能体的完整系统提示词（安全准则 + 工具调用风格 + 记忆系统 + 心跳 + 运行环境 + 技能描述 + 工作空间上下文）
-- `getDescription(agentName)`: 获取主智能体描述（读取工作目录下的.md文件）
+### AgentDefinition
+统一的智能体定义 record，从 `agent.md` 的 YAML frontmatter + markdown body 解析而来。替代原先的 `SubagentDefinition + WorkspaceConfig` 双轨配置。
 
-**主智能体方法：**
-- `listMainAgents()`: 列出所有主智能体
-- `loadAgentFolders()`: 加载主智能体文件夹列表（排除 subagents 目录）
+**字段：**
+- `name`: 智能体名称
+- `description`: 智能体描述
+- `kind`: AgentKind（MAIN 或 SUBAGENT）
+- `model`: 可选模型覆盖（子智能体专用）
+- `tools`: 工具白名单
+- `disallowedTools`: 工具黑名单
+- `skills`: 注入到上下文的技能名称列表
+- `permissionMode`: 权限模式
+- `content`: 系统提示词正文（agent.md 的 markdown body）
 
-**子智能体方法：**
-- `listSubagents()`: 列出所有子智能体
-- `loadSubagentFolders()`: 加载子智能体配置列表（解析 YAML frontmatter）
-- `getSubagentContent(name)`: 读取子智能体配置内容
-- `saveSubagentConfig(name, content)`: 保存子智能体配置
-- `createSubagentConfig(name, description, content)`: 创建新的子智能体配置
-- `deleteSubagentConfig(name)`: 删除子智能体配置
+**核心方法：**
+- `fromMarkdown(Path)`: 从 agent.md 文件解析
+- `fromMarkdown(String)`: 从 markdown 字符串解析
+- `toRegistrationText()`: 格式化注册信息，用于 Task 工具描述
 
-**通用方法：**
-- `bindSession(agentName, sessionId)`: 绑定智能体与会话
-- `getSessionByAgent(agentName)`: 获取智能体绑定的会话ID
-- `listAgents()`: 列出所有智能体（主智能体 + 子智能体），内部委托 listAgentsByType(null)
-- `listMainAgents()`: 列出主智能体，内部委托 listAgentsByType(MAIN)
-- `listSubagents()`: 列出子智能体，内部委托 listAgentsByType(SUBAGENT)
-- `exists(name)`: 检查智能体是否存在
-- `count()`: 获取智能体总数
-- `getAgentType(name)`: 获取智能体类型（返回 AgentIdentityEnum.AgentCategory）
+**agent.md 格式示例（子智能体）：**
+```markdown
+---
+name: code
+description: 全栈编码专家
+model: deepseek
+tools: Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,TodoWrite,Skill
+kind: subagent
+---
 
-**内部类：**
-- `AgentConfig`: 智能体配置 record（name, type[AgentCategory], path, description）
-- `AgentInfo`: 智能体信息 record (name, type, sessionId)
-- `AgentFolder`: 主智能体文件夹（name, path, files）
-- `AgentFile`: 主智能体文件（path, displayName）
-- `SubagentFolder`: 子智能体配置 record（name, description, path）
+你是一个全栈编码专家...
+```
 
-### MainAgent
-主智能体策略，作为调度者和协调者处理用户对话。实现 `Agent` 接口，被 Session 委托执行。
+**agent.md 格式示例（主智能体）：**
+```markdown
+---
+name: default
+description: Autiva 默认助手
+kind: main
+---
 
-**Spring 注解：** `@Component` + `@Lazy(false)`（必须立即初始化，因为 @PostConstruct 中订阅 EventBus.inBox）
-
-**核心设计：主智能体没有文件读写和Shell执行能力**，所有涉及文件操作、代码编写、命令执行的工作必须通过 Task 工具委派给子智能体。
-
-**功能：**
-- 被 Session 委托执行 LLM 调用（`run(Session, MessageEvent)`）
-- 支持流式响应和非流式响应两种模式
-- 支持通过 Session.isStop() 中断流式响应
-- 系统提示词委托给 AgentManager.buildSystemPrompt() 构建
-
-**事件处理：**
-- `getHandledEventTypes()`: 返回 MESSAGE、MEMORY_CONSOLIDATE、JOURNAL
-- `handleAgentEvent()`: 处理 MEMORY_CONSOLIDATE 和 JOURNAL 事件
-  - MEMORY_CONSOLIDATE：从 Session 的 **USER 通道**读取 [cursor, size) 范围消息，使用 **MEMORY 通道**的 conversationId 调用 LLM 总结，写入记忆文件，更新 cursor
-  - JOURNAL：从事件消息中提取摘要，调用 JournalManager 写入日记，更新 cursor
-
-**工具集（仅调度相关工具，无文件/Shell能力）：**
-- `WebFetchTool`: 网页获取（HTML转Markdown）
-- `WebSearchTool`: 网页搜索（Bocha搜索引擎）
-- `CommandTools`: 命令执行（Command + Process 双工具模型）
-- `AskUserQuestionTool`: 向用户提问
-- `TodoWriteTool`: 任务列表管理
-- `CronTool`: 定时任务管理
-- `TaskTool/TaskOutputTool/SessionQueryTool`: 子代理任务工具
-- `EvolveQueryTool`: 进化查询工具（查询基因库、胶囊库、推荐基因）
-- `EvolveApplyTool`: 进化应用工具（应用基因或胶囊获取策略指导）
-- `NotifyTool`: IM 通知工具（通过钉钉或微信主动通知用户）
-- `SkillManager.buildToolCallback()`: 技能工具
-- `AsyncMcpToolCallbackProvider`: MCP工具
-
-**子智能体工具配置：**
-- GenericSubagentType.Builder 中配置了 `deployTool`（部署工具）和 `projectManagementTool`（项目管理工具）
-- ProjectManagementTool 允许 Code 子智能体与后端项目管理系统交互（获取需求/Bug、提交设计方案/测试用例、更新状态）
-
-### EvolverAgent
-进化守护者主智能体策略，负责系统的自我演化。实现 `Agent` 接口，被 Session 委托执行。
-
-**Spring 注解：** `@Component` + `@Lazy(false)`（必须立即初始化，因为 @PostConstruct 中订阅 EventBus.inBox）
-
-**核心设计：独立运行，不处理用户日常对话**
-
-**功能：**
-- 被 Session 委托执行 LLM 调用（`run(Session, MessageEvent)`）
-- 执行进化周期（信号提取→基因选择→策略组装→固化）
-- 管理基因库（启用/禁用/删除基因和胶囊）
-- 调整进化策略预设
-
-**事件处理：**
-- `getHandledEventTypes()`: 返回 MESSAGE、EVOLVE
-- `handleAgentEvent()`: 处理 EVOLVE 事件
-  - EVOLVE：从事件消息中提取进化意图，使用 **EVOLVE 通道**的 conversationId 调用 LLM 执行进化周期
-
-**工具集：**
-- `WebFetchTool`: 网页获取
-- `WebSearchTool`: 网页搜索
-- `AskUserQuestionTool`: 向用户提问
-- `TodoWriteTool`: 任务列表管理
-- `EvolveQueryTool`: 进化查询
-- `EvolveCycleTool`: 执行进化周期
-- `EvolveGeneManageTool`: 基因管理（启用/禁用/删除）
-- `EvolveConfigTool`: 进化引擎配置
+你是 Autiva，一个智能助手...
+```
 
 ### Agent
-智能体策略接口，定义 Session 委托 Agent 执行的契约。遵循依赖倒置原则，Session 依赖抽象而非具体实现。
+统一智能体类，合并了原 `AbstractAgent + MainAgent + SubagentExecutor` 的功能。主智能体和子智能体都是 Agent 类的实例，区别仅在 AgentDefinition 的配置。
 
-**接口方法：**
-- `run(Session session, MessageEvent event)`: 核心执行方法，接收 Session 上下文和消息事件，返回响应流
-- `getIdentity()`: 获取智能体身份标识（AgentIdentityEnum），用于注册表映射
+**只能通过 Builder 创建（私有构造函数）。**
 
-**设计意图：**
-- Agent 是无状态策略，可被多个 Session 安全共享
-- 新增 Agent 实现时无需修改 SessionManager（开闭原则）
-- Session 通过 Agent 接口与具体实现解耦
+**核心字段：**
+- `agentId`: 智能体标识
+- `kind`: AgentKind
+- `definition`: AgentDefinition
+- `modelFactory`: ModelFactory（用于动态创建 ChatClient）
+- `tools`: 根据 definition.tools 过滤后的工具集
+- `advisors`: AgentAdvisor 列表（替代原 Hook 机制）
+- `chatClientCache`: `Map<ModelTypeEnum, ChatClient>`（按需缓存 ChatClient）
 
-### AbstractAgent
-抽象智能体基类，实现 `Agent` 接口，提供通用的 LLM 调用逻辑和事件分发机制。
+**主智能体执行（Session 驱动）：**
+- `runStream(Session, Message)`: 流式调用 LLM，返回 `Flux<AssistantMessage>`
+- `runBlock(Session, Message)`: 阻塞调用 LLM，返回 `AssistantMessage`
 
-**核心方法：**
-- `run()`: 订阅 inBox 事件流，按 sessionId 前缀过滤后进行事件分发
-- `getTools()`: 构建工具集（protected 抽象方法，子类实现以自定义工具）
-- `getSystemPrompt()`: 获取系统提示词（protected 抽象方法）
-- `getIdentity()`: 获取智能体身份（public 抽象方法，实现 Agent 接口）
+**子智能体执行由 TaskTool 驱动，Agent 类不再包含 execute() 方法。**
 
-**事件分发方法：**
-- `canHandle(EventType)`: 判断当前智能体是否能处理指定事件类型
-- `getHandledEventTypes()`: 返回当前智能体可处理的事件类型集合（默认只处理 MESSAGE）
-- `handleAgentEvent(EventType, MessageEvent)`: 处理非 MESSAGE 类型的业务事件（默认空实现，子类按需覆写）
-- `handleMessageEvent(MessageEvent)`: 处理 MESSAGE 类型事件（从原 run() 方法中提取的消息处理逻辑）
+**模型切换方案：**
+Agent 持有 `ModelFactory` 引用，运行时通过 `chatClientCache` 按需缓存 ChatClient。主智能体使用 `session.getModel()` 选择模型，子智能体优先使用 `definition.model()`，其次使用上下文中的模型，最后回退到 DEEPSEEK。
 
-**事件分发流程：**
+**Advisor 机制：**
+Hook 机制已替换为 Spring AI Advisor 机制。Agent 在创建 ChatClient 时注册 Advisors，在 Agent 层拦截模型调用前后。
+
+**Builder 模式：**
+```java
+Agent.builder()
+    .agentId("default")
+    .definition(definition)
+    .modelFactory(modelFactory)
+    .tools(tools)
+    .advisors(advisors)
+    .build()
 ```
-inBox 事件 → run() 过滤 sessionId 前缀
-    → 读取 eventType（默认 MESSAGE）
-    → canHandle() 检查
-    → MESSAGE → handleMessageEvent()（现有流程）
-    → 其他类型 → handleAgentEvent()（子类覆写）
-```
 
-**LLM 调用逻辑（handleMessageEvent 方法）：**
-- 从 MessageEvent 获取 MessageChannel，构建 channel-aware conversationId：`sessionId + "#" + channel.name()`
-- STREAM 模式：流式调用 → 逐条收集 AssistantMessage → 仅当 `channel.shouldPublishToOutBox()` 为 true 时发布到 outBox → `doFinally` 清理 busy/stop 标志，仅在 ON_COMPLETE 时调用 `lifecycleHook.onSessionEnd` → `onErrorResume` 吞掉异常（如网络不稳定连接 LLM 失败），返回空 Flux 防止错误传播终止整个 inBox 订阅
-- BLOCK 模式：try-catch 包裹阻塞调用 → 仅当 `channel.shouldPublishToOutBox()` 为 true 时发布到 outBox → 调用 `lifecycleHook.onSessionEnd(sessionId, messages, channel)` → finally 块清理 busy/stop 标志
+### AgentManager
+智能体管理器，统一管理所有 Agent（MAIN 和 SUBAGENT），合并了原 `AgentFactory` 的功能，支持懒加载。
 
-**错误处理与容错设计：**
-- `run()` 的 `subscribe()` 注册了 error handler 作为兜底，防止未捕获的异常终止整个 inBox 订阅
-- STREAM 路径使用 `onErrorResume` 在操作符链中吞掉错误，与 `doFinally` 配合确保 busy/stop 标志总是被清理
-- BLOCK 路径使用 try-catch-finally 确保异常被捕获且标志位在 finally 中清理
+**核心字段：**
+- `agents`: `ConcurrentHashMap<String, Agent>` — Agent 实例缓存
+- `definitions`: `ConcurrentHashMap<String, AgentDefinition>` — AgentDefinition 缓存
+- `skillManager`: SkillManager（@Getter 供 TaskTool 使用）
+- `sessionManager`: SessionManager（@Lazy）
+- `toolkit`: Toolkit（工具构建委托给 Toolkit）
+- `journalManager`: JournalManager
+- `mcpToolCallbackProvider`: AsyncMcpToolCallbackProvider
 
-**channel-aware conversationId 设计：**
-- 格式：`{sessionId}#{channel.name()}`，例如 `MAIN-DM-desktopApp-bitloom#USER`、`MAIN-DM-desktopApp-bitloom#SYSTEM`
-- ConpactChatMemory 解析 conversationId 时，以 `#` 为分隔符拆分出 sessionId 和 channel
-- 不同通道拥有独立的对话历史，互不干扰
-- 未知通道名回退为 USER 通道
+**初始化与加载：**
+- `init()`: @PostConstruct，扫描 agents/ 目录加载所有定义，只预加载 default 主智能体
+- `loadAllDefinitions()`: 扫描 agents/ 目录解析所有 agent.md
+- `getAgent(String)`: 懒加载获取 Agent（computeIfAbsent）
+- `createAgent(String)`: 创建 Agent 实例（加载定义 → 构建工具 → 构建 Advisor → Builder 创建）
 
-**outBox 发布策略：**
-- 仅 USER 通道的消息会发布到 outBox（`channel.shouldPublishToOutBox()` 返回 true）
-- SYSTEM、MEMORY、JOURNAL、EVOLVE 通道的响应不推送给用户，避免系统级交互干扰用户界面
+**Advisor 构建：**
+- `buildAdvisors(AgentDefinition)`: 根据 kind 构建 Advisor 列表。MAIN 智能体默认注册 JournalAdvisor 和 MemoryConsolidateAdvisor
 
-**依赖注入（@Resource）：**
-- `chatClientBuilderFactory`: ChatClient 构建工厂
-- `skillManager`: 技能管理器
-- `agentManager`: 智能体管理器（构建系统提示词）
-- `sessionManager`: 会话管理器（TaskTool 需要）
-- `toolUIBridge`: UI 桥接（工具交互）
-- `cronManager`: 定时任务管理器
-- `configManager`: 配置管理器
-- `mcpToolCallbackProvider`: MCP 工具提供者
-- `lifecycleHook`: 生命周期钩子
+**工具构建已委托给 Toolkit：**
+- `toolkit.buildToolCallbacks(definition)`: 根据 AgentDefinition 构建工具集
 
-### AgentLifecycleHook
-智能体会话生命周期钩子，在会话关键节点自动执行记忆操作。
+**系统提示词构建：**
+- `buildSystemPrompt(String agentId)`: MAIN 智能体从 agents/{agentId}/ 下的 .md 文件加载（支持覆盖），SUBAGENT 直接使用 definition.content()
+  1. 运行环境信息（工作目录、时间、平台）
+  2. 根目录 AGENTS.md（agents/{agentId} 有同名文件则跳过）
+  3. 根目录 MEMORY.md（agents/{agentId} 有同名文件则跳过）
+  4. agents/{agentId}/*.md（覆盖或扩展根目录文件，排除 agent.md）
 
-**Spring 注解：** `@Component`
+**配置加载：**
+- `loadWorkspaceConfig(String agentId)`: 加载 agents/{agentId}/config.json（仅 MAIN 智能体），与根 config.json 合并
 
-**核心方法：**
-- `onSessionStart(String sessionId)`: 会话开始时触发
-- `onSessionEnd(String sessionId, List<AssistantMessage> messages, MessageChannel channel)`: 会话结束时触发，接收 MessageChannel 参数
-  - 仅当 `channel == MessageChannel.USER` 时执行日记和记忆整理逻辑
-  - 非 USER 通道（SYSTEM/MEMORY/JOURNAL/EVOLVE）的会话结束不触发日记和记忆整理，避免系统级交互产生不必要的副作用
+**CRUD 方法：**
+- `listSubagentDefinitions()`: 列出所有子智能体定义
+- `listMainAgentDefinitions()`: 列出所有主智能体定义
+- `getSubagentContent(String)`: 获取子智能体 agent.md 内容
+- `saveSubagentConfig(String, String)`: 保存子智能体配置
+- `createSubagentConfig(String, String, String)`: 创建子智能体配置
+- `deleteSubagentConfig(String)`: 删除子智能体配置
+- `copyMainAgent(String, String)`: 复制主智能体
+- `reloadDefinitions()`: 重新加载所有定义
 
-**事件发布（仅 USER 通道触发）：**
-- `publishJournalEvent(sessionId, summary)`: 会话结束时发布 JOURNAL 事件到 inBox，使用 `EventType.JOURNAL` + `MessageChannel.JOURNAL`
-- `publishMemoryConsolidateEvent(sessionId)`: 会话结束时检查 USER 通道未处理消息数量，超过阈值（10条）时发布 MEMORY_CONSOLIDATE 事件到 inBox，使用 `EventType.MEMORY_CONSOLIDATE` + `MessageChannel.MEMORY`
+**内部类：**
+- `AgentInfo(String name, String type)`: record
+- `AgentFolder(String name, Path path, List<AgentFile> files)`: 主智能体文件夹
+- `AgentFile(Path path, String displayName)`: 主智能体文件
 
-**设计意图：**
-- 通过 MessageChannel 参数过滤，确保只有用户对话才触发日记和记忆整理
-- 心跳（SYSTEM 通道）和进化（EVOLVE 通道）等系统级交互不会污染日记和记忆系统
+### WorkspaceConfig
+对应 `config.json` 的模型类，仅用于 MAIN 智能体。子智能体不需要 config.json。
 
-### 枚举类
-- `AgentIdentityEnum`: 智能体身份标识枚举，包含所有主智能体和子智能体类型
-  - `MAIN(AgentCategory.MAIN)`: 主智能体
-  - `EVOLVER(AgentCategory.MAIN)`: 进化守护者主智能体
-  - `GENERIC(AgentCategory.SUBAGENT)`: 通用子智能体
-  - `DOCTOR(AgentCategory.SUBAGENT)`: 系统医生子智能体
-  - `A2A(AgentCategory.SUBAGENT)`: A2A协议子智能体
-  - `AgentCategory`: 内部枚举 (MAIN, SUBAGENT)
-  - `getCategory()`: 获取智能体类别
-  - `isMain()` / `isSubagent()`: 便捷判断方法
+**字段：**
+- `tools`: 工具白名单（为空时注册所有默认工具）
+- `mcpServers`: MCP server 配置映射
+- `skills`: 技能名称列表
+- `subagents`: 可用子智能体名称列表
+
+### advisor 包
+
+基于 Spring AI Advisor 机制的智能体拦截器，替代原 Hook 机制。在 Agent 层注册，与 Session 无关。
+
+#### AgentAdvisor
+Advisor 基类，实现 `CallAdvisor` + `StreamAdvisor` 接口。
+
+**可覆盖方法：**
+- `beforeModelCall(ChatClientRequest)`: 模型调用前触发，可修改请求
+- `afterModelCall(ChatClientRequest, ChatClientResponse)`: 模型调用后触发
+- `beforeToolCall(String, String)`: 工具调用前触发
+- `afterToolCall(String, String)`: 工具调用后触发
+
+**实现原理：**
+- `adviseCall()`: 调用 beforeModelCall → chain.nextCall → afterModelCall
+- `adviseStream()`: 调用 beforeModelCall → chain.nextStream → doOnNext(afterModelCall)
+
+#### JournalAdvisor
+日记 Advisor，在模型调用后将摘要写入日记。order=101。
+
+#### MemoryConsolidateAdvisor
+记忆整理 Advisor，在模型调用后检查未处理消息数量，超过阈值时触发 LLM 记忆整理。order=100。
+
+**工作流程：**
+1. 从 response.context() 获取 conversationId
+2. 从 request.prompt().getInstructions() 获取对话消息
+3. 检查未处理消息数量（从 cursor 到最新）
+4. 超过阈值（10条）时，提取对话文本
+5. 调用 LLM 总结为关键事实
+6. 追加到 `memory/YYYY-MM-DD.md`（日流水账）
+7. 调用 LLM 合并去重后写入 `MEMORY.md`（长期记忆）
+8. 更新 conversationCursors
 
 ## 消息流程
 
 ```
-用户消息 -> EventBus.inBoxPublish(sessionId, message)  [inBox, 默认 USER 通道]
-                    │
-                    ▼
-            AbstractAgent.run()     ← 订阅 inBox，按 identity 前缀过滤
-                    │
-                    ├── 读取 eventType（默认 MESSAGE）
-                    ├── 读取 messageChannel（默认 USER）
-                    ├── canHandle() 检查
-                    │
-                    ├── MESSAGE → handleMessageEvent()
-                    │       │
-                    │       ├── 构建 channel-aware conversationId: sessionId + "#" + channel.name()
-                    │       ├── LLM 调用（流式/阻塞）
-                    │       ├── 仅 channel.shouldPublishToOutBox() == true 时发布到 outBox
-                    │       └── lifecycleHook.onSessionEnd(sessionId, messages, channel)
-                    │
-                    └── 其他类型 → handleAgentEvent()（子类覆写）
-                            │
-                            ├── MEMORY_CONSOLIDATE → MainAgent.handleMemoryConsolidate()
-                            │       └── 读取 USER 通道消息，使用 MEMORY 通道 conversationId
-                            ├── JOURNAL → MainAgent.handleJournal()
-                            │       └── 写入日记，使用 JOURNAL 通道
-                            └── EVOLVE → EvolverAgent.handleEvolve()
-                                    └── 使用 EVOLVE 通道 conversationId
+用户消息 → ViewModel.sendMessage()
+         → sessionManager.publishMessage(sessionId, message)
+         → eventBus.inBoxPublish(message)
+         → Session.handleMessage() [订阅 inBox]
+            ├─ 首次对话？→ 注入 BOOTSTRAP.md 作为 SystemMessage 前置
+            └─ agent.runStream(session, message) 或 agent.runBlock(session, message)
+         → 响应通过 eventBus.outBoxPublish() 发布
+         → ViewModel 的 outBoxSubscribe() 接收并渲染
+         → Advisor 机制自动触发 afterModelCall
+         → sessionManager.saveContext() 保存上下文快照
 ```
-
-**通道路由全景：**
-```
-发布方                              通道/事件类型              MessageChannel     conversationId
-────────────────────────────────────────────────────────────────────────────────────────────────
-用户消息                    MESSAGE              USER               {sessionId}#USER
-心跳消息                    MESSAGE              SYSTEM             {sessionId}#SYSTEM
-AgentLifecycleHook          MEMORY_CONSOLIDATE   MEMORY             {sessionId}#MEMORY
-AgentLifecycleHook          JOURNAL              JOURNAL            {sessionId}#JOURNAL
-HeartbeatRunner(EVOLVER)    EVOLVE               EVOLVE             {sessionId}#EVOLVE
-```
-
-**子智能体委派流程：**
-```
-Session(Agent=MainAgent)
-        │
-        ├── Task(subagent_type="Code")    → fork子会话 → Code子智能体
-        ├── Task(subagent_type="Explore")  → fork子会话 → Explore子智能体
-        ├── Task(subagent_type="Plan")     → fork子会话 → Plan子智能体
-        ├── Task(subagent_type="Bash")     → fork子会话 → Bash子智能体
-        ├── Task(subagent_type="Doctor")   → fork子会话 → Doctor子智能体（系统配置管理）
-```
-
-## Session 模型
-
-主智能体拥有独立会话，Session ID 格式：`{agentId}-{type}-{source}-{target}`
-
-```
-MAIN-DM-desktopApp-bitloom      # 主助手会话
-MAIN-DM-wechat-user123          # 微信渠道主助手会话
-EVOLVER-SYSTEM-internal-internal # 进化守护者会话
-```
-
-子智能体采用 fork 模型：
-```
-MAIN-DM-desktopApp-bitloom
-  ├── fork → 子会话_0 (Code, parentId=主会话)
-  ├── fork → 子会话_1 (Explore, parentId=主会话)
-  └── fork → 子会话_2 (Bash, parentId=主会话)
-```
-
-**消息存储按通道隔离：** 每个会话的消息按 MessageChannel 分别存储在 `channelMessages`（EnumMap<MessageChannel, List<Message>>）中，持久化为独立的 `{channel}.jsonl` 文件。
 
 ## 设计模式
-- **策略模式**：Agent 是无状态策略接口，Session 持有 Agent 引用并委托执行，新增 Agent 无需修改 SessionManager
-- **依赖倒置原则**：Session 依赖 Agent 接口而非 AbstractAgent 具体类
-- **开闭原则**：新增 Agent 实现自动注册到 SessionManager 的 agentRegistry，无需修改已有代码
-- 观察者模式：通过 EventBus 订阅消息
-- 响应式编程：基于 Project Reactor
-- Builder模式：所有工具使用 Builder 创建，不依赖 Spring 管理
-- 调度者-执行者模式：主智能体作为调度者，子智能体作为执行者
-- 多主智能体模式：参考 OpenClaw，每个主智能体拥有独立工作空间、会话和身份
-- 初始化分离模式：AppBootstrap 负责初始化，AgentManager 负责运行时管理
-- 事件类型标记模式：通过 eventType 字段在同一 inBox 通道中区分不同业务事件类型
-- **通道隔离模式**：通过 MessageChannel 在同一会话内隔离不同业务的消息历史和 conversationId，替代了原有的独立系统会话方案
-- 游标模式：memoryCursor/journalCursor 实现断点续处理
-
-## 心跳机制
-
-灵感来源于 OpenClaw 的心跳设计。HeartbeatRunner 定期向**用户会话**发送心跳消息（使用 SYSTEM 通道），驱动主智能体进行主动检查和自省。
-
-**核心组件：**
-- **HeartbeatRunner**：定时任务执行器，按固定间隔向用户会话发送心跳消息（EventType.MESSAGE + MessageChannel.SYSTEM）
-- **ProactiveContextAdvisor**：在心跳消息处理时，将 `HEARTBEAT.md` 检查清单注入到 Advisor 链的上下文中，引导智能体按清单逐项检查
-- **HEARTBEAT.md**：工作目录下的检查清单文件，定义了心跳时需要检查的事项
-
-**HEARTBEAT_OK 响应契约：**
-- 当智能体完成心跳检查且无需采取行动时，应回复 `HEARTBEAT_OK`
-- 前端/消息层识别到 `HEARTBEAT_OK` 后会抑制输出，避免向用户展示无意义的心跳响应
-
-**流程：**
-```
-HeartbeatRunner 定时触发
-        │
-        ▼
-EventBus.inBoxPublish(userSessionId, heartbeat消息, EventType.MESSAGE, MessageChannel.SYSTEM)
-        │
-        ▼
-MainAgent 接收消息（conversationId = userSessionId#SYSTEM）
-        │
-        ▼
-ProactiveContextAdvisor 注入 HEARTBEAT.md 检查清单
-        │
-        ▼
-智能体按清单检查 → 回复 HEARTBEAT_OK（无需行动时）或执行相应操作
-        │
-        ▼
-SYSTEM 通道 shouldPublishToOutBox() == false，响应不推送到 outBox
-lifecycleHook.onSessionEnd() 检测到非 USER 通道，跳过日记/记忆整理
-```
-
-**EVOLVER 心跳：**
-```
-HeartbeatRunner 定时触发
-        │
-        ▼
-EventBus.inBoxPublish(EVOLVER-SYSTEM-internal-internal, evolve消息, EventType.EVOLVE, MessageChannel.EVOLVE)
-        │
-        ▼
-EvolverAgent 接收消息（conversationId = EVOLVER-SYSTEM-internal-internal#EVOLVE）
-        │
-        ▼
-执行进化周期
-```
-
-## 忙状态跟踪
-
-EventBus 维护全局的 busy 标志用于跨组件查询，按 sessionId 粒度管理。
-
-**核心机制：**
-- **EventBus** 维护每个会话的 busy 标志（per-session busy state），供 HeartbeatRunner 等外部组件查询
-- **HeartbeatRunner** 在发送心跳前检查目标会话的 busy 状态，若 busy 则跳过本次心跳
-  - 用户会话心跳：直接检查用户会话的 busy 状态
-  - EVOLVER 心跳：检查 EVOLVER 会话的 busy 状态
-
-**设计意图：**
-- 避免心跳消息打断正在进行的用户对话
-- 心跳跳过不会导致遗漏，下一次心跳周期会重新检查
-
-## 空会话处理
-
-Session 在 handleMessage 中增加了 Agent 为 null 的防御性处理。
-
-**行为：**
-- 当 Session 关联的 Agent 为 null 时，Session 记录一条警告日志并跳过该消息
-- 不抛出异常，不影响其他会话的正常处理
-
-**设计意图：**
-- 防止因 Agent 未正确注入或已销毁导致的 NPE
-- 在日志中保留可追溯的记录，便于排查会话管理问题
-
+- **统一 Agent 模型**：主智能体和子智能体都是 Agent 类的实例，区别仅在配置
+- **Builder 模式**：Agent 只能通过 Builder 创建（私有构造函数）
+- **懒加载**：AgentManager 启动只加载 default，其它按需创建
+- **模型切换**：Agent 持有 ModelFactory，通过 Map 缓存 ChatClient 动态选择模型
+- **观察者模式**：通过 EventBus 订阅消息
+- **Advisor 机制**：基于 Spring AI Advisor 替代原 Hook 机制，在 Agent 层拦截
+- **白名单模式**：config.json 的 tools 字段控制工具注册

@@ -12,6 +12,7 @@
 
 **依赖注入：**
 - `TaskScheduler`: Spring 任务调度器
+- `SessionManager`: 会话管理器
 
 **核心方法：**
 - `createTask()`: 创建定时任务（需要sessionId）
@@ -22,7 +23,7 @@
 - `taskExists(name)`: 检查任务是否已存在
 
 ### HeartbeatRunner
-心跳运行器，灵感来源于 OpenClaw 的 heartbeat-runner.ts，为每个用户会话和 EVOLVER 系统会话运行周期性心跳，通过 EventBus 向用户会话发送带 MessageChannel 标记的心跳消息。已完全替代 BootstrappingCronInitializer。
+心跳运行器，灵感来源于 OpenClaw 的 heartbeat-runner.ts，为每个用户会话和 EVOLVER 系统会话运行周期性心跳，通过 EventBus 向用户会话发送心跳消息。已完全替代 BootstrappingCronInitializer。
 
 **Spring 注解：** `@Component`
 
@@ -31,9 +32,9 @@
 - `SessionManager`: 会话管理器
 
 **核心机制：**
-- 为每个用户会话注册周期性心跳任务，心跳直接发送到用户会话，通过 MessageChannel.SYSTEM 标记消息来源
-- 为 EVOLVER 系统会话注册独立的心跳任务，通过 MessageChannel.EVOLVE 标记消息来源
-- 心跳触发时通过 EventBus 发送带 `heartbeat: true` metadata 的消息，使用四参数 inBoxPublish 指定 EventType 和 MessageChannel
+- 为每个用户会话注册周期性心跳任务，心跳直接发送到用户会话
+- 为 EVOLVER 系统会话注册独立的心跳任务
+- 心跳触发时通过 SessionManager 发送带 `heartbeat: true` metadata 的消息
 - 支持 `skipWhenBusy` 机制：当会话正在处理消息时，跳过本次心跳
 - 使用 HEARTBEAT.md 检查清单作为心跳消息内容，引导智能体执行例行检查
 
@@ -57,12 +58,12 @@
 - 心跳消息来源：HEARTBEAT.md 检查清单
 
 **SessionId 格式：**
-- 用户会话心跳直接发送到用户会话 ID（如 `MAIN-DM-desktopApp-bitloom`），通过 MessageChannel.SYSTEM 标记来源
-- EVOLVER 心跳发送到 `EVOLVER-SYSTEM-internal-internal`，通过 MessageChannel.EVOLVE 标记来源
+- 用户会话心跳直接发送到用户会话 ID（如 `MAIN-DM-desktopApp-bitloom`）
+- EVOLVER 心跳发送到 `EVOLVER-SYSTEM-internal-internal`
 
-**EventBus 发布方式：**
-- 用户会话心跳：`EventBus.inBoxPublish(userSessionId, userMessage, EventType.MESSAGE, MessageChannel.SYSTEM)`
-- EVOLVER 心跳：`EventBus.inBoxPublish(evolverSessionId, userMessage, EventType.EVOLVE, MessageChannel.EVOLVE)`
+**消息发布方式：**
+- 用户会话心跳：`sessionManager.publishMessage(userSessionId, userMessage)`
+- EVOLVER 心跳：`sessionManager.publishMessage(evolverSessionId, userMessage)`
 
 ## 数据模型
 
@@ -147,9 +148,9 @@ cronManager.deleteTask("session-123", "reminder");
 cronManager.triggerTask("session-123", "reminder");
 ```
 
-## EventBus 集成
+## SessionManager 集成
 
-任务触发时通过 EventBus 发送消息，使用四参数 inBoxPublish 指定 EventType 和 MessageChannel：
+任务触发时通过 SessionManager 发布消息：
 
 **SessionId 格式：**
 ```
@@ -161,14 +162,8 @@ cronManager.triggerTask("session-123", "reminder");
 
 **发送方式：**
 ```java
-EventBus.inBoxPublish(sessionId, userMessage, EventType.MESSAGE, MessageChannel.SYSTEM);
+sessionManager.publishMessage(sessionId, userMessage);
 ```
-
-**MessageChannel 架构：**
-- `MessageChannel.SYSTEM`：系统消息通道，CronManager 和 HeartbeatRunner 的用户会话心跳使用此通道
-- `MessageChannel.EVOLVE`：进化消息通道，HeartbeatRunner 的 EVOLVER 心跳使用此通道
-- MessageChannel 与 EventType 的映射关系由 `MessageChannel.fromEventType()` 自动确定
-- 四参数 `inBoxPublish` 允许显式指定 MessageChannel，覆盖默认映射
 
 ## 日志规范
 
@@ -220,5 +215,5 @@ AI: 调用 cron_create("reminder", "once", null, 10, null, "休息一下")
 4. 删除和触发任务时会验证sessionId，无权限会抛出异常
 5. 所有时间参数使用秒为单位
 6. Cron 表达式遵循标准格式（6或7位）
-7. HeartbeatRunner 不再依赖 SystemSessionManager，心跳直接发送到用户会话，通过 MessageChannel 区分消息来源
-8. EventBus 发布消息时使用四参数方法 `inBoxPublish(sessionId, message, eventType, messageChannel)`，显式指定 EventType 和 MessageChannel
+7. HeartbeatRunner 不再依赖 SystemSessionManager，心跳直接发送到用户会话
+8. 消息发布时使用 SessionManager 两参数方法 `publishMessage(sessionId, message)`

@@ -19,6 +19,8 @@ import java.util.function.Consumer;
 @Slf4j
 public class AssistantMessageCard extends VBox {
 
+    private static final String FONT_FAMILY = "\"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif";
+
     private final ChatMessage chatMessage;
     @Setter
     private Consumer<String> onContentChanged;
@@ -28,10 +30,10 @@ public class AssistantMessageCard extends VBox {
         this.getStyleClass().add("chat-message");
         this.getStyleClass().add("chat-message--assistant");
 
-        renderContent(chatMessage.getContent());
+        renderContent(chatMessage.getContent(), chatMessage.isStreaming());
 
         chatMessage.contentProperty().addListener((obs, oldVal, newVal) -> {
-            renderContent(newVal);
+            renderContent(newVal, chatMessage.isStreaming());
             if (onContentChanged != null && newVal != null) {
                 onContentChanged.accept(newVal);
             }
@@ -39,6 +41,7 @@ public class AssistantMessageCard extends VBox {
 
         chatMessage.streamingProperty().addListener((obs, oldVal, newVal) -> {
             if (!newVal) {
+                renderContent(chatMessage.getContent(), false);
                 this.getStyleClass().remove("chat-message--streaming");
             }
         });
@@ -48,12 +51,31 @@ public class AssistantMessageCard extends VBox {
         }
     }
 
-    private void renderContent(String content) {
+    private void renderContent(String content, boolean streaming) {
         this.getChildren().clear();
         if (content == null || content.isBlank()) {
             return;
         }
 
+        if (streaming) {
+            renderLightweight(content);
+        } else {
+            renderMarkdown(content);
+        }
+    }
+
+    private void renderLightweight(String content) {
+        TextFlow textFlow = new TextFlow();
+        textFlow.getStyleClass().add("md-paragraph");
+        textFlow.getStyleClass().add("chat-message__content");
+        textFlow.setMaxWidth(Double.MAX_VALUE);
+        Text text = new Text(content);
+        text.setFont(Font.font(FONT_FAMILY, 15));
+        textFlow.getChildren().add(text);
+        this.getChildren().add(textFlow);
+    }
+
+    private void renderMarkdown(String content) {
         try {
             VBox rendered = MarkdownFxRenderer.render(content);
             List<Node> childrenCopy = new ArrayList<>(rendered.getChildren());
@@ -71,7 +93,7 @@ public class AssistantMessageCard extends VBox {
             TextFlow textFlow = new TextFlow();
             textFlow.getStyleClass().add("chat-message__content");
             Text text = new Text(content);
-            text.setFont(Font.font("\"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif", 15));
+            text.setFont(Font.font(FONT_FAMILY, 15));
             textFlow.getChildren().add(text);
             this.getChildren().add(textFlow);
         }

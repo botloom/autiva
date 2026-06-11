@@ -1,0 +1,5 @@
+{
+  "allow": ["web_fetch", "web_search", "command", "ask_user", "todo_write", "cron", "task", "evolve_query", "evolve_apply", "skill", "notify"],
+  "deny": [],
+  "mcpServers": {}
+}

@@ -5,6 +5,7 @@ import cn.bitloom.agentic.session.SessionManager;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.SvgImageView;
 import cn.bitloom.router.RouteConfig;
+import cn.bitloom.store.Store;
 import cn.bitloom.vm.HomePageViewModel;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -15,11 +16,12 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
@@ -28,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
 
@@ -66,6 +69,7 @@ public class SideBarController implements Initializable, PageHolder {
 
     private Map<String, HBox> routeOptionMap;
     private HBox activeHistoryItem = null;
+    private final Map<String, HBox> historyItemMap = new LinkedHashMap<>();
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -87,21 +91,19 @@ public class SideBarController implements Initializable, PageHolder {
             });
         });
 
-        // "新聊天"按钮：创建新 session 并导航到首页
+        // "新聊天"按钮：切换到初始态并导航到首页
         this.homeOption.setOnMouseClicked(event -> {
-            if (homePageViewModel.createNewSession()) {
-                resetChatUI();
-                if (this.indexController != null) {
-                    this.indexController.navigate(RouteConfig.Path.HOME);
-                }
-                refreshHistoryList();
+            homePageViewModel.createNewSession();
+            resetChatUI();
+            if (this.indexController != null) {
+                this.indexController.navigate(RouteConfig.Path.HOME);
             }
         });
 
         this.homeOption.getStyleClass().add(ACTIVE_CSS_CLASS);
 
         // 监听 session 切换，刷新历史列表
-        this.homePageViewModel.getCurrentSessionId().addListener((obs, oldVal, newVal) -> {
+        Store.currentSessionId.addListener((obs, oldVal, newVal) -> {
             Platform.runLater(this::refreshHistoryList);
         });
 
@@ -117,18 +119,74 @@ public class SideBarController implements Initializable, PageHolder {
     }
 
     public void refreshHistoryList() {
-        historyList.getChildren().clear();
-        activeHistoryItem = null;
+        List<Session> sessions = sessionManager.getDesktopSessions();
+        String currentSessionId = Store.currentSessionId.get();
 
-        String currentSessionId = homePageViewModel.getCurrentSessionId().get();
-
-        for (Session session : sessionManager.getDesktopSessions()) {
-            HBox item = createHistoryItem(session);
-            if (session.getId().equals(currentSessionId)) {
-                item.getStyleClass().add(HISTORY_ACTIVE_CSS_CLASS);
-                activeHistoryItem = item;
+        // 移除已删除的 session 对应的项
+        java.util.Set<String> activeIds = new java.util.HashSet<>();
+        for (Session s : sessions) {
+            activeIds.add(s.getId());
+        }
+        historyItemMap.keySet().removeIf(id -> {
+            if (!activeIds.contains(id)) {
+                historyList.getChildren().remove(historyItemMap.get(id));
+                return true;
             }
-            historyList.getChildren().add(item);
+            return false;
+        });
+
+        // 增量添加/更新
+        int insertIndex = 0;
+        for (Session session : sessions) {
+            HBox existingItem = historyItemMap.get(session.getId());
+            if (existingItem == null) {
+                HBox item = createHistoryItem(session);
+                historyItemMap.put(session.getId(), item);
+                historyList.getChildren().add(insertIndex, item);
+            } else {
+                // 更新标题（如有变化）
+                updateHistoryItemTitle(existingItem, session);
+                // 调整顺序
+                int currentIndex = historyList.getChildren().indexOf(existingItem);
+                if (currentIndex != insertIndex) {
+                    historyList.getChildren().remove(existingItem);
+                    historyList.getChildren().add(insertIndex, existingItem);
+                }
+            }
+            insertIndex++;
+        }
+
+        // 更新高亮
+        activeHistoryItem = null;
+        for (Map.Entry<String, HBox> entry : historyItemMap.entrySet()) {
+            HBox item = entry.getValue();
+            if (entry.getKey().equals(currentSessionId)) {
+                if (!item.getStyleClass().contains(HISTORY_ACTIVE_CSS_CLASS)) {
+                    item.getStyleClass().add(HISTORY_ACTIVE_CSS_CLASS);
+                }
+                item.setStyle(null);
+                activeHistoryItem = item;
+            } else {
+                item.getStyleClass().remove(HISTORY_ACTIVE_CSS_CLASS);
+                item.setStyle("-fx-background-color: transparent;");
+            }
+        }
+    }
+
+    private void updateHistoryItemTitle(HBox item, Session session) {
+        // 更新标题 Label（第一个子节点是 VBox textContainer，其第一个子节点是 titleLabel）
+        if (!item.getChildren().isEmpty() && item.getChildren().get(0) instanceof VBox textContainer) {
+            if (!textContainer.getChildren().isEmpty() && textContainer.getChildren().get(0) instanceof Label titleLabel) {
+                String title = "新对话";
+                List<Message> messages = session.getMessages();
+                for (Message msg : messages) {
+                    if (msg.getMessageType() == MessageType.USER && msg.getText() != null && !msg.getText().isBlank()) {
+                        String text = msg.getText().replace("\n", " ").trim();
+                        title = text.length() > 20 ? text.substring(0, 20) + "..." : text;
+                    }
+                }
+                titleLabel.setText(title);
+            }
         }
     }
 
@@ -142,7 +200,7 @@ public class SideBarController implements Initializable, PageHolder {
         textContainer.getStyleClass().add("sidebar__history-text");
         HBox.setHgrow(textContainer, Priority.ALWAYS);
 
-        Label titleLabel = new Label(session.getDisplayTitle());
+        Label titleLabel = new Label(session.getTitle());
         titleLabel.getStyleClass().add("sidebar__history-item-title");
 
         Label timeLabel = new Label(formatTime(sessionManager.getSessionLastActiveTime(session.getId())));
@@ -165,15 +223,10 @@ public class SideBarController implements Initializable, PageHolder {
             String sessionId = session.getId();
             sessionManager.deleteSession(sessionId);
 
-            String currentId = homePageViewModel.getCurrentSessionId().get();
+            String currentId = Store.currentSessionId.get();
             if (sessionId.equals(currentId)) {
-                // 删除的是当前会话，创建新会话
-                Session newSession = sessionManager.getOrCreate(
-                        homePageViewModel.getAgentProperty().get(), "desktopApp",
-                        cn.bitloom.agentic.session.SessionTypeEnum.DM,
-                        cn.bitloom.agentic.session.SessionRespTypeEnum.STREAM,
-                        homePageViewModel.getModelProperty().get(), "bitloom");
-                homePageViewModel.switchToSession(newSession.getId());
+                // 删除的是当前会话，切换到初始态
+                homePageViewModel.createNewSession();
                 resetChatUI();
             }
             refreshHistoryList();

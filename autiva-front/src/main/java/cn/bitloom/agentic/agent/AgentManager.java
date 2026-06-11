@@ -1,11 +1,19 @@
 package cn.bitloom.agentic.agent;
 
-import cn.bitloom.agentic.util.MarkdownParser;
+import cn.bitloom.agentic.hook.AgentHook;
+import cn.bitloom.agentic.hook.JournalHook;
+import cn.bitloom.agentic.hook.MemoryConsolidateHook;
+import cn.bitloom.agentic.memory.JournalManager;
+import cn.bitloom.agentic.model.ModelFactory;
+import cn.bitloom.agentic.skill.SkillManager;
+import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.constant.AppConstants;
 import cn.bitloom.exception.AgentException;
 import cn.bitloom.exception.StorageException;
+import com.alibaba.fastjson2.JSON;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -14,95 +22,136 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+/**
+ * 智能体管理器，统一管理所有 Agent（MAIN 和 SUBAGENT）。
+ * 合并了原 AgentFactory 的功能，支持懒加载。
+ */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AgentManager {
 
-    private final Map<String, AgentConfig> agents = new ConcurrentHashMap<>();
+    private final Map<String, Agent> agents = new ConcurrentHashMap<>();
+    private final Map<String, AgentDefinition> definitions = new ConcurrentHashMap<>();
+
+    private final ModelFactory modelFactory;
+    @Getter
+    private final SkillManager skillManager;
+    private final Toolkit toolkit;
+    private final JournalManager journalManager;
 
     @PostConstruct
     public void init() {
-        registerAgents();
+        // 扫描 agents/ 目录，加载所有 AgentDefinition
+        loadAllDefinitions();
+        // 只预加载 default 主智能体
+        getAgent("default");
     }
 
-    private void registerAgents() {
-        for (AgentIdentityEnum identity : AgentIdentityEnum.values()) {
-            if (!identity.isMain()) {
-                continue;
-            }
-            Path dir = AppConstants.Base.WORKSPACE_DIR.resolve(identity.name());
-            agents.put(identity.name(), new AgentConfig(identity.name(), AgentIdentityEnum.AgentCategory.MAIN, dir));
+    /**
+     * 扫描 agents/ 目录，加载所有 agent.md 定义
+     */
+    private void loadAllDefinitions() {
+        Path agentsDir = AppConstants.Base.AGENTS_DIR;
+        if (!Files.exists(agentsDir)) {
+            return;
         }
 
-        loadSubagentConfigs().forEach(config ->
-                agents.put(config.name(), config)
-        );
-    }
-
-    public void reloadSubagents() {
-        agents.entrySet().removeIf(e -> e.getValue().type() == AgentIdentityEnum.AgentCategory.SUBAGENT);
-        loadSubagentConfigs().forEach(config ->
-                agents.put(config.name(), config)
-        );
-    }
-
-    private List<AgentConfig> loadSubagentConfigs() {
-        List<AgentConfig> configs = new ArrayList<>();
-        for (AgentIdentityEnum identity : AgentIdentityEnum.values()) {
-            if (!identity.isSubagent() || identity == AgentIdentityEnum.A2A) {
-                continue;
-            }
-            Path dir = AppConstants.Base.WORKSPACE_DIR.resolve(identity.name());
-            if (!Files.exists(dir) || !Files.isDirectory(dir)) {
-                continue;
-            }
-            try (Stream<Path> paths = Files.list(dir)) {
-                paths.filter(Files::isRegularFile)
-                        .filter(p -> p.toString().endsWith(".md"))
-                        .forEach(p -> {
+        try (Stream<Path> dirs = Files.list(agentsDir)) {
+            dirs.filter(Files::isDirectory)
+                    .forEach(dir -> {
+                        String agentId = dir.getFileName().toString();
+                        Path agentMd = dir.resolve("agent.md");
+                        if (Files.exists(agentMd)) {
                             try {
-                                String content = Files.readString(p, StandardCharsets.UTF_8);
-                                MarkdownParser parser = new MarkdownParser(content);
-                                Map<String, Object> frontMatter = parser.getFrontMatter();
-                                String name = frontMatter.containsKey("name")
-                                        ? frontMatter.get("name").toString()
-                                        : p.getFileName().toString().replace(".md", "");
-                                String description = frontMatter.containsKey("description")
-                                        ? frontMatter.get("description").toString()
-                                        : "";
-                                configs.add(new AgentConfig(name, AgentIdentityEnum.AgentCategory.SUBAGENT, p, description));
-                            } catch (IOException e) {
-                                log.error("读取子智能体配置失败: {}", p, e);
+                                AgentDefinition definition = AgentDefinition.fromMarkdown(agentMd);
+                                definitions.put(agentId, definition);
+                                log.info("加载智能体定义: agentId={}, kind={}", agentId, definition.kind());
+                            } catch (Exception e) {
+                                log.error("加载智能体定义失败: {}", agentMd, e);
                             }
-                        });
-            } catch (IOException e) {
-                log.error("列出子智能体目录失败: {}", dir, e);
+                        }
+                    });
+        } catch (IOException e) {
+            log.error("扫描 agents/ 目录失败", e);
+        }
+    }
+
+    /**
+     * 获取 Agent，懒加载
+     */
+    public Agent getAgent(String agentId) {
+        return agents.computeIfAbsent(agentId, this::createAgent);
+    }
+
+    /**
+     * 创建 Agent 实例
+     */
+    private Agent createAgent(String agentId) {
+        AgentDefinition definition = definitions.get(agentId);
+        if (definition == null) {
+            // 尝试从文件系统加载
+            Path agentMd = AppConstants.Base.agentDefinitionFile(agentId);
+            if (Files.exists(agentMd)) {
+                definition = AgentDefinition.fromMarkdown(agentMd);
+                definitions.put(agentId, definition);
+            } else {
+                // 如果没有 agent.md，创建默认的 MAIN 定义
+                definition = new AgentDefinition(agentId, "默认智能体", AgentKind.MAIN,
+                        null, List.of(), List.of(), List.of(), "default", "");
+                definitions.put(agentId, definition);
             }
         }
-        return configs;
+
+        List<AgentHook> hooks = buildHooks(definition);
+
+        Agent agent = Agent.builder()
+                .agentId(agentId)
+                .definition(definition)
+                .modelFactory(modelFactory)
+                .tools(toolkit.buildToolCallbacks(definition))
+                .hooks(hooks)
+                .build();
+
+        log.info("创建智能体: agentId={}, kind={}", agentId, definition.kind());
+        return agent;
     }
 
-    public List<AgentInfo> listSubagents() {
-        return agents.entrySet().stream()
-                .filter(e -> e.getValue().type() == AgentIdentityEnum.AgentCategory.SUBAGENT)
-                .map(entry -> new AgentInfo(
-                        entry.getKey(),
-                        entry.getValue().type().name()
-                ))
-                .toList();
+    /**
+     * 构建 Hook 列表（默认 Hook）
+     */
+    private List<AgentHook> buildHooks(AgentDefinition definition) {
+        List<AgentHook> hooks = new ArrayList<>();
+        if (definition.kind() == AgentKind.MAIN) {
+            hooks.add(new MemoryConsolidateHook(modelFactory));
+            hooks.add(new JournalHook(journalManager));
+        }
+        return hooks;
     }
 
-    public String buildSystemPrompt(AgentIdentityEnum identity) {
+    // ===== 系统提示词构建 =====
+
+    /**
+     * 构建系统提示词：
+     * MAIN 智能体从 agents/{agentId}/ 下的 .md 文件加载
+     * SUBAGENT 智能体直接使用 definition.content()
+     */
+    public String buildSystemPrompt(String agentId) {
+        AgentDefinition definition = definitions.get(agentId);
+        if (definition == null || definition.kind() == AgentKind.SUBAGENT) {
+            return definition != null ? definition.content() : "";
+        }
+
         StringBuilder sb = new StringBuilder();
 
+        // 运行环境信息
+        Path workspaceDir = AppConstants.Base.agentWorkspaceDir(agentId);
         sb.append("""
-                
+
                 
                 # 运行环境
                 
@@ -111,135 +160,166 @@ public class AgentManager {
                 - 智能体: %s
                 - 平台: %s (%s)
                 """.formatted(
-                AppConstants.Base.WORKSPACE_DIR.resolve(identity.name()),
+                workspaceDir,
                 LocalDateTime.now(),
-                identity,
+                agentId,
                 System.getProperty("os.name"),
                 System.getProperty("os.version")
         ));
 
-        Path dirPath = AppConstants.Base.WORKSPACE_DIR.resolve(identity.name());
-
-        if (Files.exists(dirPath) && Files.isDirectory(dirPath)) {
-            try (Stream<Path> stream = Files.list(dirPath)) {
+        // 收集 agents/{agentId}/ 下的 .md 文件名（用于覆盖判断）
+        Path agentDir = AppConstants.Base.agentDir(agentId);
+        Set<String> agentFileNames = new HashSet<>();
+        if (Files.exists(agentDir) && Files.isDirectory(agentDir)) {
+            try (Stream<Path> stream = Files.list(agentDir)) {
                 stream.filter(p -> p.toString().endsWith(".md"))
-                        .sorted()
-                        .forEach(p -> {
-                            try {
-                                sb.append(Files.readString(p));
-                            } catch (IOException e) {
-                                log.error("读取文件失败: {}", p, e);
-                            }
-                            sb.append("\n");
-                        });
+                        .filter(p -> !p.getFileName().toString().equals("agent.md"))
+                        .forEach(p -> agentFileNames.add(p.getFileName().toString()));
             } catch (IOException e) {
-                log.error("列出目录文件失败: {}", dirPath, e);
+                log.error("列出目录文件失败: {}", agentDir, e);
+            }
+        }
+
+        // 1. 读取根目录 AGENTS.md（agents/{agentId} 有同名文件则跳过）
+        if (!agentFileNames.contains("AGENTS.md")) {
+            appendFileContent(sb, AppConstants.Base.AGENTS_MD);
+        }
+
+        // 2. 读取根目录 MEMORY.md（agents/{agentId} 有同名文件则跳过）
+        if (!agentFileNames.contains("MEMORY.md")) {
+            appendFileContent(sb, AppConstants.Base.MEMORY_MD);
+        }
+
+        // 3. 读取 agents/{agentId}/*.md（覆盖或扩展根目录文件，排除 agent.md）
+        if (Files.exists(agentDir) && Files.isDirectory(agentDir)) {
+            try (Stream<Path> stream = Files.list(agentDir)) {
+                stream.filter(p -> p.toString().endsWith(".md"))
+                        .filter(p -> !p.getFileName().toString().equals("agent.md"))
+                        .sorted()
+                        .forEach(p -> appendFileContent(sb, p));
+            } catch (IOException e) {
+                log.error("列出目录文件失败: {}", agentDir, e);
             }
         }
 
         return sb.toString();
     }
 
-    public String getSubagentContent(String name) {
-        AgentConfig config = agents.get(name);
-        if (config == null || config.type() != AgentIdentityEnum.AgentCategory.SUBAGENT) {
-            return null;
-        }
-        try {
-            return Files.readString(config.path(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("读取子智能体配置失败: {}", name, e);
-            return null;
-        }
-    }
-
-    public void saveSubagentConfig(String name, String content) {
-        AgentConfig config = agents.get(name);
-        if (config == null || config.type() != AgentIdentityEnum.AgentCategory.SUBAGENT) {
-            throw AgentException.subagentNotFound(name);
-        }
-        try {
-            Files.writeString(config.path(), content, StandardCharsets.UTF_8);
-            log.info("保存子智能体配置: {}", name);
-            reloadSubagents();
-        } catch (IOException e) {
-            throw StorageException.writeError(name, e);
-        }
-    }
-
-    public void createSubagentConfig(String name, String description, String content) {
-        String kind = resolveSubagentKind(content);
-        Path typeDir = AppConstants.Base.WORKSPACE_DIR.resolve(kind);
-        if (!Files.exists(typeDir)) {
+    private void appendFileContent(StringBuilder sb, Path file) {
+        if (Files.exists(file)) {
             try {
-                Files.createDirectories(typeDir);
+                sb.append(Files.readString(file, StandardCharsets.UTF_8));
+                sb.append("\n");
             } catch (IOException e) {
-                throw StorageException.dirError(kind, e);
+                log.error("读取文件失败: {}", file, e);
             }
-        }
-
-        Path filePath = typeDir.resolve(name + ".md");
-        if (Files.exists(filePath)) {
-            throw AgentException.subagentAlreadyExists(name);
-        }
-
-        String fullContent = "---\nname: " + name + "\nkind: " + kind + "\ndescription: " + description + "\n---\n\n" + content;
-        try {
-            Files.writeString(filePath, fullContent, StandardCharsets.UTF_8);
-            log.info("创建子智能体配置: {}", name);
-            reloadSubagents();
-        } catch (IOException e) {
-            throw StorageException.writeError(name, e);
         }
     }
 
-    private String resolveSubagentKind(String content) {
-        if (content != null && !content.isBlank()) {
-            MarkdownParser parser = new MarkdownParser(content);
-            Object kindValue = parser.getFrontMatter().get("kind");
-            if (kindValue != null && !kindValue.toString().isBlank()) {
-                return kindValue.toString().trim().toUpperCase();
-            }
-        }
-        return AgentIdentityEnum.GENERIC.name();
+    // ===== 配置加载 =====
+
+    /**
+     * 获取指定智能体的 WorkspaceConfig
+     */
+    public WorkspaceConfig getWorkspaceConfig(String agentId) {
+        return toolkit.loadWorkspaceConfig(agentId);
     }
 
-    public void deleteSubagentConfig(String name) {
-        AgentConfig config = agents.get(name);
-        if (config == null || config.type() != AgentIdentityEnum.AgentCategory.SUBAGENT) {
-            throw AgentException.subagentNotFound(name);
-        }
-        try {
-            Files.deleteIfExists(config.path());
-            agents.remove(name);
-            log.info("删除子智能体配置: {}", name);
-        } catch (IOException e) {
-            throw StorageException.writeError(name, e);
-        }
+    // ===== CRUD 方法 =====
+
+    /**
+     * 获取所有子智能体定义
+     */
+    public List<AgentDefinition> listSubagentDefinitions() {
+        return definitions.values().stream()
+                .filter(d -> d.kind() == AgentKind.SUBAGENT)
+                .toList();
+    }
+
+    /**
+     * 获取所有主智能体定义
+     */
+    public List<AgentDefinition> listMainAgentDefinitions() {
+        return definitions.values().stream()
+                .filter(d -> d.kind() == AgentKind.MAIN)
+                .toList();
     }
 
     public boolean exists(String name) {
-        return agents.containsKey(name);
+        return definitions.containsKey(name);
     }
 
     public int count() {
-        return agents.size();
+        return definitions.size();
     }
+
+    public AgentDefinition getDefinition(String agentId) {
+        return definitions.get(agentId);
+    }
+
+    /**
+     * 复制主智能体
+     */
+    public void copyMainAgent(String sourceAgentId, String targetAgentId) {
+        Path sourceDir = AppConstants.Base.agentDir(sourceAgentId);
+        Path targetDir = AppConstants.Base.agentDir(targetAgentId);
+
+        if (!Files.exists(sourceDir)) {
+            throw AgentException.subagentNotFound(sourceAgentId);
+        }
+
+        try {
+            // 复制 agents/ 目录
+            copyDirectory(sourceDir, targetDir);
+
+            // 创建 workspace/ 目录
+            Path targetWorkspace = AppConstants.Base.agentWorkspaceDir(targetAgentId);
+            Files.createDirectories(targetWorkspace);
+
+            // 重新加载定义
+            AgentDefinition newDef = AgentDefinition.fromMarkdown(targetDir.resolve("agent.md"));
+            definitions.put(targetAgentId, newDef);
+
+            log.info("复制主智能体: {} -> {}", sourceAgentId, targetAgentId);
+        } catch (IOException e) {
+            throw StorageException.writeError(targetAgentId, e);
+        }
+    }
+
+    private void copyDirectory(Path source, Path target) throws IOException {
+        Files.createDirectories(target);
+        try (Stream<Path> stream = Files.list(source)) {
+            stream.forEach(path -> {
+                try {
+                    Path targetPath = target.resolve(path.getFileName().toString());
+                    if (Files.isDirectory(path)) {
+                        copyDirectory(path, targetPath);
+                    } else {
+                        Files.copy(path, targetPath);
+                    }
+                } catch (IOException e) {
+                    log.error("复制文件失败: {}", path, e);
+                }
+            });
+        }
+    }
+
+    // ===== Agent 文件夹管理 =====
 
     public List<AgentFolder> loadAgentFolders() {
         List<AgentFolder> result = new ArrayList<>();
-        Path workspaceDir = AppConstants.Base.WORKSPACE_DIR;
+        Path agentsDir = AppConstants.Base.AGENTS_DIR;
 
-        if (!Files.exists(workspaceDir)) {
+        if (!Files.exists(agentsDir)) {
             try {
-                Files.createDirectories(workspaceDir);
+                Files.createDirectories(agentsDir);
             } catch (IOException e) {
-                log.error("Failed to create workspace directory", e);
+                log.error("Failed to create agents directory", e);
                 return result;
             }
         }
 
-        try (Stream<Path> dirs = Files.list(workspaceDir)) {
+        try (Stream<Path> dirs = Files.list(agentsDir)) {
             dirs.filter(Files::isDirectory)
                     .forEach(dir -> {
                         AgentFolder agent = new AgentFolder(dir.getFileName().toString(), dir);
@@ -259,14 +339,7 @@ public class AgentManager {
         return result;
     }
 
-    public record AgentConfig(String name, AgentIdentityEnum.AgentCategory type, Path path, String description) {
-        public AgentConfig(String name, AgentIdentityEnum.AgentCategory type, Path path) {
-            this(name, type, path, "");
-        }
-    }
-
-    public record AgentInfo(String name, String type) {
-    }
+    // ===== 内部 record =====
 
     @Getter
     public static class AgentFolder {
@@ -282,7 +355,6 @@ public class AgentManager {
         public void addFile(Path file) {
             files.add(new AgentFile(file));
         }
-
     }
 
     @Getter
@@ -297,6 +369,5 @@ public class AgentManager {
                     ? fileName.substring(0, fileName.length() - 3)
                     : fileName;
         }
-
     }
 }

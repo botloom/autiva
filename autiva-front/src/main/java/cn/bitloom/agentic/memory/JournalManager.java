@@ -22,7 +22,7 @@ public class JournalManager {
     private final Path journalDir;
 
     public JournalManager() {
-        this.journalDir = AppConstants.Base.WORKSPACE_DIR.resolve("MAIN").resolve("memories").resolve("journal");
+        this.journalDir = AppConstants.Base.WORKSPACE_DIR.resolve("default").resolve("memories").resolve("journal");
         try {
             Files.createDirectories(this.journalDir);
         }
@@ -62,7 +62,7 @@ public class JournalManager {
 
         try {
             if (!Files.exists(journalFile)) {
-                String header = "---\ndate: " + today + "\nagent: MAIN\n---\n\n# " + today + "\n\n";
+                String header = "---\ndate: " + today + "\nagent: default\n---\n\n# " + today + "\n\n";
                 Files.writeString(journalFile, header, StandardCharsets.UTF_8);
             }
 

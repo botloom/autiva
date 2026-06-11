@@ -1,8 +1,6 @@
 package cn.bitloom.cron;
 
-import cn.bitloom.agentic.event.EventBus;
-import cn.bitloom.agentic.event.EventType;
-import cn.bitloom.agentic.session.MessageChannel;
+import cn.bitloom.agentic.session.SessionManager;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -24,6 +22,7 @@ import java.util.concurrent.ScheduledFuture;
 public class CronManager {
 
     private final TaskScheduler taskScheduler;
+    private final SessionManager sessionManager;
     private final Map<String, CronTaskInfo> taskMap = new ConcurrentHashMap<>();
 
     public void createTask(String name, String type, Integer intervalSeconds,
@@ -181,7 +180,7 @@ public class CronManager {
 
     private void triggerTaskInternal(CronTaskInfo taskInfo) {
         UserMessage userMessage = new UserMessage(taskInfo.getMessage());
-        EventBus.inBoxPublish(taskInfo.getSessionId(), userMessage, EventType.MESSAGE, MessageChannel.SYSTEM);
+        sessionManager.publishMessage(taskInfo.getSessionId(), userMessage);
         log.info("[CronManager] 任务消息已发送到EventBus: name={}, sessionId={}",
                 taskInfo.getName(), taskInfo.getSessionId());
     }

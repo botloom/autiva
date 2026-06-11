@@ -1,7 +1,8 @@
 # Command Tool — 架构文档
 
-> **v9 架构（2026-06 优化）**：在 v8 基础上全面优化代码质量、性能、健壮性和安全性。
-> **v9 核心改进**：1) 提取共享类消除重复（EncodingHelper/AbstractPosixShell/Shell.resolveCwd）；2) 后台进程增量解码从 O(n²) 优化为 O(1)；3) ShellSession 线程安全修复；4) PowerShell 危险命令检测；5) 命令长度/输出大小限制；6) workdir 无效通知。
+> **v11 架构（2026-06 ProcessBuilder 重构）**：移除 pty4j 依赖，全平台统一 ProcessBuilder 执行路径。
+> **v11 核心改进**：1) 移除 pty4j 库依赖（约 5MB），改用 JDK 原生 `ProcessBuilder`；2) 零外部依赖，纯 JDK 实现；3) 前后台统一 `ProcessBuilder + cmd.exe` 路径；4) `PtyHandle` 包装 `java.lang.Process` 而非 `pty4j.PtyProcess`。
+> **v10 核心改进**：淘汰 PowerShell → cmd.exe，LLM 语法 100% 兼容，删除 shell/ 包 6 个文件 + CLIXML 处理。
 > **双工具模型**（Command + Process）+ **智能后台化**（yield_ms）+ **per-call 参数**（workdir/env）+ **破坏性命令检测**。
 
 ---
@@ -14,15 +15,15 @@
 | 智能后台化 | `yield_ms` 参数：前台运行超时自动转后台 | OpenClaw `yieldMs` |
 | per-call 覆盖 | `workdir` / `env` 每次调用可覆盖持久化状态 | OpenClaw `workdir` / `env` |
 | 破坏性命令检测 | 正则匹配 `rm -rf`、`dd`、`mkfs`、`Remove-Item -Recurse -Force` 等危险命令 | Hermes Agent `_DESTRUCTIVE_PATTERNS` |
-| 直接执行，不写脚本文件 | 命令通过 `-EncodedCommand` / `-c` 传递给 Shell | v7 改进 |
-| 环境变量通过 ProcessBuilder 传递 | 不在脚本中注入 `$env:` / `export`，避免特殊字符问题 | v6 新增 |
+| PTY 伪终端（Windows） | PTY4J + cmd.exe，模拟真实终端，通过 stdin 写入命令 | v10 新增→v11 移除 |
+| ProcessBuilder（Windows） | `ProcessBuilder` + `cmd.exe /v:on`，纯 JDK，stderr 合并到 stdout | v11 新增 |
+| 环境变量通过 ProcessBuilder 传递 | 不在脚本中注入 `$env:` / `export`，避免特殊字符问题 | v6 保留 |
 | 状态持久化 ≠ 进程持久化 | cwd/env 写入 `~/.autiva/shell-state.json` | v4 保留 |
 | 输出零丢失 | `CountDownLatch` 确保读取线程完成后才返回输出 | v4 保留 |
-| 跨平台抽象 | `Shell` 接口 + 平台实现，消除 `IS_WINDOWS` 散布 | v4 保留 |
-| 无重复代码 | 共享类（EncodingHelper/AbstractPosixShell）+ 接口 default 方法 | v9 新增 |
-| 增量处理 | 后台进程增量解码+增量清洗，避免 O(n²) | v9 新增 |
-| 线程安全 | ShellSession 所有修改方法 synchronized，env 用 ConcurrentHashMap | v9 新增 |
-| 输入输出限制 | 命令长度 ≤8000 字符，输出 ≤1M 字符 + 30000 行 | v9 新增 |
+| 跨平台抽象 | Windows=PTY+cmd.exe，Unix=ProcessBuilder+bash/sh | v4 保留→v10 简化 |
+| 无重复代码 | Unix 路径保留共享类（EncodingHelper/AbstractPosixShell） | v9 保留 |
+| 线程安全 | ShellSession 所有修改方法 synchronized，env 用 ConcurrentHashMap | v9 保留 |
+| 输入输出限制 | 命令长度 ≤8000 字符，输出 ≤1M 字符 + 30000 行 | v9 保留 |
 
 ---
 
@@ -31,21 +32,19 @@
 ```
 cn/bitloom/agentic/tool/command/
 ├── AGENTS.md                      (本文件)
-├── CommandTools.java              Spring AI @Tool 入口（Command + Process 双工具）
-├── CommandResult.java             不可变结果 record
-├── CommandExecutor.java           核心：进程执行（流式输出 + CountDownLatch + yield_ms 智能后台化）
+├── CommandTools.java              Spring AI @Tool 入口（Command + Process 双工具，旧版，保留兼容）
+├── CommandTool.java               AbstractTool<CommandTool.Input> 入口（Command 工具，新版）
+├── ProcessTool.java               AbstractTool<ProcessTool.Input> 入口（Process 工具，新版）
+├── CommandResult.java             执行结果 record
+├── CommandExecutor.java           核心执行器 — 统一 PTY 路径
 ├── ProcessManager.java            后台进程管理（list/poll/log/write/kill/clear）
-├── ShellSession.java              Shell 会话状态（cwd + env 持久化），委托 Shell 接口
-├── CommandSafety.java             破坏性命令检测（正则匹配危险命令模式，含 PowerShell）
-├── OutputSanitizer.java           ANSI / CLIXML / 控制字符清理 + 字符大小限制
-├── EncodingHelper.java            共享编码工具（UTF-8/GBK 回退 + BOM 检测）
-└── shell/                         Shell 抽象子包
-    ├── Shell.java                 跨平台 Shell 接口（含 resolveCwd default 方法）
-    ├── ShellDetector.java         Shell 自动探测工厂
-    ├── AbstractPosixShell.java    POSIX Shell 基类（bash/sh 共享逻辑）
-    ├── PowerShellShell.java       Windows: pwsh.exe / powershell.exe
-    ├── BashShell.java             Unix: bash（继承 AbstractPosixShell）
-    └── ShShell.java               Unix fallback: sh（继承 AbstractPosixShell）
+├── ShellSession.java              Shell 会话状态（cwd + env 持久化）
+├── CommandSafety.java             破坏性命令检测
+├── OutputSanitizer.java           ANSI / 控制字符清理 + 大小截断
+├── EncodingHelper.java            UTF-8/GBK 编码回退（后台进程使用）
+└── pty/                           PTY 子包
+    ├── PtyTerminal.java           ProcessBuilder + cmd.exe 执行核心（全平台统一）
+    └── PtyResult.java             PTY 执行结果 record
 ```
 
 ---
@@ -192,12 +191,79 @@ cn/bitloom/agentic/tool/command/
 | AL | **无命令长度限制** | Shell 命令行有长度限制（Windows ~8191），超长命令可能静默截断 | **v9 根治**：添加 `MAX_COMMAND_LENGTH=8000` 校验 |
 | AM | **无输出字节大小限制** | 只限制行数（30000 行），单行可能极长 | **v9 根治**：添加 `MAX_OUTPUT_CHARS=1_000_000` |
 | AN | **workdir 无效时静默降级** | 回退到 home 目录但不通知调用方，LLM 不知道实际执行目录与请求不同 | **v9 根治**：workdir 无效时在 rawOutput 中添加回退通知 |
+| AO | **PS 5.1 `Get-Content` 默认用系统编码读文件** | `type utf8file.py \| other_cmd` 时 UTF-8 文件被 GBK 解读 → 中文乱码（如 `鏌ユ壘鍙兘`），管道传递到下游进程后乱码扩散 | **v9 根治**：PS 5.1 命令前缀中添加 `$PSDefaultParameterValues['Get-Content:Encoding']='UTF8'` 等，强制文件读写默认 UTF-8；PS 7 (pwsh) 默认 UTF-8 无需此 workaround |
+| AP | **LLM 使用 `\|\|` 语法在 PS 5.1 中报错** | PS 5.1 不支持 `\|\|` 作为语句分隔符，LLM 用 `command \|\| fallback` 报错 | **v9 根治**：在 Command 工具 description 中扩展提示，涵盖 `\|\|` 和 cmd.exe 语法（`2>nul` 等） |
+| AQ | **LLM 混用 cmd.exe 和 PowerShell 语法** | `dir /s 2>nul \|\| echo "NOT FOUND"` 在 PS 5.1 中全部报错 | **v9 根治**：在 Command 工具 description 中明确提示不要使用 cmd.exe 语法 |
+| AR | **提示文本写死 PS 5.1，pwsh 用户被误限** | 系统检测到 pwsh 时仍提示"不支持 &&"，实际上 pwsh 支持；`$PSDefaultParameterValues` 对 pwsh 多余 | **v9 根治**：1) PowerShellShell.buildPrefix() 根据 `isCore` 区分，PS 7 跳过 5.1 workaround；2) 首次执行命令时动态注入 Shell 环境信息（名称+版本提示）；3) description 改为同时涵盖 PS 5.1 和 PS 7 |
+| AS | **PowerShell 从根本上不适合 LLM 生成命令** | PS 语法体系与所有 LLM 训练数据中的 Shell 都不兼容：`&&`/`||`/heredoc/`&` in URL/`2>nul`/quote escaping 全部不兼容；v9 的版本适配是打不完的补丁 | **v10 根治**：全平台统一 PTY4J + 本地 Shell（Windows=cmd.exe，Unix=bash）。PTY 伪终端提供真实终端环境，所有常见语法原生支持，零版本适配需求 |
+| AT | **Shell 抽象层污染执行路径** | `Shell`/`ShellDetector`/`PowerShellShell`/`AbstractPosixShell` 整个抽象层只服务于 ProcessBuilder 路径；`updateFromOutput()` 依赖 `shell.pwdPattern()`；`CommandExecutor` 有 Windows/Unix 两条执行路径 | **v10 简化**：1) `ShellSession` 去掉 `Shell` 引用；2) `CommandExecutor` 只有一条 PTY 路径；3) `CommandTools.Builder` 不再需要 Shell 参数 |
+| AU | **CLIXML 死代码残留** | OutputSanitizer 的 `extractClixmlContent()`（~80 行）+ ProcessManager 的 `clixmlDetected` 分支（~30 行）在 PTY 后完全无用到 | **v10 清理**：删除 shell/ 包 6 个文件 + OutputSanitizer CLIXML 提取 + ProcessManager CLIXML 检测分支 |
+| AV | **后台/yield 混用 ProcessBuilder** | `startBackgroundProcess` 和 `executeWithYield` 走 ProcessBuilder，与前台 PTY 路径不一致 | **v10 统一**：`PtyTerminal.start()` 返回 PtyHandle，前后台统一 PTY 路径；`ProcessManager` 管理 PtyProcess（非 java.lang.Process）+ marker 检测退出码 |
+| AW | **pty4j 原生库依赖过重** | pty4j 约 5MB，依赖本地 so/dll，ConPTY 初始化可能失败 | **v11 根治**：移除 pty4j，改用 JDK 原生 `ProcessBuilder.start()`，前后台统一 ProcessBuilder 路径 |
 
 ---
 
 ## 6. 关键实现细节
 
-### v8→v9 核心改进：代码质量 + 性能 + 健壮性
+### v11 核心：ProcessBuilder 替代 pty4j
+
+**为什么移除 pty4j？**
+
+pty4j 提供 PTY（伪终端）功能，但：
+- 依赖本地 so/dll 库（约 5MB），增加部署复杂度
+- ConPTY 初始化可能因 Windows 版本/权限问题失败
+- 对于非交互式命令执行，ProcessBuilder 功能完全足够
+- JDK 原生 API，零额外依赖
+
+**v11 命令包装（`PtyTerminal.wrapCmd`）**：
+
+```
+chcp 65001 > nul 2>&1 &          ← 切换到 UTF-8 codepage
+cd /d "C:\Users\TRS" &           ← 导航到工作目录
+<用户原始命令> &                   ← LLM 直接生成的命令，零转义
+echo __PTY_MARK_<nano>^|^|!ERRORLEVEL!^|^|!CD! &  ← 捕获退出码和当前目录（^|^| 转义为 ||）
+exit                              ← 关闭 Shell（触发 stdout EOF）
+```
+
+**关键设计决策**：
+- 使用 `cmd.exe /v:on` 的**延迟展开** (`!ERRORLEVEL!`)——`%ERRORLEVEL%` 在解析时求值，会得到旧值
+- `redirectErrorStream(true)` — stderr 合并到 stdout，统一处理
+- `stdin.close()` — 写完命令后关闭 stdin，触发 cmd.exe 执行并退出
+- `ProcessBuilder.directory()` — 设置工作目录
+- `ProcessBuilder.environment().putAll()` — 设置环境变量
+
+### v11 命令执行流程（Windows）
+
+```java
+PtyTerminal.start("dir", "C:\\Users", env):
+  // 1. 创建 ProcessBuilder
+  new ProcessBuilder("cmd.exe", "/v:on")
+      .directory("C:\\Users")
+      .redirectErrorStream(true)
+      .start()
+  // 2. 通过 stdin 写入包装后的命令：
+  //    chcp 65001 > nul 2>&1 & cd /d "C:\Users" & dir & echo __PTY_MARK_<id>^|^|!ERRORLEVEL!^|^|!CD! & exit
+  // 3. 关闭 stdin 触发执行
+  // 4. 后台线程从 stdout 读取所有字节直到 EOF
+  // 5. 解析 marker 行提取 exitCode 和 cwd
+  // 6. return PtyHandle(process, markerId, "C:\\Users", startTime)
+```
+
+### v11 持久化会话（Windows）
+
+```java
+PtySession.create("C:\\Users", env):
+  // 1. 创建持久化 ProcessBuilder 进程
+  new ProcessBuilder("cmd.exe", "/v:on")
+      .directory("C:\\Users")
+      .redirectErrorStream(true)
+      .start()
+  // 2. PtySession.execute("dir", 120000):
+  //    stdin.write("chcp 65001 > nul 2>&1 & dir & echo __PTY_MARK_<id>^|^|!ERRORLEVEL!^|^|!CD!\n")
+  //    读取输出直到 marker，解析结果
+  // 3. 超时/崩溃时：process.destroyForcibly() + 重建 ProcessBuilder
+
+### v8→v9 核心改进：代码质量 + 性能 + 健壮性（保留在 Unix 路径）
 
 **1. 消除重复代码**：
 - `EncodingHelper`：共享 UTF-8/GBK 回退解码 + BOM 检测，CommandExecutor.OutputReader 和 ProcessManager.BackgroundProcess 统一使用
@@ -306,20 +372,20 @@ py -c "print('hello')" → after clean: [hello from py] ✅
 python -c "print('hello')" → 无输出（Windows Store 重定向器，非真正 Python）
 ```
 
-### PowerShell 命令构建
+### v10 命令执行流程（Windows）
 
 ```java
-buildProcessCommand("dir", "C:\\Users"):
-  pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -OutputFormat Text -EncodedCommand <base64>
-  // 解码后的命令：
-  // [Console]::OutputEncoding=[System.Text.Encoding]::UTF8;
-  // $OutputEncoding=[System.Text.Encoding]::UTF8;
-  // Set-Location -LiteralPath 'C:\Users';
-  // dir;
-  // Write-Output "__PWD__$((Get-Location).Path)"
+PtyTerminal.execute("dir", "C:\\Users", env, 120000):
+  // 1. 启动 PTY
+  PtyProcess.exec(["cmd.exe", "/v:on"], env, "C:\\Users")
+  // 2. 通过 stdin 写入包装后的命令：
+  //    chcp 65001 > nul 2>&1 & cd /d "C:\Users" & dir & echo __PTY_MARK_<id>^|!ERRORLEVEL!^|!CD! & exit
+  // 3. 后台线程从 stdout 读取所有字节直到 EOF
+  // 4. 解析 marker 行提取 exitCode 和 cwd
+  // 5. return PtyResult("clean output", 0, "C:\\Users")
 ```
 
-### Bash 命令构建
+### Bash 命令构建（Unix，不变）
 
 ```java
 buildProcessCommand("ls -la", "/home/user"):
@@ -327,18 +393,11 @@ buildProcessCommand("ls -la", "/home/user"):
     "cd '/home/user' ; ls -la ; echo \"__PWD__$(pwd)\""
 ```
 
-### PWD 标记剥离
+### PWD 跟踪
 
-`__PWD__` 标记行保留在输出中供 `ShellSession.updateFromOutput()` 提取 cwd，
-但在返回给 LLM 之前通过 `stripPwdMarker()` 剥离。
+**Windows PTY**: cwd 从 marker 行 `!CD!` 直接提取，写入 `ShellSession`。
 
-### UTF-8 编码（Windows）
-
-PowerShell `-Command` 模式下，编码设置是命令字符串的一部分：
-```powershell
-[Console]::OutputEncoding=[System.Text.Encoding]::UTF8
-```
-在用户命令执行**之前**生效，即使命令出错，错误输出也是 UTF-8 编码。
+**Unix**: `__PWD__` 标记行保留在输出中供 `ShellSession.updateFromOutput()` 提取 cwd，返回给 LLM 前通过 `stripPwdMarker()` 剥离。
 
 ### Bug T 详细分析：`-parameters` 编译参数缺失
 
@@ -364,19 +423,17 @@ Spring AI 的 `MethodToolCallback` 使用 Java 反射 API `parameter.getName()` 
 
 ---
 
-## 7. 快速烟测 checklist
+## 7. 快速烟测 checklist（v11）
 
 1. `Command("echo hello", "测试1")` → 返回 "hello"
-2. `Command("Get-Location", "测试2")` → 路径正确
-3. `Command("python -c \"print('中文测试')\"", "测试3")` → 中文不乱码
+2. `Command("cd C:\\Windows && dir", "测试2")` → 路径正确，`&&` 语法正常工作
+3. `Command("py -c \"print('中文测试')\"", "测试3")` → 中文不乱码
 4. `Command("ping -n 30 127.0.0.1", "长任务", null, null, null, 3000, null)` → 3 秒后自动转后台
 5. `Process("poll", session_id)` → 有进度输出
 6. `Process("log", session_id, null, 0, 10)` → 返回前 10 行输出
 7. `Process("list")` → 列出所有后台进程
 8. `Process("kill", session_id)` → 终止成功
 9. `Process("write", session_id, "input")` → 发送成功
-10. `Command("rm -rf /tmp/test", "危险测试")` → 输出包含破坏性命令警告
-11. `Command("ls", "per-call workdir", null, "C:\\Users", null, null, null)` → 在指定目录执行
-12. `Command("Remove-Item -Recurse -Force C:\\temp", "PS危险测试")` → 输出包含破坏性命令警告（v9 新增）
-13. `Command("超长命令...", "长度测试")` → 命令超过 8000 字符时返回错误（v9 新增）
-14. `Command("echo hello", "无效workdir", null, "C:\\不存在的目录", null, null, null)` → 输出包含回退通知（v9 新增）
+10. `Command("type C:\\some\\utf8-file.py | findstr def", "管道测试")` → 管道中文正常
+11. `Command("ls non_existent 2>nul || echo NOTFOUND", "错误处理测试")` → `||` 语法正常
+12. `Command("超长命令...", "长度测试")` → 命令超过 8000 字符时返回错误

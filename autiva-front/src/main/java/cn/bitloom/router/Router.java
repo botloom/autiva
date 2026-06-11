@@ -18,13 +18,12 @@ public class Router {
     private final IndexController indexController;
     private final RouteConfig routeConfig;
     private final Map<String, Function<IndexController, ButtonBarHolder>> buttonBarHolderMap;
-    private String currentRoute;
 
     public Router(@Lazy IndexController indexController, RouteConfig routeConfig) {
         this.indexController = indexController;
         this.routeConfig = routeConfig;
         this.routeConfig.init();
-        this.currentRoute = RouteConfig.Path.HOME;
+        Store.currentRoute.set(RouteConfig.Path.HOME);
 
         Map<String, Function<IndexController, ButtonBarHolder>> map = new HashMap<>();
         map.put(RouteConfig.Path.HOME, IndexController::getHomePageController);
@@ -46,7 +45,7 @@ public class Router {
         this.hideAllPages();
         this.showPage(path);
         this.updateButtonBar(path);
-        this.currentRoute = path;
+        Store.currentRoute.set(path);
     }
 
     public void updateButtonBarForRoute(String path) {

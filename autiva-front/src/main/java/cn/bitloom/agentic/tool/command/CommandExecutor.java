@@ -1,231 +1,97 @@
 package cn.bitloom.agentic.tool.command;
 
-import cn.bitloom.agentic.tool.command.shell.Shell;
-import cn.bitloom.agentic.tool.command.shell.ShellDetector;
+import cn.bitloom.agentic.tool.command.pty.PtyResult;
+import cn.bitloom.agentic.tool.command.pty.PtySession;
+import cn.bitloom.agentic.tool.command.pty.PtyTerminal;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.io.Closeable;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
+/**
+ * Unified PTY command executor — foreground via {@link PtySession}, background via {@link PtyTerminal}.
+ *
+ * <p>Each {@code CommandExecutor} owns one {@link PtySession} (one PTY per conversation).
+ * Foreground commands are serialized through the session; background/yield commands
+ * spawn separate PTY processes.</p>
+ *
+ * <p>cwd is maintained <b>by the PTY itself</b> — the persistent shell naturally
+ * tracks its working directory. No external cwd persistence needed.</p>
+ */
 @Slf4j
-public class CommandExecutor {
+public class CommandExecutor implements Closeable {
 
     public static final long DEFAULT_TIMEOUT_MS = 120_000L;
     public static final long MAX_TIMEOUT_MS = 600_000L;
     public static final long DEFAULT_YIELD_MS = 10_000L;
     public static final int MAX_OUTPUT_LINES = 30_000;
-    public static final String PWD_MARK_PREFIX = "__PWD__";
-    /** Maximum command length (Windows cmd line limit ~8191, Linux ~128KB) */
     public static final int MAX_COMMAND_LENGTH = 8000;
 
-    private final Shell shell;
-    private final ShellSession session;
+    private final PtySession pty;
+    private final ShellSession envSession;
 
-    public CommandExecutor(Shell shell, ShellSession session) {
-        this.shell = shell;
-        this.session = session;
+    public CommandExecutor(ShellSession envSession) {
+        this.envSession = envSession;
+        this.pty = PtySession.create(System.getProperty("user.home"), envSession.mergedEnv(null));
     }
 
-    public CommandExecutor(ShellSession session) {
-        this(ShellDetector.detect(), session);
-    }
-
-    public Shell getShell() {
-        return shell;
-    }
+    // ── foreground ──
 
     public CommandResult execute(String command, long timeoutMs, String workdir, Map<String, String> env) {
         long effectiveTimeout = Math.min(Math.max(timeoutMs, 1000L), MAX_TIMEOUT_MS);
-        String cwd = session.resolveWorkdir(workdir);
-        Map<String, String> mergedEnv = session.mergedEnv(env);
+        Map<String, String> mergedEnv = envSession.mergedEnv(env);
 
-        try {
-            ProcessBuilder pb = shell.createProcessBuilder(command, cwd, mergedEnv);
-            Process process = pb.start();
-            process.getOutputStream().close();
-
-            OutputReader outputReader = new OutputReader(process);
-            outputReader.start();
-
-            boolean completed = process.waitFor(effectiveTimeout, TimeUnit.MILLISECONDS);
-
-            if (!completed) {
-                log.warn("[CommandExecutor] command timed out after {}ms, killing process", effectiveTimeout);
-                process.destroyForcibly();
-                try {
-                    process.waitFor(2, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-
-            outputReader.await(5, TimeUnit.SECONDS);
-
-            int exitCode;
-            try {
-                exitCode = process.exitValue();
-            } catch (IllegalThreadStateException e) {
-                exitCode = -1;
-            }
-
-            String rawOutput = outputReader.getOutput();
-            log.info("[CommandExecutor] rawOutput length={}, first 200 chars: [{}]",
-                    rawOutput.length(), rawOutput.length() > 200 ? rawOutput.substring(0, 200) : rawOutput);
-
-            String cleaned = OutputSanitizer.clean(rawOutput);
-            log.info("[CommandExecutor] after clean length={}, first 200 chars: [{}]",
-                    cleaned.length(), cleaned.length() > 200 ? cleaned.substring(0, 200) : cleaned);
-            cleaned = OutputSanitizer.truncate(cleaned, MAX_OUTPUT_LINES);
-            session.updateFromOutput(cleaned);
-            cleaned = stripPwdMarker(cleaned);
-            log.info("[CommandExecutor] final output length={}", cleaned.length());
-
-            return CommandResult.success(cleaned, exitCode, !completed);
-
-        } catch (IOException e) {
-            log.error("[CommandExecutor] failed to execute command", e);
-            return CommandResult.error("Failed to execute command: " + e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return CommandResult.error("Command execution interrupted");
+        // Prepend cd if workdir override specified
+        String effectiveCmd = command;
+        if (workdir != null && !workdir.isEmpty()) {
+            effectiveCmd = (PtySession.IS_WINDOWS
+                    ? "cd /d \"" + workdir + "\" & "
+                    : "cd '" + workdir.replace("'", "'\\''") + "' ; ")
+                    + command;
         }
+
+        PtyResult r = pty.execute(effectiveCmd, effectiveTimeout);
+        String cleaned = OutputSanitizer.clean(r.output());
+        cleaned = OutputSanitizer.truncate(cleaned, MAX_OUTPUT_LINES);
+        return CommandResult.success(cleaned, r.exitCode(), false);
+    }
+
+    // ── background / yield ──
+
+    PtyTerminal.PtyHandle startBackground(String command, String workdir, Map<String, String> env) {
+        String cwd = workdir != null ? workdir : System.getProperty("user.home");
+        Map<String, String> mergedEnv = envSession.mergedEnv(env);
+        return pty.startBackground(command, cwd, mergedEnv);
     }
 
     public YieldResult executeWithYield(String command, long yieldMs, String workdir, Map<String, String> env) {
-        long effectiveYield = yieldMs > 0 ? yieldMs : DEFAULT_YIELD_MS;
-        String cwd = session.resolveWorkdir(workdir);
-        Map<String, String> mergedEnv = session.mergedEnv(env);
+        String cwd = workdir != null ? workdir : System.getProperty("user.home");
+        Map<String, String> mergedEnv = envSession.mergedEnv(env);
 
+        PtyTerminal.PtyHandle handle = pty.startBackground(command, cwd, mergedEnv);
         try {
-            ProcessBuilder pb = shell.createProcessBuilder(command, cwd, mergedEnv);
-            Process process = pb.start();
-
-            OutputReader outputReader = new OutputReader(process);
-            outputReader.start();
-
-            boolean completed = process.waitFor(effectiveYield, TimeUnit.MILLISECONDS);
-
-            if (completed) {
-                try { process.getOutputStream().close(); } catch (IOException ignored) {}
-                outputReader.await(5, TimeUnit.SECONDS);
-                int exitCode;
-                try {
-                    exitCode = process.exitValue();
-                } catch (IllegalThreadStateException e) {
-                    exitCode = -1;
-                }
-                String rawOutput = outputReader.getOutput();
-                String cleaned = OutputSanitizer.clean(rawOutput);
+            PtyResult r = PtyTerminal.readUntilMarker(handle, yieldMs > 0 ? yieldMs : DEFAULT_YIELD_MS);
+            if (r.exitCode() >= 0 || !handle.isAlive()) {
+                handle.destroy();
+                String cleaned = OutputSanitizer.clean(r.output());
                 cleaned = OutputSanitizer.truncate(cleaned, MAX_OUTPUT_LINES);
-                session.updateFromOutput(cleaned);
-                cleaned = stripPwdMarker(cleaned);
-                return new YieldResult(true, cleaned, exitCode, null);
-            } else {
-                String partialOutput = outputReader.getOutputSoFar();
-                String cleaned = OutputSanitizer.clean(partialOutput);
-                session.updateFromOutput(cleaned);
-                cleaned = stripPwdMarker(cleaned);
-                return new YieldResult(false, cleaned, null, process);
+                return new YieldResult(true, cleaned, r.exitCode(), null);
             }
-
-        } catch (IOException e) {
-            log.error("[CommandExecutor] failed to execute command with yield", e);
-            return new YieldResult(true, "Failed to execute command: " + e.getMessage(), -1, null);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new YieldResult(true, "Command execution interrupted", -1, null);
+            handle.destroy();
+            return new YieldResult(true, "Interrupted", -1, null);
         }
+
+        return new YieldResult(false,
+                OutputSanitizer.clean(PtySession.readPartial(handle)),
+                null, handle);
     }
 
-    Process startBackgroundProcess(String command, String workdir, Map<String, String> env) throws IOException {
-        String cwd = session.resolveWorkdir(workdir);
-        Map<String, String> mergedEnv = session.mergedEnv(env);
-        ProcessBuilder pb = shell.createProcessBuilder(command, cwd, mergedEnv);
-        return pb.start();
-    }
+    @Override
+    public void close() { pty.close(); }
 
-    private String stripPwdMarker(String output) {
-        if (output == null || output.isEmpty()) return output;
-        // Linear scan instead of Stream API for better performance on large output
-        StringBuilder sb = new StringBuilder(output.length());
-        int i = 0;
-        while (i < output.length()) {
-            int nlIdx = output.indexOf('\n', i);
-            if (nlIdx < 0) {
-                // Last line
-                if (!output.contains(PWD_MARK_PREFIX)) {
-                    // Quick check: if the remaining part doesn't contain PWD, append all
-                    sb.append(output, i, output.length());
-                } else if (!output.substring(i).contains(PWD_MARK_PREFIX)) {
-                    sb.append(output, i, output.length());
-                }
-                break;
-            }
-            String line = output.substring(i, nlIdx);
-            if (!line.contains(PWD_MARK_PREFIX)) {
-                sb.append(line).append('\n');
-            }
-            i = nlIdx + 1;
-        }
-        // Remove trailing newline if the original didn't end with one
-        if (!output.endsWith("\n") && sb.length() > 0 && sb.charAt(sb.length() - 1) == '\n') {
-            sb.setLength(sb.length() - 1);
-        }
-        return sb.toString();
-    }
-
-    record YieldResult(boolean completed, String output, Integer exitCode, Process backgroundProcess) {
-        boolean needsBackground() {
-            return !completed && backgroundProcess != null;
-        }
-    }
-
-    static class OutputReader {
-        private final Process process;
-        private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        private final CountDownLatch latch = new CountDownLatch(1);
-        private Thread readerThread;
-
-        OutputReader(Process process) {
-            this.process = process;
-        }
-
-        void start() {
-            readerThread = new Thread(this::readLoop, "cmd-output-reader");
-            readerThread.setDaemon(true);
-            readerThread.start();
-        }
-
-        private void readLoop() {
-            try (var is = process.getInputStream()) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = is.read(buf)) != -1) {
-                    buffer.write(buf, 0, n);
-                }
-            } catch (IOException e) {
-                log.debug("[OutputReader] readLoop IOException: {}", e.getMessage());
-            } finally {
-                latch.countDown();
-            }
-        }
-
-        void await(long timeout, TimeUnit unit) throws InterruptedException {
-            latch.await(timeout, unit);
-            if (readerThread != null) {
-                readerThread.join(unit.toMillis(timeout));
-            }
-        }
-
-        String getOutput() {
-            return EncodingHelper.decodeBest(buffer.toByteArray());
-        }
-
-        String getOutputSoFar() {
-            return EncodingHelper.decodeBest(buffer.toByteArray());
-        }
+    record YieldResult(boolean completed, String output, Integer exitCode, PtyTerminal.PtyHandle backgroundHandle) {
+        boolean needsBackground() { return !completed && backgroundHandle != null; }
     }
 }

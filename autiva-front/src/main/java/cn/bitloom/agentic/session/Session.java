@@ -1,98 +1,104 @@
 package cn.bitloom.agentic.session;
 
-import cn.bitloom.agentic.agent.AgentIdentityEnum;
+import cn.bitloom.agentic.agent.Agent;
+import cn.bitloom.agentic.message.MessageBus;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import com.alibaba.fastjson2.annotation.JSONField;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.MessageType;
+import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
-@Data
 @Slf4j
+@Setter
+@Getter
 @Builder
 public class Session {
 
     private String id;
-    private AgentIdentityEnum agentId;
+    private String agentId;
     private SessionTypeEnum type;
     private SessionRespTypeEnum respType;
     private ModelTypeEnum model;
     private String source;
-    private String target;
     private String parentId;
-
-    @JSONField(serialize = false)
-    @Builder.Default
-    private Map<MessageChannel, List<Message>> channelMessages = new EnumMap<>(MessageChannel.class);
-
     @Builder.Default
     private Integer memoryCursor = 0;
-
-    @Builder.Default
-    private Integer journalCursor = 0;
-
     @Builder.Default
     private SessionState state = SessionState.IDLE;
-
-    private String title;
-
+    @Builder.Default
+    private String title = "新对话";
     @Builder.Default
     private Long createdAt = System.currentTimeMillis();
+    @Builder.Default
+    private Long updateAt = System.currentTimeMillis();
 
     @JSONField(serialize = false)
-    public Map<MessageChannel, List<Message>> getChannelMessages() {
-        if (this.channelMessages == null) {
-            this.channelMessages = new EnumMap<>(MessageChannel.class);
+    private MessageBus messageBus;
+
+    @JSONField(serialize = false)
+    private Agent agent;
+
+    @JSONField(serialize = false)
+    @Builder.Default
+    private List<Message> messages = new ArrayList<>();
+
+    @JSONField(serialize = false)
+    private final List<AssistantMessage> roundMessages = Collections.synchronizedList(new ArrayList<>());
+
+    /**
+     * 启动消息处理循环：订阅 inBox，收到消息后调用 Agent 执行
+     */
+    public void start(SessionManager sessionManager) {
+        if (this.messageBus == null || this.agent == null) {
+            log.warn("无法启动消息循环: sessionId={}, eventBus={}, agent={}", id, this.messageBus != null, this.agent != null);
+            return;
         }
-        return this.channelMessages;
+
+        this.messageBus.inBoxSubscribe()
+                .concatMap(message -> {
+                    this.updateAt = System.currentTimeMillis();
+                    this.roundMessages.clear();
+                    if (this.respType == SessionRespTypeEnum.STREAM) {
+                        return this.agent.runStream(this, message)
+                                .doOnNext(assistantMsg -> {
+                                    this.messageBus.outBoxPublish(assistantMsg);
+                                    this.roundMessages.add(assistantMsg);
+                                })
+                                .doOnComplete(() -> {
+                                    // Hook 逻辑由 Agent 的 HookAdvisor 处理
+                                    this.state = SessionState.IDLE;
+                                    sessionManager.saveContext(id);
+                                });
+                    } else {
+                        AssistantMessage response = this.agent.runBlock(this, message);
+                        this.messageBus.outBoxPublish(response);
+                        roundMessages.add(response);
+                        // Hook 逻辑由 Agent 的 HookAdvisor 处理
+                        this.state = SessionState.IDLE;
+
+                        // 保存上下文快照
+                        sessionManager.saveContext(id);
+                        return Flux.just(response);
+                    }
+                })
+                .subscribe();
     }
 
-    @JSONField(serialize = false)
-    public List<Message> getChannelMessages(MessageChannel channel) {
-        return this.getChannelMessages().computeIfAbsent(channel, k -> new ArrayList<>());
+    public void stop() {
+        this.messageBus.stop();
+        this.state = SessionState.STOPPED;
     }
 
-    @JSONField(serialize = false)
-    public List<Message> getMessages() {
-        return getChannelMessages(MessageChannel.USER);
+    public Boolean isStop() {
+        return this.state == SessionState.STOPPED;
     }
 
-    @JSONField(serialize = false)
-    public Map<MessageChannel, List<Message>> getAllChannelMessages() {
-        return this.getChannelMessages();
-    }
-
-    public Integer getMemoryCursor() {
-        return this.memoryCursor != null ? this.memoryCursor : 0;
-    }
-
-    public Integer getJournalCursor() {
-        return this.journalCursor != null ? this.journalCursor : 0;
-    }
-
-    @JSONField(serialize = false)
-    public String getDisplayTitle() {
-        if (this.title != null && !this.title.isBlank()) {
-            return this.title;
-        }
-        List<Message> userMessages = getMessages();
-        for (Message msg : userMessages) {
-            if (msg.getMessageType() == MessageType.USER && msg.getText() != null && !msg.getText().isBlank()) {
-                String text = msg.getText().replace("\n", " ").trim();
-                return text.length() > 20 ? text.substring(0, 20) + "..." : text;
-            }
-        }
-        return "新对话";
-    }
-
-    public Long getCreatedAt() {
-        return this.createdAt != null ? this.createdAt : 0L;
-    }
 }

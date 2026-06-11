@@ -3,6 +3,7 @@ package cn.bitloom.controller;
 import cn.bitloom.bridge.wechat.WechatILinkClient;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
+import cn.bitloom.store.Store;
 import cn.bitloom.vm.SettingsPageViewModel;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
@@ -12,14 +13,18 @@ import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.PasswordField;
-import javafx.scene.control.TextField;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -41,6 +46,18 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
 
     @FXML
     private VBox settingsPage;
+    @FXML
+    private VBox userCard;
+    @FXML
+    private ImageView userAvatar;
+    @FXML
+    private Label userNameLabel;
+    @FXML
+    private Label userIdLabel;
+    @FXML
+    private Button loginButton;
+    @FXML
+    private Button logoutButton;
     @FXML
     private TextField dingTalkClientIdField;
     @FXML
@@ -75,10 +92,12 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
     private IndexController indexController;
 
     private ChangeListener<WechatILinkClient.State> weixinStateListener;
+    private ChangeListener<String> userIdListener;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         this.bindViewModel();
+        this.bindUserCard();
     }
 
     private void bindViewModel() {
@@ -89,6 +108,129 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
         deepseekBaseUrlField.textProperty().bindBidirectional(viewModel.getDeepseekBaseUrl());
         deepseekCompletionsPathField.textProperty().bindBidirectional(viewModel.getDeepseekCompletionsPath());
         deepseekChatModelField.textProperty().bindBidirectional(viewModel.getDeepseekChatModel());
+    }
+
+    private void bindUserCard() {
+        updateUserInfo();
+        userIdListener = (obs, oldVal, newVal) -> Platform.runLater(this::updateUserInfo);
+        Store.userId.addListener(userIdListener);
+    }
+
+    private void updateUserInfo() {
+        String userId = Store.userId.get();
+        boolean isLoggedIn = userId != null && !"default".equals(userId);
+        if (isLoggedIn) {
+            userNameLabel.setText(userId);
+            userIdLabel.setText("ID: " + userId);
+            loginButton.setVisible(false);
+            loginButton.setManaged(false);
+            logoutButton.setVisible(true);
+            logoutButton.setManaged(true);
+        } else {
+            userNameLabel.setText("点击登录");
+            userIdLabel.setText("未登录");
+            loginButton.setVisible(true);
+            loginButton.setManaged(true);
+            logoutButton.setVisible(false);
+            logoutButton.setManaged(false);
+        }
+    }
+
+    @FXML
+    private void handleLogin() {
+        showLoginDialog();
+    }
+
+    @FXML
+    private void handleLogout() {
+        Store.userId.set("default");
+        updateUserInfo();
+    }
+
+    private void showLoginDialog() {
+        Stage dialog = new Stage();
+        dialog.initModality(Modality.APPLICATION_MODAL);
+        dialog.initStyle(StageStyle.UNIFIED);
+        dialog.setTitle("");
+
+        VBox root = new VBox(20);
+        root.setAlignment(Pos.CENTER);
+        root.setPadding(new Insets(32, 40, 32, 40));
+        root.setStyle("-fx-background-color: #ffffff;");
+        root.setPrefWidth(340);
+
+        // 设置弹窗图标
+        dialog.getIcons().add(userAvatar.getImage());
+
+        // 头像
+        ImageView avatarView = new ImageView(userAvatar.getImage());
+        avatarView.setFitWidth(64);
+        avatarView.setFitHeight(64);
+
+        // 标题
+        Label titleLabel = new Label("登录 Autiva");
+        titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: 700; " +
+                "-fx-font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; " +
+                "-fx-text-fill: #1d1d1f;");
+
+        Label subtitleLabel = new Label("输入你的用户名即可登录");
+        subtitleLabel.setStyle("-fx-font-size: 13px; " +
+                "-fx-font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; " +
+                "-fx-text-fill: #86868b;");
+
+        // 输入框
+        TextField usernameField = new TextField();
+        usernameField.setPromptText("输入用户名");
+        usernameField.setStyle("-fx-font-size: 15px; " +
+                "-fx-font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; " +
+                "-fx-background-color: rgba(0,0,0,0.03); -fx-background-radius: 10px; " +
+                "-fx-border-color: rgba(0,0,0,0.1); -fx-border-width: 1px; -fx-border-radius: 10px; " +
+                "-fx-pref-height: 40px; -fx-padding: 8 14; " +
+                "-fx-focus-color: #0071e3; -fx-faint-focus-color: rgba(0,113,227,0.1);");
+        usernameField.setPrefWidth(260);
+
+        // 按钮行
+        HBox buttonRow = new HBox(12);
+        buttonRow.setAlignment(Pos.CENTER);
+
+        Button cancelBtn = new Button("取消");
+        cancelBtn.setStyle("-fx-font-size: 14px; -fx-font-weight: 500; " +
+                "-fx-font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; " +
+                "-fx-background-color: #f5f5f7; -fx-background-radius: 10px; " +
+                "-fx-text-fill: #1d1d1f; -fx-pref-height: 40px; -fx-pref-width: 120px; " +
+                "-fx-border-color: transparent; -fx-cursor: hand;");
+        cancelBtn.setOnAction(e -> dialog.close());
+
+        Button confirmBtn = new Button("登录");
+        confirmBtn.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; " +
+                "-fx-font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; " +
+                "-fx-background-color: #0071e3; -fx-background-radius: 10px; " +
+                "-fx-text-fill: #ffffff; -fx-pref-height: 40px; -fx-pref-width: 120px; " +
+                "-fx-border-color: transparent; -fx-cursor: hand;");
+        confirmBtn.setOnAction(e -> {
+            String username = usernameField.getText().trim();
+            if (!username.isEmpty()) {
+                Store.userId.set(username);
+                updateUserInfo();
+                dialog.close();
+            }
+        });
+
+        // 回车确认
+        usernameField.setOnAction(e -> confirmBtn.fire());
+
+        buttonRow.getChildren().addAll(cancelBtn, confirmBtn);
+
+        root.getChildren().addAll(avatarView, titleLabel, subtitleLabel, usernameField, buttonRow);
+
+        Scene scene = new Scene(root);
+        dialog.setScene(scene);
+        dialog.setResizable(false);
+
+        dialog.showAndWait();
+
+        // 自动聚焦输入框
+        usernameField.requestFocus();
     }
 
     @Override

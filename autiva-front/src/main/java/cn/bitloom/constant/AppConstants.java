@@ -3,88 +3,77 @@ package cn.bitloom.constant;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/**
- * The type App constants.
- *
- * @author bitloom
- */
 public class AppConstants {
 
     private AppConstants() {
     }
 
-    /**
-     * The type Base.
-     */
     public static class Base {
         private Base() {
         }
 
-        /**
-         * The constant USER_HOME.
-         */
         public static final String USER_HOME = System.getProperty("user.home");
-        /**
-         * The constant APP_DIR.
-         */
         public static final Path APP_DIR = Paths.get(USER_HOME, ".autiva");
-        /**
-         * The constant LOGS_DIR.
-         */
         public static final Path LOGS_DIR = APP_DIR.resolve("logs");
-        /**
-         * The constant SKILL_DIR.
-         */
-        public static final Path SKILL_DIR = APP_DIR.resolve("skills");
-        /**
-         * The constant MCP_DIR.
-         */
-        public static final Path MCP_DIR = APP_DIR.resolve("mcp");
-        /**
-         * The constant WORKSPACE_DIR.
-         */
         public static final Path WORKSPACE_DIR = APP_DIR.resolve("workspace");
+        public static final Path AGENTS_DIR = APP_DIR.resolve("agents");
+        public static final Path AGENT_CONFIG_FILE = APP_DIR.resolve("config.json");
+        public static final Path SETTINGS_FILE = APP_DIR.resolve("settings.properties");
+        public static final Path SKILLS_DIR = APP_DIR.resolve("skills");
+        public static final Path AGENTS_MD = APP_DIR.resolve("AGENTS.md");
+        public static final Path MEMORY_MD = APP_DIR.resolve("MEMORY.md");
+        public static final Path BOOTSTRAP_MD = APP_DIR.resolve("BOOTSTRAP.md");
+        public static final Path MEMORY_DIR = APP_DIR.resolve("memory");
+
+        public static final String DEFAULT_USER = "default";
+
         /**
-         * The constant SESSION_DIR.
+         * 获取指定 agent 的定义目录（agents/{agentId}/）
          */
-        public static final Path SESSION_DIR = APP_DIR.resolve("sessions");
+        public static Path agentDir(String agentId) {
+            return AGENTS_DIR.resolve(agentId);
+        }
+
         /**
-         * The constant MCP_CONFIG_FILE.
+         * 获取指定 agent 的 agent.md 路径（agents/{agentId}/agent.md）
          */
-        public static final Path MCP_CONFIG_FILE = MCP_DIR.resolve("mcp-servers.json");
+        public static Path agentDefinitionFile(String agentId) {
+            return agentDir(agentId).resolve("agent.md");
+        }
+
         /**
-         * The constant CONFIG_FILE.
+         * 获取指定 agent 的工作空间目录（workspace/{agentId}/，仅存 session 运行时数据）
          */
-        public static final Path CONFIG_FILE = APP_DIR.resolve("settings.properties");
+        public static Path agentWorkspaceDir(String agentId) {
+            return WORKSPACE_DIR.resolve(agentId);
+        }
+
+        /**
+         * 获取指定 agent 的 config.json 路径（agents/{agentId}/config.json）
+         */
+        public static Path agentConfigFile(String agentId) {
+            return agentDir(agentId).resolve("config.json");
+        }
+
+        /**
+         * 获取指定 agent 的 context 目录（workspace/{agentId}/context/{sessionId}/）
+         */
+        public static Path agentContextDir(String agentId, String sessionId) {
+            return agentWorkspaceDir(agentId).resolve("context").resolve(sessionId);
+        }
+
+
     }
 
-    /**
-     * The type Window.
-     */
     public static class Stage {
         private Stage() {
         }
 
-        /**
-         * The constant WIDTH.
-         */
         public static final double WIDTH = 800;
-        /**
-         * The constant HEIGHT.
-         */
         public static final double HEIGHT = 500;
-        /**
-         * The constant FXML.
-         */
         public static final String FXML = "/cn/bitloom/index.fxml";
-        /**
-         * The constant ICON.
-         */
         public static final String ICON = "/cn/bitloom/images/icon.png";
-
-        /**
-         * The constant NAME.
-         */
+        public static final String ICON_SVG = "/cn/bitloom/images/icon.svg";
         public static final String NAME = "Autiva";
     }
 

@@ -1,7 +1,6 @@
 package cn.bitloom.node;
 
-import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.session.SessionManager;
 import cn.bitloom.util.MarkdownFxRenderer;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
@@ -34,6 +33,8 @@ import java.util.function.Consumer;
 
 public class TaskCard extends VBox {
 
+    private static final String FONT_FAMILY = "\"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif";
+
     private final Label statusLabel;
     private final VBox body;
     private Timeline pulseTimeline;
@@ -42,9 +43,9 @@ public class TaskCard extends VBox {
     private final VBox messageContainer;
     private final StringBuilder streamBuffer = new StringBuilder();
     private VBox currentStreamBox = null;
+    private ToolGroupCard currentToolGroup = null;
 
     private Disposable eventSubscription;
-    private String childSessionId;
     private boolean userCollapsed = false;
 
     @Setter
@@ -105,15 +106,17 @@ public class TaskCard extends VBox {
         header.setOnMouseClicked(e -> toggleBody());
     }
 
-    public void subscribeSession(String sessionId) {
-        this.childSessionId = sessionId;
-        if (sessionId == null) {
+    public void subscribeSession(String sessionId, SessionManager sessionManager) {
+        if (sessionId == null || sessionManager == null) {
             return;
         }
 
-        eventSubscription = EventBus.outBoxSubscribe()
-                .filter(event -> event.getSessionId().equals(sessionId))
-                .map(MessageEvent::getMessage)
+        cn.bitloom.agentic.session.Session session = sessionManager.getById(sessionId);
+        if (session == null || session.getMessageBus() == null) {
+            return;
+        }
+
+        eventSubscription = session.getMessageBus().outBoxSubscribe()
                 .subscribe(
                         message -> Platform.runLater(() -> processMessage(message)),
                         error -> {},
@@ -164,15 +167,25 @@ public class TaskCard extends VBox {
 
         if (finishReason == null || finishReason.isBlank()) {
             streamBuffer.append(text != null ? text : "");
+            String accumulated = streamBuffer.toString();
+            if (accumulated.isBlank()) {
+                return;
+            }
             if (currentStreamBox == null) {
+                closeCurrentToolGroup();
                 currentStreamBox = new VBox(4);
                 currentStreamBox.getStyleClass().add("chat-message__task-assistant");
                 messageContainer.getChildren().add(currentStreamBox);
             }
-            renderStreamContent(currentStreamBox, streamBuffer.toString());
+            renderLightweightStream(currentStreamBox, accumulated);
         } else if ("STOP".equals(finishReason)) {
             if (currentStreamBox != null) {
-                renderStreamContent(currentStreamBox, streamBuffer.toString());
+                String content = streamBuffer.toString();
+                if (!content.isBlank()) {
+                    renderStreamContent(currentStreamBox, content);
+                } else {
+                    messageContainer.getChildren().remove(currentStreamBox);
+                }
                 currentStreamBox = null;
             } else if (text != null && !text.isBlank()) {
                 appendMarkdownNode(text);
@@ -210,6 +223,20 @@ public class TaskCard extends VBox {
         }
     }
 
+    private void renderLightweightStream(VBox container, String content) {
+        container.getChildren().clear();
+        if (content == null || content.isBlank()) return;
+
+        TextFlow textFlow = new TextFlow();
+        textFlow.getStyleClass().add("md-paragraph");
+        textFlow.getStyleClass().add("chat-message__task-md-content");
+        textFlow.setMaxWidth(Double.MAX_VALUE);
+        Text text = new Text(content);
+        text.setFont(Font.font(FONT_FAMILY, 13));
+        textFlow.getChildren().add(text);
+        container.getChildren().add(textFlow);
+    }
+
     private void renderStreamContent(VBox container, String content) {
         container.getChildren().clear();
         if (content == null || content.isBlank()) return;
@@ -230,13 +257,14 @@ public class TaskCard extends VBox {
             TextFlow textFlow = new TextFlow();
             textFlow.getStyleClass().add("chat-message__task-md-content");
             Text text = new Text(content);
-            text.setFont(Font.font("\"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif", 13));
+            text.setFont(Font.font(FONT_FAMILY, 13));
             textFlow.getChildren().add(text);
             container.getChildren().add(textFlow);
         }
     }
 
     private void appendMarkdownNode(String content) {
+        closeCurrentToolGroup();
         VBox mdBox = new VBox(4);
         mdBox.getStyleClass().add("chat-message__task-assistant");
         renderStreamContent(mdBox, content);
@@ -247,14 +275,28 @@ public class TaskCard extends VBox {
         ToolMessageCard card = new ToolMessageCard(toolName, arguments, true);
         HBox wrapper = new HBox(card);
         wrapper.setAlignment(Pos.CENTER_LEFT);
-        messageContainer.getChildren().add(wrapper);
+        addToToolGroup(wrapper, toolName);
     }
 
     private void appendToolResponseCard(String toolName, String responseData) {
         ToolMessageCard card = new ToolMessageCard(toolName, responseData, false);
         HBox wrapper = new HBox(card);
         wrapper.setAlignment(Pos.CENTER_LEFT);
-        messageContainer.getChildren().add(wrapper);
+        addToToolGroup(wrapper, toolName);
+    }
+
+    private void addToToolGroup(Node toolCard, String toolName) {
+        if (currentToolGroup != null) {
+            currentToolGroup.addToolCard(toolCard, toolName);
+        } else {
+            currentToolGroup = new ToolGroupCard();
+            currentToolGroup.addToolCard(toolCard, toolName);
+            messageContainer.getChildren().add(currentToolGroup);
+        }
+    }
+
+    private void closeCurrentToolGroup() {
+        currentToolGroup = null;
     }
 
     private void ensureBodyVisible() {
@@ -291,43 +333,55 @@ public class TaskCard extends VBox {
     }
 
     public void appendOutput(String text) {
-        Platform.runLater(() -> {
-            ensureBodyVisible();
-            streamBuffer.append(text);
-            if (currentStreamBox == null) {
-                currentStreamBox = new VBox(4);
-                currentStreamBox.getStyleClass().add("chat-message__task-assistant");
-                messageContainer.getChildren().add(currentStreamBox);
-            }
-            renderStreamContent(currentStreamBox, streamBuffer.toString());
-            notifyContentChanged();
-        });
+        Platform.runLater(() -> doAppendOutput(text));
+    }
+
+    private void doAppendOutput(String text) {
+        ensureBodyVisible();
+        streamBuffer.append(text);
+        if (currentStreamBox == null) {
+            closeCurrentToolGroup();
+            currentStreamBox = new VBox(4);
+            currentStreamBox.getStyleClass().add("chat-message__task-assistant");
+            messageContainer.getChildren().add(currentStreamBox);
+        }
+        renderLightweightStream(currentStreamBox, streamBuffer.toString());
+        notifyContentChanged();
     }
 
     public void setStatus(String status) {
-        Platform.runLater(() -> {
-            statusLabel.getStyleClass().removeIf(s -> s.startsWith("chat-message__task-status--"));
-            statusLabel.setText(switch (status) {
-                case "completed" -> "已完成";
-                case "failed" -> "失败";
-                case "running" -> "运行中";
-                default -> status;
-            });
-            statusLabel.getStyleClass().add("chat-message__task-status--" + status);
+        Platform.runLater(() -> doSetStatus(status));
+    }
 
-            if ("completed".equals(status) || "failed".equals(status)) {
-                stopPulseAnimation();
-                pulseDot.getStyleClass().add("chat-message__task-pulse--" + status);
-            }
+    private void doSetStatus(String status) {
+        statusLabel.getStyleClass().removeIf(s -> s.startsWith("chat-message__task-status--"));
+        statusLabel.setText(switch (status) {
+            case "completed" -> "已完成";
+            case "failed" -> "失败";
+            case "running" -> "运行中";
+            default -> status
+        ;
         });
+        statusLabel.getStyleClass().add("chat-message__task-status--" + status);
+
+        if ("completed".equals(status) || "failed".equals(status)) {
+            stopPulseAnimation();
+            pulseDot.getStyleClass().add("chat-message__task-pulse--" + status);
+        }
     }
 
     public void complete(String result) {
         Platform.runLater(() -> {
+            closeCurrentToolGroup();
             if (result != null && !result.isBlank()) {
-                appendOutput("\n" + result);
+                streamBuffer.append("\n").append(result);
             }
-            setStatus("completed");
+            if (currentStreamBox != null && !streamBuffer.isEmpty()) {
+                renderStreamContent(currentStreamBox, streamBuffer.toString());
+                currentStreamBox = null;
+            }
+            streamBuffer.setLength(0);
+            doSetStatus("completed");
             dispose();
         });
     }

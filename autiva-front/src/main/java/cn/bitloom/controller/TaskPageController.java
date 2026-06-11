@@ -47,43 +47,43 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
     }
 
     private void renderTasks() {
-        viewModel.loadTasks();
         taskListContainer.getChildren().clear();
-
-        if (viewModel.getTasks().isEmpty()) {
-            return;
-        }
-
-        Map<String, List<CronTaskInfo>> tasksBySessionId = viewModel.getTasksGroupedBySessionId();
-
-        VBox cardsContainer = new VBox();
-        cardsContainer.getStyleClass().add("task-page__cards-container");
-        cardsContainer.setSpacing(16);
-
-        for (Map.Entry<String, List<CronTaskInfo>> entry : tasksBySessionId.entrySet()) {
-            String sessionId = entry.getKey();
-            List<CronTaskInfo> sessionTasks = entry.getValue();
-
-            VBox sessionTaskList = new VBox();
-            sessionTaskList.setSpacing(12);
-            sessionTaskList.getStyleClass().add("task-page__session-list");
-
-            for (CronTaskInfo task : sessionTasks) {
-                VBox card = createTaskCard(task);
-                sessionTaskList.getChildren().add(card);
+        viewModel.loadTasksAsync(() -> {
+            if (viewModel.getTasks().isEmpty()) {
+                return;
             }
 
-            TitledPane sessionCard = new TitledPane();
-            sessionCard.setText(String.format("Session: %s (%d 个任务)", sessionId, sessionTasks.size()));
-            sessionCard.setContent(sessionTaskList);
-            sessionCard.getStyleClass().add("task-page__session-card");
-            sessionCard.setExpanded(false);
-            sessionCard.setAnimated(true);
+            Map<String, List<CronTaskInfo>> tasksBySessionId = viewModel.getTasksGroupedBySessionId();
 
-            cardsContainer.getChildren().add(sessionCard);
-        }
+            VBox cardsContainer = new VBox();
+            cardsContainer.getStyleClass().add("task-page__cards-container");
+            cardsContainer.setSpacing(16);
 
-        taskListContainer.getChildren().add(cardsContainer);
+            for (Map.Entry<String, List<CronTaskInfo>> entry : tasksBySessionId.entrySet()) {
+                String sessionId = entry.getKey();
+                List<CronTaskInfo> sessionTasks = entry.getValue();
+
+                VBox sessionTaskList = new VBox();
+                sessionTaskList.setSpacing(12);
+                sessionTaskList.getStyleClass().add("task-page__session-list");
+
+                for (CronTaskInfo task : sessionTasks) {
+                    VBox card = createTaskCard(task);
+                    sessionTaskList.getChildren().add(card);
+                }
+
+                TitledPane sessionCard = new TitledPane();
+                sessionCard.setText(String.format("Session: %s (%d 个任务)", sessionId, sessionTasks.size()));
+                sessionCard.setContent(sessionTaskList);
+                sessionCard.getStyleClass().add("task-page__session-card");
+                sessionCard.setExpanded(false);
+                sessionCard.setAnimated(true);
+
+                cardsContainer.getChildren().add(sessionCard);
+            }
+
+            taskListContainer.getChildren().add(cardsContainer);
+        });
     }
 
     private VBox createTaskCard(CronTaskInfo task) {

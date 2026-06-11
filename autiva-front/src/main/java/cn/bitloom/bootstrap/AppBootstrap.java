@@ -1,6 +1,5 @@
 package cn.bitloom.bootstrap;
 
-import cn.bitloom.agentic.agent.AgentIdentityEnum;
 import cn.bitloom.constant.AppConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -19,149 +18,131 @@ public class AppBootstrap {
 
     public static void initialize() {
         try {
-            createAppDirsIfNotExist();
+            initAppDirs();
         } catch (Exception e) {
             log.error("创建应用目录失败", e);
         }
         try {
-            createConfigFileIfNotExist();
-        } catch (Exception e) {
+            initSettingsFile();
+        } catch (IOException e) {
             log.error("创建配置文件失败", e);
         }
         try {
-            initAgentWorkspaces();
+            initDefaultAgent();
         } catch (Exception e) {
-            log.error("初始化主智能体工作区失败", e);
+            log.error("初始化默认智能体失败", e);
         }
         try {
-            initSubagentWorkspace();
+            initSubagents();
         } catch (Exception e) {
-            log.error("初始化子智能体工作区失败", e);
+            log.error("初始化子智能体失败", e);
         }
     }
 
-    private static void createAppDirsIfNotExist() {
-        try {
-            if (!Files.exists(AppConstants.Base.APP_DIR)) {
-                Files.createDirectories(AppConstants.Base.APP_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.LOGS_DIR)) {
-                Files.createDirectories(AppConstants.Base.LOGS_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.SKILL_DIR)) {
-                Files.createDirectories(AppConstants.Base.SKILL_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.MCP_DIR)) {
-                Files.createDirectories(AppConstants.Base.MCP_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.WORKSPACE_DIR)) {
-                Files.createDirectories(AppConstants.Base.WORKSPACE_DIR);
-            }
-            if (!Files.exists(AppConstants.Base.MCP_CONFIG_FILE)) {
-                Files.writeString(AppConstants.Base.MCP_CONFIG_FILE, "{\"mcpServers\":{}}");
-            }
-        } catch (Exception e) {
-            log.error("创建应用目录失败", e);
+    private static void initAppDirs() throws IOException {
+        if (!Files.exists(AppConstants.Base.APP_DIR)) {
+            Files.createDirectories(AppConstants.Base.APP_DIR);
+        }
+        if (!Files.exists(AppConstants.Base.LOGS_DIR)) {
+            Files.createDirectories(AppConstants.Base.LOGS_DIR);
+        }
+        if (!Files.exists(AppConstants.Base.SKILLS_DIR)) {
+            Files.createDirectories(AppConstants.Base.SKILLS_DIR);
+        }
+        if (!Files.exists(AppConstants.Base.AGENTS_DIR)) {
+            Files.createDirectories(AppConstants.Base.AGENTS_DIR);
         }
     }
 
-    private static void createConfigFileIfNotExist() {
-        if (!Files.exists(AppConstants.Base.CONFIG_FILE)) {
-            try {
-                Files.writeString(AppConstants.Base.CONFIG_FILE, DEFAULT_CONFIG_TEMPLATE);
-                log.info("创建默认配置文件: {}", AppConstants.Base.CONFIG_FILE);
-            } catch (IOException e) {
-                log.error("创建配置文件失败", e);
-            }
+    private static void initSettingsFile() throws IOException {
+        Path settingsFile = AppConstants.Base.SETTINGS_FILE;
+        if (Files.exists(settingsFile)) {
+            return;
         }
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+        Resource configResource = resolver.getResource("classpath:bootstrap/settings.properties");
+        Files.copy(configResource.getInputStream(), settingsFile, StandardCopyOption.REPLACE_EXISTING);
     }
 
-    private static final String DEFAULT_CONFIG_TEMPLATE = """
-            # Autiva Application Settings
-            # 首次运行自动生成，请在设置页面中修改
+    /**
+     * 初始化默认主智能体：agents/default/ 目录
+     * 从 classpath:bootstrap/agent/default/ 复制所有文件到 agents/default/
+     * 同时创建 workspace/default/ 目录（仅 context/ 和 sessions/）
+     */
+    private static void initDefaultAgent() throws IOException {
+        Path defaultAgentDir = AppConstants.Base.agentDir("default");
+        if (Files.exists(defaultAgentDir)) {
+            ensureWorkspaceDir("default");
+            return;
+        }
 
-            app.session.isolation=PER_PEER
-            app.search.bocha-api-key=
+        Files.createDirectories(defaultAgentDir);
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
-            # DeepSeek Configuration
-            spring.ai.deepseek.chat.base-url=https://api.deepseek.com
-            spring.ai.deepseek.chat.completions-path=/v1/chat/completions
-            spring.ai.deepseek.chat.api-key=
-            spring.ai.deepseek.chat.options.model=deepseek-chat
-
-            # ZhiPu AI Configuration
-            spring.ai.zhipuai.chat.base-url=https://open.bigmodel.cn/api/paas/v4
-            spring.ai.zhipuai.chat.completions-path=/chat/completions
-            spring.ai.zhipuai.api-key=
-            spring.ai.zhipuai.chat.options.model=glm-4-flash
-
-            # WeChat iLink
-            wechat.ilink.enabled=false
-            
-            """;
-
-    private static void initAgentWorkspaces() {
-        for (AgentIdentityEnum identity : AgentIdentityEnum.values()) {
-            if (!identity.isMain()) {
-                continue;
-            }
-            try {
-                Path dir = AppConstants.Base.WORKSPACE_DIR.resolve(identity.name());
-                if (!Files.exists(dir)) {
-                    Files.createDirectories(dir);
-                    log.info("初始化工作目录: {}", dir);
-                }
-                copyClasspathTemplates("bootstrap/" + identity.name(), dir);
-            } catch (Exception e) {
-                log.warn("初始化主智能体工作区失败(跳过): {}, 原因: {}", identity.name(), e.getMessage());
+        // 从 bootstrap/agent/default/ 复制所有文件到 agents/default/
+        Resource[] defaultResources = resolver.getResources("classpath:bootstrap/agent/default/*");
+        for (Resource resource : defaultResources) {
+            String fileName = resource.getFilename();
+            if (fileName != null) {
+                copyResourceIfNotExists(resource, defaultAgentDir.resolve(fileName));
             }
         }
+
+        // 创建 memory/ 目录
+        Files.createDirectories(defaultAgentDir.resolve("memory"));
+
+        // 创建 workspace/default/ 目录（仅 session 运行时数据）
+        ensureWorkspaceDir("default");
     }
 
-    private static void copyClasspathTemplates(String classpathDir, Path targetDir) {
-        try {
-            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-            Resource[] resources = resolver.getResources("classpath:" + classpathDir + "/*.md");
+    /**
+     * 初始化子智能体：agents/{name}/
+     * 从 classpath:bootstrap/subagent/{name}/ 复制所有文件到 agents/{name}/
+     */
+    private static void initSubagents() throws IOException {
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
 
-            for (Resource resource : resources) {
-                String fileName = resource.getFilename();
-                Path targetPath = null;
-                if (fileName != null) {
-                    targetPath = targetDir.resolve(fileName);
-                }
-                if (targetPath != null && !Files.exists(targetPath)) {
-                    try {
-                        Files.copy(resource.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-                        log.info("复制模板文件: {}", targetPath);
-                    } catch (IOException e) {
-                        log.error("复制模板文件失败: {}", fileName, e);
-                    }
-                }
-            }
-        } catch (IOException e) {
-            log.error("扫描模板目录失败: {}", classpathDir, e);
-        }
-    }
+        // 扫描 bootstrap/subagent/ 下的所有子目录中的文件
+        Resource[] subagentResources = resolver.getResources("classpath:bootstrap/subagent/*/*");
 
-    private static void initSubagentWorkspace() {
-        for (AgentIdentityEnum identity : AgentIdentityEnum.values()) {
-            if (!identity.isSubagent()) {
-                continue;
-            }
-            if (identity == AgentIdentityEnum.A2A) {
+        for (Resource resource : subagentResources) {
+            String fileName = resource.getFilename();
+            if (fileName == null) {
                 continue;
             }
 
-            try {
-                Path dir = AppConstants.Base.WORKSPACE_DIR.resolve(identity.name());
-                if (!Files.exists(dir)) {
-                    Files.createDirectories(dir);
-                    log.info("初始化子智能体工作目录: {}", dir);
-                }
-                copyClasspathTemplates("bootstrap/" + identity.name(), dir);
-            } catch (Exception e) {
-                log.warn("初始化子智能体工作区失败(跳过): {}, 原因: {}", identity.name(), e.getMessage());
+            // 从 URL 中提取子目录名作为 agentId
+            // URL 格式: .../bootstrap/subagent/{agentId}/{fileName}
+            String url = resource.getURL().toString();
+            int subagentIdx = url.lastIndexOf("bootstrap/subagent/");
+            if (subagentIdx < 0) continue;
+            String relativePath = url.substring(subagentIdx + "bootstrap/subagent/".length());
+            int slashIdx = relativePath.indexOf('/');
+            if (slashIdx < 0) continue;
+            String agentId = relativePath.substring(0, slashIdx);
+
+            Path agentDir = AppConstants.Base.agentDir(agentId);
+            if (Files.exists(agentDir.resolve("agent.md"))) {
+                continue;
             }
+
+            Files.createDirectories(agentDir);
+            copyResourceIfNotExists(resource, agentDir.resolve(fileName));
+            log.info("初始化子智能体: {} ({})", agentId, fileName);
         }
     }
+
+    private static void ensureWorkspaceDir(String agentId) throws IOException {
+        Path workspaceDir = AppConstants.Base.agentWorkspaceDir(agentId);
+        Files.createDirectories(workspaceDir.resolve("sessions"));
+        Files.createDirectories(workspaceDir.resolve("context"));
+    }
+
+    private static void copyResourceIfNotExists(Resource resource, Path target) throws IOException {
+        if (Files.exists(target)) {
+            return;
+        }
+        Files.copy(resource.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+    }
+
 }

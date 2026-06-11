@@ -19,7 +19,7 @@
 
 **工作流程：**
 ```
-钉钉消息 → BotMessageConsumer → EventBus.inBox → MainAgent → EventBus.outBox → BotMessageConsumer → BotReplier → 钉钉
+钉钉消息 → BotMessageConsumer → EventBus.inBox → Agent → EventBus.outBox → BotMessageConsumer → BotReplier → 钉钉
 ```
 
 ### DingTalkProperties
@@ -163,8 +163,8 @@ export DINGTALK_APP_CLIENT_SECRET="your-client-secret"
 ```
 
 ### 消息流转
-1. **钉钉 → 系统**：`BotMessageConsumer.execute()` 接收消息 → `EventBus.inBoxPublishBlocked()` 发布
-2. **系统 → 钉钉**：`EventBus.outBoxSubscribe()` 订阅回复 → `BotReplier.replyText()` 发送
+1. **钉钉 → 系统**：`BotMessageConsumer.execute()` 接收消息 → `sessionManager.publishMessage()` 发布
+2. **系统 → 钉钉**：`session.getEventBus().outBoxSubscribe()` 订阅回复 → `BotReplier.replyText()` 发送
 
 ### 会话隔离
 - 使用 `SessionTypeEnum.DM` 创建点对点会话
@@ -184,8 +184,8 @@ export DINGTALK_APP_CLIENT_SECRET="your-client-secret"
    - 支持单聊和群聊消息接收
    - 自动重连机制
 
-3. **消息发送方式**：
-   - 使用 `inBoxPublishBlocked` 发送非流式消息
+3.4. **消息发送方式**：
+   - 使用 `sessionManager.publishMessage()` 发送消息到 EventBus
    - 智能体回复通过 `BotReplier` 发送
    - 支持文本消息格式
 
@@ -229,7 +229,7 @@ export DINGTALK_APP_CLIENT_SECRET="your-client-secret"
 
 **工作流程：**
 ```
-微信用户 → iLink 服务器 → WeixinILinkClient(getUpdates 长轮询) → WeixinILinkMessageHandler → EventBus.inBox → MainAgent → EventBus.outBox → WeixinILinkMessageHandler → WeixinILinkClient(sendText) → iLink 服务器 → 微信用户
+微信用户 → iLink 服务器 → WeixinILinkClient(getUpdates 长轮询) → WeixinILinkMessageHandler → EventBus.inBox → Agent → EventBus.outBox → WeixinILinkMessageHandler → WeixinILinkClient(sendText) → iLink 服务器 → 微信用户
 ```
 
 ### WeixinILinkProperties
@@ -449,8 +449,8 @@ iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
 - `ILinkException`: 协议错误（ret != 0）
 
 #### 消息流转
-1. **微信 → 系统**：`WeixinILinkClient` 长轮询获取消息 → `WeixinILinkMessageHandler.handleMessage()` → `EventBus.inBoxPublish()` 发布
-2. **系统 → 微信**：`EventBus.outBoxSubscribe()` 订阅回复 → `ILinkApiClient.sendText()` 发送
+1. **微信 → 系统**：`WeixinILinkClient` 长轮询获取消息 → `WeixinILinkMessageHandler.handleMessage()` → `sessionManager.publishMessage()` 发布
+2. **系统 → 微信**：`session.getEventBus().outBoxSubscribe()` 订阅回复 → `ILinkApiClient.sendText()` 发送
 
 #### 会话隔离
 - 使用 `SessionTypeEnum.DM` 创建点对点会话
@@ -481,7 +481,7 @@ iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
    - 连接断开时停止轮询
 
 4. **消息发送方式**：
-   - 使用 `inBoxPublish` 发送消息到 EventBus
+   - 使用 `sessionManager.publishMessage()` 发送消息
    - 智能体回复通过 `ILinkApiClient.sendText()` 发送
    - 当前仅支持文本消息格式
    - 发送消息前，目标用户必须先给 bot 发过消息（context_token 前提）

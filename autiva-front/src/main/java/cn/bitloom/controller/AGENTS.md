@@ -71,10 +71,11 @@
 - 管理 ScrollPane + VBox 聊天容器
 - 监听 ViewModel 的 ObservableList 变化，创建消息卡片组件
 - 工具调用分组折叠：连续的 TOOL 类型消息自动归入 `ToolGroupCard`，非 TOOL 消息中断分组。通过 `currentToolGroup` 字段追踪当前活跃的工具分组，清除对话时重置
+- 滚动到顶部加载更多历史消息：监听 ScrollPane vvalue 变化，当滚动到顶部时调用 `viewModel.loadMoreMessages(30)` 加载更早的消息，在 chatContainer 头部插入消息卡片并保持滚动位置不变
 - 处理搜索输入框和发送按钮事件
 - 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 管理模型选择 ComboBox
-- 管理智能体选择按钮（agentSelector）：点击弹出 ContextMenu 选择智能体（目前仅 MAIN 可选）
+- 管理智能体选择按钮（agentSelector）：点击弹出 ContextMenu 选择智能体（从 AgentManager 动态获取主智能体列表）
 - 处理语音输入按钮
 - 画布按钮：打开 CanvasDialog 弹窗
 - 动画效果（图标淡出、聊天区域展开）
@@ -89,6 +90,8 @@
 - `viewModel.clear()` - 清除对话
 - `viewModel.addUserMessage()` - 添加用户消息到列表
 - `viewModel.prepareHistoricalMessages()` - 准备历史消息
+- `viewModel.loadMoreMessages(int)` - 加载更多历史消息（滚动到顶部时触发）
+- `viewModel.hasMoreMessages()` - 是否还有更多历史消息
 - `viewModel.getMessages()` - 监听消息列表变化
 - `viewModel.createNewSession()` - 创建新会话（SideBarController 调用）
 - `viewModel.switchToSession()` - 切换会话（SideBarController 调用）
@@ -210,8 +213,9 @@
 - `historyList`: 历史对话列表容器（VBox）
 
 **核心方法：**
-- `refreshHistoryList()`: 刷新历史对话列表
+- `refreshHistoryList()`: 增量刷新历史对话列表（使用 historyItemMap 缓存，仅更新变化的项，避免全量重建）
 - `createHistoryItem(Session)`: 创建历史对话项 UI
+- `updateHistoryItemTitle(HBox, Session)`: 更新历史对话项标题
 - `updateHistoryActiveState(HBox)`: 更新历史对话选中状态
 - `formatTime(long)`: 格式化时间戳（今天显示 HH:mm，其他显示 MM/dd HH:mm）
 
@@ -220,6 +224,7 @@
 - CSS 类名 `sidebar__option--active` 提取为常量 `ACTIVE_CSS_CLASS`
 - CSS 类名 `sidebar__history-item--active` 提取为常量 `HISTORY_ACTIVE_CSS_CLASS`
 - 鼠标点击事件通过 Map 遍历统一注册
+- `historyItemMap`（Map<String, HBox>）缓存历史项，增量更新避免全量重建
 
 ### ButtonBarController
 底部按钮栏控制器。

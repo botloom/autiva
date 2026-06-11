@@ -1,8 +1,6 @@
 package cn.bitloom.bridge.wechat;
 
-import cn.bitloom.agentic.agent.AgentIdentityEnum;
-import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.agent.AgentManager;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.session.Session;
 import cn.bitloom.agentic.session.SessionManager;
@@ -24,11 +22,13 @@ public class WechatILinkMessageHandler {
 
     private static final String SOURCE = "wechat";
     private final SessionManager sessionManager;
+    private final AgentManager agentManager;
     private final WechatILinkClient wechatILinkClient;
     private final Map<String, Session> sessionMap = new ConcurrentHashMap<>();
 
-    public WechatILinkMessageHandler(SessionManager sessionManager, @Lazy WechatILinkClient wechatILinkClient) {
+    public WechatILinkMessageHandler(SessionManager sessionManager, AgentManager agentManager, @Lazy WechatILinkClient wechatILinkClient) {
         this.sessionManager = sessionManager;
+        this.agentManager = agentManager;
         this.wechatILinkClient = wechatILinkClient;
     }
 
@@ -46,7 +46,7 @@ public class WechatILinkMessageHandler {
             session = bindSession(userId);
         }
 
-        EventBus.inBoxPublish(
+        sessionManager.publishMessage(
                 session.getId(),
                 UserMessage.builder()
                         .text(text.trim())
@@ -55,10 +55,9 @@ public class WechatILinkMessageHandler {
     }
 
     private Session bindSession(String userId) {
-        Session session = sessionManager.getOrCreate(AgentIdentityEnum.MAIN, SOURCE, SessionTypeEnum.DM, SessionRespTypeEnum.BLOCK, ModelTypeEnum.DEEPSEEK, userId);
-        EventBus.outBoxSubscribe()
-                .filter(event -> event.getSessionId().equals(session.getId()))
-                .map(MessageEvent::getMessage)
+        Session session = sessionManager.getOrCreate("default", userId, SOURCE, SessionTypeEnum.DM, SessionRespTypeEnum.BLOCK, ModelTypeEnum.DEEPSEEK);
+        // SessionManager 自动绑定 Agent，无需手动 bindAgentAndStart
+        session.getMessageBus().outBoxSubscribe()
                 .subscribe(
                         msg -> wechatILinkClient.sendText(userId, msg.getText().trim()),
                         error -> log.error("微信回复发送失败，userId = {}", userId, error),

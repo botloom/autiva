@@ -19,7 +19,7 @@
 - `toXml()`: 将 frontMatter 和 basePath 格式化为 XML（用于 AI 工具描述，便于模型定位技能根目录）
 
 ### SkillManager
-技能管理器，统一负责技能的加载、管理、持久化和 AI 工具回调构建。
+技能管理器，统一负责技能的加载、管理和持久化。
 
 **加载功能：**
 - `loadSkills()`: 重新加载所有技能（从默认技能目录）
@@ -40,20 +40,12 @@
 - `saveSkill(Skill)`: 保存技能
 - `deleteSkill(String)`: 删除技能
 
-**AI 工具功能：**
-- `buildToolCallback()`: 构建 FunctionToolCallback，将技能作为 AI 工具提供给智能体。无技能时返回 null，调用方需处理 null
-- 内部类 `SkillsFunction`: 实现 Function<SkillsInput, String>，处理技能调用
-- 内部类 `SkillsInput`: 工具输入 record，包含 command（技能名称）
-
 ## AI 工具功能
 
-技能通过 ToolCallbacks 模式注册，由 SkillManager 直接提供：
-
-- `buildToolCallback()`: 构建 FunctionToolCallback，将技能作为 AI 工具提供给智能体。无技能时返回 null，调用方需处理 null
-- 内部类 `SkillsFunction`: 实现 Function<SkillsInput, String>，处理技能调用
-- 内部类 `SkillsInput`: 工具输入 record，包含 command（技能名称）
-
-在 MainAgent 中通过 `skillManager.buildToolCallback()` 获取 ToolCallback 并注册到 ChatClient，需处理 null 返回值。
+技能调用已从 SkillManager 中解耦，由 `tool/skill/SkillTool` 负责：
+- **SkillTool**（`cn.bitloom.agentic.tool.skill.SkillTool`）：技能调用工具，继承 AbstractTool\<SkillTool.Input\>，通过 SkillManager.getSkill() 加载技能内容
+- 技能信息通过系统提示词注入（TaskTool.buildSubagentSystemPrompt()），SkillTool 仅负责按名称加载技能内容
+- 原 `buildToolCallback()`、`SkillsFunction`、`SkillsInput` 已移除
 
 ## SKILL.md 格式
 ```markdown
@@ -78,3 +70,4 @@ metadata:
 3. name 和 description 是必填字段
 4. 修改技能后需要重新加载
 5. MarkdownParser 替代了原来的 SnakeYAML 解析
+6. 技能调用工具已迁移到 `tool/skill/SkillTool`
