@@ -1,0 +1,23 @@
+package cn.bitloom.node;
+
+import cn.bitloom.agentic.event.MessageEvent;
+import javafx.scene.layout.VBox;
+
+/**
+ * 消息卡片抽象基类，消除 ChatMessage 中间层。
+ * 继承 VBox，可以直接添加到 JavaFX 容器中。
+ * 各卡片继承此抽象类，实现 getType() 和 getContent() 方法。
+ */
+public abstract class MessageCard extends VBox {
+
+    /**
+     * 获取消息类型
+     */
+    public abstract MessageEvent.Type getMessageType();
+
+    /**
+     * 获取消息内容（用于复制按钮等操作）
+     */
+    public abstract String getContent();
+
+}

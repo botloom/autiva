@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: autiva
+  config:
+    import: optional:file:${user.home}/.autiva/settings.properties
+  main:
+    web-application-type: none
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    chat:
+      client:
+        enabled: false
+    mcp:
+      client:
+        type: async
+        name: autiva
+    openai:
+      api-key: not-required
+logging:
+  level:
+    root: info
+    cn.bitloom: debug
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${user.home}/.autiva/logs/autiva-front.%d{yyyy-MM-dd}.%i.log
+      max-history: 30
+      max-file-size: 10MB

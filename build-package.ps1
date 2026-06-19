@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$JDK = "D:\jdk-17"
+$JDK = "D:\jdk-25"
 $MVN = "D:\apache-maven-3.9.12\bin\mvn.cmd"
 $PROJECT = "D:\project\autiva"
 
@@ -139,6 +139,7 @@ Remove-Item -Recurse -Force autiva-front\target\jpackage-output -ErrorAction Sil
   --java-options "-XX:+UseCompressedOops" `
   --java-options "-XX:+UseCompressedClassPointers" `
   --java-options "-XX:+UseStringDeduplication" `
+  --java-options "-XX:+UseCompactObjectHeaders" `
   --dest autiva-front\target\jpackage-output `
   --app-version 1.0.0 `
   --vendor "Bitloom" `
