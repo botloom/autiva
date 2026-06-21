@@ -57,18 +57,30 @@
 - `SUBAGENT`: 子智能体，被其他 Agent 通过 Task 工具调用，内置不可配置
 
 ### AgentDefinition
-统一的智能体定义 record，从 `agent.md` 的 YAML frontmatter + markdown body 解析而来。
+统一的智能体定义 record，从 `agent.md` 的 YAML frontmatter + markdown body 解析而来。MAIN 智能体在加载时会合并 config.json，合并后 tools/skills/subagents/mcpServers 以 config.json 为准（非空覆盖）。
 
 **字段：**
 - `name`: 智能体名称（@NonNull）
 - `description`: 智能体描述（@NonNull）
 - `kind`: AgentKind（MAIN 或 SUBAGENT）（@NonNull）
-- `model`: 可选模型覆盖（子智能体专用）（@Nullable）
 - `tools`: 工具白名单（@NonNull）
-- `disallowedTools`: 工具黑名单（@NonNull）
 - `skills`: 注入到上下文的技能名称列表（@NonNull）
-- `permissionMode`: 权限模式（@NonNull）
+- `subagents`: 可用子智能体名称列表（@NonNull）
+- `mcpServers`: MCP server 配置映射（@NonNull）
 - `content`: 系统提示词正文（agent.md 的 markdown body）（@NonNull）
+
+**内部类 WorkspaceConfig：**
+对应 `config.json` 的模型类，仅用于 MAIN 智能体。加载后通过 `merge()` 合并到 AgentDefinition 中。
+
+- `tools`: 工具白名单
+- `mcpServers`: MCP server 配置映射
+- `skills`: 技能名称列表
+- `subagents`: 可用子智能体名称列表
+
+**核心方法：**
+- `fromMarkdown(Path/String)`: 从 agent.md 解析 AgentDefinition
+- `merge(WorkspaceConfig)`: 将 config.json 合并到定义中，非空字段覆盖
+- `toRegistrationText()`: 格式化注册信息
 
 ### Agent
 统一智能体类。主智能体和子智能体都是 Agent 类的实例，区别仅在 AgentDefinition 的配置。
@@ -151,16 +163,9 @@ Agent.builder()
 - `getSubagentDefinitions()`: 获取所有 SUBAGENT 定义
 - `getSubagentDefinitions(List<String>)`: 按名称列表过滤 SUBAGENT 定义（空列表返回全部）
 - `getMainAgentIds()`: 获取所有 MAIN agent ID
-- `getOrLoadMainDefinition(String)`: 获取或懒加载 MAIN 定义（支持文件系统按需加载）
-
-### WorkspaceConfig
-对应 `config.json` 的模型类，仅用于 MAIN 智能体。
-
-**字段：**
-- `tools`: 工具白名单
-- `mcpServers`: MCP server 配置映射
-- `skills`: 技能名称列表
-- `subagents`: 可用子智能体名称列表
+- `getOrLoadMainDefinition(String)`: 获取或懒加载 MAIN 定义（加载后合并 config.json）
+- `loadWorkspaceConfig(String)`: 加载并合并 WorkspaceConfig（default + agentId，agentId 优先）
+- `loadConfigFromFile(Path)`: 从文件读取 WorkspaceConfig
 
 ### advisor 包
 
@@ -199,6 +204,7 @@ Hook 桥接 Advisor，将 AgentHook 列表桥接到 Spring AI Advisor 机制。
 - **RuntimeContext 运行时依赖传递**：Advisor 依赖通过 ChatClientRequest.context() 在运行时传递，无需构建时持有 SessionManager
 - **Builder 方法链**：可选功能（记忆、压缩等）默认不开启，通过 `.memory()`/`.compact()` 等方法显式启用
 - **Advisor 机制**：基于 Spring AI Advisor 替代原 Hook 机制，在 Agent 层拦截
-- **白名单模式**：config.json 的 tools 字段控制工具注册
+- **白名单模式**：AgentDefinition.tools 字段控制工具注册（MAIN 智能体已合并 config.json）
 - **定义管理集中化**：AgentDefinitionManager 统一管理所有定义，FileSystemSessionManager 和 TaskTool 共享
+- **config.json 合并**：MAIN 智能体加载时自动合并 config.json（default + agentId），非空字段覆盖 frontmatter 值
 - **Agent 构建下沉**：主智能体由 FileSystemSessionManager.getOrCreateAgent() 构建，子智能体由 TaskTool.createSubagent() 构建

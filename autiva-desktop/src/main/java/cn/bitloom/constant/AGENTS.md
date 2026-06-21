@@ -22,6 +22,8 @@
 - `MEMORY_MD`: 长期记忆文件 (`~/.autiva/MEMORY.md`)
 - `BOOTSTRAP_MD`: 首次启动引导文件 (`~/.autiva/BOOTSTRAP.md`)
 - `MEMORY_DIR`: 长期记忆流水账目录 (`~/.autiva/memory`)
+- `PROJECTS_DIR`: 项目工作区根目录 (`~/.autiva/projects`)，编码智能体场景使用
+- `PROJECTS_REGISTRY_FILE`: 项目注册表文件 (`~/.autiva/projects/registry.json`)，持久化项目列表
 - `DEFAULT_USER`: 默认用户标识 (`"default"`)
 
 ### Base 路径方法

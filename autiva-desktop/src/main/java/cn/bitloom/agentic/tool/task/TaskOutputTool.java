@@ -4,6 +4,7 @@ import cn.bitloom.agentic.task.repository.BackgroundTask;
 import cn.bitloom.agentic.task.repository.TaskRepository;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.util.Assert;
@@ -42,7 +43,7 @@ public class TaskOutputTool extends AbstractTool<TaskOutputTool.Input> {
     }
 
     @Override
-    public ToolResult execute(Input input, ToolContext context) {
+    public @NonNull ToolResult execute(Input input, ToolContext context) {
         BackgroundTask bgTask = taskRepository.getTasks(input.task_id());
 
         if (bgTask == null) {

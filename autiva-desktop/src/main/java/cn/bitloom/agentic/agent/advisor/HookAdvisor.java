@@ -2,13 +2,13 @@ package cn.bitloom.agentic.agent.advisor;
 
 import cn.bitloom.agentic.hook.AgentHook;
 import lombok.Builder;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
-import org.springframework.lang.NonNull;
 import reactor.core.publisher.Flux;
 
 import java.util.List;

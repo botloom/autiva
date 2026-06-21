@@ -214,7 +214,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 
 	@FunctionalInterface
 	public interface TodoEventHandler {
-		void handle(Todos todos);
+		void handle(Todos todos, String sessionId);
 	}
 
 	public record Todos(List<TodoItem> todos) {
@@ -254,7 +254,8 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 		// 验证待办事项
 		this.validateTodos(todosRecord);
 
-		this.todoListConsumer.handle(todosRecord);
+		String sessionId = context != null ? (String) context.getContext().get("sessionId") : null;
+		this.todoListConsumer.handle(todosRecord, sessionId);
 
 		return ToolResult.success("待办事项已成功修改", Map.of("count", todos.size()));
 	}
@@ -322,7 +323,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 
 	public static class Builder {
 
-		private TodoEventHandler todoEventHandler = todos -> log.debug("Updated Todos: {}", todos);
+		private TodoEventHandler todoEventHandler = (todos, sessionId) -> log.debug("Updated Todos: {}", todos);
 
 		public Builder todoEventHandler(TodoEventHandler todoEventHandler) {
 			this.todoEventHandler = todoEventHandler;

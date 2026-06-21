@@ -1,6 +1,8 @@
 package cn.bitloom.agentic.agent;
 
+import cn.bitloom.agentic.agent.AgentDefinition.WorkspaceConfig;
 import cn.bitloom.constant.AppConstants;
+import cn.bitloom.util.JsonUtils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -60,7 +62,7 @@ public class AgentDefinitionManager {
     }
 
     /**
-     * 从 agents 目录加载所有主智能体定义
+     * 从 agents 目录加载所有主智能体定义，并合并 config.json
      */
     private void loadMainDefinitions() {
         Path agentsDir = AppConstants.Base.AGENTS_DIR;
@@ -76,6 +78,8 @@ public class AgentDefinitionManager {
                         if (Files.exists(agentFile)) {
                             try {
                                 AgentDefinition definition = AgentDefinition.fromMarkdown(agentFile);
+                                // 合并 config.json（default + agentId，agentId 优先）
+                                definition = definition.merge(loadWorkspaceConfig(agentId));
                                 definitions.put(agentId, definition);
                                 log.info("加载主智能体定义: {}", agentId);
                             } catch (Exception e) {
@@ -137,7 +141,7 @@ public class AgentDefinitionManager {
 
     /**
      * 获取或懒加载 MAIN 定义。
-     * 如果缓存中没有，尝试从文件系统加载。
+     * 如果缓存中没有，尝试从文件系统加载，并合并 config.json。
      *
      * @param agentId 智能体 ID
      * @return AgentDefinition，不存在则创建默认定义
@@ -152,14 +156,43 @@ public class AgentDefinitionManager {
         Path agentMd = AppConstants.MainAgent.agentFile(agentId);
         if (Files.exists(agentMd)) {
             definition = AgentDefinition.fromMarkdown(agentMd);
+            // 合并 config.json
+            definition = definition.merge(loadWorkspaceConfig(agentId));
             definitions.put(agentId, definition);
             return definition;
         }
 
-        // 如果没有 agent.md，创建默认的 MAIN 定义
-        definition = new AgentDefinition(agentId, "默认智能体", AgentKind.MAIN,
-                null, List.of(), List.of(), List.of(), "default", "");
-        definitions.put(agentId, definition);
         return definition;
+    }
+
+    /**
+     * 加载并合并 WorkspaceConfig（default + agentId，agentId 优先）。
+     */
+    public WorkspaceConfig loadWorkspaceConfig(String agentId) {
+        WorkspaceConfig rootConfig = loadConfigFromFile(AppConstants.MainAgent.configFile("default"));
+        WorkspaceConfig agentConfig = loadConfigFromFile(AppConstants.MainAgent.configFile(agentId));
+
+        WorkspaceConfig merged = new WorkspaceConfig();
+        merged.setTools(agentConfig.getTools() != null && !agentConfig.getTools().isEmpty()
+                ? agentConfig.getTools() : rootConfig.getTools());
+        merged.setMcpServers(agentConfig.getMcpServers() != null && !agentConfig.getMcpServers().isEmpty()
+                ? agentConfig.getMcpServers() : rootConfig.getMcpServers());
+        merged.setSkills(agentConfig.getSkills() != null && !agentConfig.getSkills().isEmpty()
+                ? agentConfig.getSkills() : rootConfig.getSkills());
+        merged.setSubagents(agentConfig.getSubagents() != null && !agentConfig.getSubagents().isEmpty()
+                ? agentConfig.getSubagents() : rootConfig.getSubagents());
+        return merged;
+    }
+
+    private WorkspaceConfig loadConfigFromFile(Path configFile) {
+        if (Files.exists(configFile)) {
+            try {
+                String content = Files.readString(configFile, StandardCharsets.UTF_8);
+                return JsonUtils.fromJson(content, WorkspaceConfig.class);
+            } catch (IOException e) {
+                log.error("读取配置文件失败: {}", configFile, e);
+            }
+        }
+        return new WorkspaceConfig();
     }
 }

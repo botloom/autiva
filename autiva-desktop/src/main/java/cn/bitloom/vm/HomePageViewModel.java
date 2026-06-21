@@ -1,5 +1,6 @@
 package cn.bitloom.vm;
 
+import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.EventConverter;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.session.*;
@@ -41,9 +42,11 @@ public class HomePageViewModel {
         if (this.outBoxSubscription != null) {
             this.outBoxSubscription.dispose();
         }
-        this.outBoxSubscription = this.session.subscribe()
+        this.outBoxSubscription = EventBus.outBoxFlux()
                 .doOnNext(event -> {
-                    if (event instanceof MessageEvent messageEvent) {
+                    if (event instanceof MessageEvent messageEvent
+                            && this.session != null
+                            && this.session.getId().equals(messageEvent.getSessionId())) {
                         Platform.runLater(() -> this.processEvent(messageEvent));
                     }
                 })
@@ -269,7 +272,7 @@ public class HomePageViewModel {
     public void sendMessage(String text) {
         if (this.session == null) {
             this.session = fileSystemSessionManager.create(
-                    Store.currentAgent.get(), Store.source.get(), SessionTypeEnum.DM,
+                    Store.currentAgent.get(), null, SessionTypeEnum.DM,
                     SessionRespTypeEnum.STREAM, Store.selectedModel.get());
             Store.currentSessionId.set(this.session.getId());
             subscribeOutBox();
@@ -281,7 +284,7 @@ public class HomePageViewModel {
         Store.isStreaming.set(true);
         Store.isPaused.set(false);
         fileSystemSessionManager.updateState(this.session.getId(), SessionState.GENERATING);
-        this.session.publish(MessageEvent.userMessage(this.session.getId(), text));
+        EventBus.publishIn(MessageEvent.userMessage(this.session.getId(), text));
         // 触发侧边栏刷新（更新会话标题）
         Store.refreshHistory.set(!Store.refreshHistory.get());
     }
@@ -295,8 +298,6 @@ public class HomePageViewModel {
         if (this.session != null) {
             fileSystemSessionManager.updateState(this.session.getId(), SessionState.IDLE);
             fileSystemSessionManager.clear(this.session.getId());
-            fileSystemSessionManager.getChildSessions(this.session.getId())
-                    .forEach(child -> fileSystemSessionManager.delete(child.getId()));
         }
         Store.statusText.set("就绪");
     }
@@ -305,9 +306,7 @@ public class HomePageViewModel {
         if (Store.isStreaming.get() && !Store.isPaused.get()) {
             Store.isPaused.set(true);
             if (this.session != null) {
-                this.session.stop();
-                fileSystemSessionManager.getChildSessions(this.session.getId())
-                        .forEach(Session::stop);
+                fileSystemSessionManager.stopSession(this.session.getId());
                 fileSystemSessionManager.updateState(this.session.getId(), SessionState.PAUSED);
             }
 

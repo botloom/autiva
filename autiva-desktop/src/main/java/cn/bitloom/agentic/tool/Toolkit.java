@@ -2,10 +2,9 @@ package cn.bitloom.agentic.tool;
 
 import cn.bitloom.agentic.agent.AgentDefinition;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
-import cn.bitloom.agentic.agent.AgentKind;
-import cn.bitloom.agentic.agent.WorkspaceConfig;
 import cn.bitloom.agentic.memory.MemoryManager;
 import cn.bitloom.agentic.model.ModelFactory;
+import cn.bitloom.agentic.session.InMemorySessionManager;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.task.repository.TaskRepository;
 import cn.bitloom.agentic.tool.command.CommandTool;
@@ -47,19 +46,14 @@ import cn.bitloom.agentic.util.GuiQuestionHandler;
 import cn.bitloom.agentic.util.GuiTodoEventHandler;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.config.ConfigManager;
-import cn.bitloom.constant.AppConstants;
 import cn.bitloom.cron.CronManager;
-import cn.bitloom.util.JsonUtils;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.mcp.AsyncMcpToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -84,6 +78,12 @@ public class Toolkit {
     private final AgentDefinitionManager agentDefinitionManager;
     private final TaskRepository taskRepository;
     private final ProcessManager processManager;
+    private final InMemorySessionManager inMemorySessionManager;
+
+    @PostConstruct
+    public void init() {
+
+    }
 
     /**
      * 根据 AgentDefinition 构建工具回调列表
@@ -105,10 +105,10 @@ public class Toolkit {
             TaskTool taskTool = TaskTool.builder()
                     .toolkit(this)
                     .modelFactory(modelFactory)
-                    .skillManager(skillManager)
                     .taskRepository(taskRepository)
                     .toolUIBridge(toolUIBridge)
                     .agentDefinitionManager(agentDefinitionManager)
+                    .inMemorySessionManager(inMemorySessionManager)
                     .build();
             filtered = new ArrayList<>(filtered);
             filtered.add(taskTool.toToolCallback());
@@ -119,18 +119,12 @@ public class Toolkit {
 
     /**
      * 检查 agent 是否允许使用 Task 工具
-     * - MAIN 智能体：检查 WorkspaceConfig.tools 白名单是否包含 "Task"
+     * - MAIN 智能体：检查 definition.tools 白名单是否包含 "Task"（已合并 config.json）
      * - SUBAGENT 智能体：检查 definition.tools 白名单是否包含 "Task"
      */
     private boolean isTaskToolAllowed(AgentDefinition definition) {
-        if (definition.kind() == AgentKind.MAIN) {
-            WorkspaceConfig config = loadWorkspaceConfig(definition.name());
-            List<String> whitelist = config.getTools();
-            return whitelist == null || whitelist.isEmpty() || whitelist.contains("Task");
-        }
-        // SUBAGENT：白名单为空或包含 "Task"
-        List<String> tools = definition.tools();
-        return tools == null || tools.isEmpty() || tools.contains("Task");
+        List<String> whitelist = definition.tools();
+        return whitelist.isEmpty() || whitelist.contains("Task");
     }
 
     /**
@@ -193,64 +187,18 @@ public class Toolkit {
     }
 
     /**
-     * 根据配置过滤工具列表
+     * 根据配置过滤工具列表。
+     * MAIN 和 SUBAGENT 统一使用 definition.tools 白名单（MAIN 已合并 config.json）。
      */
     private List<ToolCallback> filterByConfig(List<ToolCallback> callbacks, AgentDefinition definition) {
-        // 主智能体：从 WorkspaceConfig 加载白名单
-        if (definition.kind() == AgentKind.MAIN) {
-            WorkspaceConfig config = loadWorkspaceConfig(definition.name());
-            List<String> whitelist = config.getTools();
-            if (whitelist != null && !whitelist.isEmpty()) {
-                Set<String> allowed = Set.copyOf(whitelist);
-                return callbacks.stream()
-                    .filter(tc -> allowed.contains(tc.getToolDefinition().name()))
-                    .toList();
-            }
-            return callbacks;
-        }
-
-        // 子智能体：白名单 + 黑名单
-        List<ToolCallback> result = callbacks;
-        if (definition.tools() != null && !definition.tools().isEmpty()) {
-            Set<String> allowed = Set.copyOf(definition.tools());
-            result = result.stream()
+        List<String> whitelist = definition.tools();
+        if (!whitelist.isEmpty()) {
+            Set<String> allowed = Set.copyOf(whitelist);
+            return callbacks.stream()
                 .filter(tc -> allowed.contains(tc.getToolDefinition().name()))
                 .toList();
         }
-        if (definition.disallowedTools() != null && !definition.disallowedTools().isEmpty()) {
-            Set<String> disallowed = Set.copyOf(definition.disallowedTools());
-            result = result.stream()
-                .filter(tc -> !disallowed.contains(tc.getToolDefinition().name()))
-                .toList();
-        }
-        return result;
+        return callbacks;
     }
 
-    public WorkspaceConfig loadWorkspaceConfig(String agentId) {
-        WorkspaceConfig rootConfig = loadConfigFromFile(AppConstants.MainAgent.configFile("default"));
-        WorkspaceConfig agentConfig = loadConfigFromFile(AppConstants.MainAgent.configFile(agentId));
-
-        WorkspaceConfig merged = new WorkspaceConfig();
-        merged.setTools(agentConfig.getTools() != null && !agentConfig.getTools().isEmpty()
-                ? agentConfig.getTools() : rootConfig.getTools());
-        merged.setMcpServers(agentConfig.getMcpServers() != null && !agentConfig.getMcpServers().isEmpty()
-                ? agentConfig.getMcpServers() : rootConfig.getMcpServers());
-        merged.setSkills(agentConfig.getSkills() != null && !agentConfig.getSkills().isEmpty()
-                ? agentConfig.getSkills() : rootConfig.getSkills());
-        merged.setSubagents(agentConfig.getSubagents() != null && !agentConfig.getSubagents().isEmpty()
-                ? agentConfig.getSubagents() : rootConfig.getSubagents());
-        return merged;
-    }
-
-    private WorkspaceConfig loadConfigFromFile(Path configFile) {
-        if (Files.exists(configFile)) {
-            try {
-                String content = Files.readString(configFile, StandardCharsets.UTF_8);
-                return JsonUtils.fromJson(content, WorkspaceConfig.class);
-            } catch (IOException e) {
-                log.error("读取配置文件失败: {}", configFile, e);
-            }
-        }
-        return new WorkspaceConfig();
-    }
 }

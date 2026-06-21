@@ -53,12 +53,13 @@ public class FileSystemSessionManager implements ISessionManager {
     private final MemoryManager memoryManager;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, Agent> agentCache = new ConcurrentHashMap<>();
+    private final Map<String, SessionRunner> runners = new ConcurrentHashMap<>();
 
     public FileSystemSessionManager(AgentDefinitionManager definitionManager,
-                                     ModelFactory modelFactory,
-                                     Toolkit toolkit,
-                                     @Lazy CompactChatMemory chatMemory,
-                                     MemoryManager memoryManager) {
+                                    ModelFactory modelFactory,
+                                    Toolkit toolkit,
+                                    @Lazy CompactChatMemory chatMemory,
+                                    MemoryManager memoryManager) {
         this.definitionManager = definitionManager;
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
@@ -112,16 +113,19 @@ public class FileSystemSessionManager implements ISessionManager {
 
     /**
      * 创建新的桌面端 Session（UUID 格式 ID）
+     * 实现 ISessionManager 接口，parentSessionId 在主会话场景下为 null。
      */
-    public Session create(String agentId, String source, SessionTypeEnum type, SessionRespTypeEnum respType, ModelTypeEnum model) {
-        String sessionId = agentId + "-" + type + "-" + source + "-" + Store.userId.get() + "-" + System.currentTimeMillis();
+    @Override
+    public Session create(String agentId, String parentSessionId, SessionTypeEnum type, SessionRespTypeEnum respType, ModelTypeEnum model) {
+        String sessionId = agentId + "-" + type + "-" + "desktopApp" + "-" + Store.userId.get() + "-" + System.currentTimeMillis();
 
         Session session = Session.builder()
                 .id(sessionId)
                 .agentId(agentId)
+                .parentId(parentSessionId)
                 .sessionType(type)
                 .respType(respType)
-                .source(source)
+                .source("desktopApp")
                 .model(model)
                 .build();
 
@@ -134,16 +138,16 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
-     * 激活会话：设置 EventBus、注入 Agent、启动消息循环、加载历史消息、恢复上下文
+     * 激活会话：注入 Agent、加载历史消息、通过 SessionRunner 启动消息循环
      * 仅在用户点击切换到某个 session 时调用
      */
     public void activate(String sessionId) {
         Session session = sessions.get(sessionId);
 
-        // 注入 Agent 并启动消息循环
+        // 注入 Agent
         Agent agent = this.getOrCreateAgent(session.getAgentId());
         session.setAgent(agent);
-        // 注入 MemoryManager（供 Session 处理 MemoryEvent 时调用）
+        // 注入 MemoryManager（供 SessionRunner 处理 MemoryEvent 时调用）
         session.setMemoryManager(memoryManager);
 
         // 从磁盘加载最新状态
@@ -168,31 +172,37 @@ public class FileSystemSessionManager implements ISessionManager {
             log.error("加载会话消息失败: {}", sessionId, e);
         }
 
-        session.start();
+        // 通过 SessionRunner 启动消息循环
+        SessionRunner runner = new SessionRunner(session);
+        runners.put(sessionId, runner);
+        runner.start();
     }
 
     /**
      * Gets by id.
      */
+    @Override
     public Session getById(String sessionId) {
         return this.sessions.get(sessionId);
     }
 
     /**
-     * Gets all user sessions.
+     * 停止会话的消息处理循环（通过 SessionRunner）
      */
-    public List<Session> getAllUserSessions() {
-        return this.sessions.values().stream()
-                .filter(s -> s.getParentId() == null)
-                .toList();
+    public void stopSession(String sessionId) {
+        SessionRunner runner = runners.get(sessionId);
+        if (runner != null) {
+            runner.stop();
+        }
     }
+
 
     /**
      * Gets desktop sessions.
      */
     public List<Session> getDesktopSessions() {
         return this.sessions.values().stream()
-                .filter(s -> s.getParentId() == null && "desktopApp".equals(s.getSource()))
+                .filter(s -> "desktopApp".equals(s.getSource()))
                 .sorted((a, b) -> Long.compare(
                         b.getUpdateAt() != null ? b.getUpdateAt() : b.getCreatedAt(),
                         a.getUpdateAt() != null ? a.getUpdateAt() : a.getCreatedAt()))
@@ -211,17 +221,15 @@ public class FileSystemSessionManager implements ISessionManager {
     /**
      * Append message.
      */
+    @Override
     public void store(String sessionId, List<Message> messages) {
         Session session = this.sessions.get(sessionId);
         try {
             Path messagesFile = AppConstants.Session.messagesFile(session.getAgentId(), sessionId);
-            if (!Files.exists(messagesFile)) {
-                Files.createFile(messagesFile);
-            }
             StringBuilder sb = new StringBuilder();
             for (Message message : messages) {
                 if (message instanceof AssistantMessage assistantMessage) {
-                    if (assistantMessage.getMetadata().get("finishReason").equals("TOOL_CALLS")) {
+                    if (assistantMessage.getMetadata().get("finishReason").toString().equals("TOOL_CALLS")) {
                         EventBus.publishOut(EventConverter.fromMessage(sessionId, assistantMessage));
                     }
                 }
@@ -236,15 +244,6 @@ public class FileSystemSessionManager implements ISessionManager {
         } catch (IOException e) {
             throw StorageException.writeError("messages-append", e);
         }
-    }
-
-    /**
-     * Gets child sessions.
-     */
-    public List<Session> getChildSessions(String parentSessionId) {
-        return this.sessions.values().stream()
-                .filter(s -> parentSessionId.equals(s.getParentId()))
-                .toList();
     }
 
     /**
@@ -268,14 +267,25 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
+     * 实现 ISessionManager 接口的 remove 方法，委托给 delete。
+     */
+    @Override
+    public void remove(String sessionId) {
+        delete(sessionId);
+    }
+
+    /**
      * Delete session.
      */
     public void delete(String sessionId) {
         try {
             Session session = this.getById(sessionId);
             if (session != null) {
-                // 停止消息处理循环
-                session.stop();
+                // 通过 SessionRunner 停止消息处理循环
+                SessionRunner runner = runners.remove(sessionId);
+                if (runner != null) {
+                    runner.stop();
+                }
 
                 this.sessions.remove(sessionId);
 
@@ -367,7 +377,7 @@ public class FileSystemSessionManager implements ISessionManager {
     private Agent getOrCreateAgent(String agentId) {
         return agentCache.computeIfAbsent(agentId, id -> {
             AgentDefinition definition = definitionManager.getOrLoadMainDefinition(id);
-            ChatModel chatModel = modelFactory.model(resolveModel(definition));
+            ChatModel chatModel = modelFactory.model(ModelTypeEnum.DEEPSEEK);
             Agent agent = Agent.builder()
                     .name(id)
                     .definition(definition)
@@ -381,20 +391,6 @@ public class FileSystemSessionManager implements ISessionManager {
             log.info("创建主智能体: agentId={}", id);
             return agent;
         });
-    }
-
-    /**
-     * 解析主智能体使用的模型
-     */
-    private ModelTypeEnum resolveModel(AgentDefinition definition) {
-        if (definition.model() != null && !definition.model().isEmpty()) {
-            try {
-                return ModelTypeEnum.valueOf(definition.model().toUpperCase());
-            } catch (IllegalArgumentException e) {
-                log.warn("未知的模型类型: {}, 使用默认模型", definition.model());
-            }
-        }
-        return ModelTypeEnum.DEEPSEEK;
     }
 
     /**
@@ -443,17 +439,11 @@ public class FileSystemSessionManager implements ISessionManager {
         target.setContextCapacity(source.getContextCapacity());
         target.setCompactionThreshold(source.getCompactionThreshold());
         target.setCurrentContextLength(source.getCurrentContextLength());
-        target.setActivatedToolGroups(source.getActivatedToolGroups());
-        target.setPermissionMode(source.getPermissionMode());
-        target.setTasks(source.getTasks());
-        target.setPlanModeActive(source.isPlanModeActive());
-        target.setPlanFilePath(source.getPlanFilePath());
         target.setSavedAt(source.getSavedAt());
         target.setShutdownInterrupted(source.isShutdownInterrupted());
         target.setSessionType(source.getSessionType());
         target.setRespType(source.getRespType());
         target.setSource(source.getSource());
-        target.setParentId(source.getParentId());
     }
 
     private Path getSessionDir(Session session) {

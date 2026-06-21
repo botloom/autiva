@@ -19,7 +19,6 @@ public class AppConstants {
         public static final Path WORKSPACE_DIR = APP_DIR.resolve("workspace");
         public static final Path AGENTS_DIR = APP_DIR.resolve("agents");
         public static final Path SKILLS_DIR = APP_DIR.resolve("skills");
-        public static final Path PET_DIR = APP_DIR.resolve("pets");
         public static final Path SETTINGS_FILE = APP_DIR.resolve("settings.properties");
 
     }

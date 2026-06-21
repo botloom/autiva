@@ -1,5 +1,6 @@
 package cn.bitloom.bridge.wechat;
 
+import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.session.Session;
@@ -39,7 +40,7 @@ public class WechatILinkMessageHandler {
         } else {
             session = bindSession(userId);
         }
-        session.publish(
+        EventBus.publishIn(
                 MessageEvent.userMessage(session.getId(), text.trim())
         );
     }

@@ -127,7 +127,6 @@ public class Agent {
         private List<ToolCallback> tools = new ArrayList<>();
         private List<AgentHook> hooks = new ArrayList<>();
         private boolean enableLogging = true;
-        private boolean enableToolCallMessage = true;
         private boolean enableMemory = false;
         private ChatMemory chatMemory;
         private boolean enableCompact = false;
@@ -178,11 +177,6 @@ public class Agent {
             return this;
         }
 
-        public Builder tollCallMessage(boolean enableToolCallMessage) {
-            this.enableToolCallMessage = enableToolCallMessage;
-            return this;
-        }
-
         public Builder compact(boolean enableCompact) {
             this.enableCompact = enableCompact;
             return this;
@@ -199,14 +193,12 @@ public class Agent {
             if (this.enableLogging) {
                 builder.defaultAdvisors(LoggingAdvisor.builder().build());
             }
-            if (this.enableToolCallMessage) {
-                builder.defaultAdvisors(
-                        ToolCallingAdvisor.builder()
-                                .disableInternalConversationHistory()
-                                .advisorOrder(BaseAdvisor.HIGHEST_PRECEDENCE + 300)
-                                .build()
-                );
-            }
+            builder.defaultAdvisors(
+                    ToolCallingAdvisor.builder()
+                            .disableInternalConversationHistory()
+                            .advisorOrder(BaseAdvisor.HIGHEST_PRECEDENCE + 300)
+                            .build()
+            );
             if (this.enableMemory) {
                 builder.defaultAdvisors(
                         MessageChatMemoryAdvisor

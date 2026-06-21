@@ -27,12 +27,12 @@ public class GuiQuestionHandler implements QuestionHandler {
     }
 
     @Override
-    public Map<String, String> handle(List<Question> questions) {
+    public Map<String, String> handle(List<Question> questions, String sessionId) {
         try {
             String questionsJson = JsonUtils.toJson(questions);
             CompletableFuture<String> answerFuture = new CompletableFuture<>();
 
-            this.toolUIBridge.showQuestions(questionsJson, answerFuture);
+            this.toolUIBridge.showQuestions(questionsJson, answerFuture, sessionId);
 
             String answersJson = answerFuture.get(this.timeoutMinutes, TimeUnit.MINUTES);
 

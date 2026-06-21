@@ -16,9 +16,6 @@
 - `isStreaming`: 流式生成状态（BooleanProperty，默认值：false）— 控制发送/暂停按钮的显示切换
 - `isPaused`: 暂停状态（BooleanProperty，默认值：false）— 与 isStreaming 配套控制 UI 状态
 - `currentRoute`: 当前路由路径（StringProperty）— Router 导航时更新，其他组件可监听响应路由变化
-- `petVisible`: 萌宠窗口可见状态（BooleanProperty，默认值：false）— 关闭主窗口时设为true，恢复时设为false
-- `currentPetType`: 当前植物类型（ObjectProperty\<PetType\>，默认值：SUNFLOWER）— 消息追加时由 PetStateManager 更新
-- `growthProgress`: 全局生长进度（DoubleProperty，默认值：0.0）— 消息追加时由 PetStateManager 更新
 - `refreshHistory`: 侧边栏历史列表刷新信号（BooleanProperty，默认值：false）— 翻转此值触发 SideBarController 刷新历史列表，用于聊天过程中更新会话标题
 
 **使用位置：**

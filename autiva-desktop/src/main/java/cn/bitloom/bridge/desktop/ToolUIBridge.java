@@ -1,5 +1,7 @@
 package cn.bitloom.bridge.desktop;
 
+import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.node.QuestionCard;
 import cn.bitloom.node.TaskCard;
 import cn.bitloom.node.TodoCard;
@@ -8,7 +10,10 @@ import javafx.scene.Node;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.Disposable;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -21,10 +26,38 @@ public class ToolUIBridge {
 
     private final Map<String, CompletableFuture<String>> pendingQuestions = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> activeTaskCards = new ConcurrentHashMap<>();
+    private final Map<String, TaskCard> sessionTaskCards = new ConcurrentHashMap<>();
+    private Disposable outBoxSubscription;
+
     @Setter
     private Consumer<Node> onNodeAdded;
 
-    public void showQuestions(String questionsJson, CompletableFuture<String> answerFuture) {
+    @PostConstruct
+    public void init() {
+        subscribeOutBox();
+    }
+
+    private void subscribeOutBox() {
+        this.outBoxSubscription = EventBus.outBoxFlux()
+                .doOnNext(event -> {
+                    if (event instanceof MessageEvent messageEvent) {
+                        TaskCard card = sessionTaskCards.get(messageEvent.getSessionId());
+                        if (card != null) {
+                            Platform.runLater(() -> card.processEvent(messageEvent));
+                        }
+                    }
+                })
+                .subscribe();
+    }
+
+    @PreDestroy
+    public void destroy() {
+        if (outBoxSubscription != null && !outBoxSubscription.isDisposed()) {
+            outBoxSubscription.dispose();
+        }
+    }
+
+    public void showQuestions(String questionsJson, CompletableFuture<String> answerFuture, String sessionId) {
         String questionId = UUID.randomUUID().toString();
         this.pendingQuestions.put(questionId, answerFuture);
         answerFuture.whenComplete((result, error) -> this.pendingQuestions.remove(questionId));
@@ -32,7 +65,10 @@ public class ToolUIBridge {
         Platform.runLater(() -> {
             try {
                 QuestionCard card = new QuestionCard(questionsJson, questionId, this::onQuestionAnswered);
-                if (this.onNodeAdded != null) {
+                TaskCard taskCard = sessionId != null ? this.sessionTaskCards.get(sessionId) : null;
+                if (taskCard != null) {
+                    taskCard.addQuestionCard(card);
+                } else if (this.onNodeAdded != null) {
                     this.onNodeAdded.accept(card);
                 }
             } catch (Exception e) {
@@ -51,11 +87,14 @@ public class ToolUIBridge {
         }
     }
 
-    public void showTodos(String todosJson) {
+    public void showTodos(String todosJson, String sessionId) {
         Platform.runLater(() -> {
             try {
                 TodoCard card = new TodoCard(todosJson);
-                if (this.onNodeAdded != null) {
+                TaskCard taskCard = sessionId != null ? this.sessionTaskCards.get(sessionId) : null;
+                if (taskCard != null) {
+                    taskCard.addTodoCard(card);
+                } else if (this.onNodeAdded != null) {
                     this.onNodeAdded.accept(card);
                 }
             } catch (Exception e) {
@@ -64,9 +103,10 @@ public class ToolUIBridge {
         });
     }
 
-    public TaskCard createTaskCard(String taskId, String taskJson) {
+    public void createTaskCard(String taskId, String taskJson) {
         TaskCard card = new TaskCard(taskJson);
         this.activeTaskCards.put(taskId, card);
+        this.sessionTaskCards.put(taskId, card);
         Platform.runLater(() -> {
             try {
                 if (this.onNodeAdded != null) {
@@ -76,26 +116,11 @@ public class ToolUIBridge {
                 log.error("Error showing task card", e);
             }
         });
-        return card;
-    }
-
-    public TaskCard getTaskCard(String taskId) {
-        return this.activeTaskCards.get(taskId);
-    }
-
-    public void removeTaskCard(String taskId) {
-        this.activeTaskCards.remove(taskId);
-    }
-
-    public void appendTaskOutput(String taskId, String text) {
-        TaskCard card = this.activeTaskCards.get(taskId);
-        if (card != null) {
-            card.appendOutput(text);
-        }
     }
 
     public void completeTaskCard(String taskId, String result) {
         TaskCard card = this.activeTaskCards.remove(taskId);
+        this.sessionTaskCards.remove(taskId);
         if (card != null) {
             card.complete(result);
         }
@@ -103,8 +128,9 @@ public class ToolUIBridge {
 
     public void failTaskCard(String taskId, String error) {
         TaskCard card = this.activeTaskCards.remove(taskId);
+        this.sessionTaskCards.remove(taskId);
         if (card != null) {
-            card.appendOutput("\n错误: " + error);
+            card.complete("\n错误: " + error);
             card.setStatus("failed");
             card.dispose();
         }

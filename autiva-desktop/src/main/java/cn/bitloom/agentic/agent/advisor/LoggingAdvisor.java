@@ -3,6 +3,7 @@ package cn.bitloom.agentic.agent.advisor;
 import cn.bitloom.util.JsonUtils;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
@@ -11,7 +12,6 @@ import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.lang.NonNull;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;

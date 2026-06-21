@@ -47,10 +47,11 @@ Spring @Component，统一管理工具注册和构建。
 - `agentDefinitionManager`: AgentDefinitionManager
 - `taskRepository`: TaskRepository（@Component 单例，解决状态共享）
 - `processManager`: ProcessManager（@Component 单例，解决状态共享）
+- `diffService`: DiffService（编码智能体 Diff 生成服务）
 
 **核心方法：**
 - `buildToolCallbacks(AgentDefinition)`: 根据 AgentDefinition 构建工具回调列表，按 kind 分流
-- `buildAllTools()`: 构建工具集（文件、搜索、命令、交互、定时、Task、记忆、技能、管理、MCP），支持 config.json 白名单过滤
+- `buildAllTools()`: 构建工具集（文件、搜索、命令、交互、定时、Task、记忆、技能、管理、MCP），支持 config.json 白名单过滤。构建 WriteTool/EditTool 时传入 GuiDiffReviewHandler 和 DiffService（编码智能体 Diff 审核支持）
 
 ### ToolResult
 所有工具统一返回 `ToolResult` 实体类，`toToolCallback()` 内部自动调用 `toJson()` 供 Spring AI 框架消费。
@@ -175,8 +176,8 @@ tool/
 文件系统操作工具，每个工具独立继承 AbstractTool。
 
 - **ReadTool**: 文件读取工具（继承 AbstractTool\<ReadTool.Input\>）。支持 offset/limit 分页，行号格式输出。成功时 data 含 file/start_line/end_line/total_lines，rawOutput 保留原始格式化文本
-- **WriteTool**: 文件写入工具（继承 AbstractTool\<WriteTool.Input\>）。写入/覆盖文件，自动创建父目录。成功时 data 含 file/bytes/action
-- **EditTool**: 文件编辑工具（继承 AbstractTool\<EditTool.Input\>）。精确字符串替换，支持 replace_all。成功时 data 含 file/occurrences/replace_all，rawOutput 保留 cat-n 片段。使用 ToolUtils 静态方法
+- **WriteTool**: 文件写入工具（继承 AbstractTool\<WriteTool.Input\>）。写入/覆盖文件，自动创建父目录。成功时 data 含 file/bytes/action。**Diff 审核机制**：Builder 接受 DiffReviewHandler 和 DiffService，execute() 中检查 ToolContext 的 reviewDiff 标志，启用时生成 FileDiff 并通过 DiffReviewHandler 阻塞等待用户审核（GuiDiffReviewHandler 通过 ToolUIBridge.showDiffReview 展示 DiffReviewCard），批准后才写入真实文件，拒绝则返回错误
+- **EditTool**: 文件编辑工具（继承 AbstractTool\<EditTool.Input\>）。精确字符串替换，支持 replace_all。成功时 data 含 file/occurrences/replace_all，rawOutput 保留 cat-n 片段。使用 ToolUtils 静态方法。**Diff 审核机制**：同 WriteTool，Builder 接受 DiffReviewHandler 和 DiffService，reviewDiff 标志启用时阻塞审核
 
 ### search 包 (`cn.bitloom.agentic.tool.search`)
 搜索类工具，统一继承 AbstractTool。
@@ -207,19 +208,19 @@ tool/
 ### task 包 (`cn.bitloom.agentic.tool.task`)
 子代理任务工具，统一继承 AbstractTool。
 
-- **TaskTool**: 启动子代理执行任务（继承 AbstractTool\<TaskTool.Input\>）。参考 Claude Code 子智能体设计：独立的 LLM 调用，不创建 Session，执行完即丢弃，只返回最终文本。使用 Agent.Builder 构建子智能体并调用 `.disableDefaultAdvisors()`（纯净模式，不注册任何 Advisor）。通过 `agent.runStream(ctx, msg)` 复用现有方法，传入无 Session 的 RuntimeContext。Input record 包含 description/prompt/subagent_type/model/resume/run_in_background。内部 public record TaskCall 包含 description/prompt/subagentName/resume/runInBackground。Builder 接受 Toolkit/ModelFactory/SkillManager/TaskRepository/ToolUIBridge/AgentDefinitionManager。name="Task"
-  - `createSubagent(name)`: 创建子智能体 Agent 实例（从 definitionManager 获取定义 → 构建 ChatModel → Agent.Builder 创建，调用 `.disableDefaultAdvisors()`）
-  - `executeSubagent(agent, ctx, taskCall, taskId)`: 子智能体执行逻辑，构造 `RuntimeContext(taskId)` 调用 `agent.runStream(ctx, userMessage)`，通过 onChunk 回调推送 TaskCard
-  - `resolveModel(definition, context)`: 解析子智能体使用的模型
-  - `buildSubagentSystemPrompt(definition)`: 构建子智能体系统提示词，注入技能内容
+- **TaskTool**: 启动子代理执行任务（继承 AbstractTool\<TaskTool.Input\>）。子 Session 机制：每个子智能体任务创建一个子 Session（InMemorySessionManager 管理），子 Session 拥有 ChatMemory 支持对话历史，resume 时通过子 Session 恢复上下文。使用 Agent.Builder 构建子智能体并注册 InMemoryChatMemory（`.memory(inMemorySessionManager.getChatMemory())`）。Input record 包含 description/prompt/subagent_type/model/resume/run_in_background。内部 public record TaskCall 包含 description/prompt/subagentName/resume/runInBackground。Builder 接受 Toolkit/ModelFactory/TaskRepository/ToolUIBridge/AgentDefinitionManager/InMemorySessionManager。name="Task"。**编码智能体透传**：构造子智能体 RuntimeContext 后，从父 ToolContext 传递 reviewDiff 和 projectPath 标志到子智能体 params，使 code 子智能体的 WriteTool/EditTool 能启用 Diff 审核
+  - `createSubagent(name)`: 创建子智能体 Agent 实例（从 definitionManager 获取定义 → 构建 ChatModel → Agent.Builder 创建，注册 InMemoryChatMemory）
+  - `executeSubagent(agent, ctx, taskCall, taskId)`: 子智能体执行逻辑，构造 `RuntimeContext(subSession)` 调用 `agent.runStream(ctx, userMessage)`，通过 onChunk 回调推送 TaskCard
+  - `resolveParentSessionId(context)`: 从 ToolContext 解析父会话ID
 - **TaskOutputTool**: 获取子代理任务输出（继承 AbstractTool\<TaskOutputTool.Input\>）。支持阻塞/非阻塞模式，可配置超时。Input record 包含 task_id/block/timeout。name="TaskOutput"
 
-**子智能体调用机制（参考 Claude Code）：**
-1. TaskTool.execute() 创建子智能体 Agent（`.disableDefaultAdvisors()` 纯净模式）
-2. 用 UUID taskId 标识任务（不创建 Session）
-3. 构造无 Session 的 `RuntimeContext(taskId)`
-4. 调用 `agent.runStream(ctx, userMessage)`，通过 onChunk 回调推送 TaskCard
-5. 完成后返回最终文本给主对话，中间过程不持久化
+**子智能体调用机制（子 Session 模式）：**
+1. TaskTool.execute() 创建子智能体 Agent（带 InMemoryChatMemory，支持对话历史）
+2. 通过 InMemorySessionManager 创建子 Session（sessionType=SUB，parentId=父会话ID）
+3. resume 时从 InMemorySessionManager 获取已有子 Session，ChatMemory 自动恢复历史对话
+4. 构造包含子 Session 的 `RuntimeContext(subSession)`
+5. 调用 `agent.runStream(ctx, userMessage)`，通过 onChunk 回调推送 TaskCard
+6. 完成后返回最终文本给主对话，子 Session 保留在内存中供后续 resume
 
 **TaskCard 流式输出机制：**
 子智能体执行时通过 ToolUIBridge 实时推送输出到 TaskCard：

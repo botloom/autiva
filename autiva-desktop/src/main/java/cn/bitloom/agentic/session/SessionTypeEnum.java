@@ -3,5 +3,6 @@ package cn.bitloom.agentic.session;
 public enum SessionTypeEnum {
     DM,
     GROUP,
-    SYSTEM
+    SYSTEM,
+    SUB
 }

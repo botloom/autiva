@@ -4,9 +4,6 @@ import cn.bitloom.bootstrap.AppBootstrap;
 import cn.bitloom.bootstrap.SplashScreen;
 import cn.bitloom.constant.AppConstants;
 import cn.bitloom.node.SvgImageView;
-import cn.bitloom.pet.DesktopPetStage;
-import cn.bitloom.pet.PetStateManager;
-import cn.bitloom.store.Store;
 import cn.bitloom.util.ExecutorManager;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -36,10 +33,9 @@ import java.awt.event.MouseEvent;
 public class AutivaApplication extends Application {
 
     private ConfigurableApplicationContext springContext;
-    private DesktopPetStage desktopPet;
     private TrayIcon trayIcon;
-    private Popup trayPopup;    // 隐藏的 UTILITY owner，让萌宠窗口不出现在任务栏
-    private Stage hiddenOwner;
+    private Popup trayPopup;
+    private Stage hiddenOwner;  // 隐藏的 UTILITY owner，用于托盘菜单
     // 保存主窗口关闭前的位置和大小
     private double savedX, savedY, savedWidth, savedHeight;
 
@@ -89,13 +85,10 @@ public class AutivaApplication extends Application {
                     stage.setMinWidth(600);
                     stage.setMinHeight(400);
 
-                    // 初始化桌面萌宠
-                    initDesktopPet(stage);
-
                     // 初始化系统托盘
                     setupTrayIcon(stage, iconView.getImage());
 
-                    // 关闭主窗口时显示萌宠而非退出
+                    // 关闭主窗口时隐藏而非退出
                     stage.setOnCloseRequest(e -> {
                         e.consume();
                         // 保存主窗口位置和大小
@@ -105,16 +98,9 @@ public class AutivaApplication extends Application {
                         savedHeight = stage.getHeight();
                         // 隐藏主窗口（从任务栏消失）
                         stage.hide();
-                        if (desktopPet != null) {
-                            desktopPet.show();
-                            Store.petVisible.set(true);
-                        }
                     });
 
                     stage.show();
-
-                    // 同步萌宠状态到 Store
-                    syncPetStateToStore();
                 } catch (Exception e) {
                     log.error("主界面加载失败", e);
                 }
@@ -126,9 +112,6 @@ public class AutivaApplication extends Application {
 
     @Override
     public void stop() {
-        if (desktopPet != null) {
-            desktopPet.stop();
-        }
         removeTrayIcon();
         ExecutorManager.close();
         springContext.close();
@@ -144,42 +127,6 @@ public class AutivaApplication extends Application {
         mainStage.setHeight(savedHeight > 0 ? savedHeight : AppConstants.Stage.HEIGHT);
         mainStage.show();
         mainStage.toFront();
-        if (desktopPet != null) {
-            desktopPet.hide();
-        }
-        Store.petVisible.set(false);
-    }
-
-    private void initDesktopPet(Stage mainStage) {
-        try {
-            // 创建隐藏的 UTILITY Stage 作为萌宠的 owner
-            // UTILITY 窗口不会出现在任务栏，且 owner 可见时 owned 窗口也不出现在任务栏
-            hiddenOwner = new Stage();
-            hiddenOwner.initStyle(StageStyle.UTILITY);
-            hiddenOwner.setWidth(1);
-            hiddenOwner.setHeight(1);
-            hiddenOwner.setOpacity(0);
-            hiddenOwner.show();
-            hiddenOwner.toBack();
-
-            PetStateManager petStateManager = springContext.getBean(PetStateManager.class);
-            desktopPet = new DesktopPetStage(petStateManager);
-            desktopPet.create(hiddenOwner);
-
-            // 单击萌宠恢复主窗口
-            desktopPet.setOnRestore(() -> restoreMainWindow(mainStage));
-
-            // 右键退出
-            desktopPet.setOnExit(() -> {
-                if (desktopPet != null) {
-                    desktopPet.stop();
-                }
-                removeTrayIcon();
-                Platform.exit();
-            });
-        } catch (Exception e) {
-            log.warn("桌面萌宠初始化失败", e);
-        }
     }
 
     private void setupTrayIcon(Stage mainStage, Image appIcon) {
@@ -187,6 +134,15 @@ public class AutivaApplication extends Application {
             log.warn("系统不支持托盘图标");
             return;
         }
+
+        // 创建隐藏的 UTILITY Stage 作为托盘菜单的 owner
+        hiddenOwner = new Stage();
+        hiddenOwner.initStyle(StageStyle.UTILITY);
+        hiddenOwner.setWidth(1);
+        hiddenOwner.setHeight(1);
+        hiddenOwner.setOpacity(0);
+        hiddenOwner.show();
+        hiddenOwner.toBack();
 
         SystemTray tray = SystemTray.getSystemTray();
 
@@ -264,9 +220,6 @@ public class AutivaApplication extends Application {
         Label exitLabel = createMenuLabel("退出 Autiva");
         exitLabel.setOnMouseClicked(e -> {
             trayPopup.hide();
-            if (desktopPet != null) {
-                desktopPet.stop();
-            }
             removeTrayIcon();
             Platform.exit();
         });
@@ -329,17 +282,6 @@ public class AutivaApplication extends Application {
                 // ignore
             }
             trayIcon = null;
-        }
-    }
-
-    private void syncPetStateToStore() {
-        try {
-            PetStateManager petStateManager = springContext.getBean(PetStateManager.class);
-            var state = petStateManager.getState();
-            Store.currentPetType.set(state.getPetType());
-            Store.growthProgress.set(state.getGrowthProgress());
-        } catch (Exception e) {
-            log.warn("同步萌宠状态失败", e);
         }
     }
 }

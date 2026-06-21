@@ -1,5 +1,6 @@
 package cn.bitloom.cron;
 
+import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.session.Session;
@@ -186,7 +187,7 @@ public class CronManager {
 
     private void triggerTaskInternal(CronTaskInfo taskInfo) {
         Session session = fileSystemSessionManager.getById(taskInfo.sessionId);
-        session.publish(
+        EventBus.publishIn(
                 MessageEvent.userMessage(session.getId(), taskInfo.getMessage())
         );
         log.info("[CronManager] 任务消息已发送到EventBus: name={}, sessionId={}", taskInfo.getName(), taskInfo.getSessionId());

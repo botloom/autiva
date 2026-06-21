@@ -1,5 +1,6 @@
 package cn.bitloom.bridge.dingtalk;
 
+import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.session.Session;
@@ -31,7 +32,7 @@ public class DingTalkMessageConsumer implements OpenDingTalkCallbackListener<Cha
         } else {
             session = this.bindSession(message);
         }
-        session.publish(
+        EventBus.publishIn(
                 MessageEvent.userMessage(session.getId(), message.getText().getContent().trim())
         );
         return null;

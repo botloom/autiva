@@ -27,6 +27,7 @@
 
 **依赖注入：**
 - `SessionManager`: 会话管理器
+- `ProjectRegistry`: 项目注册表管理器（编码智能体场景）
 
 **属性：**
 - `messages`: 消息卡片列表（ObservableList<MessageCard>），ViewModel 直接创建卡片组件，Controller 监听此列表变化将卡片添加到 UI
@@ -34,13 +35,15 @@
 - `isPaused`: 暂停状态（BooleanProperty），Controller 监听此属性切换暂停/发送按钮
 - `currentSessionId`: 当前会话ID（StringProperty），SideBarController 监听此属性刷新历史列表
 - `agentProperty`: 当前选中的智能体（ObjectProperty<String>），默认 "default"
+- `currentProject`: 当前编码项目（ProjectInfo），仅 coder 智能体场景使用，切换非 coder 智能体时清空
 
 **核心方法：**
 - `init()`: 初始化，仅同步 userId 到 Store，不加载/创建任何 session
 - `subscribeOutBox()`: 订阅 Session outBox 消息流（切换 session 时重新订阅，使用 Disposable 管理）
-- `createNewSession()`: 切换到初始态（session 设为 null，清空消息列表，重置状态），不创建真正的 session
-- `switchToSession(String sessionId)`: 切换到指定 session（调用 activateSession 激活，订阅 OutBox，加载历史消息到 UI）
-- `sendMessage(String)`: 发送消息给智能体系统（接收纯文本，内部构建 MessageEvent），懒创建 session（首次发送时才创建），暂停后恢复时重新激活会话，发送后翻转 Store.refreshHistory 触发侧边栏标题刷新
+- `createNewSession()`: 切换到初始态（session 设为 null，清空消息列表，重置状态，清空 currentProject），不创建真正的 session
+- `switchToSession(String sessionId)`: 切换到指定 session（调用 activateSession 激活，订阅 OutBox，加载历史消息到 UI，从 session.projectPath 恢复 currentProject）
+- `switchAgent(String agentId)`: 切换智能体（设置 Store.currentAgent，非 coder 智能体时清空 currentProject，调用 createNewSession）
+- `sendMessage(String)`: 发送消息给智能体系统（接收纯文本，内部构建 MessageEvent），懒创建 session（首次发送时才创建），coder 智能体且有 currentProject 时创建带 projectPath 和 reviewDiff=true 的 Session，暂停后恢复时重新激活会话，发送后翻转 Store.refreshHistory 触发侧边栏标题刷新
 - `processMessage(MessageEvent)`: 处理消息流，根据 MessageEvent.Type 分发（USER/ASSISTANT/TOOL），直接访问结构化字段
 - `processAssistantEvent(MessageEvent)`: 处理助手消息（根据 MessageEvent 的 finishReason 判断流式/完成/工具调用，直接调用 AssistantMessageCard.appendContent() 和 complete()）
 - `processToolEvent(MessageEvent)`: 处理工具消息（直接创建 ToolMessageCard）
@@ -53,6 +56,13 @@
 - `pauseGeneration()`: 暂停当前流式生成，调用 session.stop() 通知后端停止（同时停止所有子智能体会话），保留部分响应，设置 SessionState 为 PAUSED
 - `hasHistoricalMessages()`: 是否有历史消息
 - `clear()`: 清除所有状态，清空主 session 消息记录，删除所有子 session（从内存和磁盘）
+
+**编码项目管理方法：**
+- `getCurrentProject()`: 获取当前编码项目（ProjectInfo）
+- `setCurrentProject(ProjectInfo)`: 设置当前编码项目
+- `listProjects()`: 列出所有注册项目（委托 ProjectRegistry）
+- `createNewProject(String name)`: 新建项目并设为当前（委托 ProjectRegistry.createProject）
+- `registerLocalProject(String path, String name)`: 注册本地文件夹并设为当前（委托 ProjectRegistry.registerLocal）
 
 **消息流处理设计（简化版）：**
 - `currentAssistantCard`: 追踪当前流式消息的 AssistantMessageCard 对象

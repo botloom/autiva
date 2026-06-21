@@ -1,22 +1,25 @@
 package cn.bitloom.agentic.tool.task;
 
-import cn.bitloom.agentic.agent.Agent;
-import cn.bitloom.agentic.agent.AgentDefinition;
-import cn.bitloom.agentic.agent.AgentDefinitionManager;
-import cn.bitloom.agentic.agent.AgentKind;
-import cn.bitloom.agentic.agent.RuntimeContext;
+import cn.bitloom.agentic.agent.*;
+import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.event.EventConverter;
+import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
-import cn.bitloom.agentic.skill.SkillManager;
+import cn.bitloom.agentic.session.InMemorySessionManager;
+import cn.bitloom.agentic.session.Session;
+import cn.bitloom.agentic.session.SessionRespTypeEnum;
+import cn.bitloom.agentic.session.SessionTypeEnum;
 import cn.bitloom.agentic.task.repository.TaskRepository;
 import cn.bitloom.agentic.tool.AbstractTool;
-import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.agentic.tool.ToolResult;
-import cn.bitloom.exception.AgentException;
+import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
+import cn.bitloom.exception.AgentException;
 import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ToolContext;
@@ -34,10 +37,11 @@ import java.util.stream.Collectors;
  * Task工具启动专门的代理（子进程），它们自主处理复杂任务。
  * 每种代理类型都有特定的能力和可用的工具。
  * <p>
- * 参考 Claude Code 子智能体设计：
- * - 子智能体是独立的 LLM 调用，不创建 Session
- * - 执行完即丢弃，只返回最终文本给主对话
- * - 不持久化中间过程
+ * 子 Session 机制：
+ * - 每个子智能体任务创建一个子 Session（InMemorySessionManager 管理）
+ * - 子 Session 拥有 ChatMemory，支持多轮对话上下文
+ * - resume 时通过子 Session 恢复历史对话
+ * - 子 Session 纯内存存储，不持久化到磁盘
  */
 @Slf4j
 public class TaskTool extends AbstractTool<TaskTool.Input> {
@@ -86,34 +90,34 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
     /**
      * 子智能体任务调用参数
      */
-    public record TaskCall(String description, String prompt, String subagentName,
-                           String resume, Boolean runInBackground) {
+    public record TaskCall(String description, String prompt, String subagentName, String resume, Boolean runInBackground) {
     }
 
     private final Toolkit toolkit;
     private final ModelFactory modelFactory;
-    private final SkillManager skillManager;
     private final TaskRepository taskRepository;
     private final ToolUIBridge toolUIBridge;
     private final AgentDefinitionManager definitionManager;
+    private final InMemorySessionManager inMemorySessionManager;
 
     private TaskTool(String description, Toolkit toolkit, ModelFactory modelFactory,
-                     SkillManager skillManager, TaskRepository taskRepository,
-                     ToolUIBridge toolUIBridge, AgentDefinitionManager definitionManager) {
+                     TaskRepository taskRepository,
+                     ToolUIBridge toolUIBridge, AgentDefinitionManager definitionManager,
+                     InMemorySessionManager inMemorySessionManager) {
         super("Task", description, Input.class);
         this.toolkit = toolkit;
         this.modelFactory = modelFactory;
-        this.skillManager = skillManager;
         this.taskRepository = taskRepository;
         this.toolUIBridge = toolUIBridge;
         this.definitionManager = definitionManager;
+        this.inMemorySessionManager = inMemorySessionManager;
     }
 
     @Override
-    public ToolResult execute(Input input, ToolContext context) {
+    public @NonNull ToolResult execute(Input input, ToolContext context) {
         String subagentName = input.subagent_type();
 
-        // 创建子智能体 Agent（纯净模式，无 Advisor）
+        // 创建子智能体 Agent（带 ChatMemory）
         Agent agent = createSubagent(subagentName);
         if (agent.getDefinition().kind() != AgentKind.SUBAGENT) {
             throw AgentException.subagentNotFound(subagentName);
@@ -127,13 +131,24 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                 input.run_in_background()
         );
 
-        // 用 taskId 标识任务（不创建 Session）
-        String taskId;
+        // 创建或恢复子 Session
+        Session subSession;
+        String parentSessionId = resolveParentSessionId(context);
+
         if (Objects.nonNull(taskCall.resume())) {
-            taskId = taskCall.resume();
+            // resume：从 InMemorySessionManager 获取已有子 Session
+            subSession = inMemorySessionManager.getById(taskCall.resume());
+            if (subSession == null) {
+                throw AgentException.subagentNotFound("无法恢复代理ID: " + taskCall.resume());
+            }
         } else {
-            taskId = subagentName + "-" + System.currentTimeMillis();
+            // 新建子 Session
+            subSession = inMemorySessionManager.create(
+                    subagentName, parentSessionId, SessionTypeEnum.SUB,
+                    SessionRespTypeEnum.STREAM, ModelTypeEnum.DEEPSEEK);
         }
+
+        String taskId = subSession.getId();
 
         // TaskCard UI
         if (this.toolUIBridge != null) {
@@ -144,8 +159,9 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             this.toolUIBridge.createTaskCard(taskId, JsonUtils.toJson(taskJson));
         }
 
-        // 构造子智能体的 RuntimeContext（无 Session）
-        RuntimeContext ctx = new RuntimeContext(taskId);
+        // 构造子智能体的 RuntimeContext（包含子 Session）
+        RuntimeContext ctx = new RuntimeContext(subSession);
+        ctx.param("sessionId", taskId);
 
         // 后台任务
         if (Boolean.TRUE.equals(taskCall.runInBackground())) {
@@ -185,7 +201,20 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
     }
 
     /**
-     * 创建子智能体 Agent 实例（纯净模式，不注册任何 Advisor）
+     * 从 ToolContext 解析父会话ID
+     */
+    private String resolveParentSessionId(ToolContext context) {
+        if (context != null) {
+            Object sessionId = context.getContext().get("sessionId");
+            if (sessionId instanceof String id) {
+                return id;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 创建子智能体 Agent 实例（带 ChatMemory，支持对话历史）
      */
     private Agent createSubagent(String name) {
         AgentDefinition definition = definitionManager.getDefinition(name);
@@ -193,16 +222,16 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             throw AgentException.subagentNotFound(name);
         }
 
-        ChatModel chatModel = modelFactory.model(resolveModel(definition, null));
+        ChatModel chatModel = modelFactory.model(ModelTypeEnum.DEEPSEEK);
 
         return Agent.builder()
                 .name(name)
                 .definition(definition)
                 .model(chatModel)
-                .systemPrompt(buildSubagentSystemPrompt(definition))
+                .systemPrompt(definition.content())
                 .tools(toolkit.buildToolCallbacks(definition))
                 .hooks(List.of())
-                .tollCallMessage(false)
+                .memory(inMemorySessionManager.getChatMemory())
                 .build();
     }
 
@@ -214,59 +243,17 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         StringBuilder fullResult = new StringBuilder();
 
         agent.runStream(ctx, userMessage)
-                .doOnNext(msg -> {
-                    String text = msg.getText();
-                    if (text != null && !text.isEmpty()) {
-                        fullResult.append(text);
-                        if (this.toolUIBridge != null) {
-                            this.toolUIBridge.appendTaskOutput(taskId, text);
-                        }
+                .map(msg -> EventConverter.fromMessage(taskId, msg))
+                .doOnNext(event -> {
+                    EventBus.publishOut(event);
+                    if (event instanceof MessageEvent me && me.isAssistantMessage() && me.getText() != null) {
+                        fullResult.append(me.getText());
                     }
                 })
                 .doOnError(e -> log.error("子智能体执行失败: taskId={}", taskId, e))
                 .blockLast();
 
         return "agent_id: " + taskId + "\n\n" + fullResult;
-    }
-
-    /**
-     * 解析子智能体使用的模型
-     */
-    private ModelTypeEnum resolveModel(AgentDefinition definition, Map<String, Object> context) {
-        if (definition.model() != null && !definition.model().isEmpty()) {
-            try {
-                return ModelTypeEnum.valueOf(definition.model().toUpperCase());
-            } catch (IllegalArgumentException e) {
-                log.warn("未知的模型类型: {}, 使用默认模型", definition.model());
-            }
-        }
-        Object contextModel = context != null ? context.get("model") : null;
-        if (contextModel instanceof ModelTypeEnum modelTypeEnum) {
-            return modelTypeEnum;
-        }
-        return ModelTypeEnum.DEEPSEEK;
-    }
-
-    /**
-     * 构建子智能体的系统提示词
-     */
-    private String buildSubagentSystemPrompt(AgentDefinition definition) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(definition.content());
-
-        // 注入技能内容
-        if (skillManager != null && definition.skills() != null && !definition.skills().isEmpty()) {
-            var skills = skillManager.getAllSkills();
-            String skillsContent = skills.stream()
-                    .filter(s -> definition.skills().contains(s.name()))
-                    .map(skill -> "%s\n\n%s".formatted(skill.toXml(), skill.content()))
-                    .collect(Collectors.joining("\n\n"));
-            if (!skillsContent.isEmpty()) {
-                sb.append("\n").append(skillsContent);
-            }
-        }
-
-        return sb.toString();
     }
 
     public static Builder builder() {
@@ -277,10 +264,10 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
 
         private Toolkit toolkit;
         private ModelFactory modelFactory;
-        private SkillManager skillManager;
         private TaskRepository taskRepository;
         private ToolUIBridge toolUIBridge;
         private AgentDefinitionManager agentDefinitionManager;
+        private InMemorySessionManager inMemorySessionManager;
 
         private Builder() {
         }
@@ -292,11 +279,6 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
 
         public Builder modelFactory(ModelFactory modelFactory) {
             this.modelFactory = modelFactory;
-            return this;
-        }
-
-        public Builder skillManager(SkillManager skillManager) {
-            this.skillManager = skillManager;
             return this;
         }
 
@@ -315,10 +297,16 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             return this;
         }
 
+        public Builder inMemorySessionManager(InMemorySessionManager inMemorySessionManager) {
+            this.inMemorySessionManager = inMemorySessionManager;
+            return this;
+        }
+
         public TaskTool build() {
             Assert.notNull(this.toolkit, "必须提供toolkit");
             Assert.notNull(this.modelFactory, "必须提供modelFactory");
             Assert.notNull(this.agentDefinitionManager, "必须提供agentDefinitionManager");
+            Assert.notNull(this.inMemorySessionManager, "必须提供inMemorySessionManager");
 
             // 获取所有子智能体定义，构建描述
             List<AgentDefinition> subagentDefs = agentDefinitionManager.getSubagentDefinitions();
@@ -329,8 +317,8 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             String description = TASK_DESCRIPTION_TEMPLATE.formatted(subagentRegistrations);
 
             return new TaskTool(description, toolkit, modelFactory,
-                    this.skillManager, this.taskRepository, this.toolUIBridge,
-                    this.agentDefinitionManager);
+                    this.taskRepository, this.toolUIBridge,
+                    this.agentDefinitionManager, this.inMemorySessionManager);
         }
     }
 }

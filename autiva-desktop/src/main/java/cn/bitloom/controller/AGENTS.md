@@ -76,6 +76,7 @@
 - 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 管理模型选择 ComboBox
 - 管理智能体选择按钮（agentSelector）：点击弹出 ContextMenu 选择智能体（从 AgentDefinitionManager 动态获取主智能体列表）
+- 编码模式项目选择栏管理：agentSelector="coder" 时显示 projectBar（项目选择 ComboBox + 新建项目按钮 + 打开本地文件夹按钮），其他智能体时隐藏
 - 处理语音输入按钮
 - 画布按钮：打开 CanvasDialog 弹窗
 - 动画效果（图标淡出、聊天区域展开）
@@ -83,6 +84,19 @@
 - 自动滚动到底部：通过 `shouldScrollToBottom` 标志 + `PostLayoutPulseListener` 实现延迟滚动。AssistantMessageCard 和 TaskCard 均通过 `onContentChanged` 回调在内容变化时通知 `scrollToBottom()`，确保流式输出期间 ScrollPane 自动向下滚动
 - 防止 ScrollPane 焦点导致布局偏移：`chatScrollPane.setFocusTraversable(false)`，阻止 ScrollPane 获得焦点
 - 防止 TextFlow 重新换行导致布局偏移：`fitToWidth="false"` + `chatContainer.prefWidthProperty().bind(chatScrollPane.widthProperty())`。根因：`fitToWidth=true` 使内容宽度跟随 viewport 宽度，而 viewport 宽度在垂直滚动条出现/消失时会变化（vbarPolicy=AS_NEEDED），导致 TextFlow 重新换行产生"缩进"效果。改为手动绑定 ScrollPane 整体宽度（稳定不变），彻底切断 viewport 宽度变化对内容的影响
+
+**FXML 字段（编码模式）：**
+- `projectBar`：项目选择栏容器（HBox），默认隐藏，coder 模式下显示
+- `projectSelector`：项目选择下拉框（ComboBox<ProjectInfo>），通过 cellFactory 显示项目名
+- `newProjectButton`：新建项目按钮，弹出 TextInputDialog 输入项目名
+- `openLocalButton`：打开本地文件夹按钮，弹出 DirectoryChooser 选择目录
+
+**编码模式核心方法：**
+- `setupProjectBar()`：初始化 projectSelector 的 cellFactory/buttonCell、newProjectButton 和 openLocalButton 事件、projectSelector 选择监听
+- `updateProjectBarVisibility(String agentId)`：根据智能体 ID 控制 projectBar 显示/隐藏，coder 时刷新项目列表
+- `refreshProjectSelector()`：从 viewModel.listProjects() 加载项目列表，保留当前选择
+- `handleNewProject()`：弹出 TextInputDialog 输入项目名，调用 viewModel.createNewProject(name)，刷新并选中新项目
+- `handleOpenLocal()`：弹出 DirectoryChooser 选择目录，调用 viewModel.registerLocalProject(path, name)，刷新并选中
 
 **ViewModel 委托：**
 - `viewModel.sendMessage()` - 发送消息
@@ -97,6 +111,10 @@
 - `viewModel.createNewSession()` - 创建新会话（SideBarController 调用）
 - `viewModel.switchToSession()` - 切换会话（SideBarController 调用）
 - `viewModel.getAgentProperty()` - 获取当前智能体属性
+- `viewModel.setCurrentProject(ProjectInfo)` - 设置当前编码项目
+- `viewModel.createNewProject(String name)` - 新建项目并设为当前
+- `viewModel.registerLocalProject(String path, String name)` - 注册本地文件夹并设为当前
+- `viewModel.listProjects()` - 列出所有注册项目
 
 ### AgentPageController
 智能体配置页控制器。

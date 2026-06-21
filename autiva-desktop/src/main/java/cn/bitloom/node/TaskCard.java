@@ -1,8 +1,6 @@
 package cn.bitloom.node;
 
 import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.session.Session;
-import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.util.MarkdownFxRenderer;
 import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,7 +23,6 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
 import lombok.Setter;
-import reactor.core.Disposable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +42,6 @@ public class TaskCard extends VBox {
     private VBox currentStreamBox = null;
     private ToolGroupCard currentToolGroup = null;
 
-    private Disposable eventSubscription;
     private boolean userCollapsed = false;
 
     @Setter
@@ -106,30 +102,29 @@ public class TaskCard extends VBox {
         header.setOnMouseClicked(e -> toggleBody());
     }
 
-    public void subscribeSession(String sessionId, FileSystemSessionManager fileSystemSessionManager) {
-        if (sessionId == null || fileSystemSessionManager == null) {
-            return;
-        }
+    public void addTodoCard(TodoCard card) {
+        Platform.runLater(() -> {
+            closeCurrentToolGroup();
+            messageContainer.getChildren().add(card);
+            ensureBodyVisible();
+            notifyContentChanged();
+        });
+    }
 
-        Session session = fileSystemSessionManager.getById(sessionId);
-
-        eventSubscription = session.subscribe()
-                .doOnNext(event -> {
-                    if (event instanceof MessageEvent messageEvent) {
-                        Platform.runLater(() -> this.processEvent(messageEvent));
-                    }
-                })
-                .subscribe();
+    public void addQuestionCard(QuestionCard card) {
+        Platform.runLater(() -> {
+            closeCurrentToolGroup();
+            messageContainer.getChildren().add(card);
+            ensureBodyVisible();
+            notifyContentChanged();
+        });
     }
 
     public void dispose() {
-        if (eventSubscription != null && !eventSubscription.isDisposed()) {
-            eventSubscription.dispose();
-        }
         stopPulseAnimation();
     }
 
-    private void processEvent(MessageEvent event) {
+    public void processEvent(MessageEvent event) {
         if (event.isAssistantMessage()) {
             processAssistantEvent(event);
         } else if (event.isToolResponse()) {
@@ -305,23 +300,6 @@ public class TaskCard extends VBox {
             pulseTimeline.stop();
             pulseDot.setOpacity(1.0);
         }
-    }
-
-    public void appendOutput(String text) {
-        Platform.runLater(() -> doAppendOutput(text));
-    }
-
-    private void doAppendOutput(String text) {
-        ensureBodyVisible();
-        streamBuffer.append(text);
-        if (currentStreamBox == null) {
-            closeCurrentToolGroup();
-            currentStreamBox = new VBox(4);
-            currentStreamBox.getStyleClass().add("chat-message__task-assistant");
-            messageContainer.getChildren().add(currentStreamBox);
-        }
-        renderLightweightStream(currentStreamBox, streamBuffer.toString());
-        notifyContentChanged();
     }
 
     public void setStatus(String status) {

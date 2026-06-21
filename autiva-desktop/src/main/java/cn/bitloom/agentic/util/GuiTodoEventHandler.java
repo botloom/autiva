@@ -14,10 +14,10 @@ public class GuiTodoEventHandler implements TodoEventHandler {
     private final ToolUIBridge toolUIBridge;
 
     @Override
-    public void handle(Todos todos) {
+    public void handle(Todos todos, String sessionId) {
         try {
             String todosJson = JsonUtils.toJson(todos);
-            this.toolUIBridge.showTodos(todosJson);
+            this.toolUIBridge.showTodos(todosJson, sessionId);
             log.debug("Todo list displayed in UI: {} items", todos.todos().size());
         } catch (Exception e) {
             log.error("Error displaying todos in UI", e);

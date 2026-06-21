@@ -31,7 +31,14 @@
    - 创建 `agents/default/memory/` 目录
    - 创建 `workspace/default/` 目录（仅 context/ 和 sessions/）
 
-4. **`initSubagents()`**: 初始化子智能体
+4. **`initCoderMainAgent()`**: 初始化编码主智能体
+   - 创建 `agents/coder/` 目录
+   - 从 classpath:bootstrap/agent/coder/* 复制 agent.md 和 config.json
+   - 创建 `agents/coder/memory/` 目录
+   - 创建 `workspace/coder/` 目录（仅 context/ 和 sessions/）
+   - 仅在 agents/coder/ 不存在时执行（幂等）
+
+5. **`initSubagents()`**: 初始化子智能体
    - 从 classpath:bootstrap/subagent/*.md 复制到 `agents/{name}/agent.md`
    - 例如 `bootstrap/subagent/code.md` → `agents/code/agent.md`
 

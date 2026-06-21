@@ -67,7 +67,7 @@ public class AskUserQuestionTool extends AbstractTool<AskUserQuestionTool.Input>
 	 */
 	@FunctionalInterface
 	public interface QuestionHandler {
-		Map<String, String> handle(List<Question> questions);
+		Map<String, String> handle(List<Question> questions, String sessionId);
 	}
 
 	/**
@@ -173,7 +173,8 @@ public class AskUserQuestionTool extends AbstractTool<AskUserQuestionTool.Input>
 			questions.forEach(q -> logger.trace("问题: {}", q.question()));
 		}
 
-		Map<String, String> result = this.questionHandler.handle(questions);
+		String sessionId = context != null ? (String) context.getContext().get("sessionId") : null;
+		Map<String, String> result = this.questionHandler.handle(questions, sessionId);
 
 		if (this.answersValidation) {
 			this.validateAnswers(questions, result);

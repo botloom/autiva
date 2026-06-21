@@ -53,9 +53,6 @@ public class AppBootstrap {
         if (!Files.exists(AppConstants.Base.SKILLS_DIR)){
             Files.createDirectories(AppConstants.Base.SKILLS_DIR);
         }
-        if (!Files.exists(AppConstants.Base.PET_DIR)){
-            Files.createDirectories(AppConstants.Base.PET_DIR);
-        }
         if (!Files.exists(AppConstants.Base.LOGS_DIR)){
             Files.createDirectories(AppConstants.Base.LOGS_DIR);
         }

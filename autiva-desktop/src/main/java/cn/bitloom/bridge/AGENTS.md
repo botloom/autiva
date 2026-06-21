@@ -505,3 +505,49 @@ iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
 ### API 文档参考
 - 微信 iLink Bot API：https://www.wechatbot.dev/zh
 - iLink 协议文档：https://www.wechatbot.dev/zh/protocol
+
+## 桌面端 UI 桥接（desktop 子包）
+
+### ToolUIBridge
+桌面端工具 UI 桥接器，Spring @Component，负责将工具执行过程中的 UI 交互（提问、任务卡片）桥接到 JavaFX 主线程执行。通过订阅 EventBus.outBox 将子智能体事件路由到对应的 TaskCard。
+
+**核心字段：**
+- `pendingQuestions`: Map<String, CompletableFuture<String>> — 待回答的提问 Future
+- `activeTaskCards`: Map<String, TaskCard> — 活跃任务卡片（taskId → TaskCard）
+- `sessionTaskCards`: Map<String, TaskCard> — 子会话事件路由映射（sub-session ID → TaskCard）
+- `outBoxSubscription`: Disposable — EventBus outBox 订阅
+- `onNodeAdded`: Consumer<Node> — 节点添加回调（由 HomePageController 设置，将卡片添加到聊天容器）
+
+**核心方法：**
+- `init()`: @PostConstruct，订阅 EventBus.outBoxFlux()，将子会话事件路由到对应 TaskCard
+- `destroy()`: @PreDestroy，清理 EventBus 订阅
+- `showQuestions(String questionsJson, CompletableFuture<String> answerFuture)`: 创建 QuestionCard 并添加到 UI，关联 Future 供 AskUserQuestionTool 阻塞等待
+- `onQuestionAnswered(String questionId, String resultJson)`: 完成对应的提问 Future
+- `showTodos(String todosJson)`: 创建 TodoCard 并添加到 UI
+- `createTaskCard(String taskId, String taskJson)`: 创建 TaskCard 并添加到 UI，同时注册 sub-session ID → TaskCard 映射供事件路由
+- `completeTaskCard(String taskId, String result)`: 标记任务卡片完成，取消注册 sub-session ID 映射
+- `failTaskCard(String taskId, String error)`: 标记任务卡片失败，取消注册 sub-session ID 映射
+
+**事件路由机制：**
+ToolUIBridge 订阅 EventBus.outBoxFlux()，当收到 MessageEvent 时，通过 `sessionTaskCards` 映射查找对应的 TaskCard，将事件路由到 TaskCard.processEvent() 方法处理。这使得 TaskCard 能展示子智能体的流式文本、工具调用（ToolMessageCard）和工具响应。
+
+**事件流转：**
+```
+子智能体执行:
+  TaskTool.executeSubagent()
+    → agent.runStream() → EventConverter.fromMessage(taskId, msg) → EventBus.publishOut()  ← 流式文本 + STOP
+  InMemoryChatMemory.add()
+    → EventBus.publishOut()                                                                  ← TOOL_CALLS + TOOL
+
+  ToolUIBridge (订阅 EventBus.outBoxFlux)
+    → filter: sessionTaskCards.containsKey(sessionId)
+    → TaskCard.processEvent(messageEvent)                                                    ← 路由到对应 TaskCard
+      → processAssistantEvent()                                                              ← 流式文本 + STOP
+      → processToolEvent()                                                                   ← TOOL_CALLS/TOOL → ToolMessageCard
+```
+
+**设计模式：**
+- CompletableFuture 阻塞等待：工具执行线程通过 Future 阻塞等待 UI 线程用户操作
+- Platform.runLater() 线程切换：所有 UI 操作在 JavaFX 应用线程执行
+- 回调通知：UI 组件通过回调方法完成对应的 Future，解除工具线程阻塞
+- EventBus 事件路由：ToolUIBridge 订阅 EventBus.outBox，按 sessionId 路由子会话事件到 TaskCard

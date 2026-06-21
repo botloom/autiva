@@ -4,11 +4,11 @@ import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.session.Session;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -38,9 +38,9 @@ public class CompactChatMemory implements ChatMemory {
         if (messages.stream().noneMatch(msg -> msg instanceof ToolResponseMessage)) {
             List<Message> sessionMessages = session.getMessages();
             if (!sessionMessages.isEmpty()) {
-                Message lastMsg = sessionMessages.get(sessionMessages.size() - 1);
+                Message lastMsg = sessionMessages.getLast();
                 if (lastMsg instanceof AssistantMessage lastAssistant && !lastAssistant.getToolCalls().isEmpty()) {
-                    sessionMessages.remove(sessionMessages.size() - 1);
+                    sessionMessages.removeLast();
                 }
             }
         }

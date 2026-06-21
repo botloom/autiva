@@ -259,6 +259,24 @@ ToolGroupCard (VBox)
 - 进行中项显示 activeForm
 - 进度条和完成统计
 
+### DiffReviewCard
+Diff 审核卡片，用于 WriteTool/EditTool 的文件修改审核展示。参考 QuestionCard 的设计模式。
+
+**样式类：** `chat-message`, `chat-message--tool`, `diff-review-card`
+
+**构造参数：**
+- `diffJson`: Diff 内容 JSON（FileDiff 序列化格式，包含 filePath/hunks/isCreate/isDelete）
+- `reviewId`: 审核 ID（UUID，用于关联 CompletableFuture）
+- `onReviewed`: BiConsumer<String, String> 回调（reviewId, resultJson），通知 ToolUIBridge 完成审核
+
+**特性：**
+- 展示文件路径和操作类型（新建/修改/删除）
+- 解析 hunks 数组，按 hunk 渲染 @@ 行号范围头 + Diff 行
+- Diff 行着色：ADD 行绿色背景（rgba(34,197,94,0.12)），REMOVE 行红色背景（rgba(239,68,68,0.12)），CONTEXT 行无背景
+- 滚动面板展示完整 Diff（最大高度 400px）
+- "批准修改"按钮（绿色渐变）和"拒绝修改"按钮（红色渐变）
+- 点击后禁用按钮，通过 onReviewed 回调返回结果 JSON（{"approved":true/false, "comment":""}）
+
 ### TaskCard
 任务卡片，用于子智能体任务的流式输出展示。
 
