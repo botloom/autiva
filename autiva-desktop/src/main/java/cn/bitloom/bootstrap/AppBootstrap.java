@@ -90,9 +90,6 @@ public class AppBootstrap {
             Files.copy(resource.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        // 创建 memory/ 目录
-        Files.createDirectories(AppConstants.MainAgent.memoryDir(AppConstants.Agents.DEFAULT_AGENT_NAME));
-
         // 创建 workspace 目录
         Files.createDirectories(AppConstants.MainAgent.sessionsDir(AppConstants.Agents.DEFAULT_AGENT_NAME));
         Files.createDirectories(AppConstants.MainAgent.contextDir(AppConstants.Agents.DEFAULT_AGENT_NAME));

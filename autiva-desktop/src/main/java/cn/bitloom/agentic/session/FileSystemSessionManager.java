@@ -9,6 +9,7 @@ import cn.bitloom.agentic.memory.CompactChatMemory;
 import cn.bitloom.agentic.memory.MemoryManager;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
+import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.agentic.util.MessageUtil;
 import cn.bitloom.constant.AppConstants;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -51,6 +53,7 @@ public class FileSystemSessionManager implements ISessionManager {
     private final Toolkit toolkit;
     private final CompactChatMemory chatMemory;
     private final MemoryManager memoryManager;
+    private final SkillManager skillManager;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, Agent> agentCache = new ConcurrentHashMap<>();
     private final Map<String, SessionRunner> runners = new ConcurrentHashMap<>();
@@ -59,12 +62,14 @@ public class FileSystemSessionManager implements ISessionManager {
                                     ModelFactory modelFactory,
                                     Toolkit toolkit,
                                     @Lazy CompactChatMemory chatMemory,
-                                    MemoryManager memoryManager) {
+                                    MemoryManager memoryManager,
+                                    SkillManager skillManager) {
         this.definitionManager = definitionManager;
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
         this.chatMemory = chatMemory;
         this.memoryManager = memoryManager;
+        this.skillManager = skillManager;
     }
 
     /**
@@ -378,6 +383,22 @@ public class FileSystemSessionManager implements ISessionManager {
         return agentCache.computeIfAbsent(agentId, id -> {
             AgentDefinition definition = definitionManager.getOrLoadMainDefinition(id);
             ChatModel chatModel = modelFactory.model(ModelTypeEnum.DEEPSEEK);
+
+            // 计算技能描述
+            String skillDesc = skillManager.getDescription();
+
+            // 计算子智能体描述
+            String subagentDesc = definition.subagents().stream()
+                    .map(name -> {
+                        AgentDefinition def = definitionManager.getDefinition(name);
+                        return def != null ? "- " + name + ": " + def.description() : "";
+                    })
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.joining("\n"));
+
+            // 记忆文件路径
+            java.nio.file.Path memoryPath = AppConstants.MainAgent.memoryFile(id);
+
             Agent agent = Agent.builder()
                     .name(id)
                     .definition(definition)
@@ -387,6 +408,9 @@ public class FileSystemSessionManager implements ISessionManager {
                     .hooks(List.of())
                     .memory(chatMemory)
                     .compact(true)
+                    .skillDescriptions(skillDesc)
+                    .subagentDescriptions(subagentDesc)
+                    .memoryFilePath(memoryPath)
                     .build();
             log.info("创建主智能体: agentId={}", id);
             return agent;

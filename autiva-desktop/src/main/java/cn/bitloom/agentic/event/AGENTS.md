@@ -54,11 +54,10 @@
 - `isUserMessage()`: 判断是否为用户消息
 
 ### MemoryEvent
-记忆事件，统一发布到 EventBus.inBox，由 Session 分类处理。
+记忆事件，统一发布到 EventBus.inBox，由 SessionRunner 分类处理。
 
 **Type 枚举：**
 - `CONTEXT_COMPACT`: 上下文需要压缩（由 UsageAdvisor 在 token 超阈值时发布）
-- `SESSION_END`: 会话结束，检查遗漏记忆（由 Session.stop() 发布）
 
 **字段：**
 - `type`: 事件类型（Type 枚举）
@@ -68,7 +67,6 @@
 
 **静态工厂方法：**
 - `contextCompact(sessionId, agentId, currentTokens, maxTokens)`: 创建上下文压缩事件
-- `sessionEnd(sessionId, agentId)`: 创建会话结束事件
 
 ### EventConverter
 事件转换器，是唯一同时导入 Spring AI 和事件类型的类。负责在 Spring AI Message 和 MessageEvent 之间进行双向转换。
@@ -101,16 +99,12 @@ EventBus.inBoxFlux()
 ```
 MemoryEvent
     │
-    ├── CONTEXT_COMPACT（由 UsageAdvisor 发布）
-    │   └── Session.handleContextCompact()
-    │       ├── memoryManager.compact() 生成摘要
-    │       ├── 更新 Session.summary
-    │       ├── 推进 memoryCursor
-    │       └── 重置 currentContextLength
-    │
-    └── SESSION_END（由 Session.stop() 发布）
-        └── Session.handleSessionEnd()
-            └── memoryManager.consolidate() 提取关键事实追加到日流水账
+    └── CONTEXT_COMPACT（由 UsageAdvisor 发布）
+        └── SessionRunner.handleContextCompact()
+            ├── memoryManager.compact() 生成摘要
+            ├── 更新 Session.summary
+            ├── 推进 memoryCursor
+            └── 重置 currentContextLength
 ```
 
 ## 设计模式

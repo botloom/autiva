@@ -26,24 +26,28 @@ Usage 提取 Advisor，从模型响应的 `Usage` 中提取 `prompt_tokens`，�
 **注册策略：** 通过 Agent.Builder 的 `.compact(true)` 注册，主智能体开启，子智能体 Fresh 模式不压缩。
 
 ### ProactiveContextAdvisor
-主动上下文注入 Advisor，基于 Session 结构化注入上下文。
+主动上下文注入 Advisor，将可变上下文动态注入到系统提示词中。
 
-**Spring 注解：** `@Builder`（Lombok），无字段，无构造函数依赖
+**Spring 注解：** `@Builder`（Lombok）
+
+**Builder 字段：**
+- `skillDescriptions`: 技能描述文本（Agent 构建时计算，相对稳定）
+- `subagentDescriptions`: 子智能体描述文本（Agent 构建时计算，相对稳定）
+- `memoryFilePath`: memory.md 文件路径，请求时读取最新内容
 
 **order：** 200
 
 **依赖：** RuntimeContext（从 `request.context().get("runtimeContext")` 获取 Session）
 
-**注入内容：**
-1. 基于 Session 的结构化上下文：
-   - 任务清单（todo_write 维护的 TaskItem 列表）
-   - Plan Mode 上下文（激活时注入计划文件路径）
-   - 早期对话摘要（游标前自动压缩的 summary）
-2. 心跳上下文（HEARTBEAT.md，仅心跳请求时注入）
+**注入内容（XML 格式，追加到 SystemMessage 末尾）：**
+1. `<memory>` — memory.md 热记忆内容（每次请求从文件读取最新版本）
+2. `<skills>` — 技能描述文本
+3. `<subagents>` — 子智能体描述文本
+4. `<summary>` — Session.summary（压缩后的早期对话摘要，上下文桥接）
 
-**已移除功能：**
-- 相关记忆自动召回（改为智能体通过 `memory_search` 工具主动搜索）
-- 进化提示（EvolutionHintProvider 已删除）
+**注入方式：** 找到 SystemMessage 并追加上下文文本；若无 SystemMessage 则新建一个。
+
+**注册策略：** 通过 Agent.Builder 的 `.compact(true)` 注册，主智能体开启，子智能体不压缩。
 
 ### HookAdvisor
 Hook 桥接 Advisor，将 `AgentHook` 高级 API 桥接到 Spring AI Advisor 机制。

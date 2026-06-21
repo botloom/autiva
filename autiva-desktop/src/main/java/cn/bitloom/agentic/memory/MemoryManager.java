@@ -16,19 +16,20 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
- * 统一记忆管理服务，替代 MemorySearchService。
+ * 统一记忆管理服务。
  * <p>
  * 所有记忆工具通过它操作，Session 处理 MemoryEvent 时也调用它。
  * 按 agentId 解析路径，不再硬编码 "default"。
+ * <p>
+ * 记忆架构为两层：
+ * 1. 热记忆（memory.md）— 自动注入上下文，智能体主动读写
+ * 2. 上下文桥接（session.summary）— 压缩后的早期对话摘要
  */
 @Slf4j
 @Component
@@ -37,12 +38,6 @@ public class MemoryManager {
 
     private static final int MAX_RESULT_LENGTH = 300;
     private static final int DEFAULT_SEARCH_LIMIT = 5;
-
-    private static final String CONSOLIDATE_PROMPT = """
-            你是一个记忆整理助手。请从以下对话中提取关键事实和信息，以简洁的要点形式输出。
-            只提取重要的事实、决策、偏好和关键信息，忽略日常寒暄和工具调用的技术细节。
-            如果没有值得记忆的内容，直接输出"无"。每个要点一行，使用 - 开头。
-            """;
 
     private static final String COMPACTION_PROMPT = """
             你是一个对话压缩助手。请将以下对话历史压缩为简洁的摘要，保留：
@@ -71,15 +66,6 @@ public class MemoryManager {
         return AppConstants.MainAgent.memoryFile(agentId);
     }
 
-    private Path memoryDir(String agentId) {
-        return AppConstants.MainAgent.memoryDir(agentId);
-    }
-
-    private Path dailyJournal(String agentId) {
-        String today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        return memoryDir(agentId).resolve(today + ".md");
-    }
-
     /**
      * 从 sessionId 解析出 agentId
      * sessionId 格式：{agentId}-{type}-{source}-{userId}-{timestamp}
@@ -94,41 +80,23 @@ public class MemoryManager {
     // ===== 写入操作（供记忆工具调用）=====
 
     /**
-     * 追加记忆到日流水账或 memory.md
+     * 追加记忆到 memory.md
      * @param agentId 智能体ID
      * @param content 记忆内容
-     * @param target "memory" → 写入 memory.md；"journal"（默认）→ 写入日流水账
      */
-    public void save(String agentId, String content, String target) {
+    public void save(String agentId, String content) {
         if (content == null || content.isBlank()) {
             return;
         }
-        String targetFile = target == null ? "journal" : target.toLowerCase();
         try {
-            if ("memory".equals(targetFile)) {
-                Path file = memoryFile(agentId);
-                Files.createDirectories(file.getParent());
-                String existing = Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : "";
-                String appended = existing.isBlank() ? content : existing + "\n\n" + content;
-                Files.writeString(file, appended, StandardCharsets.UTF_8);
-                log.info("[MemoryManager] 已追加到 memory.md: agentId={}", agentId);
-            } else {
-                Path dir = memoryDir(agentId);
-                Files.createDirectories(dir);
-                Path file = dailyJournal(agentId);
-                String today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-                String existing = Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : "";
-                String appended;
-                if (existing.isBlank()) {
-                    appended = "# " + today + " 记忆流水账\n\n" + content;
-                } else {
-                    appended = existing + "\n\n" + content;
-                }
-                Files.writeString(file, appended, StandardCharsets.UTF_8);
-                log.info("[MemoryManager] 已追加到日流水账: agentId={}, file={}", agentId, file);
-            }
+            Path file = memoryFile(agentId);
+            Files.createDirectories(file.getParent());
+            String existing = Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : "";
+            String appended = existing.isBlank() ? content : existing + "\n\n" + content;
+            Files.writeString(file, appended, StandardCharsets.UTF_8);
+            log.info("[MemoryManager] 已追加到 memory.md: agentId={}", agentId);
         } catch (IOException e) {
-            log.error("[MemoryManager] save 失败: agentId={}, target={}", agentId, targetFile, e);
+            log.error("[MemoryManager] save 失败: agentId={}", agentId, e);
             throw new RuntimeException("写入记忆失败: " + e.getMessage(), e);
         }
     }
@@ -159,30 +127,22 @@ public class MemoryManager {
     /**
      * 删除记忆条目
      * @param agentId 智能体ID
-     * @param type "section" → 清空 memory.md 区块；"journal" → 删除日流水账文件
-     * @param target 区块名称或日期(YYYY-MM-DD)
+     * @param section 区块名称（清空该区块内容）
      */
-    public void delete(String agentId, String type, String target) {
-        if (type == null) {
+    public void delete(String agentId, String section) {
+        if (section == null || section.isBlank()) {
             return;
         }
         try {
-            if ("section".equalsIgnoreCase(type)) {
-                Path file = memoryFile(agentId);
-                if (Files.exists(file)) {
-                    String existing = Files.readString(file, StandardCharsets.UTF_8);
-                    String updated = replaceSection(existing, target, "*（已清空）*");
-                    Files.writeString(file, updated, StandardCharsets.UTF_8);
-                    log.info("[MemoryManager] 已清空 memory.md 区块: agentId={}, section={}", agentId, target);
-                }
-            } else if ("journal".equalsIgnoreCase(type)) {
-                Path file = memoryDir(agentId).resolve(target + ".md");
-                if (Files.deleteIfExists(file)) {
-                    log.info("[MemoryManager] 已删除日流水账: agentId={}, file={}", agentId, file);
-                }
+            Path file = memoryFile(agentId);
+            if (Files.exists(file)) {
+                String existing = Files.readString(file, StandardCharsets.UTF_8);
+                String updated = replaceSection(existing, section, "*（已清空）*");
+                Files.writeString(file, updated, StandardCharsets.UTF_8);
+                log.info("[MemoryManager] 已清空 memory.md 区块: agentId={}, section={}", agentId, section);
             }
         } catch (IOException e) {
-            log.error("[MemoryManager] delete 失败: agentId={}, type={}, target={}", agentId, type, target, e);
+            log.error("[MemoryManager] delete 失败: agentId={}, section={}", agentId, section, e);
             throw new RuntimeException("删除记忆失败: " + e.getMessage(), e);
         }
     }
@@ -218,8 +178,6 @@ public class MemoryManager {
         }
         return sb.toString();
     }
-
-    // ===== LLM 整理（供 Session 处理 MemoryEvent 时调用）=====
 
     /**
      * 异步上下文压缩
@@ -259,34 +217,6 @@ public class MemoryManager {
         }
     }
 
-    /**
-     * 会话结束异步检查遗漏记忆
-     * @param agentId 智能体ID
-     * @param messages 待检查的消息列表
-     */
-    public void consolidate(String agentId, List<Message> messages) {
-        try {
-            if (messages == null || messages.isEmpty()) {
-                return;
-            }
-            String conversationText = extractConversationText(messages);
-            if (conversationText.isBlank()) {
-                return;
-            }
-            // 调用 LLM 提取关键事实
-            String newFacts = callLlm(CONSOLIDATE_PROMPT + "\n\n对话内容：\n" + conversationText);
-            if (newFacts == null || newFacts.isBlank() || "无".equals(newFacts.trim())) {
-                log.info("[MemoryManager] 会话结束无可记忆内容: agentId={}", agentId);
-                return;
-            }
-            // 追加到日流水账（不自动合并到 memory.md，由智能体主动决定）
-            save(agentId, newFacts, "journal");
-            log.info("[MemoryManager] 会话结束记忆整理完成: agentId={}", agentId);
-        } catch (Exception e) {
-            log.error("[MemoryManager] consolidate 失败: agentId={}", agentId, e);
-        }
-    }
-
     // ===== 私有辅助方法 =====
 
     /**
@@ -311,35 +241,18 @@ public class MemoryManager {
         // 搜索 memory.md
         Path memFile = memoryFile(agentId);
         if (Files.exists(memFile)) {
-            searchInFile(memFile, memoryFile(agentId).getParent().relativize(memFile),
-                    lowerQuery, results, limit);
+            searchInFile(memFile, "memory.md", lowerQuery, results, limit);
         }
 
-        // 搜索 memory/YYYY-MM-DD.md
-        Path memDir = memoryDir(agentId);
-        if (Files.exists(memDir) && Files.isDirectory(memDir)) {
-            try (Stream<Path> walk = Files.walk(memDir)) {
-                walk.filter(p -> p.toString().endsWith(".md"))
-                        .filter(Files::isRegularFile)
-                        .forEach(p -> {
-                            if (results.size() >= limit) return;
-                            searchInFile(p, memoryFile(agentId).getParent().relativize(p),
-                                    lowerQuery, results, limit);
-                        });
-            } catch (IOException e) {
-                log.error("[MemoryManager] 遍历记忆目录失败: {}", memDir, e);
-            }
-        }
         return results.subList(0, Math.min(results.size(), limit));
     }
 
-    private void searchInFile(Path file, Path relativePath, String lowerQuery,
+    private void searchInFile(Path file, String fileName, String lowerQuery,
                               List<SearchResult> results, int limit) {
         if (results.size() >= limit) return;
         try {
             String content = Files.readString(file, StandardCharsets.UTF_8);
             String lowerContent = content.toLowerCase();
-            String fileName = relativePath.toString();
 
             if (lowerContent.contains(lowerQuery) || fileName.toLowerCase().contains(lowerQuery)) {
                 SearchResult result = new SearchResult();

@@ -22,6 +22,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.jspecify.annotations.NonNull;
 import reactor.core.publisher.Flux;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -130,6 +131,9 @@ public class Agent {
         private boolean enableMemory = false;
         private ChatMemory chatMemory;
         private boolean enableCompact = false;
+        private String skillDescriptions;
+        private String subagentDescriptions;
+        private Path memoryFilePath;
 
         public Builder name(String name) {
             this.name = name;
@@ -182,6 +186,21 @@ public class Agent {
             return this;
         }
 
+        public Builder skillDescriptions(String skillDescriptions) {
+            this.skillDescriptions = skillDescriptions;
+            return this;
+        }
+
+        public Builder subagentDescriptions(String subagentDescriptions) {
+            this.subagentDescriptions = subagentDescriptions;
+            return this;
+        }
+
+        public Builder memoryFilePath(Path memoryFilePath) {
+            this.memoryFilePath = memoryFilePath;
+            return this;
+        }
+
         public Agent build() {
             ChatClient.Builder builder = ChatClient.builder(this.model);
             if (StringUtils.isNotBlank(this.systemPrompt)) {
@@ -210,7 +229,11 @@ public class Agent {
             if (this.enableCompact) {
                 builder.defaultAdvisors(
                         UsageAdvisor.builder().build(),
-                        ProactiveContextAdvisor.builder().build()
+                        ProactiveContextAdvisor.builder()
+                                .skillDescriptions(this.skillDescriptions)
+                                .subagentDescriptions(this.subagentDescriptions)
+                                .memoryFilePath(this.memoryFilePath)
+                                .build()
                 );
             }
             if (!this.hooks.isEmpty()) {

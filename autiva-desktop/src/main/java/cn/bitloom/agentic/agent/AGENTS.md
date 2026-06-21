@@ -14,8 +14,6 @@
 │   │   ├── AGENTS.md              ← 人格 + 行为约定
 │   │   ├── MEMORY.md              ← 长期记忆
 │   │   ├── BOOTSTRAP.md           ← 首次启动引导
-│   │   └── memory/                ← 每日记忆流水账
-│   │       └── YYYY-MM-DD.md
 │   ├── code/                      ← 编码子智能体（仅 agent.md，无 config.json）
 │   │   └── agent.md
 │   ├── explore/                   ← 探索子智能体
@@ -28,7 +26,6 @@
 │       ├── AGENTS.md
 │       ├── MEMORY.md
 │       ├── BOOTSTRAP.md
-│       ├── memory/
 │       └── xxx.md                 ← 额外提示词片段
 ├── workspace/                     ← 运行时数据（仅 session 相关）
 │   ├── default/
@@ -111,9 +108,10 @@ Agent.builder()
     .hooks(hooks)                  // AgentHook 列表
     .memory(chatMemory)            // 开启记忆（传入 ChatMemory）
     .compact(true)                 // 开启上下文压缩（注册 UsageAdvisor + ProactiveContextAdvisor）
+    .skillDescriptions(desc)       // 技能描述文本（传给 ProactiveContextAdvisor）
+    .subagentDescriptions(desc)    // 子智能体描述文本（传给 ProactiveContextAdvisor）
+    .memoryFilePath(path)          // memory.md 路径（传给 ProactiveContextAdvisor）
     .logging(true)                 // 开启日志（默认 true）
-    .tollCallMessage(true)         // 开启工具调用消息（默认 true）
-    .disableDefaultAdvisors()      // 关闭所有默认 Advisor（子智能体纯净模式）
     .build()
 ```
 

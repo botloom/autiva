@@ -14,7 +14,7 @@ import org.springframework.ai.tool.annotation.ToolParam;
 public class MemorySearchTool extends AbstractTool<MemorySearchTool.Input> {
 
     private static final String DESCRIPTION = """
-            搜索记忆文件，包括 memory.md 和 memory/YYYY-MM-DD.md 日流水账。
+            搜索记忆文件（memory.md）。
             回答关于用户偏好、历史事件的问题前，应先调用此工具搜索相关记忆。""";
 
     private final MemoryManager memoryManager;

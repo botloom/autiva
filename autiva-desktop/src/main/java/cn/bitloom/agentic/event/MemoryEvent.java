@@ -9,7 +9,6 @@ import lombok.experimental.SuperBuilder;
  * <p>
  * 类型：
  * - CONTEXT_COMPACT：上下文需要压缩（由 UsageAdvisor 在 token 超阈值时发布）
- * - SESSION_END：会话结束，检查遗漏记忆（由 Session.stop() 发布）
  */
 @Getter
 @Setter
@@ -17,8 +16,7 @@ import lombok.experimental.SuperBuilder;
 public final class MemoryEvent extends AbstractEvent {
 
     public enum Type {
-        CONTEXT_COMPACT,
-        SESSION_END
+        CONTEXT_COMPACT
     }
 
     private Type type;
@@ -36,14 +34,6 @@ public final class MemoryEvent extends AbstractEvent {
                 .agentId(agentId)
                 .currentTokens(currentTokens)
                 .maxTokens(maxTokens)
-                .build();
-    }
-
-    public static MemoryEvent sessionEnd(String sessionId, String agentId) {
-        return MemoryEvent.builder()
-                .sessionId(sessionId)
-                .type(Type.SESSION_END)
-                .agentId(agentId)
                 .build();
     }
 }

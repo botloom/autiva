@@ -61,10 +61,9 @@ Session 编排器，负责主会话的消息循环和记忆事件处理。从 Se
 - `start()`: 订阅 EventBus.inBoxFlux()，过滤当前会话事件，按事件类型分类处理：
   - `MessageEvent.USER` → 串行调用 Agent 执行对话（concatMap），构造 RuntimeContext 时从 session 读取 reviewDiff/projectPath 传递到 params（供 WriteTool/EditTool/TaskTool 使用）
   - `MemoryEvent` → 异步处理（`Schedulers.boundedElastic()`），不阻塞对话流
-- `stop()`: 发布 `MemoryEvent.sessionEnd()` 到 inBox 触发异步记忆检查，然后取消订阅
-- `handleMemoryEvent(event)`: 根据 MemoryEvent.type 分发到 handleContextCompact 或 handleSessionEnd
+- `stop()`: 设置会话状态为 STOPPED，取消订阅
+- `handleMemoryEvent(event)`: 处理 CONTEXT_COMPACT 事件，调用 handleContextCompact
 - `handleContextCompact(memoryManager)`: 调用 `memoryManager.compact()` 生成摘要，推进 memoryCursor，重置 currentContextLength
-- `handleSessionEnd(memoryManager)`: 调用 `memoryManager.consolidate()` 提取关键事实追加到日流水账
 
 ### ISessionManager
 Session 管理器统一接口。不同的实现提供不同的存储策略：
@@ -105,6 +104,7 @@ Session 管理器统一接口。不同的实现提供不同的存储策略：
 - `toolkit`: Toolkit — 工具容器
 - `chatMemory`: CompactChatMemory（@Lazy，避免循环依赖）
 - `memoryManager`: MemoryManager — 记忆管理器
+- `skillManager`: SkillManager — 技能管理器（计算技能描述传给 ProactiveContextAdvisor）
 - `sessions`: Map\<String, Session\> 会话内存缓存
 - `agentCache`: Map\<String, Agent\> Agent 实例缓存（懒加载）
 - `runners`: Map\<String, SessionRunner\> SessionRunner 实例缓存
@@ -115,7 +115,7 @@ Session 管理器统一接口。不同的实现提供不同的存储策略：
 - `create(agentId, parentSessionId, type, respType, model, projectPath, reviewDiff)`: 创建带编码参数的 Session（coder 场景使用，projectPath 关联项目路径，reviewDiff=true 启用 Diff 审核）
 - `activate(sessionId)`: 激活会话（注入 Agent、注入 MemoryManager、加载历史消息、通过 SessionRunner 启动消息循环）
 - `stopSession(sessionId)`: 通过 SessionRunner 停止会话的消息处理循环
-- `getOrCreateAgent(agentId)`: 获取或懒加载创建主智能体 Agent 实例（computeIfAbsent，默认开启 memory + compact）
+- `getOrCreateAgent(agentId)`: 获取或懒加载创建主智能体 Agent 实例（computeIfAbsent，默认开启 memory + compact，计算 skillDescriptions/subagentDescriptions/memoryFilePath 传给 ProactiveContextAdvisor）
 - `getById(sessionId)`: 获取会话
 - `getDesktopSessions()`: 获取所有桌面端 session
 - `store(sessionId, messages)`: 追加消息到 messages.jsonl
@@ -213,7 +213,7 @@ Session 管理器统一接口。不同的实现提供不同的存储策略：
 9. delete() 会先通过 SessionRunner 停止消息循环再删除
 10. currentContextLength 由 UsageAdvisor 从模型响应 Usage 中提取并维护（语义为 token 数）
 11. 历史消息通过 MessageChatMemoryAdvisor + CompactChatMemory 自动注入
-12. MemoryEvent（CONTEXT_COMPACT/SESSION_END）通过 Schedulers.boundedElastic() 异步处理，不阻塞对话流
+12. MemoryEvent（CONTEXT_COMPACT）通过 Schedulers.boundedElastic() 异步处理，不阻塞对话流
 13. 子智能体通过 InMemorySessionManager 创建子 Session，拥有 ChatMemory 支持对话历史
 14. 子 Session 不启动 EventBus 消息循环，由 TaskTool 直接驱动 Agent 执行
 15. 消息发布统一使用 `EventBus.publishIn()`，不再通过 `session.publish()`

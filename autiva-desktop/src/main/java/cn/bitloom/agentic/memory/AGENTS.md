@@ -1,7 +1,12 @@
 # Memory 包
 
 ## 概述
-本包实现了对话记忆管理和持久化记忆服务，实现 Spring AI 的 ChatMemory 接口，通过 FileSystemSessionManager 进行消息的持久化和加载，并提供游标感知的消息获取功能。统一记忆管理服务由 `MemoryManager` 提供，支持智能体主动记忆（工具调用）和事件驱动记忆（上下文压缩、会话结束整理）。
+本包实现了对话记忆管理和持久化记忆服务，实现 Spring AI 的 ChatMemory 接口，通过 FileSystemSessionManager 进行消息的持久化和加载，并提供游标感知的消息获取功能。统一记忆管理服务由 `MemoryManager` 提供，支持智能体主动记忆（工具调用）和事件驱动记忆（上下文压缩）。
+
+## 记忆架构（两层）
+
+1. **热记忆（memory.md）**：自动注入上下文窗口，智能体通过工具主动读写
+2. **上下文桥接（session.summary）**：压缩后的早期对话摘要，由 ProactiveContextAdvisor 注入
 
 ## 核心类
 
@@ -30,22 +35,20 @@ DeepSeek 等模型严格要求 `AssistantMessage(tool_calls)` 后必须紧跟对
 - `currentContextLength` 由 `UsageAdvisor` 维护（不再由 CompactChatMemory 估算）
 
 ### MemoryManager
-统一记忆管理服务，替代旧版 `MemorySearchService`。所有记忆工具通过它操作，Session 处理 MemoryEvent 时也调用它。按 agentId 解析路径，不再硬编码 "default"。
+统一记忆管理服务。所有记忆工具通过它操作，Session 处理 MemoryEvent 时也调用它。按 agentId 解析路径，不再硬编码 "default"。
 
 **Spring 注解：** `@Component`，通过 `@RequiredArgsConstructor` 注入 `ModelFactory`
 
 **存储路径：**
-- memory.md：`~/.autiva/workspace/{agentId}/memory.md`
-- 日流水账：`~/.autiva/workspace/{agentId}/memories/{YYYY-MM-DD}.md`
-- transcripts：`~/.autiva/workspace/{agentId}/memories/transcripts/{sessionId}.txt`
+- memory.md：`~/.autiva/agents/{agentId}/memory.md`
+- transcripts：`~/.autiva/workspace/{agentId}/transcripts/`
 
-**核心方法（6 个）：**
-- `save(agentId, content, target)`: 追加记忆到 memory.md（target="memory"）或日流水账（target="journal"）
+**核心方法（5 个）：**
+- `save(agentId, content)`: 追加记忆到 memory.md
 - `update(agentId, section, content)`: 更新 memory.md 的指定 `## 区块`（用户画像/关键偏好/近期事件/例行提醒）
-- `delete(agentId, type, target)`: 清空 memory.md 区块（type="section"）或删除日流水账文件（type="journal"）
-- `search(agentId, query, limit)`: 搜索记忆文件，返回格式化结果列表
+- `delete(agentId, section)`: 清空 memory.md 指定区块
+- `search(agentId, query, limit)`: 搜索 memory.md，返回格式化结果列表
 - `compact(agentId, sessionId, messages, existingSummary)`: 异步上下文压缩，调用 LLM 生成摘要并合并已有摘要
-- `consolidate(agentId, messages)`: 会话结束异步检查遗漏记忆，提取关键事实追加到日流水账
 
 **辅助方法：**
 - `resolveAgentId(sessionId)`: 从 sessionId 解析出 agentId（格式 `{agentId}-{type}-{source}-{userId}-{timestamp}`）
@@ -89,7 +92,7 @@ UsageAdvisor 检测超阈值
          │
          └── 发布 MemoryEvent.CONTEXT_COMPACT 到 inBox
                    │
-                   └── Session.handleContextCompact()（异步，boundedElastic）
+                   └── SessionRunner.handleContextCompact()（异步，boundedElastic）
                              │
                              ├── 1. MemoryManager.compact()：
                              │       ├── 保存原始消息到 transcripts
@@ -100,45 +103,32 @@ UsageAdvisor 检测超阈值
                              └── 4. 重置 currentContextLength = 0
 ```
 
-### 会话结束整理
-```
-Session.stop()
-         │
-         └── 发布 MemoryEvent.SESSION_END 到 inBox
-                   │
-                   └── Session.handleSessionEnd()（异步，boundedElastic）
-                             │
-                             └── MemoryManager.consolidate()：
-                                   ├── 调用 LLM 提取关键事实
-                                   ├── 若无值得记忆内容则跳过
-                                   └── 追加到日流水账（不自动合并到 memory.md，由智能体主动决定）
-```
-
 **默认配置：**
 - contextCapacity: 64000（DEEPSEEK）/ 32000（QWEN）
 - compactionThreshold: 0.8
 
 ## 智能体主动记忆
 智能体通过 4 个记忆工具主动读写记忆（详见 tool/AGENTS.md）：
-- `memory_save`: 追加记忆到 memory.md 或日流水账
+- `memory_save`: 追加记忆到 memory.md
 - `memory_update`: 更新 memory.md 指定区块
-- `memory_delete`: 清空区块或删除日流水账
-- `memory_search`: 搜索记忆文件
+- `memory_delete`: 清空 memory.md 指定区块
+- `memory_search`: 搜索 memory.md
 
 所有工具通过 `MemoryManager.resolveAgentId(sessionId)` 解析 agentId，委托 MemoryManager 执行。
 
 ## 设计模式
 - 代理模式：CompactChatMemory 代理 FileSystemSessionManager 进行消息管理
 - 游标感知：CompactChatMemory.get() 只返回游标后的消息
-- 事件驱动：压缩和整理通过 MemoryEvent 异步触发，不阻塞对话流
+- 事件驱动：压缩通过 MemoryEvent 异步触发，不阻塞对话流
 - 主动记忆：智能体通过工具主动读写记忆，替代旧版自动召回
 
 ## 注意事项
 1. conversationId 直接使用 sessionId
 2. 消息持久化由 FileSystemSessionManager 负责
-3. 上下文压缩由 UsageAdvisor 触发 MemoryEvent，Session 异步处理
+3. 上下文压缩由 UsageAdvisor 触发 MemoryEvent，SessionRunner 异步处理
 4. currentContextLength 语义为 token 数，由 UsageAdvisor 从模型响应 Usage 中提取
 5. CompactChatMemory 通过 MessageChatMemoryAdvisor 注册到 ChatClient，历史消息自动注入
 6. 游标前的消息以摘要形式通过 ProactiveContextAdvisor 注入
 7. MemoryManager 是 Spring @Component，按 agentId 解析路径，不硬编码 "default"
 8. 旧版 MemorySearchService、MemoryCompactAdvisor、LongMemoryConsolidateAdvisor 已移除
+9. 日流水账（memory/YYYY-MM-DD.md）和 consolidate() 已移除，记忆架构简化为两层

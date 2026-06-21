@@ -29,7 +29,6 @@ import org.springframework.util.Assert;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * 启动新的代理来自主处理复杂的多步骤任务。
@@ -46,21 +45,18 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TaskTool extends AbstractTool<TaskTool.Input> {
 
-    private static final String TASK_DESCRIPTION_TEMPLATE = """
+    private static final String TASK_DESCRIPTION = """
             启动新的代理来自主处理复杂的多步骤任务。
-            
-            Task工具启动专门的代理（子进程），它们自主处理复杂任务。每种代理类型都有特定的能力和可用的工具。
-            
-            可用的代理类型及其能力：
-            %s
-            
+
+            Task工具启动专门的代理（子进程），它们自主处理复杂任务。每种代理类型都有特定的能力和可用的工具。可用的代理类型已在系统提示词中列出。
+
             使用Task工具时，必须指定subagent_type参数来选择使用哪种代理类型。
-            
+
             何时不应使用Task工具：
             - 简单的网页内容获取，可以直接使用WebFetch工具
             - 管理任务列表，使用TodoWrite工具
             - 向用户提问，使用AskUserQuestion工具
-            
+
             使用说明：
             - 始终包含简短描述（3-5个词）总结代理将要做什么
             - 尽可能并发启动多个代理，以最大化性能；为此，使用包含多个工具使用的单条消息
@@ -308,15 +304,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             Assert.notNull(this.agentDefinitionManager, "必须提供agentDefinitionManager");
             Assert.notNull(this.inMemorySessionManager, "必须提供inMemorySessionManager");
 
-            // 获取所有子智能体定义，构建描述
-            List<AgentDefinition> subagentDefs = agentDefinitionManager.getSubagentDefinitions();
-            String subagentRegistrations = subagentDefs.stream()
-                    .map(AgentDefinition::toRegistrationText)
-                    .collect(Collectors.joining("\n"));
-
-            String description = TASK_DESCRIPTION_TEMPLATE.formatted(subagentRegistrations);
-
-            return new TaskTool(description, toolkit, modelFactory,
+            return new TaskTool(TASK_DESCRIPTION, toolkit, modelFactory,
                     this.taskRepository, this.toolUIBridge,
                     this.agentDefinitionManager, this.inMemorySessionManager);
         }

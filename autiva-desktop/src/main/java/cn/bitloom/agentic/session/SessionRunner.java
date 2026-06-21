@@ -69,11 +69,10 @@ public class SessionRunner {
     }
 
     /**
-     * 停止会话：发布 SESSION_END 事件触发异步记忆检查，然后取消订阅。
+     * 停止会话：取消订阅。
      */
     public void stop() {
         this.session.setSessionState(SessionState.STOPPED);
-        EventBus.publishIn(MemoryEvent.sessionEnd(this.session.getId(), this.session.getAgentId()));
         if (this.subscription != null) {
             this.subscription.dispose();
             this.subscription = null;
@@ -90,9 +89,8 @@ public class SessionRunner {
                 log.warn("[SessionRunner] MemoryManager 未注入，跳过记忆事件: {}", event.getType());
                 return;
             }
-            switch (event.getType()) {
-                case CONTEXT_COMPACT -> handleContextCompact(memoryManager);
-                case SESSION_END -> handleSessionEnd(memoryManager);
+            if (event.getType() == MemoryEvent.Type.CONTEXT_COMPACT) {
+                handleContextCompact(memoryManager);
             }
         } catch (Exception e) {
             log.warn("[SessionRunner] 处理记忆事件失败: {}", event.getType(), e);
@@ -112,13 +110,5 @@ public class SessionRunner {
         this.session.setMemoryCursor(this.session.getMessages().size());
         this.session.setCurrentContextLength(0);
         log.info("[SessionRunner] 上下文压缩完成: sessionId={}, newCursor={}", this.session.getId(), this.session.getMemoryCursor());
-    }
-
-    /**
-     * 会话结束异步检查遗漏记忆
-     */
-    private void handleSessionEnd(MemoryManager memoryManager) {
-        List<Message> messages = new ArrayList<>(this.session.getMessages());
-        memoryManager.consolidate(this.session.getAgentId(), messages);
     }
 }

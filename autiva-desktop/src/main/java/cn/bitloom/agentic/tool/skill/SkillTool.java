@@ -21,15 +21,13 @@ import java.util.stream.Collectors;
 public class SkillTool extends AbstractTool<SkillTool.Input> {
 
     private static final String DESCRIPTION = """
-            执行技能
-            
-            当用户要求你执行任务时，检查以下可用技能中是否有任何技能可以更有效地帮助完成任务。技能提供专门的能力和领域知识。
-            
+            执行技能。可用技能列表已在系统提示词中列出。
+
             如何使用技能：
             - 使用此工具仅传入技能名称调用技能（不带参数）
             - 当你调用技能时，你将看到 <command-message>"{name}"技能正在加载</command-message>
             - 技能的提示将展开并提供关于如何完成任务的详细说明
-            
+
             重要：
             - 每个技能的响应都会包含其根目录（basePath），执行脚本或引用技能内的文件时必须使用该根目录作为基准路径
             - 仅使用系统提示词中列出的可用技能

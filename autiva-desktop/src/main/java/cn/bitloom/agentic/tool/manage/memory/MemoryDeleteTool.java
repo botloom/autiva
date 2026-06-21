@@ -8,15 +8,14 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
 /**
- * 删除记忆条目（破坏性操作，需谨慎）。
+ * 清空 memory.md 指定区块内容（破坏性操作，需谨慎）。
  */
 @Slf4j
 public class MemoryDeleteTool extends AbstractTool<MemoryDeleteTool.Input> {
 
     private static final String DESCRIPTION = """
-            删除记忆条目（破坏性操作，需谨慎）。
-            type="section" 清空 memory.md 指定区块内容，target 为区块名称。
-            type="journal" 删除日流水账文件，target 为日期(YYYY-MM-DD)。""";
+            清空 memory.md 指定区块内容（破坏性操作，需谨慎）。
+            target 为区块名称（如：用户画像、关键偏好、近期事件、例行提醒）。""";
 
     private final MemoryManager memoryManager;
 
@@ -26,20 +25,19 @@ public class MemoryDeleteTool extends AbstractTool<MemoryDeleteTool.Input> {
     }
 
     public record Input(
-            @ToolParam(description = "删除类型：section 或 journal") String type,
-            @ToolParam(description = "区块名称或日期(YYYY-MM-DD)") String target
+            @ToolParam(description = "区块名称（如：用户画像、关键偏好、近期事件、例行提醒）") String target
     ) {}
 
     @Override
     public ToolResult execute(Input input, ToolContext context) {
         String sessionId = (String) context.getContext().get("sessionId");
         String agentId = memoryManager.resolveAgentId(sessionId);
-        log.info("[ToolCall] memory_delete - agentId={}, type={}, target={}", agentId, input.type(), input.target());
+        log.info("[ToolCall] memory_delete - agentId={}, target={}", agentId, input.target());
         try {
-            memoryManager.delete(agentId, input.type(), input.target());
-            return ToolResult.success("记忆已删除: " + input.type() + "/" + input.target());
+            memoryManager.delete(agentId, input.target());
+            return ToolResult.success("记忆区块已清空: " + input.target());
         } catch (Exception e) {
-            return ToolResult.error("删除记忆失败: " + e.getMessage());
+            return ToolResult.error("清空记忆失败: " + e.getMessage());
         }
     }
 }

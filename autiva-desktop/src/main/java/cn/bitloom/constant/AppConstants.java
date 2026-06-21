@@ -56,10 +56,6 @@ public class AppConstants {
             return Agents.agentDir(agentId).resolve("memory.md");
         }
 
-        public static Path memoryDir(String agentId) {
-            return Agents.agentDir(agentId).resolve("memory");
-        }
-
         public static Path configFile(String agentId) {
             return Agents.agentDir(agentId).resolve("config.json");
         }
