@@ -136,6 +136,9 @@
                         <option>javafx.graphics/com.sun.javafx.iio=ALL-UNNAMED</option>
                         <option>--add-opens</option>
                         <option>javafx.graphics/com.sun.javafx.iio.imageio=ALL-UNNAMED</option>
+                        <option>--enable-native-access=javafx.graphics</option>
+                        <option>--add-opens</option>
+                        <option>java.base/sun.misc=ALL-UNNAMED</option>
                     </options>
                 </configuration>
             </plugin>

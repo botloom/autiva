@@ -25,6 +25,8 @@ logging:
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${user.home}/.autiva/logs/autiva-front.log
   logback:
     rollingpolicy:
       file-name-pattern: ${user.home}/.autiva/logs/autiva-front.%d{yyyy-MM-dd}.%i.log

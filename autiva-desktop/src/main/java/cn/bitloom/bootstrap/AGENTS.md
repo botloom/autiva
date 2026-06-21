@@ -73,6 +73,13 @@
 - 容错模式：每步独立 try-catch，单步失败不阻塞后续步骤
 - 异步加载模式：Splash 秒级显示，Spring 上下文后台加载
 
+## JVM 参数
+javafx-maven-plugin 配置了以下 JVM 参数（pom.xml）：
+- `--add-opens javafx.graphics/com.sun.javafx.iio=ALL-UNNAMED` — 允许反射访问 JavaFX 内部图像 I/O 包
+- `--add-opens javafx.graphics/com.sun.javafx.iio.imageio=ALL-UNNAMED` — 允许反射访问 JavaFX ImageIO 桥接包
+- `--enable-native-access=javafx.graphics` — 允许 JavaFX 加载原生库（消除 JavaFX 21+ 原生访问警告）
+- `--add-opens java.base/sun.misc=ALL-UNNAMED` — 允许 dingtalk-stream SDK 访问 sun.misc.Unsafe（消除 Unsafe 弃用警告）
+
 ## 注意事项
 1. AppBootstrap 在 Spring 上下文启动之前执行，不能使用 Spring 依赖注入
 2. SplashScreen 不依赖 FXML 和 Spring，确保启动画面能秒级显示

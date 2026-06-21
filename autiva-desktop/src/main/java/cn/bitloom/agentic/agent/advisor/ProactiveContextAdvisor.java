@@ -98,7 +98,7 @@ public class ProactiveContextAdvisor implements StreamAdvisor, CallAdvisor {
             }
 
             if (!systemMessageFound) {
-                messages.add(0, new SystemMessage(contextText));
+                messages.addFirst(new SystemMessage(contextText));
             }
 
             return request.mutate()
