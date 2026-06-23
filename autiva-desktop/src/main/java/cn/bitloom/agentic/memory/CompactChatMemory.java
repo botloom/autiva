@@ -58,7 +58,17 @@ public class CompactChatMemory implements ChatMemory {
         }
         List<Message> messages = session.getMessages();
         int memoryCursor = session.getMemoryCursor();
-        return messages.subList(memoryCursor, messages.size());
+        int memoryBaseOffset = session.getMemoryBaseOffset();
+
+        // 内存列表从 memoryBaseOffset 开始
+        // 正常情况下 memoryBaseOffset >= memoryCursor（压缩后清理，内存只含游标后消息）
+        if (memoryBaseOffset >= memoryCursor) {
+            return messages;
+        }
+
+        // 兜底：如果 memoryBaseOffset < memoryCursor（不应发生），返回游标后的部分
+        int offset = Math.min(memoryCursor - memoryBaseOffset, messages.size());
+        return messages.subList(offset, messages.size());
     }
 
     @Override

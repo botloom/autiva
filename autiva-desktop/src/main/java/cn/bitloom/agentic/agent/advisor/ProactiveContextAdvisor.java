@@ -1,7 +1,10 @@
 package cn.bitloom.agentic.agent.advisor;
 
+import cn.bitloom.agentic.agent.AgentDefinition;
+import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.agent.RuntimeContext;
 import cn.bitloom.agentic.session.Session;
+import cn.bitloom.agentic.skill.SkillManager;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -19,32 +22,45 @@ import reactor.core.publisher.Flux;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 主动上下文注入 Advisor，基于 Session 和配置动态注入上下文到系统提示词。
  * <p>
- * 注入内容：
+ * 注入内容（每次请求动态计算）：
  * 1. 热记忆（memory.md 内容，每次请求从文件读取最新版本）
- * 2. 上下文桥接（Session.summary，压缩后的早期对话摘要）
- * 3. 技能描述（Agent 构建时计算）
- * 4. 子智能体描述（Agent 构建时计算）
+ * 2. 环境元数据（操作系统信息、当前时间与时区）
+ * 3. 上下文桥接（Session.summary，压缩后的早期对话摘要）
+ * 4. 技能描述（请求时通过 SkillManager 动态计算）
+ * 5. 子智能体描述（请求时通过 AgentDefinitionManager 动态计算）
  * <p>
  * Session 通过 RuntimeContext 传递，无需在构建时持有 SessionManager。
+ * 技能和子智能体描述改为请求时动态计算，确保运行时变更能被感知。
  */
 @Slf4j
 @Builder
 public class ProactiveContextAdvisor implements StreamAdvisor, CallAdvisor {
 
-    /** 技能描述文本（Agent 构建时计算，相对稳定） */
-    private final String skillDescriptions;
+    /** 技能管理器（请求时动态计算技能描述） */
+    private final SkillManager skillManager;
 
-    /** 子智能体描述文本（Agent 构建时计算，相对稳定） */
-    private final String subagentDescriptions;
+    /** 智能体定义管理器（请求时动态获取子智能体定义） */
+    private final AgentDefinitionManager definitionManager;
+
+    /** 当前智能体定义（提供 subagents 列表） */
+    private final AgentDefinition definition;
 
     /** memory.md 文件路径，请求时读取最新内容 */
     private final Path memoryFilePath;
+
+    /** 时间格式化器：yyyy-MM-dd HH:mm:ss (UTC+HH:mm) */
+    private static final DateTimeFormatter TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Override
     public @NonNull String getName() {
@@ -123,17 +139,25 @@ public class ProactiveContextAdvisor implements StreamAdvisor, CallAdvisor {
             sb.append("\n<memory>\n").append(memoryContent).append("\n</memory>");
         }
 
-        // 2. 技能描述
-        if (skillDescriptions != null && !skillDescriptions.isBlank()) {
-            sb.append("\n<skills>\n").append(skillDescriptions).append("\n</skills>");
+        // 2. 环境元数据（OS + 时间）
+        String envText = buildEnvironmentText();
+        if (!envText.isBlank()) {
+            sb.append("\n<environment>\n").append(envText).append("\n</environment>");
         }
 
-        // 3. 子智能体描述
-        if (subagentDescriptions != null && !subagentDescriptions.isBlank()) {
-            sb.append("\n<subagents>\n").append(subagentDescriptions).append("\n</subagents>");
+        // 3. 技能描述（动态计算）
+        String skillDesc = buildSkillDescriptions();
+        if (skillDesc != null && !skillDesc.isBlank()) {
+            sb.append("\n<skills>\n").append(skillDesc).append("\n</skills>");
         }
 
-        // 4. 上下文桥接（Session.summary）
+        // 4. 子智能体描述（动态计算）
+        String subagentDesc = buildSubagentDescriptions();
+        if (subagentDesc != null && !subagentDesc.isBlank()) {
+            sb.append("\n<subagents>\n").append(subagentDesc).append("\n</subagents>");
+        }
+
+        // 5. 上下文桥接（Session.summary）
         RuntimeContext ctx = (RuntimeContext) request.context().get("runtimeContext");
         if (ctx != null && ctx.getSession() != null) {
             Session session = ctx.getSession();
@@ -151,6 +175,67 @@ public class ProactiveContextAdvisor implements StreamAdvisor, CallAdvisor {
             return null;
         }
         return result;
+    }
+
+    /**
+     * 构建环境元数据文本（OS 信息 + 当前时间与时区）
+     */
+    private String buildEnvironmentText() {
+        StringBuilder sb = new StringBuilder();
+        String osName = System.getProperty("os.name", "unknown");
+        String osVersion = System.getProperty("os.version", "");
+        String osArch = System.getProperty("os.arch", "unknown");
+
+        sb.append("- OS: ").append(osName);
+        if (!osVersion.isEmpty()) {
+            sb.append(" ").append(osVersion);
+        }
+        sb.append(" (").append(osArch).append(")");
+
+        ZoneId zoneId = ZoneId.systemDefault();
+        ZonedDateTime now = ZonedDateTime.now(zoneId);
+        sb.append("\n- Time: ").append(now.format(TIME_FORMATTER));
+
+        // 时区偏移：UTC+08:00
+        sb.append(" (UTC").append(now.getOffset().getId()).append(")");
+
+        return sb.toString();
+    }
+
+    /**
+     * 动态构建技能描述（每次请求从 SkillManager 获取最新）
+     */
+    private String buildSkillDescriptions() {
+        if (skillManager == null) {
+            return null;
+        }
+        try {
+            return skillManager.getDescription();
+        } catch (Exception e) {
+            log.debug("[ProactiveContextAdvisor] 获取技能描述失败", e);
+            return null;
+        }
+    }
+
+    /**
+     * 动态构建子智能体描述（每次请求从 AgentDefinitionManager 获取最新）
+     */
+    private String buildSubagentDescriptions() {
+        if (definition == null || definitionManager == null) {
+            return null;
+        }
+        try {
+            return definition.subagents().stream()
+                    .map(name -> {
+                        AgentDefinition def = definitionManager.getDefinition(name);
+                        return def != null ? "- " + name + ": " + def.description() : "";
+                    })
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.joining("\n"));
+        } catch (Exception e) {
+            log.debug("[ProactiveContextAdvisor] 获取子智能体描述失败", e);
+            return null;
+        }
     }
 
     /**

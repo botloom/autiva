@@ -2,9 +2,9 @@ package cn.bitloom.bridge.desktop;
 
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.node.QuestionCard;
-import cn.bitloom.node.TaskCard;
-import cn.bitloom.node.TodoCard;
+import cn.bitloom.node.tool.QuestionCard;
+import cn.bitloom.node.tool.TaskCard;
+import cn.bitloom.node.tool.TodoCard;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import lombok.Setter;

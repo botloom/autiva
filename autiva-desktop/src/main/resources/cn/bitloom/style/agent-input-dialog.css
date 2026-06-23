@@ -1,0 +1,80 @@
+.agent-input-dialog {
+    -fx-background-color: #ffffff;
+    -fx-padding: 24;
+    -fx-spacing: 16;
+}
+
+.agent-input-dialog__message {
+    -fx-font-size: 14px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #86868b;
+}
+
+.agent-input-dialog__input {
+    -fx-font-size: 14px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: #f5f5f7;
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(0, 0, 0, 0.08);
+    -fx-border-width: 1px;
+    -fx-border-radius: 8;
+    -fx-padding: 8 12;
+    -fx-pref-height: 36;
+}
+
+.agent-input-dialog__input:focused {
+    -fx-border-color: #0071e3;
+    -fx-background-color: #ffffff;
+}
+
+.agent-input-dialog__footer {
+    -fx-spacing: 8;
+    -fx-alignment: center-right;
+    -fx-padding: 4 0 0 0;
+}
+
+.agent-input-dialog__btn {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 28;
+    -fx-padding: 4 12;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.agent-input-dialog__btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}
+
+.agent-input-dialog__btn:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+}
+
+.agent-input-dialog__btn-primary {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 28;
+    -fx-padding: 4 12;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.agent-input-dialog__btn-primary:hover {
+    -fx-background-color: rgba(0, 113, 227, 0.08);
+}
+
+.agent-input-dialog__btn-primary:pressed {
+    -fx-background-color: rgba(0, 113, 227, 0.15);
+}

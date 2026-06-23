@@ -48,7 +48,8 @@
 
 **瞬态字段（不序列化，@JsonIgnore）：**
 - `agent`: Agent 实例
-- `messages`: List\<Message\> 消息列表（Spring AI 聊天记忆）
+- `messages`: List\<Message\> 消息列表（Spring AI 聊天记忆，只保留 memoryBaseOffset 之后的消息）
+- `memoryBaseOffset`: 内存列表第一条消息对应磁盘 messages.jsonl 的行号（压缩后清理内存时推进，加载更多历史时回退）
 - `memoryManager`: MemoryManager 实例（由 FileSystemSessionManager.activate() 注入，子 Session 不注入）
 
 **方法：**
@@ -63,7 +64,7 @@ Session 编排器，负责主会话的消息循环和记忆事件处理。从 Se
   - `MemoryEvent` → 异步处理（`Schedulers.boundedElastic()`），不阻塞对话流
 - `stop()`: 设置会话状态为 STOPPED，取消订阅
 - `handleMemoryEvent(event)`: 处理 CONTEXT_COMPACT 事件，调用 handleContextCompact
-- `handleContextCompact(memoryManager)`: 调用 `memoryManager.compact()` 生成摘要，推进 memoryCursor，重置 currentContextLength
+- `handleContextCompact(memoryManager)`: 调用 `memoryManager.compact()` 生成摘要，推进 memoryCursor 和 memoryBaseOffset，清理内存中的已压缩消息（磁盘保留），重置 currentContextLength
 
 ### ISessionManager
 Session 管理器统一接口。不同的实现提供不同的存储策略：
@@ -105,7 +106,7 @@ Session 管理器统一接口。不同的实现提供不同的存储策略：
 - `chatMemory`: CompactChatMemory（@Lazy，避免循环依赖）
 - `memoryManager`: MemoryManager — 记忆管理器
 - `skillManager`: SkillManager — 技能管理器（计算技能描述传给 ProactiveContextAdvisor）
-- `sessions`: Map\<String, Session\> 会话内存缓存
+- `sessions`: Map\<String, Session\> 会话内存缓存（LRU 策略，保留最近 5 个，超出时停止 SessionRunner + 清理消息）
 - `agentCache`: Map\<String, Agent\> Agent 实例缓存（懒加载）
 - `runners`: Map\<String, SessionRunner\> SessionRunner 实例缓存
 
@@ -113,11 +114,13 @@ Session 管理器统一接口。不同的实现提供不同的存储策略：
 - `init()`: @PostConstruct，从 workspace/{agentId}/sessions/ 加载所有会话，预加载 default 主智能体
 - `create(agentId, parentSessionId, type, respType, model)`: 创建新的桌面端 Session，走完整流程：创建 → 持久化 → 注册 → 激活（委托重载方法传 projectPath=null, reviewDiff=false）
 - `create(agentId, parentSessionId, type, respType, model, projectPath, reviewDiff)`: 创建带编码参数的 Session（coder 场景使用，projectPath 关联项目路径，reviewDiff=true 启用 Diff 审核）
-- `activate(sessionId)`: 激活会话（注入 Agent、注入 MemoryManager、加载历史消息、通过 SessionRunner 启动消息循环）
+- `activate(sessionId)`: 激活会话（注入 Agent、注入 MemoryManager、设置 memoryBaseOffset、只加载最近 100 条消息（环形缓冲区）、通过 SessionRunner 启动消息循环）
+- `loadRecentMessages(file, count)`: 高效加载文件最后 N 行并反序列化（环形缓冲区，避免全量加载）
+- `loadMessagesRange(sessionId, offset, count)`: 从磁盘 messages.jsonl 加载指定行号范围的消息（供"加载更多历史"使用）
 - `stopSession(sessionId)`: 通过 SessionRunner 停止会话的消息处理循环
 - `getOrCreateAgent(agentId)`: 获取或懒加载创建主智能体 Agent 实例（computeIfAbsent，默认开启 memory + compact，计算 skillDescriptions/subagentDescriptions/memoryFilePath 传给 ProactiveContextAdvisor）
 - `getById(sessionId)`: 获取会话
-- `getDesktopSessions()`: 获取所有桌面端 session
+- `getDesktopSessions()`: 获取所有桌面端 session（同步块迭代 synchronizedMap）
 - `store(sessionId, messages)`: 追加消息到 messages.jsonl
 - `clear(sessionId)`: 清空会话消息记录
 - `delete(sessionId)`: 删除会话（通过 SessionRunner 停止消息循环）

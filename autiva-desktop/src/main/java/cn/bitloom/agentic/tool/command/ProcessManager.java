@@ -170,6 +170,8 @@ public class ProcessManager {
 
     static class BackgroundProcess {
         private static final long INPUT_WAIT_IDLE_MS = 15_000L;
+        private static final int MAX_BUFFER_SIZE = 512 * 1024;        // 保留最后 512KB
+        private static final int TRUNCATE_THRESHOLD = 1024 * 1024;    // 超过 1MB 时触发截断
 
         final Process process;
         final String id;
@@ -210,7 +212,16 @@ public class ProcessManager {
                 byte[] buf = new byte[8192];
                 int n;
                 while ((n = stdout.read(buf)) != -1) {
-                    synchronized (rawBuffer) { rawBuffer.write(buf, 0, n); }
+                    synchronized (rawBuffer) {
+                        rawBuffer.write(buf, 0, n);
+                        // 超过阈值时截断，保留最后 MAX_BUFFER_SIZE 字节
+                        if (rawBuffer.size() > TRUNCATE_THRESHOLD) {
+                            byte[] all = rawBuffer.toByteArray();
+                            rawBuffer.reset();
+                            rawBuffer.write(all, all.length - MAX_BUFFER_SIZE, MAX_BUFFER_SIZE);
+                            log.debug("[BackgroundProcess] buffer truncated to {} bytes", MAX_BUFFER_SIZE);
+                        }
+                    }
                     lastOutputTimeMs = System.currentTimeMillis();
                     decodeAndEnqueue();
                     signalNewOutput();

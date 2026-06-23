@@ -75,7 +75,7 @@
 - 处理发送输入框和发送按钮事件
 - 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 管理模型选择 ComboBox
-- 管理智能体选择按钮（agentSelector）：点击弹出 ContextMenu 选择智能体（从 AgentDefinitionManager 动态获取主智能体列表）
+- 管理智能体选择按钮（agentSelector）：通过 `setupAgentSelector()` 方法初始化，从 `AgentDefinitionManager.getMainAgentIds()` 获取主智能体列表填充到 ComboBox items，默认选中 Store.currentAgent 或 "default"，监听选择变化调用 viewModel.switchAgent()
 - 编码模式项目选择栏管理：agentSelector="coder" 时显示 projectBar（项目选择 ComboBox + 新建项目按钮 + 打开本地文件夹按钮），其他智能体时隐藏
 - 处理语音输入按钮
 - 画布按钮：打开 CanvasDialog 弹窗
@@ -117,27 +117,73 @@
 - `viewModel.listProjects()` - 列出所有注册项目
 
 ### AgentPageController
-智能体配置页控制器。
+智能体配置页控制器，实现 Initializable、ButtonBarHolder、PageHolder。
 
 **Spring 注解：** `@Component`
 
 **依赖注入：**
 - `AgentPageViewModel`: 视图模型
+- `WindowManager`: 窗口管理器（打开配置编辑器对话框）
 
 **职责（仅 UI）：**
-- 渲染智能体卡片（TitledPane）
-- 通过系统文件管理器打开配置目录（`Desktop.getDesktop().open()`）
-- 删除确认弹窗
+- 渲染智能体卡片列表（ScrollPane + VBox，与 SkillPage 风格一致）
+- 每个卡片包含：名称、描述、操作按钮（打开目录/复制/删除）、配置文件列表
+- 新建智能体：弹出 TextInputDialog 输入名称
+- 删除智能体：确认弹窗后删除
+- 复制智能体：弹出 TextInputDialog 输入新名称
+- 打开目录：调用系统文件管理器
+- 编辑文件：通过 WindowManager 打开 AgentConfigEditorDialog
 
 **ViewModel 委托：**
-- `viewModel.loadAgents()` - 加载智能体列表
+- `viewModel.loadAgentsAsync()` - 异步加载智能体列表
 - `viewModel.getMainAgents()` - 获取主智能体列表
-- `viewModel.getSubagents()` - 获取子智能体列表
 - `viewModel.readFileContent()` - 读取文件内容
-- `viewModel.readSubagentContent()` - 读取子智能体内容
-- `viewModel.saveFile()` - 保存文件
-- `viewModel.saveSubagentConfig()` - 保存子智能体配置
-- `viewModel.deleteSubagent()` - 删除子智能体
+- `viewModel.createAgent()` - 创建新智能体
+- `viewModel.deleteAgent()` - 删除智能体
+- `viewModel.copyAgent()` - 复制智能体
+- `viewModel.openAgentDirectory()` - 打开智能体目录
+- `viewModel.agentExists()` - 检查智能体是否存在
+
+**按钮栏配置：**
+- "新建智能体" 按钮
+
+### AgentConfigEditorDialogController
+智能体配置文件编辑器对话框控制器，实现 WindowManager.StageAware、DialogHolder、Initializable。
+
+**Spring 注解：** `@Component`
+
+**DialogHolder 配置：**
+- 宽 700、高 500、可调整大小（最小 500x350）
+
+**职责：**
+- 初始化编辑器内容（文件内容）
+- 保存文件内容到磁盘
+- 取消关闭对话框
+
+### AgentInputDialogController
+智能体输入对话框控制器，实现 WindowManager.StageAware、DialogHolder、Initializable。
+
+**Spring 注解：** `@Component`
+
+**DialogHolder 配置：**
+- 宽 400、高 180
+
+**职责：**
+- 初始化提示信息和默认值
+- 确认时通过 `Consumer<String>` 回调返回输入值
+- Enter 键确认，空值不响应
+
+### AgentConfirmDialogController
+智能体确认对话框控制器，实现 WindowManager.StageAware、DialogHolder、Initializable。
+
+**Spring 注解：** `@Component`
+
+**DialogHolder 配置：**
+- 宽 380、高 180
+
+**职责：**
+- 初始化标题和提示信息
+- 确认/取消时通过 `Consumer<Boolean>` 回调返回结果
 
 ### SettingsPageController
 设置页控制器。
@@ -208,6 +254,43 @@
 - `viewModel.getTaskConfig()` - 获取任务配置描述
 - `viewModel.truncateMessage()` - 截断消息
 - `viewModel.formatCreateTime()` - 格式化创建时间
+
+### GepPageController
+基因进化管理页控制器（窄列卡片列表风格，对齐 AgentPage 设计规范）。
+
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `GepPageViewModel`: 视图模型（MVVM）
+
+**职责（仅 UI）：**
+- 渲染操作卡片（策略选择 + 执行周期 + 提取经验）
+- 渲染概览卡片（统计行：基因数/事件数/路由数/规则数）
+- 渲染可展开基因卡片（收起：标题+描述+标签+展开按钮；展开：策略步骤/约束/验证/反模式/代码/版本历史/父基因/时间/操作按钮）
+- 渲染路由卡片（行列表 + 添加/删除）
+- 渲染记忆卡片（行列表 + 添加/删除）
+- 渲染事件卡片（行列表）
+- 渲染胶囊卡片（行列表 + 删除）
+- 添加路由/规则对话框
+- 基因启用/禁用/删除操作
+- 版本回滚确认
+
+**FXML 字段：**
+- `gepPage`: 页面根容器
+- `contentContainer`: 内容容器（动态填充）
+
+**ViewModel 委托：**
+- `viewModel.loadData()` - 加载所有数据
+- `viewModel.toggleGene(id)` - 切换基因启用状态
+- `viewModel.deleteGene(id)` - 删除基因
+- `viewModel.runEvolutionCycle()` - 执行进化周期
+- `viewModel.extractAndEvolve()` - 提取经验并进化
+- `viewModel.addRoute(pattern, geneId, weight)` - 添加路由
+- `viewModel.removeRoute(pattern)` - 删除路由
+- `viewModel.addRule(pattern, action, confidence)` - 添加记忆规则
+- `viewModel.deleteRule(ruleId)` - 删除记忆规则
+- `viewModel.getGeneHistory(geneId)` - 获取基因版本历史
+- `viewModel.revertGene(geneId, commitHash)` - 回滚基因版本
 
 ### SideBarController
 侧边栏控制器。

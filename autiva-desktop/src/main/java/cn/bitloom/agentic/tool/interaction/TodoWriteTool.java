@@ -33,7 +33,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 		4. 用户提供多个任务 - 当用户提供要完成的事项列表（编号或逗号分隔）时
 		5. 收到新指令后 - 立即将用户需求捕获为待办事项
 		6. 开始处理任务时 - 在开始工作前将其标记为in_progress。理想情况下，一次只能有一个待办事项处于in_progress状态
-		7. 完成任务后 - 将其标记为已完成，并添加在实现过程中发现的任何新后续任务
+		7. 完成任务后 - 将其标记为已完成，并添加在实现过程中发现的任何新后续任务。**即使这是最后一个任务，也必须调用TodoWrite将其标记为completed**
 
 		## 何时不使用此工具
 
@@ -48,7 +48,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 		## 验证规则
 
 		此工具验证以下内容：
-		- 一次只能有一个任务处于in_progress状态
+		- 最多只能有一个任务处于in_progress状态（允许所有任务完成时为0）
 		- 任务内容和activeForm不能为空或空白
 		- 所有任务必须具有有效的状态值（pending、in_progress、completed）
 
@@ -177,7 +177,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 
 		1. **任务状态**：使用这些状态来跟踪进度：
 		- pending: 任务尚未开始
-		- in_progress: 正在处理（限制为一次一个任务）
+		- in_progress: 正在处理（最多一次一个任务，全部完成时可为0）
 		- completed: 任务成功完成
 
 		**重要**：任务描述必须有两种形式：
@@ -187,7 +187,8 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 		2. **任务管理**：
 		- 在工作时实时更新任务状态
 		- 完成后立即将任务标记为已完成（不要批量完成）
-		- 任何时候必须恰好有一个任务处于in_progress状态（不能少，也不能多）
+		- 任何时候最多有一个任务处于in_progress状态（允许所有任务完成时为0）
+		- **当最后一个任务完成时，必须调用TodoWrite将其标记为completed，此时所有任务都为completed状态是正常的**
 		- 在开始新任务之前完成当前任务
 		- 从列表中完全删除不再相关的任务
 
@@ -261,7 +262,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 	}
 
 	/**
-	 * 根据以下规则验证待办列表： - 一次只能有一个任务处于in_progress状态 - 任务内容和activeForm不能为空或空白 -
+	 * 根据以下规则验证待办列表： - 最多只能有一个任务处于in_progress状态（允许为0） - 任务内容和activeForm不能为空或空白 -
 	 * 所有任务必须具有有效的状态值
 	 * @param todos 要验证的待办列表
 	 * @throws IllegalArgumentException 如果验证失败
@@ -300,20 +301,15 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 		// 计算in_progress任务数量
 		long inProgressCount = items.stream().filter(item -> item.status() == Status.in_progress).count();
 
-		if (inProgressCount > 1) {
-			throw new IllegalArgumentException("一次只能有一个任务处于in_progress状态。当前有 " + inProgressCount
-					+ " 个任务处于in_progress状态。请更新任务状态，确保恰好有一个任务处于in_progress状态。");
-		}
-
 		// 检查是否有任何任务
 		if (items.isEmpty()) {
 			throw new IllegalArgumentException("待办列表不能为空。至少需要一个任务。");
 		}
 
-		// 如果有任何任务，必须恰好有一个处于in_progress状态
-		if (inProgressCount != 1) {
-			throw new IllegalArgumentException("必须恰好有一个任务处于in_progress状态。当前有 " + inProgressCount
-					+ " 个任务处于in_progress状态。请更新任务状态，确保恰好有一个任务处于in_progress状态。");
+		// 允许所有任务完成时 in_progress 为 0，但不能超过 1 个
+		if (inProgressCount > 1) {
+			throw new IllegalArgumentException("一次只能有一个任务处于in_progress状态。当前有 " + inProgressCount
+					+ " 个任务处于in_progress状态。请更新任务状态，确保最多只有一个任务处于in_progress状态。");
 		}
 	}
 

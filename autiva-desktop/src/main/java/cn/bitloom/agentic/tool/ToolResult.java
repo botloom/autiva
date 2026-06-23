@@ -7,9 +7,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 工具统一返回值类型。
@@ -77,6 +79,24 @@ public class ToolResult {
 
     public static ToolResult warning(String message, Map<String, Object> data, String rawOutput) {
         return new ToolResult(Status.WARNING, message, data, rawOutput);
+    }
+
+    public static ToolResult toolNotFound(String toolName, Set<String> availableTools) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("requested_tool", toolName);
+        data.put("available_tools", new ArrayList<>(availableTools));
+        return new ToolResult(Status.ERROR,
+            "工具 '" + toolName + "' 不存在或当前智能体无权使用。可用工具: " + String.join(", ", availableTools),
+            data, null);
+    }
+
+    public static ToolResult toolDenied(String toolName, String reason) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("requested_tool", toolName);
+        data.put("reason", reason);
+        return new ToolResult(Status.ERROR,
+            "工具 '" + toolName + "' 被拒绝: " + reason,
+            data, null);
     }
 
     // ========== Builder ==========

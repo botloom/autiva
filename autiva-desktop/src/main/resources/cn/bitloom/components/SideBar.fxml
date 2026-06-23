@@ -2,7 +2,7 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-<?import cn.bitloom.node.SvgImageView?>
+<?import cn.bitloom.node.svg.SvgImageView?>
 
 <VBox fx:id="sideBar" styleClass="sidebar" xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.SideBarController"

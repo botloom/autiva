@@ -53,6 +53,23 @@ Spring @Component，统一管理工具注册和构建。
 - `buildToolCallbacks(AgentDefinition)`: 根据 AgentDefinition 构建工具回调列表，按 kind 分流
 - `buildAllTools()`: 构建工具集（文件、搜索、命令、交互、定时、Task、记忆、技能、管理、MCP），支持 config.json 白名单过滤。构建 WriteTool/EditTool 时传入 GuiDiffReviewHandler 和 DiffService（编码智能体 Diff 审核支持）
 
+### AutivaToolCallingManager
+自定义 `ToolCallingManager` 实现，注入到 `ToolCallingAdvisor` 中，替代 Spring AI 默认的 `DefaultToolCallingManager`。
+
+**核心功能：**
+- **工具存在性校验**：当 LLM 幻觉出不存在的工具名（如 Bash）时，返回 `ToolResult.toolNotFound()` 友好错误提示（而非抛异常），让 LLM 有机会自我纠正
+- **工具权限校验**：基于已注册工具名集合（`registeredToolNames`），阻止未授权的工具调用
+
+**核心字段：**
+- `registeredToolNames`: `Set<String>` — 已注册工具名集合，从 `List<ToolCallback>` 提取
+
+**核心方法：**
+- `resolveToolDefinitions(ToolCallingChatOptions)`: 从 chatOptions 提取工具定义（与 DefaultToolCallingManager 逻辑一致）
+- `executeToolCalls(Prompt, ChatResponse)`: 逐个执行工具调用，找不到工具时返回 `ToolResult.toolNotFound()` 错误响应，而非抛 `IllegalStateException`
+
+**注入方式：**
+在 `Agent.Builder.build()` 中创建 `AutivaToolCallingManager` 实例，通过 `ToolCallingAdvisor.builder().toolCallingManager()` 注入。
+
 ### ToolResult
 所有工具统一返回 `ToolResult` 实体类，`toToolCallback()` 内部自动调用 `toJson()` 供 Spring AI 框架消费。
 
@@ -66,6 +83,8 @@ Spring @Component，统一管理工具注册和构建。
 - `ToolResult.success(message)` / `ToolResult.success(message, data)` / `ToolResult.success(message, data, rawOutput)`
 - `ToolResult.error(message)` / `ToolResult.error(message, rawOutput)` / `ToolResult.error(message, data)`
 - `ToolResult.warning(message)` / `ToolResult.warning(message, data)` / `ToolResult.warning(message, data, rawOutput)`
+- `ToolResult.toolNotFound(toolName, availableTools)` — 工具不存在或无权使用，data 含 requested_tool 和 available_tools
+- `ToolResult.toolDenied(toolName, reason)` — 工具被权限拒绝，data 含 requested_tool 和 reason
 - `ToolResult.builder().status(...).message(...).data(...).rawOutput(...).build()`
 
 **序列化：**
@@ -94,6 +113,7 @@ Toolkit 内部按 AgentDefinition.kind() 分流，构建主智能体或子智能
 ```
 tool/
 ├── AbstractTool.java          # 抽象基类
+├── AutivaToolCallingManager.java # 自定义工具调用管理器（工具校验与权限控制）
 ├── Toolkit.java               # 工具容器
 ├── ToolResult.java            # 统一返回值
 ├── ToolUtils.java             # 共享工具方法
@@ -175,7 +195,19 @@ tool/
 ### file 包 (`cn.bitloom.agentic.tool.file`)
 文件系统操作工具，每个工具独立继承 AbstractTool。
 
-- **ReadTool**: 文件读取工具（继承 AbstractTool\<ReadTool.Input\>）。支持 offset/limit 分页，行号格式输出。成功时 data 含 file/start_line/end_line/total_lines，rawOutput 保留原始格式化文本
+- **ReadTool**: 文件读取工具（继承 AbstractTool\<ReadTool.Input\>）。支持 offset/limit 分页，行号格式输出。成功时 data 含 file/start_line/end_line/total_lines/tokens_used/token_budget，rawOutput 保留原始格式化文本。**大文件保护机制**（参考 Claude Code）：
+  - 文件大小预检查：超过 10MB 的文件直接拒绝，返回错误提示
+  - Token 预算控制：使用上下文窗口 60% 的 Token 预算（默认 120K tokens）
+  - 流式读取：边读边计算 Token，达到预算立即停止，避免内存溢出和 UI 卡死
+  - 行截断：超长行（>2000字符）自动截断
+  - Token 超限警告：超出 Token 预算时返回 WARNING 状态，提示用户使用 offset/limit 分段读取
+  - 使用 TokenEstimator 工具类进行 Token 估算
+  - **图片/二进制文件检测**（解决 LLM 读取截图卡死问题）：
+    * 支持的图片格式：PNG, JPG, JPEG, GIF, WEBP, BMP, ICO, SVG, TIFF 等
+    * 对于图片文件：返回基本信息（格式、大小、路径），不尝试读取内容，避免 UI 卡死
+    * 支持的二进制格式：EXE, DLL, ZIP, PDF, MP3, MP4, Office 文档等
+    * 对于二进制文件：返回类型提示和专用工具建议
+    * 通过文件头（Magic Bytes）额外检测未知二进制文件，防止误读
 - **WriteTool**: 文件写入工具（继承 AbstractTool\<WriteTool.Input\>）。写入/覆盖文件，自动创建父目录。成功时 data 含 file/bytes/action。**Diff 审核机制**：Builder 接受 DiffReviewHandler 和 DiffService，execute() 中检查 ToolContext 的 reviewDiff 标志，启用时生成 FileDiff 并通过 DiffReviewHandler 阻塞等待用户审核（GuiDiffReviewHandler 通过 ToolUIBridge.showDiffReview 展示 DiffReviewCard），批准后才写入真实文件，拒绝则返回错误
 - **EditTool**: 文件编辑工具（继承 AbstractTool\<EditTool.Input\>）。精确字符串替换，支持 replace_all。成功时 data 含 file/occurrences/replace_all，rawOutput 保留 cat-n 片段。使用 ToolUtils 静态方法。**Diff 审核机制**：同 WriteTool，Builder 接受 DiffReviewHandler 和 DiffService，reviewDiff 标志启用时阻塞审核
 
@@ -203,7 +235,7 @@ tool/
 交互类工具，统一继承 AbstractTool。
 
 - **AskUserQuestionTool**: 向用户提问澄清问题的工具（继承 AbstractTool\<AskUserQuestionTool.Input\>）。支持多选/单选问题，1-4个问题，每个2-4个选项。Builder 接受 QuestionHandler。name="AskUserQuestionTool"
-- **TodoWriteTool**: 结构化任务列表管理工具（继承 AbstractTool\<TodoWriteTool.Input\>）。验证规则：恰好一个 in_progress 任务。Builder 接受 TodoEventHandler。name="TodoWrite"
+- **TodoWriteTool**: 结构化任务列表管理工具（继承 AbstractTool\<TodoWriteTool.Input\>）。验证规则：最多一个 in_progress 任务（允许全部完成时为0）。DESCRIPTION 强调最后一个任务完成时也必须调用 TodoWrite 标记为 completed。Builder 接受 TodoEventHandler。name="TodoWrite"
 
 ### task 包 (`cn.bitloom.agentic.tool.task`)
 子代理任务工具，统一继承 AbstractTool。

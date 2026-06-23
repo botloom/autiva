@@ -73,31 +73,113 @@ VBox (settingsPage)
 - 透明轨道和按钮，极简风格
 
 ### AgentPage.fxml
-智能体配置管理页面视图。
+智能体配置管理页面视图，采用卡片列表布局。
 
 **控制器：** AgentPageController
+
+**样式表：** `@../style/agent-page.css`
 
 **结构：**
 ```
 VBox (agentPage)
-└── ScrollPane
+└── ScrollPane (agent-page__scroll-pane)
     └── VBox (agentListContainer) - 智能体列表容器
+        └── (动态生成) VBox (agent-page__card) - 每个智能体一个卡片
+            ├── HBox (agent-page__card-header) - 名称 + 操作按钮
+            │   ├── Label (agent-page__card-title) - 智能体名称
+            │   ├── Region - 弹性间隔
+            │   ├── Button - 打开目录
+            │   ├── Button - 复制
+            │   └── Button - 删除（红色）
+            ├── Label (agent-page__card-description) - 智能体描述
+            ├── Separator (agent-page__card-separator) - 分隔线
+            └── VBox (agent-page__file-list) - 配置文件列表
+                └── (动态生成) HBox (agent-page__file-row) - 每个配置文件一行
+                    ├── VBox (agent-page__file-info) - 文件名 + 描述
+                    └── Button (agent-page__file-btn) - 编辑按钮
 ```
 
 **功能：**
-- 显示智能体文件夹列表
-- 每个智能体显示其配置文件
-- 支持查看和编辑配置文件
+- 显示智能体卡片列表，每个卡片包含名称、描述和配置文件操作
+- 配置文件列表包含：agent.md（智能体定义）、config.json（工具与子智能体配置）、memory.md（记忆文件）
+- 点击编辑按钮打开 AgentConfigEditorDialog 编辑文件
+- 新建智能体：弹出输入对话框，复制 default 模板
+- 删除智能体：确认弹窗后删除整个目录
+- 复制智能体：弹出输入对话框，复制源智能体文件并替换名称
+- 打开目录：用系统文件管理器打开智能体目录
 
-**配置文件：**
-- 位于 `~/.autiva/workspace` 目录
-- 每个智能体一个文件夹
-- 文件内容为 Markdown 格式
+**配置文件路径：**
+- 位于 `~/.autiva/agents/{agentId}/` 目录
+- 每个智能体包含 agent.md、config.json、memory.md
 
 **滚动条样式：**
 - 宽度 6px，符合 Apple 设计规范
 - 半透明圆角滑块，悬停时加深
 - 透明轨道和按钮，极简风格
+
+### AgentConfigEditorDialog.fxml
+智能体配置文件编辑器对话框。
+
+**控制器：** AgentConfigEditorDialogController
+
+**样式表：** `@../style/agent-config-editor-dialog.css`
+
+**结构：**
+```
+VBox (agent-config-editor)
+├── TextArea (editorArea) - 编辑区（等宽字体）
+└── HBox (agent-config-editor__footer) - 底部按钮
+    ├── Button (cancelButton) - 取消
+    └── Button (saveButton) - 保存（蓝色）
+```
+
+**特性：**
+- 窗口尺寸 700x500，可调整大小（最小 500x350）
+- TextArea 使用等宽字体（Consolas/Menlo）
+- 保存按钮写回文件并关闭对话框
+
+### AgentInputDialog.fxml
+智能体输入对话框，用于新建/复制智能体时输入名称。
+
+**控制器：** AgentInputDialogController
+
+**样式表：** `@../style/agent-input-dialog.css`
+
+**结构：**
+```
+VBox (agent-input-dialog)
+├── Label (messageLabel) - 提示信息
+├── TextField (inputField) - 输入框
+└── HBox (agent-input-dialog__footer) - 底部按钮
+    ├── Button (cancelButton) - 取消
+    └── Button (confirmButton) - 确定（蓝色）
+```
+
+**特性：**
+- 窗口尺寸 400x180
+- Enter 键确认
+- 通过回调 `Consumer<String>` 返回输入结果
+
+### AgentConfirmDialog.fxml
+智能体确认对话框，用于删除确认等场景。
+
+**控制器：** AgentConfirmDialogController
+
+**样式表：** `@../style/agent-confirm-dialog.css`
+
+**结构：**
+```
+VBox (agent-confirm-dialog)
+├── Label (headerLabel) - 标题
+├── Label (messageLabel) - 提示信息
+└── HBox (agent-confirm-dialog__footer) - 底部按钮
+    ├── Button (cancelButton) - 取消
+    └── Button (confirmButton) - 确定（红色危险按钮）
+```
+
+**特性：**
+- 窗口尺寸 380x180
+- 通过回调 `Consumer<Boolean>` 返回确认结果
 
 ### SkillPage.fxml
 技能管理页面视图。

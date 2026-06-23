@@ -3,7 +3,7 @@ package cn.bitloom;
 import cn.bitloom.bootstrap.AppBootstrap;
 import cn.bitloom.bootstrap.SplashScreen;
 import cn.bitloom.constant.AppConstants;
-import cn.bitloom.node.SvgImageView;
+import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.util.ExecutorManager;
 import javafx.application.Application;
 import javafx.application.Platform;

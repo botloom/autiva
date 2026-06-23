@@ -13,11 +13,16 @@ import java.nio.file.Path;
 @Component
 public class EvolveConfig {
 
-    private final Path evolveDir = AppConstants.APP_DIR.resolve("evolve");
+    private final Path evolveDir = AppConstants.Evolve.EVOLVE_DIR;
     private final Path genesFile = evolveDir.resolve("genes.json");
     private final Path capsulesFile = evolveDir.resolve("capsules.json");
     private final Path eventsFile = evolveDir.resolve("events.jsonl");
     private final Path candidatesFile = evolveDir.resolve("candidates.jsonl");
+    private final Path genesDir = AppConstants.Evolve.GENES_DIR;
+    private final Path routingFile = AppConstants.Evolve.ROUTING_FILE;
+    private final Path memoryDir = AppConstants.Evolve.MEMORY_DIR;
+    private final Path memoryRulesFile = AppConstants.Evolve.MEMORY_RULES_FILE;
+    private final Path executionsDir = AppConstants.Evolve.EXECUTIONS_DIR;
 
     private StrategyPreset strategyPreset = StrategyPreset.BALANCED;
     private int signalDedupWindow = 8;
@@ -31,6 +36,9 @@ public class EvolveConfig {
     private double highFailureRate = 0.75;
     private double epigeneticDecay = 0.95;
     private double epigeneticBoostOnSuccess = 1.2;
+    private double experienceConfidenceThreshold = 0.7;
+    private int mutationFrequencyLimitPerHour = 10;
+    private double maxComplexityIncrease = 1.5;
 
     public void setStrategyPreset(StrategyPreset preset) {
         this.strategyPreset = preset;

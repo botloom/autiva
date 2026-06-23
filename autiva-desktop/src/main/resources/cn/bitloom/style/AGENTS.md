@@ -267,51 +267,42 @@ Markdown 编辑器对话框样式。
 - `.canvas-page__layer-list`: 图层列表
 
 ### gep-page.css
-基因进化管理页面样式。
+基因进化管理页面样式，对齐 AgentPage 设计规范（白底、窄列卡片列表、灰底蓝字按钮）。
 
 **样式类：**
-- `.gep-page`: 页面容器（白色背景）
-- `.gep-page__scroll-pane`: 滚动面板（6px 滚动条）
-- `.gep-page__content`: 内容区域
-- `.gep-page__section-label`: 分节标签
-- `.gep-page__card`: 卡片（白色，12px圆角，微阴影）
-- `.gep-page__row`: 行
-- `.gep-page__row-title`: 行标题
-- `.gep-page__action-btn`: 操作按钮（蓝色主按钮）
+- `.gep-page`: 页面容器（白色背景，padding 24，top-center）
+- `.gep-page__scroll-pane`: 滚动面板（pref-width 600, max-width 700, 6px 滚动条）
+- `.gep-page__content`: 内容区域（padding 0 32 32 32, spacing 12）
+- `.gep-page__section-label`: 分节标签（13px/600/#86868b）
+- `.gep-page__card`: 卡片（白色，12px圆角，边框 rgba(0,0,0,0.08)，阴影 12/20）
+- `.gep-page__card-title`: 卡片标题（18px/600/#1d1d1f）
+- `.gep-page__card-description`: 卡片描述（14px/#86868b）
+- `.gep-page__row`: 行（spacing 8, center-left）
+- `.gep-page__row-title`: 行标题（15px/500/#1d1d1f）
+- `.gep-page__row-subtitle`: 行副标题（13px/#86868b）
+- `.gep-page__btn`: 按钮（灰底蓝字，12px/600，8px圆角，#0071e3）
+- `.gep-page__btn--danger`: 危险按钮（红色文字 #ff3b30）
+- `.gep-page__tag`: 标签（11px/600，4px圆角）
+- `.gep-page__tag--REPAIR`: 修复分类（橙色）
+- `.gep-page__tag--OPTIMIZE`: 优化分类（绿色）
+- `.gep-page__tag--INNOVATE`: 创新分类（紫色）
+- `.gep-page__tag--enabled`: 启用状态（绿色）
+- `.gep-page__tag--disabled`: 禁用状态（灰色）
+- `.gep-page__tag--runtime`: 运行时类型（蓝色）
+- `.gep-page__tag--success`: 成功状态（绿色）
+- `.gep-page__tag--pending`: 待定状态（橙色）
+- `.gep-page__tag--failed`: 失败状态（红色）
+- `.gep-page__tag--unknown`: 未知状态（灰色）
+- `.gep-page__gene-detail`: 基因展开详情区
+- `.gep-page__gene-section-title`: 详情子区标题（13px/600/#86868b）
+- `.gep-page__gene-section-item`: 详情子区条目（13px/#424245）
+- `.gep-page__gene-code`: 代码块（深色背景，等宽字体）
+- `.gep-page__gene-meta`: 元信息文本（13px/#86868b）
+- `.gep-page__gene-version-row`: 版本历史行
+- `.gep-page__gene-version-text`: 版本历史文本（13px/#424245）
+- `.gep-page__gene-version-time`: 版本历史时间（13px/#86868b）
 - `.gep-page__strategy-select`: 策略选择器
-- `.gep-page__gene-item`: 基因列表项（分割线分隔）
-- `.gep-page__gene-header`: 基因头部
-- `.gep-page__gene-id`: 基因ID
-- `.gep-page__gene-tag`: 标签（分类/状态）
-- `.gep-page__gene-tag--REPAIR`: 修复分类（橙色）
-- `.gep-page__gene-tag--OPTIMIZE`: 优化分类（蓝色）
-- `.gep-page__gene-tag--INNOVATE`: 创新分类（紫色）
-- `.gep-page__gene-tag--enabled`: 启用状态（绿色）
-- `.gep-page__gene-tag--disabled`: 禁用状态（灰色）
-- `.gep-page__gene-boost`: 表观权重
-- `.gep-page__gene-summary`: 基因摘要
-- `.gep-page__gene-signals`: 信号列表
-- `.gep-page__gene-actions`: 操作按钮区
-- `.gep-page__gene-action-btn`: 操作按钮
-- `.gep-page__gene-action-btn--danger`: 危险操作按钮（红色）
-- `.gep-page__capsule-item`: 胶囊列表项
-- `.gep-page__capsule-header`: 胶囊头部
-- `.gep-page__capsule-id`: 胶囊ID
-- `.gep-page__capsule-score`: 胶囊分数
-- `.gep-page__capsule-genes`: 包含基因列表
-- `.gep-page__capsule-actions`: 胶囊操作区
-- `.gep-page__event-item`: 事件列表项
-- `.gep-page__event-header`: 事件头部
-- `.gep-page__event-tag`: 事件状态标签
-- `.gep-page__event-tag--success`: 成功状态（绿色）
-- `.gep-page__event-tag--pending`: 待定状态（橙色）
-- `.gep-page__event-tag--failed`: 失败状态（红色）
-- `.gep-page__event-tag--unknown`: 未知状态（灰色）
-- `.gep-page__event-id`: 事件ID
-- `.gep-page__event-details`: 事件详情
-- `.gep-page__event-time`: 事件时间
-- `.gep-page__empty`: 空状态提示
-- `.gep-page__spacer`: 底部间距
+- `.gep-page__empty`: 空状态（14px/#86868b/padding 40）
 
 ### scroll-bar.css
 滚动条样式。

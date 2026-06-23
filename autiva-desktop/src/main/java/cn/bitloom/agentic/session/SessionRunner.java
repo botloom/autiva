@@ -98,7 +98,9 @@ public class SessionRunner {
     }
 
     /**
-     * 异步上下文压缩
+     * 异步上下文压缩。
+     * 压缩后清理内存中的已压缩消息（磁盘 messages.jsonl 保留完整历史），
+     * 推进 memoryCursor 和 memoryBaseOffset，避免内存无上限增长。
      */
     private void handleContextCompact(MemoryManager memoryManager) {
         List<Message> messages = new ArrayList<>(this.session.getMessages());
@@ -107,8 +109,17 @@ public class SessionRunner {
         if (newSummary != null && !newSummary.isBlank()) {
             this.session.setSummary(newSummary);
         }
-        this.session.setMemoryCursor(this.session.getMessages().size());
+
+        // 更新磁盘游标：memoryBaseOffset + 当前内存消息数 = 磁盘上已压缩到的位置
+        int newCursor = this.session.getMemoryBaseOffset() + this.session.getMessages().size();
+        this.session.setMemoryCursor(newCursor);
+
+        // 清理内存中的已压缩消息（磁盘 messages.jsonl 保留完整历史）
+        this.session.getMessages().clear();
+        this.session.setMemoryBaseOffset(newCursor);
+
         this.session.setCurrentContextLength(0);
-        log.info("[SessionRunner] 上下文压缩完成: sessionId={}, newCursor={}", this.session.getId(), this.session.getMemoryCursor());
+        log.info("[SessionRunner] 上下文压缩完成: sessionId={}, newCursor={}, 内存已清理",
+                this.session.getId(), newCursor);
     }
 }

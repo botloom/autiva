@@ -32,9 +32,19 @@ public class ShellSession {
         load();
     }
 
-    /** 获取当前工作目录 */
+    /** 获取当前工作目录，验证有效性 */
     public synchronized String getCwd() {
-        return cwd != null ? cwd : System.getProperty("user.home");
+        if (cwd != null) {
+            Path p = Paths.get(cwd);
+            if (Files.isDirectory(p)) {
+                return cwd;
+            }
+            // cwd 无效，回退到 user.home 并持久化
+            log.warn("[ShellSession] persisted cwd '{}' does not exist, falling back to user.home", cwd);
+            cwd = System.getProperty("user.home");
+            persist();
+        }
+        return System.getProperty("user.home");
     }
 
     /** 设置当前工作目录 */

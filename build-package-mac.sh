@@ -82,7 +82,7 @@ jpackage \
   --main-class cn.bitloom.AutivaApplication \
   --runtime-image "$JLINK_OUTPUT" \
   --java-options "-Xms128m" \
-  --java-options "-Xmx512m" \
+  --java-options "-Xmx1024m" \
   --dest autiva-front/target/jpackage-output \
   --app-version 1.0.0 \
   --vendor "Bitloom" \

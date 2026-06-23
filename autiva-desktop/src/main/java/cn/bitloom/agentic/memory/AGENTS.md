@@ -18,7 +18,7 @@
 
 **核心方法：**
 - `add(conversationId, messages)`: 添加消息到会话，追加前检查上一条是否是孤儿 AssistantMessage(tool_calls)（若本次 add 无 ToolResponseMessage 则删除上一条）
-- `get(conversationId)`: 获取会话消息（延迟加载，只返回 Session.memoryCursor 之后的消息），返回前检查最后一条是否是孤儿 AssistantMessage(tool_calls) 并过滤
+- `get(conversationId)`: 获取会话消息（游标感知，根据 memoryBaseOffset 计算实际偏移，返回游标之后的消息），返回前检查最后一条是否是孤儿 AssistantMessage(tool_calls) 并过滤
 - `clear(conversationId)`: 清除会话消息
 
 **工具调用消息成对性保障（边界检查策略）：**
@@ -30,7 +30,8 @@ DeepSeek 等模型严格要求 `AssistantMessage(tool_calls)` 后必须紧跟对
 直接使用 sessionId，格式为 `{agentId}-{type}-{source}-{target}`
 
 **游标感知机制：**
-- `get()` 方法从 Session 获取 memoryCursor，只返回游标之后的消息
+- `get()` 方法根据 Session 的 memoryCursor 和 memoryBaseOffset 计算实际偏移
+- 正常情况下 memoryBaseOffset >= memoryCursor（压缩后清理内存，内存只含游标后消息），直接返回全部内存消息
 - 游标前的消息以压缩摘要形式通过 ProactiveContextAdvisor 注入 system prompt
 - `currentContextLength` 由 `UsageAdvisor` 维护（不再由 CompactChatMemory 估算）
 
@@ -71,8 +72,8 @@ CompactChatMemory.add(conversationId, messages)
 CompactChatMemory.get(conversationId)
          │
          ├── 1. 从 sessionManager.getById() 获取 Session
-         ├── 2. 从 Session 获取 memoryCursor
-         └── 3. 取游标之后的消息（subList(cursor, size)），检查最后一条是否是孤儿 AssistantMessage(tool_calls)
+         ├── 2. 从 Session 获取 memoryCursor 和 memoryBaseOffset
+         └── 3. 若 memoryBaseOffset >= memoryCursor，返回全部内存消息；否则返回 subList(cursor-offset, size)
 ```
 
 ## 事件驱动压缩策略
@@ -84,7 +85,7 @@ CompactChatMemory.get(conversationId)
 2. 更新 `Session.currentContextLength`（语义为 token 数）
 3. 当 `promptTokens >= maxTokens * compactionThreshold` 时，发布 `MemoryEvent.contextCompact()` 到 inBox
 4. `Session.start()` 中 MemoryEvent 分支通过 `Schedulers.boundedElastic()` 异步处理，不阻塞对话流
-5. 调用 `MemoryManager.compact()` 生成新摘要，推进 `memoryCursor`，重置 `currentContextLength`
+5. 调用 `MemoryManager.compact()` 生成新摘要，推进 `memoryCursor` 和 `memoryBaseOffset`，清理内存消息，重置 `currentContextLength`
 
 ### 压缩流程
 ```
@@ -99,8 +100,9 @@ UsageAdvisor 检测超阈值
                              │       ├── 调用 LLM 生成摘要
                              │       └── 合并已有摘要
                              ├── 2. 更新 Session.summary
-                             ├── 3. 推进 memoryCursor = messages.size()
-                             └── 4. 重置 currentContextLength = 0
+                             ├── 3. 推进 memoryCursor = memoryBaseOffset + messages.size()
+                             ├── 4. 清理内存消息（messages.clear()），推进 memoryBaseOffset = memoryCursor
+                             └── 5. 重置 currentContextLength = 0
 ```
 
 **默认配置：**

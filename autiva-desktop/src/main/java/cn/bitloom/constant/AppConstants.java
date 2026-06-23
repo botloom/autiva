@@ -88,6 +88,37 @@ public class AppConstants {
         private Context() {}
     }
 
+    public static class Evolve {
+        private Evolve() {}
+
+        public static final Path EVOLVE_DIR = APP_DIR.resolve("evolve");
+        public static final Path GENES_DIR = EVOLVE_DIR.resolve("genes");
+        public static final Path ROUTING_FILE = EVOLVE_DIR.resolve("routing.json");
+        public static final Path MEMORY_DIR = EVOLVE_DIR.resolve("memory");
+        public static final Path MEMORY_RULES_FILE = MEMORY_DIR.resolve("rules.jsonl");
+        public static final Path EXECUTIONS_DIR = APP_DIR.resolve("logs").resolve("executions");
+
+        public static Path geneDir(String geneId) {
+            return GENES_DIR.resolve(geneId);
+        }
+
+        public static Path geneMetaFile(String geneId) {
+            return geneDir(geneId).resolve("gene.json");
+        }
+
+        public static Path geneCodeFile(String geneId) {
+            return geneDir(geneId).resolve("impl.java");
+        }
+
+        public static Path geneVersionsDir(String geneId) {
+            return geneDir(geneId).resolve("versions");
+        }
+
+        public static Path executionLogFile(String date) {
+            return EXECUTIONS_DIR.resolve(date + ".jsonl");
+        }
+    }
+
     public static class Stage {
         private Stage() {
         }

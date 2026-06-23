@@ -1,8 +1,14 @@
 package cn.bitloom.agentic.evolve;
 
 import cn.bitloom.agentic.evolve.config.EvolveConfig;
+import cn.bitloom.agentic.evolve.experience.Experience;
+import cn.bitloom.agentic.evolve.experience.ExperienceEngine;
+import cn.bitloom.agentic.evolve.experience.ExperienceTarget;
 import cn.bitloom.agentic.evolve.gene.*;
+import cn.bitloom.agentic.evolve.memory.MemoryEngine;
+import cn.bitloom.agentic.evolve.mutation.GeneMutator;
 import cn.bitloom.agentic.evolve.prompt.EvolvePromptAssembler;
+import cn.bitloom.agentic.evolve.routing.RoutingEngine;
 import cn.bitloom.agentic.evolve.signal.Signal;
 import cn.bitloom.agentic.evolve.signal.SignalExtractor;
 import cn.bitloom.agentic.evolve.signal.SignalHistory;
@@ -28,8 +34,14 @@ public class EvolutionEngine {
     private final StrategyEngine strategyEngine;
     private final EvolvePromptAssembler promptAssembler;
     private final Solidifier solidifier;
+    private final ExperienceEngine experienceEngine;
+    private final GeneMutator geneMutator;
+    private final RoutingEngine routingEngine;
+    private final MemoryEngine memoryEngine;
 
-    public EvolutionEngine(EvolveConfig config, GeneStore geneStore, Solidifier solidifier) {
+    public EvolutionEngine(EvolveConfig config, GeneStore geneStore, Solidifier solidifier,
+                           ExperienceEngine experienceEngine, GeneMutator geneMutator,
+                           RoutingEngine routingEngine, MemoryEngine memoryEngine) {
         this.config = config;
         this.geneStore = geneStore;
         this.signalExtractor = new SignalExtractor();
@@ -38,6 +50,10 @@ public class EvolutionEngine {
         this.strategyEngine = new StrategyEngine(config);
         this.promptAssembler = new EvolvePromptAssembler(config);
         this.solidifier = solidifier;
+        this.experienceEngine = experienceEngine;
+        this.geneMutator = geneMutator;
+        this.routingEngine = routingEngine;
+        this.memoryEngine = memoryEngine;
     }
 
     public EvolutionCycleResult runCycle(List<String> conversationTexts) {
@@ -92,6 +108,64 @@ public class EvolutionEngine {
 
     public Solidifier.SolidifyResult solidify(EvolutionEvent event) {
         return solidifier.solidify(event);
+    }
+
+    public void evolve(Experience experience) {
+        if (experience == null || !experience.isActionable()) {
+            log.info("[Evolve] 经验不可操作，跳过进化");
+            return;
+        }
+
+        log.info("[Evolve] 开始经验驱动进化: target={}, confidence={}",
+                experience.target(), experience.confidence());
+
+        switch (experience.target()) {
+            case GENE -> evolveGene(experience);
+            case ROUTING -> updateRouting(experience);
+            case MEMORY -> updateMemory(experience);
+        }
+    }
+
+    public List<Experience> extractAndEvolve() {
+        List<Experience> experiences = experienceEngine.batchExtract(config.getRecentEventsLimit());
+        for (Experience exp : experiences) {
+            evolve(exp);
+        }
+        return experiences;
+    }
+
+    private void evolveGene(Experience experience) {
+        String geneId = experience.targetId();
+        if (geneId == null || geneId.isEmpty()) {
+            log.warn("[Evolve] 经验未指定目标基因ID");
+            return;
+        }
+
+        List<Gene> genes = geneStore.loadGenes();
+        Gene gene = genes.stream()
+                .filter(g -> g.id().equals(geneId))
+                .findFirst()
+                .orElse(null);
+
+        if (gene == null) {
+            log.warn("[Evolve] 目标基因不存在: {}", geneId);
+            return;
+        }
+
+        Gene mutated = geneMutator.mutate(gene, experience);
+        if (mutated != null) {
+            log.info("[Evolve] 基因进化成功: {} -> v{}", geneId, mutated.version());
+        }
+    }
+
+    private void updateRouting(Experience experience) {
+        routingEngine.updateFromExperience(experience);
+        log.info("[Evolve] 路由已更新: pattern={}", experience.pattern());
+    }
+
+    private void updateMemory(Experience experience) {
+        memoryEngine.addRuleFromExperience(experience);
+        log.info("[Evolve] 规则已沉淀: pattern={}", experience.pattern());
     }
 
     public EvolutionEvent createEvent(List<Signal> signals, Gene gene, String intent,

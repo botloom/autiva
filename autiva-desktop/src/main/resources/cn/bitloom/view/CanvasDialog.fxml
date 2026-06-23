@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-<?import cn.bitloom.node.SvgImageView?>
+<?import cn.bitloom.node.svg.SvgImageView?>
 
 <BorderPane fx:id="rootContainer"
       stylesheets="@../style/canvas-page.css"

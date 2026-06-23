@@ -108,8 +108,8 @@ Agent.builder()
     .hooks(hooks)                  // AgentHook 列表
     .memory(chatMemory)            // 开启记忆（传入 ChatMemory）
     .compact(true)                 // 开启上下文压缩（注册 UsageAdvisor + ProactiveContextAdvisor）
-    .skillDescriptions(desc)       // 技能描述文本（传给 ProactiveContextAdvisor）
-    .subagentDescriptions(desc)    // 子智能体描述文本（传给 ProactiveContextAdvisor）
+    .skillManager(skillManager)    // SkillManager（传给 ProactiveContextAdvisor，请求时动态计算技能描述）
+    .definitionManager(defMgr)     // AgentDefinitionManager（传给 ProactiveContextAdvisor，请求时动态计算子智能体描述）
     .memoryFilePath(path)          // memory.md 路径（传给 ProactiveContextAdvisor）
     .logging(true)                 // 开启日志（默认 true）
     .build()

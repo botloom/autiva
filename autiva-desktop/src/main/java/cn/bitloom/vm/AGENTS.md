@@ -41,7 +41,7 @@
 - `init()`: 初始化，仅同步 userId 到 Store，不加载/创建任何 session
 - `subscribeOutBox()`: 订阅 Session outBox 消息流（切换 session 时重新订阅，使用 Disposable 管理）
 - `createNewSession()`: 切换到初始态（session 设为 null，清空消息列表，重置状态，清空 currentProject），不创建真正的 session
-- `switchToSession(String sessionId)`: 切换到指定 session（调用 activateSession 激活，订阅 OutBox，加载历史消息到 UI，从 session.projectPath 恢复 currentProject）
+- `switchToSession(String sessionId)`: 切换到指定 session（同步调用 activate 激活，activate 只加载最近 100 条消息，速度足够快；激活后订阅 OutBox 并渲染历史消息）
 - `switchAgent(String agentId)`: 切换智能体（设置 Store.currentAgent，非 coder 智能体时清空 currentProject，调用 createNewSession）
 - `sendMessage(String)`: 发送消息给智能体系统（接收纯文本，内部构建 MessageEvent），懒创建 session（首次发送时才创建），coder 智能体且有 currentProject 时创建带 projectPath 和 reviewDiff=true 的 Session，暂停后恢复时重新激活会话，发送后翻转 Store.refreshHistory 触发侧边栏标题刷新
 - `processMessage(MessageEvent)`: 处理消息流，根据 MessageEvent.Type 分发（USER/ASSISTANT/TOOL），直接访问结构化字段
@@ -49,9 +49,9 @@
 - `processToolEvent(MessageEvent)`: 处理工具消息（直接创建 ToolMessageCard）
 - `prependHistoricalMessages(List<MessageCard>)`: 在消息列表头部批量插入历史卡片（供 Controller 加载更多历史消息时调用）
 - `convertEventToCards(MessageEvent)`: 将 MessageEvent 转换为卡片列表（用于历史消息加载，一个事件可能产生多个卡片）
-- `prepareHistoricalMessages()`: 准备历史消息，仅加载最近 50 条（MAX_INITIAL_MESSAGES），填充 messages 列表
-- `loadMoreMessages(int count)`: 加载更多历史消息（从历史消息头部加载，返回 List<MessageCard>）
-- `hasMoreMessages()`: 是否还有更多历史消息可加载
+- `prepareHistoricalMessages()`: 准备历史消息，渲染 session.getMessages() 中的全部消息（activate 已只加载最近 100 条），分批处理避免阻塞 FX 线程
+- `loadMoreMessages(int count)`: 加载更多历史消息（从磁盘 messages.jsonl 按需读取，根据 memoryBaseOffset 和 memoryCursor 计算偏移，返回 List<MessageCard>）
+- `hasMoreMessages()`: 是否还有更多历史消息可加载（基于 memoryBaseOffset > memoryCursor 判断）
 - `addUserMessage(String)`: 添加用户消息卡片到列表
 - `pauseGeneration()`: 暂停当前流式生成，调用 session.stop() 通知后端停止（同时停止所有子智能体会话），保留部分响应，设置 SessionState 为 PAUSED
 - `hasHistoricalMessages()`: 是否有历史消息
@@ -83,17 +83,19 @@
 - `AgentDefinitionManager`: 智能体定义管理器
 
 **属性：**
-- `mainAgents`: 主智能体列表（ObservableList<AgentFolder>）
-- `subagents`: 子智能体列表（ObservableList<SubagentFolder>）
+- `mainAgents`: 主智能体列表（ObservableList<AgentDefinition>）
 
 **核心方法：**
-- `loadAgents()`: 同步加载主智能体和子智能体列表（阻塞 FX 线程，仅用于兼容）
+- `loadAgents()`: 同步加载主智能体列表（阻塞 FX 线程，仅用于兼容）
 - `loadAgentsAsync(Runnable)`: 异步加载智能体列表，使用 `javafx.concurrent.Task` + `ExecutorManager.platformTaskExecutor` 在后台线程执行 I/O，完成后在 FX 线程更新 ObservableList 并回调 onLoaded
-- `readFileContent(AgentFile)`: 读取配置文件内容
-- `readSubagentContent(SubagentFolder)`: 读取子智能体配置内容
-- `saveFile(AgentFile, String)`: 保存文件
-- `saveSubagentConfig(String, String)`: 保存子智能体配置
-- `deleteSubagent(String)`: 删除子智能体
+- `readFileContent(String agentId, String fileName)`: 读取配置文件内容
+- `saveFileContent(String agentId, String fileName, String content)`: 保存配置文件内容，并重新加载智能体定义
+- `createAgent(String agentId)`: 创建新智能体（复制 default 模板，创建 workspace 目录）
+- `deleteAgent(String agentId)`: 删除智能体目录（递归删除）
+- `copyAgent(String sourceAgentId, String targetAgentId)`: 复制智能体（复制文件并替换名称）
+- `openAgentDirectory(String agentId)`: 用系统文件管理器打开智能体目录
+- `getAgentFiles(String agentId)`: 获取智能体目录下的文件列表
+- `agentExists(String agentId)`: 检查智能体是否已存在
 
 ### SettingsPageViewModel
 设置页视图模型，管理配置状态。
@@ -187,6 +189,49 @@
 - `applyPropertiesToSelection()`: 将 ViewModel 属性应用到选中元素
 - `zoomIn()/zoomOut()/resetZoom()`: 缩放控制
 - `getToolByName(String)`: 按名称获取工具实例
+
+### GepPageViewModel
+基因进化管理页视图模型，管理进化系统数据和统计。
+
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `GeneStore`: 基因存储
+- `EvolutionEngine`: 进化引擎
+- `EvolveConfig`: 进化配置
+- `RoutingEngine`: 路由引擎
+- `MemoryEngine`: 记忆引擎
+
+**属性：**
+- `genes`: 基因列表（ObservableList<Gene>）
+- `routes`: 路由列表（ObservableList<RoutingEntry>）
+- `rules`: 记忆规则列表（ObservableList<MemoryRule>）
+- `capsules`: 胶囊列表（ObservableList<Capsule>）
+- `events`: 进化事件列表（ObservableList<EvolutionEvent>）
+- `geneCount`: 基因总数（IntegerProperty）
+- `enabledGeneCount`: 启用基因数（IntegerProperty）
+- `eventCount`: 事件总数（IntegerProperty）
+- `successRate`: 成功率（DoubleProperty）
+- `routeCount`: 路由数（IntegerProperty）
+- `ruleCount`: 规则数（IntegerProperty）
+- `strategyPreset`: 当前策略（StringProperty）
+
+**核心方法：**
+- `loadData()`: 同步加载所有数据并更新统计
+- `loadDataAsync(Runnable)`: 异步加载数据
+- `toggleGene(String)`: 切换基因启用状态
+- `deleteGene(String)`: 删除基因
+- `setStrategyPreset(StrategyPreset)`: 设置进化策略
+- `runEvolutionCycle()`: 执行进化周期
+- `extractAndEvolve()`: 提取经验并进化
+- `addRoute(pattern, geneId, weight)`: 添加路由
+- `removeRoute(pattern)`: 删除路由
+- `addRule(pattern, action, confidence)`: 添加记忆规则
+- `deleteRule(ruleId)`: 删除记忆规则
+- `deleteCapsule(capsuleId)`: 删除胶囊
+- `getGeneHistory(geneId)`: 获取基因JGit版本历史
+- `revertGene(geneId, commitHash)`: 回滚基因版本
+- `getGeneCode(geneId)`: 获取基因可执行代码
 
 ## 与其他组件的关系
 

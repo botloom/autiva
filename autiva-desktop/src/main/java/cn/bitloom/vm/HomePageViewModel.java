@@ -4,10 +4,10 @@ import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.EventConverter;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.session.*;
-import cn.bitloom.node.AssistantMessageCard;
-import cn.bitloom.node.MessageCard;
-import cn.bitloom.node.ToolMessageCard;
-import cn.bitloom.node.UserMessageCard;
+import cn.bitloom.node.message.AssistantMessageCard;
+import cn.bitloom.node.message.MessageCard;
+import cn.bitloom.node.message.ToolMessageCard;
+import cn.bitloom.node.message.UserMessageCard;
 import cn.bitloom.store.Store;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -35,8 +35,6 @@ public class HomePageViewModel {
     private Session session;
     private AssistantMessageCard currentAssistantCard = null;
     private Disposable outBoxSubscription;
-    private int historicalMessageOffset = 0;
-    private static final int MAX_INITIAL_MESSAGES = 50;
 
     private void subscribeOutBox() {
         if (this.outBoxSubscription != null) {
@@ -58,7 +56,6 @@ public class HomePageViewModel {
         Store.currentSessionId.set("");
         messages.clear();
         currentAssistantCard = null;
-        historicalMessageOffset = 0;
         Store.isStreaming.set(false);
         Store.isPaused.set(false);
         if (this.outBoxSubscription != null) {
@@ -78,6 +75,7 @@ public class HomePageViewModel {
             return;
         }
 
+        // 同步激活（activate 只加载最近 100 条消息，速度足够快）
         fileSystemSessionManager.activate(sessionId);
 
         this.session = targetSession;
@@ -89,7 +87,6 @@ public class HomePageViewModel {
 
         messages.clear();
         currentAssistantCard = null;
-        historicalMessageOffset = 0;
         Store.isStreaming.set(false);
         Store.isPaused.set(false);
 
@@ -109,11 +106,7 @@ public class HomePageViewModel {
             return;
         }
 
-        int startIndex = Math.max(0, historicalMessages.size() - MAX_INITIAL_MESSAGES);
-        historicalMessageOffset = startIndex;
-        List<org.springframework.ai.chat.messages.Message> recentMessages = historicalMessages.subList(startIndex, historicalMessages.size());
-
-        List<MessageEvent> events = EventConverter.fromMessages(this.session.getId(), recentMessages);
+        List<MessageEvent> events = EventConverter.fromMessages(this.session.getId(), historicalMessages);
 
         int batchSize = 20;
         for (int i = 0; i < events.size(); i += batchSize) {
@@ -135,13 +128,33 @@ public class HomePageViewModel {
     }
 
     public List<MessageCard> loadMoreMessages(int count) {
-        if (this.session == null || historicalMessageOffset <= 0) return List.of();
-        List<org.springframework.ai.chat.messages.Message> allMessages = this.session.getMessages();
-        historicalMessageOffset = Math.min(historicalMessageOffset, allMessages.size());
-        if (historicalMessageOffset <= 0) return List.of();
-        int newOffset = Math.max(0, historicalMessageOffset - count);
-        List<org.springframework.ai.chat.messages.Message> olderMessages = new ArrayList<>(allMessages.subList(newOffset, historicalMessageOffset));
-        historicalMessageOffset = newOffset;
+        if (this.session == null) {
+            return List.of();
+        }
+
+        int currentBaseOffset = this.session.getMemoryBaseOffset();
+        int memoryCursor = this.session.getMemoryCursor();
+
+        // 没有更多历史消息（已到游标位置）
+        if (currentBaseOffset <= memoryCursor) {
+            return List.of();
+        }
+
+        int newOffset = Math.max(memoryCursor, currentBaseOffset - count);
+        int toLoad = currentBaseOffset - newOffset;
+
+        // 从磁盘按需加载
+        List<org.springframework.ai.chat.messages.Message> olderMessages =
+                fileSystemSessionManager.loadMessagesRange(this.session.getId(), newOffset, toLoad);
+
+        if (olderMessages.isEmpty()) {
+            return List.of();
+        }
+
+        // 更新内存状态
+        this.session.setMemoryBaseOffset(newOffset);
+        this.session.getMessages().addAll(0, olderMessages);
+
         return EventConverter.fromMessages(this.session.getId(), olderMessages).stream()
                 .flatMap(e -> convertEventToCards(e).stream())
                 .filter(Objects::nonNull)
@@ -153,7 +166,8 @@ public class HomePageViewModel {
     }
 
     public boolean hasMoreMessages() {
-        return historicalMessageOffset > 0;
+        return this.session != null
+                && this.session.getMemoryBaseOffset() > this.session.getMemoryCursor();
     }
 
     public boolean hasHistoricalMessages() {
@@ -201,7 +215,7 @@ public class HomePageViewModel {
 
             if (currentAssistantCard != null) {
                 currentAssistantCard.complete("STOP");
-                if (!currentAssistantCard.isValid()) {
+                if (currentAssistantCard.isValid()) {
                     messages.remove(currentAssistantCard);
                 }
                 currentAssistantCard = null;
@@ -213,7 +227,7 @@ public class HomePageViewModel {
             // 工具调用：结束当前流式消息
             if (currentAssistantCard != null) {
                 currentAssistantCard.complete("TOOL_CALLS");
-                if (!currentAssistantCard.isValid()) {
+                if (currentAssistantCard.isValid()) {
                     messages.remove(currentAssistantCard);
                 }
                 currentAssistantCard = null;
@@ -292,7 +306,6 @@ public class HomePageViewModel {
     public void clear() {
         messages.clear();
         currentAssistantCard = null;
-        historicalMessageOffset = 0;
         Store.isStreaming.set(false);
         Store.isPaused.set(false);
         if (this.session != null) {

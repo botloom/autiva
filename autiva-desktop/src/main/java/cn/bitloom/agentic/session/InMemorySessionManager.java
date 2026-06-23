@@ -83,7 +83,7 @@ public class InMemorySessionManager implements ISessionManager {
         Session session = sessions.get(sessionId);
         for (Message message : messages) {
             if (message instanceof AssistantMessage assistantMessage) {
-                if (assistantMessage.getMetadata().get("finishReason").equals("TOOL_CALLS")) {
+                if (assistantMessage.getMetadata().get("finishReason").toString().equals("TOOL_CALLS")) {
                     EventBus.publishOut(EventConverter.fromMessage(sessionId, assistantMessage));
                 }
             }

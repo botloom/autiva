@@ -5,6 +5,8 @@ import cn.bitloom.agentic.agent.advisor.LoggingAdvisor;
 import cn.bitloom.agentic.agent.advisor.ProactiveContextAdvisor;
 import cn.bitloom.agentic.agent.advisor.UsageAdvisor;
 import cn.bitloom.agentic.hook.AgentHook;
+import cn.bitloom.agentic.skill.SkillManager;
+import cn.bitloom.agentic.tool.AutivaToolCallingManager;
 import cn.bitloom.agentic.util.MessageUtil;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -131,8 +133,8 @@ public class Agent {
         private boolean enableMemory = false;
         private ChatMemory chatMemory;
         private boolean enableCompact = false;
-        private String skillDescriptions;
-        private String subagentDescriptions;
+        private SkillManager skillManager;
+        private AgentDefinitionManager definitionManager;
         private Path memoryFilePath;
 
         public Builder name(String name) {
@@ -186,13 +188,13 @@ public class Agent {
             return this;
         }
 
-        public Builder skillDescriptions(String skillDescriptions) {
-            this.skillDescriptions = skillDescriptions;
+        public Builder skillManager(SkillManager skillManager) {
+            this.skillManager = skillManager;
             return this;
         }
 
-        public Builder subagentDescriptions(String subagentDescriptions) {
-            this.subagentDescriptions = subagentDescriptions;
+        public Builder definitionManager(AgentDefinitionManager definitionManager) {
+            this.definitionManager = definitionManager;
             return this;
         }
 
@@ -212,10 +214,12 @@ public class Agent {
             if (this.enableLogging) {
                 builder.defaultAdvisors(LoggingAdvisor.builder().build());
             }
+            AutivaToolCallingManager toolCallingManager = new AutivaToolCallingManager(this.tools);
             builder.defaultAdvisors(
                     ToolCallingAdvisor.builder()
                             .disableInternalConversationHistory()
                             .advisorOrder(BaseAdvisor.HIGHEST_PRECEDENCE + 300)
+                            .toolCallingManager(toolCallingManager)
                             .build()
             );
             if (this.enableMemory) {
@@ -230,8 +234,9 @@ public class Agent {
                 builder.defaultAdvisors(
                         UsageAdvisor.builder().build(),
                         ProactiveContextAdvisor.builder()
-                                .skillDescriptions(this.skillDescriptions)
-                                .subagentDescriptions(this.subagentDescriptions)
+                                .skillManager(this.skillManager)
+                                .definitionManager(this.definitionManager)
+                                .definition(this.definition)
                                 .memoryFilePath(this.memoryFilePath)
                                 .build()
                 );

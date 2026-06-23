@@ -3,7 +3,7 @@ package cn.bitloom.controller;
 import cn.bitloom.agentic.session.Session;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.node.SvgImageView;
+import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.router.RouteConfig;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.HomePageViewModel;

@@ -43,3 +43,16 @@ GUI 待办事项事件处理器，用于 TodoWriteTool 的图形界面展示。
 - 通过 ToolUIBridge 在 WebView 中显示待办事项列表
 - 非阻塞，即发即忘模式
 - 自动序列化 Todos 对象为 JSON 传递给 JavaScript
+
+### TokenEstimator
+Token 估算工具类，用于估算文本的 Token 数量，避免超出上下文窗口限制。
+
+**功能：**
+- 估算文本的 Token 数量（使用简单的字符计数方法，1 Token ≈ 3 字符）
+- 估算单行的 Token 数量（考虑行号前缀）
+- 检查文件大小是否在安全范围内
+- 计算基于 Token 预算的最大可读取字符数
+
+**使用场景：**
+- ReadTool 大文件保护机制：边读边计算 Token，达到预算立即停止
+- 防止超大文件导致内存溢出和 UI 卡死

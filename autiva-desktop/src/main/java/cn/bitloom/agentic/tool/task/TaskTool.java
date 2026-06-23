@@ -3,7 +3,6 @@ package cn.bitloom.agentic.tool.task;
 import cn.bitloom.agentic.agent.*;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.EventConverter;
-import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.session.InMemorySessionManager;
@@ -242,8 +241,8 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                 .map(msg -> EventConverter.fromMessage(taskId, msg))
                 .doOnNext(event -> {
                     EventBus.publishOut(event);
-                    if (event instanceof MessageEvent me && me.isAssistantMessage() && me.getText() != null) {
-                        fullResult.append(me.getText());
+                    if (event.isAssistantMessage() && event.getText() != null) {
+                        fullResult.append(event.getText());
                     }
                 })
                 .doOnError(e -> log.error("子智能体执行失败: taskId={}", taskId, e))

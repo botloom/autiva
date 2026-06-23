@@ -61,6 +61,15 @@
 **用途：**
 - 浏览器后退按钮
 
+#### menu.svg
+汉堡菜单图标（三条横线，蓝色）。
+
+**用途：**
+- 侧边栏切换按钮
+- 底部按钮栏的菜单按钮
+
+**颜色：** Apple 系统蓝色 (#007AFF)
+
 #### right.svg
 向右箭头图标。
 
@@ -177,7 +186,7 @@
 
 ### 在 FXML 中使用 SVG
 ```xml
-<?import cn.bitloom.node.SvgImageView?>
+<?import cn.bitloom.node.svg.SvgImageView?>
 
 <SvgImageView fitWidth="20" fitHeight="20" 
               svgPath="/cn/bitloom/images/arrow-up.svg"/>

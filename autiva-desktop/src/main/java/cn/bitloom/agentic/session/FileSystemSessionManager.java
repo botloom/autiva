@@ -30,12 +30,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -54,7 +56,30 @@ public class FileSystemSessionManager implements ISessionManager {
     private final CompactChatMemory chatMemory;
     private final MemoryManager memoryManager;
     private final SkillManager skillManager;
-    private final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private static final int MAX_CACHED_SESSIONS = 5;
+    private static final int RECENT_MESSAGES_COUNT = 50;
+
+    /**
+     * Session 内存缓存，使用 LRU 策略（保留最近 MAX_CACHED_SESSIONS 个）。
+     * 超出上限时淘汰最久未访问的 Session：停止 SessionRunner + 清理内存消息（磁盘保留）。
+     */
+    private final Map<String, Session> sessions = Collections.synchronizedMap(
+            new LinkedHashMap<>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Session> eldest) {
+                    if (size() > MAX_CACHED_SESSIONS) {
+                        SessionRunner runner = runners.remove(eldest.getKey());
+                        if (runner != null) {
+                            runner.stop();
+                        }
+                        eldest.getValue().setMessages(new ArrayList<>());
+                        eldest.getValue().setMemoryBaseOffset(eldest.getValue().getMemoryCursor());
+                        log.info("[LRU] 淘汰 Session: {}", eldest.getKey());
+                        return true;
+                    }
+                    return false;
+                }
+            });
     private final Map<String, Agent> agentCache = new ConcurrentHashMap<>();
     private final Map<String, SessionRunner> runners = new ConcurrentHashMap<>();
 
@@ -144,7 +169,8 @@ public class FileSystemSessionManager implements ISessionManager {
 
     /**
      * 激活会话：注入 Agent、加载历史消息、通过 SessionRunner 启动消息循环
-     * 仅在用户点击切换到某个 session 时调用
+     * 仅在用户点击切换到某个 session 时调用。
+     * 只加载最近 RECENT_MESSAGES_COUNT 条消息到内存（环形缓冲区），避免全量加载导致内存膨胀。
      */
     public void activate(String sessionId) {
         Session session = sessions.get(sessionId);
@@ -162,25 +188,89 @@ public class FileSystemSessionManager implements ISessionManager {
             syncPersistentFields(diskState, session);
         }
 
-        // 加载历史消息
+        // 设置内存偏移量：内存从游标后开始加载
+        session.setMemoryBaseOffset(session.getMemoryCursor());
+
+        // 只加载最近 N 条消息（环形缓冲区，不全量加载）
         Path messagesFile = AppConstants.Session.messagesFile(session.getAgentId(), sessionId);
-        try (BufferedReader reader = Files.newBufferedReader(messagesFile)) {
-            List<Message> messages = new ArrayList<>();
-            reader.lines().forEach(line -> {
-                Message message = MessageUtil.deserializeMessage(line);
-                if (message != null) {
-                    messages.add(message);
-                }
-            });
-            session.setMessages(messages);
-        } catch (IOException e) {
-            log.error("加载会话消息失败: {}", sessionId, e);
-        }
+        List<Message> messages = loadRecentMessages(messagesFile, RECENT_MESSAGES_COUNT);
+        session.setMessages(messages);
 
         // 通过 SessionRunner 启动消息循环
         SessionRunner runner = new SessionRunner(session);
         runners.put(sessionId, runner);
         runner.start();
+    }
+
+    /**
+     * 高效加载文件最后 N 行并反序列化为 Message 列表。
+     * 使用环形缓冲区（ArrayDeque），内存只保留最后 N 行，避免全量加载。
+     */
+    private List<Message> loadRecentMessages(Path file, int count) {
+        if (!Files.exists(file)) {
+            return new ArrayList<>();
+        }
+        try (BufferedReader reader = Files.newBufferedReader(file)) {
+            ArrayDeque<String> lastLines = new ArrayDeque<>(count + 1);
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lastLines.addLast(line);
+                if (lastLines.size() > count) {
+                    lastLines.removeFirst();
+                }
+            }
+            List<Message> messages = new ArrayList<>(lastLines.size());
+            for (String l : lastLines) {
+                Message msg = MessageUtil.deserializeMessage(l);
+                if (msg != null) {
+                    messages.add(msg);
+                }
+            }
+            return messages;
+        } catch (IOException e) {
+            log.error("加载最近消息失败: {}", file, e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 从磁盘 messages.jsonl 加载指定行号范围的消息（供"加载更多历史"使用）。
+     *
+     * @param sessionId 会话ID
+     * @param offset    起始行号（含）
+     * @param count     加载条数
+     * @return 反序列化后的消息列表
+     */
+    public List<Message> loadMessagesRange(String sessionId, int offset, int count) {
+        Session session = sessions.get(sessionId);
+        if (session == null || count <= 0 || offset < 0) {
+            return List.of();
+        }
+        Path messagesFile = AppConstants.Session.messagesFile(session.getAgentId(), sessionId);
+        if (!Files.exists(messagesFile)) {
+            return List.of();
+        }
+        try (BufferedReader reader = Files.newBufferedReader(messagesFile)) {
+            List<Message> messages = new ArrayList<>(count);
+            int index = 0;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (index >= offset) {
+                    Message msg = MessageUtil.deserializeMessage(line);
+                    if (msg != null) {
+                        messages.add(msg);
+                    }
+                    if (messages.size() >= count) {
+                        break;
+                    }
+                }
+                index++;
+            }
+            return messages;
+        } catch (IOException e) {
+            log.error("加载消息范围失败: sessionId={}, offset={}, count={}", sessionId, offset, count, e);
+            return List.of();
+        }
     }
 
     /**
@@ -206,12 +296,14 @@ public class FileSystemSessionManager implements ISessionManager {
      * Gets desktop sessions.
      */
     public List<Session> getDesktopSessions() {
-        return this.sessions.values().stream()
-                .filter(s -> "desktopApp".equals(s.getSource()))
-                .sorted((a, b) -> Long.compare(
-                        b.getUpdateAt() != null ? b.getUpdateAt() : b.getCreatedAt(),
-                        a.getUpdateAt() != null ? a.getUpdateAt() : a.getCreatedAt()))
-                .toList();
+        synchronized (this.sessions) {
+            return this.sessions.values().stream()
+                    .filter(s -> "desktopApp".equals(s.getSource()))
+                    .sorted((a, b) -> Long.compare(
+                            b.getUpdateAt() != null ? b.getUpdateAt() : b.getCreatedAt(),
+                            a.getUpdateAt() != null ? a.getUpdateAt() : a.getCreatedAt()))
+                    .toList();
+        }
     }
 
     /**
@@ -384,18 +476,6 @@ public class FileSystemSessionManager implements ISessionManager {
             AgentDefinition definition = definitionManager.getOrLoadMainDefinition(id);
             ChatModel chatModel = modelFactory.model(ModelTypeEnum.DEEPSEEK);
 
-            // 计算技能描述
-            String skillDesc = skillManager.getDescription();
-
-            // 计算子智能体描述
-            String subagentDesc = definition.subagents().stream()
-                    .map(name -> {
-                        AgentDefinition def = definitionManager.getDefinition(name);
-                        return def != null ? "- " + name + ": " + def.description() : "";
-                    })
-                    .filter(s -> !s.isEmpty())
-                    .collect(Collectors.joining("\n"));
-
             // 记忆文件路径
             java.nio.file.Path memoryPath = AppConstants.MainAgent.memoryFile(id);
 
@@ -408,8 +488,8 @@ public class FileSystemSessionManager implements ISessionManager {
                     .hooks(List.of())
                     .memory(chatMemory)
                     .compact(true)
-                    .skillDescriptions(skillDesc)
-                    .subagentDescriptions(subagentDesc)
+                    .skillManager(skillManager)
+                    .definitionManager(definitionManager)
                     .memoryFilePath(memoryPath)
                     .build();
             log.info("创建主智能体: agentId={}", id);

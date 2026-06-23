@@ -134,7 +134,7 @@ Remove-Item -Recurse -Force autiva-front\target\jpackage-output -ErrorAction Sil
   --main-class cn.bitloom.AutivaApplication `
   --runtime-image $jlinkOutput `
   --java-options "-Xms128m" `
-  --java-options "-Xmx512m" `
+  --java-options "-Xmx1024m" `
   --java-options "-XX:SharedArchiveFile=`$APPDIR/app-cds.jsa" `
   --java-options "-XX:+UseCompressedOops" `
   --java-options "-XX:+UseCompressedClassPointers" `

@@ -1,11 +1,17 @@
 package cn.bitloom.controller;
 
+import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.node.*;
+import cn.bitloom.node.message.AssistantMessageCard;
+import cn.bitloom.node.message.MessageCard;
+import cn.bitloom.node.message.ToolMessageCard;
+import cn.bitloom.node.svg.SvgImageView;
+import cn.bitloom.node.tool.TaskCard;
+import cn.bitloom.node.tool.ToolGroupCard;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.HomePageViewModel;
 import cn.bitloom.window.WindowManager;
@@ -43,6 +49,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -87,6 +94,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private final ToolUIBridge toolUIBridge;
     @Getter
     private final WindowManager windowManager;
+    @Getter
+    private final AgentDefinitionManager agentDefinitionManager;
 
     @Getter
     @Setter
@@ -519,7 +528,20 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     }
 
     private void setupAgentSelector() {
-        this.agentSelector.setValue("default");
+        // 从 AgentDefinitionManager 获取主智能体列表并填充到 ComboBox
+        Set<String> mainAgentIds = agentDefinitionManager.getMainAgentIds();
+        this.agentSelector.getItems().addAll(mainAgentIds);
+
+        // 设置默认值
+        String currentAgent = Store.currentAgent.get();
+        if (currentAgent != null && mainAgentIds.contains(currentAgent)) {
+            this.agentSelector.setValue(currentAgent);
+        } else if (mainAgentIds.contains("default")) {
+            this.agentSelector.setValue("default");
+        } else if (!mainAgentIds.isEmpty()) {
+            this.agentSelector.setValue(mainAgentIds.iterator().next());
+        }
+
         updateAgentSelectorWidth();
 
         this.agentSelector.valueProperty().addListener((obs, oldVal, newVal) -> {

@@ -3,7 +3,7 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-<?import cn.bitloom.node.SvgImageView?>
+<?import cn.bitloom.node.svg.SvgImageView?>
 
 <VBox fx:id="homePage" styleClass="home-page" xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.HomePageController"
@@ -35,7 +35,7 @@
         <FlowPane fx:id="fileTagsPane" styleClass="home-page__file-tags"
                   prefWidth="600" maxWidth="1000" minWidth="300"
                   visible="false" managed="false"/>
-        <TextArea fx:id="sendField" promptText="输入消息与智能体对话..." styleClass="home-page__send-field"
+        <TextArea fx:id="sendField" promptText="给呆芽发消息..." styleClass="home-page__send-field"
                   prefRowCount="1" maxWidth="1000" minWidth="300" prefWidth="600" wrapText="true"/>
         <HBox alignment="BOTTOM_RIGHT" spacing="8">
             <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37">

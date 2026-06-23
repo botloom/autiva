@@ -1,6 +1,7 @@
 package cn.bitloom.agentic.evolve.gene;
 
 import cn.bitloom.agentic.evolve.config.EvolveConfig;
+import cn.bitloom.agentic.evolve.repository.GeneRepository;
 import cn.bitloom.agentic.evolve.solidify.EvolutionEvent;
 import cn.bitloom.exception.EvolveException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,6 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Stream;
 
 @Slf4j
 @Component
@@ -26,9 +29,11 @@ public class GeneStore {
     private final EvolveConfig config;
     private final ObjectMapper mapper;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final GeneRepository geneRepository;
 
-    public GeneStore(EvolveConfig config) {
+    public GeneStore(EvolveConfig config, GeneRepository geneRepository) {
         this.config = config;
+        this.geneRepository = geneRepository;
         this.mapper = new ObjectMapper();
         this.mapper.enable(SerializationFeature.INDENT_OUTPUT);
         initStorage();
@@ -37,6 +42,9 @@ public class GeneStore {
     private void initStorage() {
         try {
             Files.createDirectories(config.getEvolveDir());
+            Files.createDirectories(config.getGenesDir());
+            Files.createDirectories(config.getMemoryDir());
+            Files.createDirectories(config.getExecutionsDir());
 
             if (!Files.exists(config.getGenesFile())) {
                 String seed = readClasspathResource("evolve/genes.seed.json");
@@ -57,6 +65,12 @@ public class GeneStore {
             if (!Files.exists(config.getCandidatesFile())) {
                 Files.writeString(config.getCandidatesFile(), "", StandardCharsets.UTF_8);
             }
+            if (!Files.exists(config.getRoutingFile())) {
+                Files.writeString(config.getRoutingFile(), "[]", StandardCharsets.UTF_8);
+            }
+            if (!Files.exists(config.getMemoryRulesFile())) {
+                Files.writeString(config.getMemoryRulesFile(), "", StandardCharsets.UTF_8);
+            }
         } catch (IOException e) {
             log.error("[Evolve] 初始化存储失败", e);
         }
@@ -65,6 +79,10 @@ public class GeneStore {
     public List<Gene> loadGenes() {
         lock.readLock().lock();
         try {
+            List<Gene> fromDir = loadGenesFromDir();
+            if (!fromDir.isEmpty()) {
+                return fromDir;
+            }
             String json = Files.readString(config.getGenesFile(), StandardCharsets.UTF_8);
             List<Gene> genes = mapper.readValue(json, new TypeReference<>() {});
             return genes != null ? genes : Collections.emptyList();
@@ -97,11 +115,13 @@ public class GeneStore {
     public void upsertGene(Gene gene) {
         lock.writeLock().lock();
         try {
+            saveGeneToDir(gene);
             List<Gene> genes = new ArrayList<>(loadGenesInternal());
             genes.removeIf(g -> g.id().equals(gene.id()));
             genes.add(gene);
             writeGenes(genes);
-            log.info("[Evolve] 基因已更新: {}", gene.id());
+            geneRepository.commit(gene, "gene update: " + gene.id() + " v" + gene.version());
+            log.info("[Evolve] 基因已更新: {} (v{})", gene.id(), gene.version());
         } finally {
             lock.writeLock().unlock();
         }
@@ -113,6 +133,7 @@ public class GeneStore {
             List<Gene> genes = new ArrayList<>(loadGenesInternal());
             genes.removeIf(g -> g.id().equals(geneId));
             writeGenes(genes);
+            deleteGeneDir(geneId);
             log.info("[Evolve] 基因已删除: {}", geneId);
         } finally {
             lock.writeLock().unlock();
@@ -182,6 +203,113 @@ public class GeneStore {
             return Collections.emptyList();
         } finally {
             lock.readLock().unlock();
+        }
+    }
+
+    public String loadGeneCode(String geneId) {
+        Path codeFile = config.getGenesDir().resolve(geneId).resolve("impl.java");
+        try {
+            if (Files.exists(codeFile)) {
+                return Files.readString(codeFile, StandardCharsets.UTF_8);
+            }
+        } catch (IOException e) {
+            log.warn("[Evolve] 加载基因代码失败: {}", geneId, e);
+        }
+        return null;
+    }
+
+    public void saveGeneCode(String geneId, String code) {
+        try {
+            Path geneDir = config.getGenesDir().resolve(geneId);
+            Files.createDirectories(geneDir);
+            Files.writeString(geneDir.resolve("impl.java"), code, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("[Evolve] 保存基因代码失败: {}", geneId, e);
+        }
+    }
+
+    public List<GeneRepository.CommitInfo> getGeneHistory(String geneId) {
+        return geneRepository.history(geneId);
+    }
+
+    public void revertGene(String geneId, String commitHash) {
+        geneRepository.revert(geneId, commitHash);
+        log.info("[Evolve] 基因已回滚: {} -> {}", geneId, commitHash);
+    }
+
+    public String diffGene(String geneId, String fromCommit, String toCommit) {
+        return geneRepository.diff(geneId, fromCommit, toCommit);
+    }
+
+    private List<Gene> loadGenesFromDir() {
+        if (!Files.exists(config.getGenesDir())) {
+            return Collections.emptyList();
+        }
+        try (Stream<Path> dirs = Files.list(config.getGenesDir())) {
+            return dirs
+                    .filter(Files::isDirectory)
+                    .map(this::loadGeneFromDir)
+                    .filter(Objects::nonNull)
+                    .toList();
+        } catch (IOException e) {
+            log.warn("[Evolve] 扫描基因目录失败", e);
+            return Collections.emptyList();
+        }
+    }
+
+    private Gene loadGeneFromDir(Path geneDir) {
+        Path metaFile = geneDir.resolve("gene.json");
+        if (!Files.exists(metaFile)) {
+            return null;
+        }
+        try {
+            String json = Files.readString(metaFile, StandardCharsets.UTF_8);
+            Gene gene = mapper.readValue(json, Gene.class);
+            String code = loadGeneCode(gene.id());
+            if (code != null && gene.code() == null) {
+                return gene.withCode(code);
+            }
+            return gene;
+        } catch (IOException e) {
+            log.warn("[Evolve] 加载基因目录失败: {}", geneDir, e);
+            return null;
+        }
+    }
+
+    private void saveGeneToDir(Gene gene) {
+        try {
+            Path geneDir = config.getGenesDir().resolve(gene.id());
+            Files.createDirectories(geneDir);
+            Files.createDirectories(geneDir.resolve("versions"));
+
+            String metaJson = mapper.writeValueAsString(gene);
+            Files.writeString(geneDir.resolve("gene.json"), metaJson, StandardCharsets.UTF_8);
+
+            if (gene.code() != null && !gene.code().isEmpty()) {
+                Files.writeString(geneDir.resolve("impl.java"), gene.code(), StandardCharsets.UTF_8);
+            }
+
+            Path versionFile = geneDir.resolve("versions").resolve("v" + gene.version() + ".json");
+            if (!Files.exists(versionFile)) {
+                Files.writeString(versionFile, metaJson, StandardCharsets.UTF_8);
+            }
+        } catch (IOException e) {
+            log.error("[Evolve] 保存基因到目录失败: {}", gene.id(), e);
+        }
+    }
+
+    private void deleteGeneDir(String geneId) {
+        try {
+            Path geneDir = config.getGenesDir().resolve(geneId);
+            if (Files.exists(geneDir)) {
+                try (Stream<Path> walk = Files.walk(geneDir)) {
+                    walk.sorted(Comparator.reverseOrder())
+                            .map(Path::toFile)
+                            .forEach(File::delete);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("[Evolve] 删除基因目录失败: {}", geneId, e);
         }
     }
 

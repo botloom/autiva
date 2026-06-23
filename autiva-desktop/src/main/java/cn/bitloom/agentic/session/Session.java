@@ -89,6 +89,17 @@ public class Session {
     @Builder.Default
     private List<Message> messages = new ArrayList<>();
 
+    /**
+     * 内存列表第一条消息对应磁盘 messages.jsonl 的行号。
+     * 压缩后清理内存时推进此值；加载更多历史消息时回退此值。
+     * 初始值 = memoryCursor（内存从游标后开始加载）。
+     */
+    @Getter
+    @Setter
+    @JsonIgnore
+    @Builder.Default
+    private int memoryBaseOffset = 0;
+
     @Getter
     @Setter
     @JsonIgnore

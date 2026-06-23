@@ -99,10 +99,12 @@ cn/bitloom/agentic/tool/command/
 ### 3.6 ShellSession
 
 - 状态文件：`~/.autiva/shell-state.json`（包含 cwd + env）
-- `resolveWorkdir(perCallWorkdir)` — per-call 优先，否则使用持久化 cwd
+- `getCwd()` — 获取当前工作目录，验证有效性（无效时回退到 user.home 并持久化）
+- `resolveWorkdir(perCallWorkdir)` — per-call 优先，否则使用持久化 cwd（验证有效性）
 - `updateCwd(newCwd)` — 从 marker 行提取新 cwd 并持久化
 - `mergedEnv(perCallEnv)` — 三层合并（系统 env + 持久化 env + per-call env）
 - **线程安全**：所有修改方法 `synchronized`，env 使用 `ConcurrentHashMap`
+- **防御性验证**：getCwd() 和 resolveWorkdir() 都会验证目录有效性，无效时自动回退到 user.home
 
 ### 3.7 ProcessManager
 
@@ -116,6 +118,8 @@ cn/bitloom/agentic/tool/command/
 | `clear` | `clear(id)` | 清除已完成的进程记录 |
 
 **v12 变化**：`BackgroundProcess` 持有 `Process`（java.lang.Process）而非 `PtyHandle`。marker 检测通过 `ShellExecutor` 的解析方法实现。
+
+**缓冲区限制**：`rawBuffer` 超过 1MB（TRUNCATE_THRESHOLD）时截断，保留最后 512KB（MAX_BUFFER_SIZE），避免长时间运行的进程积累大量输出导致内存膨胀。
 
 ### 3.8 CommandSafety
 
