@@ -1,7 +1,11 @@
 package cn.bitloom.bridge.desktop;
 
+import cn.bitloom.agentic.a2ui.A2UIMessage;
+import cn.bitloom.agentic.event.A2UIActionEvent;
+import cn.bitloom.agentic.event.A2UIEvent;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.MessageEvent;
+import cn.bitloom.node.a2ui.A2UICard;
 import cn.bitloom.node.tool.QuestionCard;
 import cn.bitloom.node.tool.TaskCard;
 import cn.bitloom.node.tool.TodoCard;
@@ -27,10 +31,14 @@ public class ToolUIBridge {
     private final Map<String, CompletableFuture<String>> pendingQuestions = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> activeTaskCards = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> sessionTaskCards = new ConcurrentHashMap<>();
+    private final Map<String, A2UICard> activeSurfaces = new ConcurrentHashMap<>();
     private Disposable outBoxSubscription;
 
     @Setter
     private Consumer<Node> onNodeAdded;
+
+    @Setter
+    private String currentSessionId;
 
     @PostConstruct
     public void init() {
@@ -44,6 +52,11 @@ public class ToolUIBridge {
                         TaskCard card = sessionTaskCards.get(messageEvent.getSessionId());
                         if (card != null) {
                             Platform.runLater(() -> card.processEvent(messageEvent));
+                        }
+                    } else if (event instanceof A2UIEvent a2uiEvent) {
+                        A2UICard card = activeSurfaces.get(a2uiEvent.getMessage().surfaceId());
+                        if (card != null) {
+                            Platform.runLater(() -> card.handleMessage(a2uiEvent.getMessage()));
                         }
                     }
                 })
@@ -134,5 +147,75 @@ public class ToolUIBridge {
             card.setStatus("failed");
             card.dispose();
         }
+    }
+
+    // ===== A2UI 相关方法 =====
+
+    /**
+     * 处理 A2UI 消息(实现 A2UITool.A2UIHandler 接口)。
+     * <p>
+     * 在 UI 线程创建/更新/删除 A2UI 卡片,返回 CompletableFuture 供工具线程等待。
+     */
+    public CompletableFuture<String> handleA2UIMessage(A2UIMessage message, String sessionId) {
+        CompletableFuture<String> future = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            try {
+                switch (message) {
+                    case A2UIMessage.CreateSurface cs -> {
+                        A2UICard card = new A2UICard(cs.surfaceId());
+                        card.setOnUserAction((actionName, context) ->
+                                onA2UIAction(cs.surfaceId(), null, actionName, context, sessionId));
+                        activeSurfaces.put(cs.surfaceId(), card);
+                        if (onNodeAdded != null) {
+                            onNodeAdded.accept(card);
+                        }
+                        future.complete("Surface created: " + cs.surfaceId());
+                    }
+                    case A2UIMessage.UpdateComponents uc -> {
+                        A2UICard card = activeSurfaces.get(uc.surfaceId());
+                        if (card != null) {
+                            card.handleMessage(uc);
+                            future.complete("Components updated: " + uc.components().size());
+                        } else {
+                            future.complete("Surface not found: " + uc.surfaceId());
+                        }
+                    }
+                    case A2UIMessage.UpdateDataModel udm -> {
+                        A2UICard card = activeSurfaces.get(udm.surfaceId());
+                        if (card != null) {
+                            card.handleMessage(udm);
+                            future.complete("Data model updated");
+                        } else {
+                            future.complete("Surface not found: " + udm.surfaceId());
+                        }
+                    }
+                    case A2UIMessage.DeleteSurface ds -> {
+                        A2UICard card = activeSurfaces.remove(ds.surfaceId());
+                        if (card != null) {
+                            card.handleMessage(ds);
+                            future.complete("Surface deleted: " + ds.surfaceId());
+                        } else {
+                            future.complete("Surface not found: " + ds.surfaceId());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Error handling A2UI message", e);
+                future.completeExceptionally(e);
+            }
+        });
+
+        return future;
+    }
+
+    /**
+     * 处理 A2UI 用户交互回流。
+     * <p>
+     * 通过 EventBus 发送 A2UIActionEvent 到 Agent。
+     */
+    public void onA2UIAction(String surfaceId, String componentId,
+                             String actionName, Map<String, Object> context, String sessionId) {
+        EventBus.publishIn(A2UIActionEvent.of(sessionId, surfaceId, componentId, actionName, context));
     }
 }

@@ -515,11 +515,13 @@ iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
 - `pendingQuestions`: Map<String, CompletableFuture<String>> — 待回答的提问 Future
 - `activeTaskCards`: Map<String, TaskCard> — 活跃任务卡片（taskId → TaskCard）
 - `sessionTaskCards`: Map<String, TaskCard> — 子会话事件路由映射（sub-session ID → TaskCard）
+- `activeSurfaces`: Map<String, A2UICard> — 活跃 A2UI Surface（surfaceId → A2UICard）
 - `outBoxSubscription`: Disposable — EventBus outBox 订阅
 - `onNodeAdded`: Consumer<Node> — 节点添加回调（由 HomePageController 设置，将卡片添加到聊天容器）
+- `currentSessionId`: String — 当前会话 ID
 
 **核心方法：**
-- `init()`: @PostConstruct，订阅 EventBus.outBoxFlux()，将子会话事件路由到对应 TaskCard
+- `init()`: @PostConstruct，订阅 EventBus.outBoxFlux()，将子会话事件和 A2UI 事件路由到对应组件
 - `destroy()`: @PreDestroy，清理 EventBus 订阅
 - `showQuestions(String questionsJson, CompletableFuture<String> answerFuture)`: 创建 QuestionCard 并添加到 UI，关联 Future 供 AskUserQuestionTool 阻塞等待
 - `onQuestionAnswered(String questionId, String resultJson)`: 完成对应的提问 Future
@@ -527,9 +529,13 @@ iLink 协议 HTTP 客户端，封装所有 iLink API 调用。
 - `createTaskCard(String taskId, String taskJson)`: 创建 TaskCard 并添加到 UI，同时注册 sub-session ID → TaskCard 映射供事件路由
 - `completeTaskCard(String taskId, String result)`: 标记任务卡片完成，取消注册 sub-session ID 映射
 - `failTaskCard(String taskId, String error)`: 标记任务卡片失败，取消注册 sub-session ID 映射
+- `handleA2UIMessage(A2UIMessage message, String sessionId)`: 处理 A2UI 消息（实现 A2UITool.A2UIHandler 接口），创建/更新/删除 A2UICard，返回 CompletableFuture
+- `onA2UIAction(surfaceId, componentId, actionName, context, sessionId)`: 处理 A2UI 用户交互回流，通过 EventBus.publishIn 发送 A2UIActionEvent 到 Agent
 
 **事件路由机制：**
-ToolUIBridge 订阅 EventBus.outBoxFlux()，当收到 MessageEvent 时，通过 `sessionTaskCards` 映射查找对应的 TaskCard，将事件路由到 TaskCard.processEvent() 方法处理。这使得 TaskCard 能展示子智能体的流式文本、工具调用（ToolMessageCard）和工具响应。
+ToolUIBridge 订阅 EventBus.outBoxFlux()，处理两类事件：
+1. **MessageEvent** — 通过 `sessionTaskCards` 映射查找对应的 TaskCard，将事件路由到 TaskCard.processEvent() 方法处理。这使得 TaskCard 能展示子智能体的流式文本、工具调用（ToolMessageCard）和工具响应。
+2. **A2UIEvent** — 通过 `activeSurfaces` 映射查找对应的 A2UICard，将 A2UI 消息路由到 A2UICard.handleMessage() 方法处理。这使得 A2UI 界面能动态更新。
 
 **事件流转：**
 ```

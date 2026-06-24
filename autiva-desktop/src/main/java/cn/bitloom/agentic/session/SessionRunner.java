@@ -64,6 +64,22 @@ public class SessionRunner {
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .then(Mono.<AbstractEvent>empty())
                                 .flux();
+                    case A2UIActionEvent actionEvent -> {
+                        // A2UI 用户交互回流：构造用户消息让 Agent 继续处理
+                        String actionText = "[A2UI 用户交互] surface=" + actionEvent.getSurfaceId()
+                                + " action=" + actionEvent.getActionName()
+                                + " source=" + actionEvent.getSourceComponentId()
+                                + " data=" + actionEvent.getContext();
+                        UserMessage userMessage = new UserMessage(actionText);
+                        RuntimeContext ctx = new RuntimeContext(this.session);
+                        ctx.param("sessionId", this.session.getId())
+                           .param("model", this.session.getModel());
+                        yield this.session.getAgent().runStream(ctx, userMessage)
+                                .map(msg -> EventConverter.fromMessage(this.session.getId(), msg))
+                                .doOnNext(EventBus::publishOut)
+                                .doOnComplete(() -> this.session.setSessionState(SessionState.IDLE));
+                    }
+                    default -> Flux.<AbstractEvent>empty();
                 })
                 .subscribe();
     }

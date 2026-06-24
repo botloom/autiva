@@ -24,6 +24,8 @@
 ### AbstractEvent
 所有事件的抽象基类，使用 `@SuperBuilder` 支持 Lombok Builder 模式。
 
+**permits 列表：** MessageEvent, MemoryEvent, A2UIEvent, A2UIActionEvent
+
 **核心字段：**
 - `sessionId`: 会话ID（用于 Session 过滤本会话事件）
 
@@ -67,6 +69,31 @@
 
 **静态工厂方法：**
 - `contextCompact(sessionId, agentId, currentTokens, maxTokens)`: 创建上下文压缩事件
+
+### A2UIEvent
+A2UI 事件（从 Agent → UI），携带 A2UI v0.9.1 消息体。
+
+**字段：**
+- `message`: A2UIMessage（CreateSurface/UpdateComponents/UpdateDataModel/DeleteSurface）
+
+**静态工厂方法：**
+- `of(sessionId, message)`: 创建 A2UI 事件
+
+**流转路径：** Agent → A2UITool → ToolUIBridge → EventBus.outBox → A2UICard
+
+### A2UIActionEvent
+A2UI 用户动作事件（从 UI → Agent），用户通过 A2UI 界面触发的交互。
+
+**字段：**
+- `surfaceId`: Surface ID
+- `sourceComponentId`: 触发动作的组件 ID
+- `actionName`: 动作名称（Agent 识别）
+- `context`: 上下文数据（已解析的值）
+
+**静态工厂方法：**
+- `of(sessionId, surfaceId, sourceComponentId, actionName, context)`: 创建动作事件
+
+**流转路径：** A2UIRenderer → A2UISurface → ToolUIBridge → EventBus.inBox → SessionRunner → Agent
 
 ### EventConverter
 事件转换器，是唯一同时导入 Spring AI 和事件类型的类。负责在 Spring AI Message 和 MessageEvent 之间进行双向转换。

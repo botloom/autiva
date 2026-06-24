@@ -311,6 +311,42 @@ Markdown 编辑器对话框样式。
 - 自定义滚动条外观
 - 透明滚动条，悬停时显示
 
+### a2ui.css
+A2UI 动态界面样式，与系统聊天消息风格统一。
+
+**设计原则：**
+- 外层卡片与 `.chat-message--tool` 风格一致（白色背景、18px圆角、边框、阴影）
+- 正文15px，标题28/22/18/16/14px，与系统 md-heading 规范一致
+- 按钮圆角16px，与 `.chat-message__question-option` 风格一致
+- 输入框浅灰背景、8px圆角，与 `.chat-message__question-other-input` 风格一致
+- 内嵌卡片背景 `#f8f9fa`，与 `.chat-message--tool-group` 风格一致
+
+**样式类：**
+- `.a2ui-card`: Surface 容器（白色，18px圆角，边框 #e0e0e0，阴影）
+- `.a2ui-row`: 行布局（spacing 8，居左）
+- `.a2ui-column`: 列布局（spacing 8，居上）
+- `.a2ui-list`: 列表布局（spacing 4）
+- `.a2ui-list-scroll`: 列表滚动容器（透明背景，max-height 300）
+- `.a2ui-text`: 文本（15px，#1d1d1f，自动换行）
+- `.a2ui-text--h1` ~ `--h5`: 标题变体（28/22/18/16/14px，粗体）
+- `.a2ui-text--caption`: 辅助文字（12px，#86868b）
+- `.a2ui-text--body`: 正文（15px）
+- `.a2ui-image`: 图片（200x150，保持比例）
+- `.a2ui-icon`: 图标（20px，#1d1d1f）
+- `.a2ui-divider`: 分割线（#e5e5ea）
+- `.a2ui-button`: 按钮（Apple Blue #007aff，16px圆角，悬停/按下态）
+- `.a2ui-button--primary`: 主要按钮（蓝色）
+- `.a2ui-button--secondary`: 次要按钮（浅灰背景，边框）
+- `.a2ui-button--danger`: 危险按钮（红色 #ff3b30）
+- `.a2ui-text-field`: 文本输入框（浅灰背景 #f5f5f7，8px圆角，聚焦蓝色边框）
+- `.a2ui-check-box`: 复选框（14px，选中态蓝色）
+- `.a2ui-slider`: 滑块（Apple Blue，20px圆形 thumb）
+- `.a2ui-date-time-input`: 日期时间输入（浅灰背景，8px圆角）
+- `.a2ui-choice-picker`: 选项选择器（spacing 4）
+- `.a2ui-choice-picker__option`: 选项项（14px）
+- `.a2ui-tabs`: 标签页（透明背景，选中态浅灰+蓝色文字）
+- `.a2ui-card__inner`: 内嵌卡片（#f8f9fa，8px圆角）
+
 ## BEM 命名规范
 使用 Block__Element--Modifier 命名规范：
 - Block: 组件名（如 `button-bar`）

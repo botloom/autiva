@@ -1,5 +1,5 @@
 {
-  "tools": ["Task", "TaskOutput", "TodoWrite", "WebFetch", "WebSearch", "AskUserQuestion", "memory_save", "memory_update", "memory_delete", "memory_search"],
+  "tools": ["Task", "TaskOutput", "TodoWrite", "WebFetch", "WebSearch", "AskUserQuestion", "A2UI", "memory_save", "memory_update", "memory_delete", "memory_search"],
   "mcpServers": {},
   "skills": [],
   "subagents": ["Code","Doctor","Explore","Plan","Research"]

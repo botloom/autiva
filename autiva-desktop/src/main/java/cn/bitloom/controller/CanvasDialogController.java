@@ -354,13 +354,13 @@ public class CanvasDialogController implements WindowManager.StageAware, DialogH
             btn.setToggleGroup(group);
 
             if (i == 0) {
-                // 透明背景 - 用斜线表示
+                // 透明背景 - 用斜线表示（使用 CSS linear-gradient 替代 SVG）
                 btn.setStyle(
                     "-fx-min-width: 20; -fx-min-height: 20; -fx-max-width: 20; -fx-max-height: 20; " +
                     "-fx-background-radius: 3; -fx-border-radius: 3; -fx-border-color: #ddd; " +
                     "-fx-border-width: 1; -fx-padding: 0; -fx-cursor: hand; " +
                     "-fx-background-color: white; " +
-                    "-fx-background-image: url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\"><line x1=\"0\" y1=\"20\" x2=\"20\" y2=\"0\" stroke=\"%23ccc\" stroke-width=\"1.5\"/></svg>');"
+                    "-fx-background-image: linear-gradient(from 0% 100% to 100% 0%, #ccc 48%, transparent 48%, transparent 52%, #ccc 52%);"
                 );
             } else {
                 // 50% 透明度色块 - 用实际颜色显示

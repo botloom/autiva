@@ -352,6 +352,7 @@
 - 管理工具专属属性面板（按工具动态显示/隐藏属性行）
 - 管理图层面板
 - 双击编辑文字
+- 填充颜色色块：透明背景使用 CSS linear-gradient 实现斜线效果（替代 SVG data URI，因 JavaFX CSS 不支持 SVG）
 
 **ViewModel 委托：**
 - `viewModel.applyPropertiesToSelection()` - 应用属性到选中元素

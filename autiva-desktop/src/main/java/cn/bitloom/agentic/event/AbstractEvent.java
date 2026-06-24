@@ -7,6 +7,6 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @Setter
 @SuperBuilder
-public abstract sealed class AbstractEvent implements IEvent permits MessageEvent, MemoryEvent {
+public abstract sealed class AbstractEvent implements IEvent permits MessageEvent, MemoryEvent, A2UIEvent, A2UIActionEvent {
     private String sessionId;
 }

@@ -7,6 +7,7 @@ import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.session.InMemorySessionManager;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.task.repository.TaskRepository;
+import cn.bitloom.agentic.tool.a2ui.A2UITool;
 import cn.bitloom.agentic.tool.command.CommandTool;
 import cn.bitloom.agentic.tool.command.ProcessManager;
 import cn.bitloom.agentic.tool.command.ProcessTool;
@@ -153,6 +154,9 @@ public class Toolkit {
                 .questionHandler(new GuiQuestionHandler(toolUIBridge)).build());
         tools.add(TodoWriteTool.builder()
                 .todoEventHandler(new GuiTodoEventHandler(toolUIBridge)).build());
+        // A2UI 动态界面生成
+        tools.add(A2UITool.builder()
+                .handler(toolUIBridge::handleA2UIMessage).build());
         // 定时任务
         tools.add(CronCreateTool.builder().cronManager(cronManager).build());
         tools.add(CronListTool.builder().cronManager(cronManager).build());

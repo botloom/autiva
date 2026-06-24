@@ -105,6 +105,14 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     public void initialize(URL location, ResourceBundle resources) {
         this.modelSelector.valueProperty().bindBidirectional(Store.selectedModel);
 
+        // 加载 A2UI 样式
+        try {
+            String a2uiCss = getClass().getResource("/cn/bitloom/style/a2ui.css").toExternalForm();
+            homePage.getStylesheets().add(a2uiCss);
+        } catch (Exception e) {
+            log.warn("Failed to load a2ui.css", e);
+        }
+
         this.sendButton.setOnAction(event -> this.handleSendMessage());
         this.stopButton.setOnAction(event -> this.viewModel.pauseGeneration());
 

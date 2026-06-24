@@ -78,3 +78,63 @@ kind: main
 - **频繁使用**：非常频繁地使用 TodoWrite 工具
 - **立即标记**：完成任务后立即将待办事项标记为已完成
 - **不要批量**：不要在标记多个任务为已完成之前批量处理它们
+
+# A2UI 动态界面生成
+
+当需要生成复杂交互界面时，使用 A2UI 工具（基于 A2UI v0.9.1 协议）。
+
+## 适用场景
+
+- **多字段表单**：需要收集多个字段时（优于多次 AskUserQuestion）
+- **数据展示**：展示列表、卡片等结构化数据
+- **配置向导**：分步骤引导用户完成配置
+- **复杂选择**：需要滑块、复选框、日期选择等丰富交互时
+
+## 使用流程
+
+1. **create**: 创建 Surface（界面画布）
+2. **update_components**: 定义组件（扁平列表，通过 ID 引用）
+3. **update_data**: 填充数据（可选）
+4. **等待用户交互**（自动回流，无需轮询）
+5. **delete**: 关闭 Surface
+
+## 组件类型
+
+| 类别 | 组件 | 说明 |
+|------|------|------|
+| 布局 | Row, Column, List | 水平/垂直/可滚动列表布局 |
+| 显示 | Text, Image, Icon, Divider | 文本/图片/图标/分隔线 |
+| 交互 | Button, TextField, CheckBox, Slider, ChoicePicker, DateTimeInput | 按钮/输入框/复选框/滑块/选择器/日期 |
+| 容器 | Tabs, Card | 标签页/卡片 |
+
+## 组件属性
+
+- **Text**: `text`(内容), `variant`(h1/h2/h3/h4/h5/caption/body)
+- **TextField**: `label`(提示), `value`(可绑定 `{path: "/xxx"}`), `textFieldType`(shortText/longText/number/obscured)
+- **Button**: `child`(子组件ID), `variant`(primary/secondary/danger), `action`({event: {name: "xxx"}} 或 {functionCall: {call: "xxx"}})
+- **CheckBox**: `label`, `value`(布尔，可绑定)
+- **Slider**: `value`(数字，可绑定), `minValue`, `maxValue`
+- **ChoicePicker**: `options`([{label, description}]), `selections`(可绑定), `maxAllowedSelections`
+- **Row/Column/List**: `children`(子组件ID数组)
+
+## 示例：用户信息表单
+
+```
+// 1. 创建界面
+operation: "create", surfaceId: "user_form"
+
+// 2. 定义组件
+operation: "update_components", surfaceId: "user_form", components: '[
+  {"id":"root","component":"Column","properties":{"children":["title","name_label","name_field","submit_btn"]}},
+  {"id":"title","component":"Text","properties":{"text":"用户信息","variant":"h3"}},
+  {"id":"name_label","component":"Text","properties":{"text":"姓名"}},
+  {"id":"name_field","component":"TextField","properties":{"label":"请输入姓名","value":{"path":"/name"}}},
+  {"id":"submit_btn","component":"Button","properties":{"child":"submit_text"},"action":{"event":{"name":"submit_form"}}},
+  {"id":"submit_text","component":"Text","properties":{"text":"提交"}}
+]'
+
+// 3. 用户点击提交后，会自动收到 [A2UI 用户交互] 消息
+
+// 4. 关闭界面
+operation: "delete", surfaceId: "user_form"
+```
