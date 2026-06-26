@@ -1,0 +1,193 @@
+/* 右侧面板样式 - Apple 设计规范 */
+.right-panel {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 0 0 0 1;
+    -fx-padding: 0;
+}
+
+.right-panel__header {
+    -fx-padding: 12 16;
+    -fx-background-color: #f5f5f7;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 0 0 1 0;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.right-panel__title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1d1d1f;
+}
+
+.right-panel__close-btn {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+    -fx-padding: 4 8;
+}
+
+.right-panel__close-btn:hover {
+    -fx-background-color: #e5e5ea;
+}
+
+.right-panel__split {
+    -fx-padding: 0;
+    -fx-background-color: #ffffff;
+}
+
+.right-panel__section {
+    -fx-background-color: #ffffff;
+}
+
+.right-panel__titled-pane {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 0 0 1 0;
+}
+
+.right-panel__titled-pane > .title {
+    -fx-background-color: #f5f5f7;
+    -fx-padding: 8 12;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1d1d1f;
+}
+
+.right-panel__file-tree {
+    -fx-background-color: #ffffff;
+    -fx-padding: 4;
+}
+
+.right-panel__file-tree .tree-cell {
+    -fx-padding: 4 8;
+    -fx-font-size: 12px;
+}
+
+.right-panel__diff-list {
+    -fx-background-color: #ffffff;
+    -fx-padding: 4;
+}
+
+.right-panel__diff-item {
+    -fx-padding: 6 8;
+    -fx-font-size: 12px;
+}
+
+.right-panel__content {
+    -fx-background-color: #ffffff;
+}
+
+.right-panel__content-header {
+    -fx-padding: 8 12;
+    -fx-background-color: #f5f5f7;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 0 0 1 0;
+}
+
+.right-panel__content-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1d1d1f;
+}
+
+.right-panel__content-scroll {
+    -fx-background-color: #ffffff;
+}
+
+.right-panel__content-container {
+    -fx-padding: 12;
+    -fx-background-color: #ffffff;
+}
+
+.right-panel__file-content {
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 12px;
+    -fx-text-fill: #1d1d1f;
+}
+
+.right-panel__diff-content {
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 12px;
+    -fx-text-fill: #1d1d1f;
+}
+
+/* 文件树单元格样式 */
+.file-tree__folder {
+    -fx-font-weight: bold;
+}
+
+.file-tree__file {
+    -fx-text-fill: #424245;
+}
+
+/* Diff 审核按钮栏 */
+.right-panel__diff-actions {
+    -fx-alignment: CENTER_RIGHT;
+    -fx-spacing: 8;
+    -fx-padding: 8 0 0 0;
+}
+
+.right-panel__diff-btn--approve {
+    -fx-background-color: #007aff;
+    -fx-text-fill: #ffffff;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-width: 0;
+    -fx-padding: 6 16;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+
+.right-panel__diff-btn--approve:hover {
+    -fx-background-color: #0051d5;
+}
+
+.right-panel__diff-btn--reject {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #ff3b30;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-color: #ff3b30;
+    -fx-border-width: 1;
+    -fx-padding: 6 16;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+
+.right-panel__diff-btn--reject:hover {
+    -fx-background-color: #fff0f0;
+}
+
+/* 加载状态样式 */
+.right-panel__loading-text {
+    -fx-font-size: 12px;
+    -fx-text-fill: #86868b;
+    -fx-alignment: CENTER;
+}
+
+/* 错误状态样式 */
+.right-panel__error-text {
+    -fx-font-size: 12px;
+    -fx-text-fill: #ff3b30;
+    -fx-alignment: CENTER;
+    -fx-text-alignment: CENTER;
+}
+
+.right-panel__retry-btn {
+    -fx-background-color: #007aff;
+    -fx-text-fill: #ffffff;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-width: 0;
+    -fx-padding: 6 16;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+
+.right-panel__retry-btn:hover {
+    -fx-background-color: #0051d5;
+}

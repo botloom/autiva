@@ -24,7 +24,7 @@
 ### AbstractEvent
 所有事件的抽象基类，使用 `@SuperBuilder` 支持 Lombok Builder 模式。
 
-**permits 列表：** MessageEvent, MemoryEvent, A2UIEvent, A2UIActionEvent
+**permits 列表：** MessageEvent, MemoryEvent, A2UIEvent, A2UIActionEvent, DiffEvent
 
 **核心字段：**
 - `sessionId`: 会话ID（用于 Session 过滤本会话事件）
@@ -94,6 +94,17 @@ A2UI 用户动作事件（从 UI → Agent），用户通过 A2UI 界面触发�
 - `of(sessionId, surfaceId, sourceComponentId, actionName, context)`: 创建动作事件
 
 **流转路径：** A2UIRenderer → A2UISurface → ToolUIBridge → EventBus.inBox → SessionRunner → Agent
+
+### DiffEvent
+Diff 事件（从 Agent → UI），当 DiffService 生成新的 Diff 时发布。
+
+**字段：**
+- `diff`: FileDiff（文件 Diff 数据，包含 filePath/hunks/isCreate/isDelete）
+
+**静态工厂方法：**
+- `of(sessionId, diff)`: 创建 Diff 事件（sessionId 可为 null，因为 diff 由工具调用产生，不绑定特定 session）
+
+**流转路径：** DiffService.generateDiff() → EventBus.publishOut() → RightPanelController.subscribeDiffEvents() → 更新 diff 列表
 
 ### EventConverter
 事件转换器，是唯一同时导入 Spring AI 和事件类型的类。负责在 Spring AI Message 和 MessageEvent 之间进行双向转换。

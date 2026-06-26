@@ -4,6 +4,7 @@ import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -25,6 +26,7 @@ import java.util.Set;
  * - data: 结构化键值对 — 用于 UI 详情标签展示
  * - rawOutput: 原始输出 — 用于 LLM 消费和 UI 输出区展示
  */
+@Getter
 public class ToolResult {
 
     public enum Status {
@@ -145,22 +147,6 @@ public class ToolResult {
     }
 
     // ========== Getter ==========
-
-    public Status getStatus() {
-        return status;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public Map<String, Object> getData() {
-        return data;
-    }
-
-    public String getRawOutput() {
-        return rawOutput;
-    }
 
     // ========== 序列化 ==========
 

@@ -13,6 +13,14 @@ import java.util.List;
 public interface ButtonBarHolder {
 
     /**
+     * 按钮对齐方式
+     */
+    enum Alignment {
+        LEFT,   // 左对齐（放在 dynamicButtonContainer）
+        RIGHT   // 右对齐（放在 rightButtonContainer）
+    }
+
+    /**
      * 获取按钮配置列表
      *
      * @return 按钮配置列表
@@ -26,7 +34,18 @@ public interface ButtonBarHolder {
             String id,
             String text,
             String styleClass,
+            String svgPath,
+            Alignment alignment,
             EventHandler<javafx.event.ActionEvent> actionHandler
     ) {
+        // 兼容旧的构造方式（无图标，左对齐）
+        public ButtonConfig(String id, String text, String styleClass, EventHandler<javafx.event.ActionEvent> actionHandler) {
+            this(id, text, styleClass, null, Alignment.LEFT, actionHandler);
+        }
+
+        // 带图标，左对齐
+        public ButtonConfig(String id, String text, String styleClass, String svgPath, EventHandler<javafx.event.ActionEvent> actionHandler) {
+            this(id, text, styleClass, svgPath, Alignment.LEFT, actionHandler);
+        }
     }
 }

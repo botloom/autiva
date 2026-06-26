@@ -8,11 +8,13 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,7 +28,7 @@ public class CronManager {
     private final FileSystemSessionManager fileSystemSessionManager;
     private final Map<String, CronTaskInfo> taskMap = new ConcurrentHashMap<>();
 
-    public CronManager(TaskScheduler taskScheduler,
+    public CronManager(@Qualifier("taskScheduler") TaskScheduler taskScheduler,
                        @Lazy FileSystemSessionManager fileSystemSessionManager) {
         this.taskScheduler = taskScheduler;
         this.fileSystemSessionManager = fileSystemSessionManager;
@@ -156,7 +158,7 @@ public class CronManager {
                         ? Instant.now().plusSeconds(delaySeconds)
                         : Instant.now();
                 yield taskScheduler.scheduleAtFixedRate(() -> executeTask(name), startTime,
-                        java.time.Duration.ofSeconds(intervalSeconds));
+                        Duration.ofSeconds(intervalSeconds));
             }
             case "cron" -> {
                 if (StringUtils.isBlank(cronExpression)) {

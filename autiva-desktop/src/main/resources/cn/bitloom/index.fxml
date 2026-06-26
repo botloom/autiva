@@ -3,6 +3,7 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.geometry.Insets?>
 <BorderPane fx:id="rootContainer"
       styleClass="index-root"
       stylesheets="@style/index.css"
@@ -13,7 +14,7 @@
     <center>
         <HBox styleClass="index__content-area">
             <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
-            <VBox HBox.hgrow="ALWAYS">
+            <VBox HBox.hgrow="ALWAYS" styleClass="index__main-content">
                 <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
                 <fx:include source="view/HomePage.fxml" fx:id="homePage"/>
                 <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
@@ -22,6 +23,12 @@
                 <fx:include source="view/GepPage.fxml" fx:id="gepPage"/>
                 <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
             </VBox>
+            <fx:include source="components/RightSidebar.fxml" fx:id="rightSidebar"/>
+            <fx:include source="components/ContentPanel.fxml" fx:id="contentPanel">
+                <HBox.margin>
+                    <Insets top="8" right="8" bottom="8" left="8"/>
+                </HBox.margin>
+            </fx:include>
         </HBox>
     </center>
 </BorderPane>

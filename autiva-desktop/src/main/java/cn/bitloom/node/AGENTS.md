@@ -259,6 +259,20 @@ ToolGroupCard (VBox)
 - 进行中项显示 activeForm
 - 进度条和完成统计
 
+### FileTreeCell
+文件树单元格，用于 RightPanelController 的项目目录树展示。位于 `node/project` 子包。
+
+**继承：** `TreeCell<Path>`
+
+**职责：**
+- 显示文件/文件夹名称
+- 使用 SvgImageView 加载 SVG 图标（folder.svg / file.svg），图标尺寸 16x16
+- 文件夹使用 `file-tree__folder` 样式类（粗体），文件使用 `file-tree__file` 样式类
+
+**设计规范：**
+- 符合 Apple 设计规范，使用 SVG 矢量图标替代 emoji
+- 图标通过 `cn.bitloom.node.svg.SvgImageView` 加载
+
 ### DiffReviewCard
 Diff 审核卡片，用于 WriteTool/EditTool 的文件修改审核展示。参考 QuestionCard 的设计模式。
 

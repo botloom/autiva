@@ -1,19 +1,13 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.holder.ButtonBarHolder;
-import cn.bitloom.store.Store;
-import javafx.animation.KeyFrame;
-import javafx.animation.KeyValue;
-import javafx.animation.ScaleTransition;
-import javafx.animation.Timeline;
+import cn.bitloom.node.svg.SvgImageView;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Button;
-import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
-import javafx.scene.paint.Color;
-import javafx.util.Duration;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
@@ -24,6 +18,7 @@ import java.util.ResourceBundle;
  *
  * @author bitloom
  */
+@Slf4j
 @Component
 public class ButtonBarController implements Initializable {
 
@@ -32,55 +27,18 @@ public class ButtonBarController implements Initializable {
     @FXML
     private HBox dynamicButtonContainer;
     @FXML
-    private Label statusBarLabel;
+    private HBox rightButtonContainer;
 
     @Setter
     private IndexController indexController;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        this.statusBarLabel.textProperty().bind(Store.statusText);
-        
-        this.statusBarLabel.textProperty().addListener((observable, oldValue, newValue) -> {
-            this.playBounceAnimation();
-        });
-        
         this.sidebarButton.setOnAction(event -> {
             if (this.indexController != null) {
                 this.indexController.toggleSidebar();
             }
         });
-    }
-
-    private void playBounceAnimation() {
-        ScaleTransition scaleUp = new ScaleTransition(Duration.millis(150), this.statusBarLabel);
-        scaleUp.setToX(1.15);
-        scaleUp.setToY(1.15);
-        scaleUp.setInterpolator(javafx.animation.Interpolator.EASE_OUT);
-        
-        Timeline colorTransition = new Timeline(
-            new KeyFrame(Duration.millis(150), 
-                new KeyValue(this.statusBarLabel.textFillProperty(), Color.web("#0071e3"), javafx.animation.Interpolator.EASE_OUT)
-            )
-        );
-        
-        ScaleTransition scaleDown = new ScaleTransition(Duration.millis(150), this.statusBarLabel);
-        scaleDown.setToX(1.0);
-        scaleDown.setToY(1.0);
-        scaleDown.setInterpolator(javafx.animation.Interpolator.EASE_IN);
-        
-        Timeline colorTransitionBack = new Timeline(
-            new KeyFrame(Duration.millis(150), 
-                new KeyValue(this.statusBarLabel.textFillProperty(), Color.web("#86868b"), javafx.animation.Interpolator.EASE_IN)
-            )
-        );
-        
-        scaleUp.setOnFinished(event -> {
-            scaleDown.play();
-            colorTransitionBack.play();
-        });
-        scaleUp.play();
-        colorTransition.play();
     }
 
     /**
@@ -90,18 +48,36 @@ public class ButtonBarController implements Initializable {
      */
     public void updateButtons(ButtonBarHolder holder) {
         this.dynamicButtonContainer.getChildren().clear();
+        this.rightButtonContainer.getChildren().clear();
 
         if (holder != null) {
             for (ButtonBarHolder.ButtonConfig buttonConfig : holder.getButtonConfigs()) {
-                Button button = new Button(buttonConfig.text());
+                Button button = new Button();
                 button.setId(buttonConfig.id());
                 button.getStyleClass().add(buttonConfig.styleClass());
                 button.setOnAction(buttonConfig.actionHandler());
-                this.dynamicButtonContainer.getChildren().add(button);
+
+                // 如果有图标路径，只显示图标；否则只显示文字
+                if (buttonConfig.svgPath() != null && !buttonConfig.svgPath().isEmpty()) {
+                    SvgImageView icon = new SvgImageView();
+                    icon.setFitWidth(18);
+                    icon.setFitHeight(18);
+                    icon.setSvgPath(buttonConfig.svgPath());
+                    button.setGraphic(icon);
+                    button.setContentDisplay(javafx.scene.control.ContentDisplay.GRAPHIC_ONLY);
+                } else if (buttonConfig.text() != null && !buttonConfig.text().isEmpty()) {
+                    button.setText(buttonConfig.text());
+                    button.setContentDisplay(javafx.scene.control.ContentDisplay.TEXT_ONLY);
+                }
+
+                // 根据对齐方式放到不同容器
+                if (buttonConfig.alignment() == ButtonBarHolder.Alignment.RIGHT) {
+                    this.rightButtonContainer.getChildren().add(button);
+                } else {
+                    this.dynamicButtonContainer.getChildren().add(button);
+                }
             }
         }
     }
 
-
 }
-

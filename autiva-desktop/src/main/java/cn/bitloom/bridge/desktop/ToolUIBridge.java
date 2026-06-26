@@ -37,9 +37,6 @@ public class ToolUIBridge {
     @Setter
     private Consumer<Node> onNodeAdded;
 
-    @Setter
-    private String currentSessionId;
-
     @PostConstruct
     public void init() {
         subscribeOutBox();

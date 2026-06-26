@@ -15,13 +15,15 @@
 BorderPane (rootContainer) - 主内容区
 └── HBox (center) - 内容区
     ├── fx:include (SideBar.fxml) - 侧边栏
-    └── VBox
-        ├── fx:include (ButtonBar.fxml) - 底部按钮栏
-        ├── fx:include (HomePage.fxml) - 主页
-        ├── fx:include (SettingsPage.fxml) - 设置页
-        ├── fx:include (SkillPage.fxml) - 技能页
-        ├── fx:include (GepPage.fxml) - 基因进化页
-        └── fx:include (TaskPage.fxml) - 任务页
+    ├── VBox (index__main-content) - 主内容区域
+    │   ├── fx:include (ButtonBar.fxml) - 底部按钮栏
+    │   ├── fx:include (HomePage.fxml) - 主页
+    │   ├── fx:include (SettingsPage.fxml) - 设置页
+    │   ├── fx:include (SkillPage.fxml) - 技能页
+    │   ├── fx:include (GepPage.fxml) - 基因进化页
+    │   └── fx:include (TaskPage.fxml) - 任务页
+    ├── fx:include (RightSidebar.fxml) - 右侧边栏（文件树+diff列表）
+    └── fx:include (ContentPanel.fxml) - 内容面板（终端/文件/diff显示）
 ```
 
 **样式表：** `@style/index.css`
@@ -29,7 +31,9 @@ BorderPane (rootContainer) - 主内容区
 **特点：**
 - 使用系统默认标题栏
 - 使用 fx:include 引入子组件
-- 水平布局：侧边栏 + 主内容区
+- 四个区域平铺排列：侧边栏 + 主内容 + 右侧边栏 + 内容面板
+- 不使用 SplitPane，各区域通过 CSS border 分隔
+- 主内容区域设置 HBox.hgrow="ALWAYS" 占据剩余空间
 - 所有页面默认只显示主页
 
 ### application.yml

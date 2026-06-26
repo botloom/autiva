@@ -22,6 +22,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 
 import javax.swing.*;
 import java.awt.*;
@@ -30,13 +32,15 @@ import java.awt.event.MouseEvent;
 
 @Slf4j
 @SpringBootApplication
+@ComponentScan(excludeFilters = {
+    @ComponentScan.Filter(type = FilterType.REGEX, pattern = "cn\\.bitloom\\.bridge\\.dingtalk\\..*")
+})
 public class AutivaApplication extends Application {
 
     private ConfigurableApplicationContext springContext;
     private TrayIcon trayIcon;
     private Popup trayPopup;
-    private Stage hiddenOwner;  // 隐藏的 UTILITY owner，用于托盘菜单
-    // 保存主窗口关闭前的位置和大小
+    private Stage hiddenOwner;
     private double savedX, savedY, savedWidth, savedHeight;
 
     static void main(String[] args) {
@@ -49,8 +53,6 @@ public class AutivaApplication extends Application {
 
     @Override
     public void start(Stage stage) {
-
-        // 强制初始化 AWT Toolkit，否则 SystemTray.isSupported() 可能返回 false
         Toolkit.getDefaultToolkit();
 
         SvgImageView iconView = new SvgImageView(AppConstants.Stage.ICON_SVG);
@@ -69,7 +71,6 @@ public class AutivaApplication extends Application {
                 return;
             }
 
-            // Spring 就绪后，在 FX 线程加载 FXML 并切换窗口
             Platform.runLater(() -> {
                 try {
                     FXMLLoader loader = new FXMLLoader(getClass().getResource(AppConstants.Stage.FXML));
@@ -85,18 +86,14 @@ public class AutivaApplication extends Application {
                     stage.setMinWidth(600);
                     stage.setMinHeight(400);
 
-                    // 初始化系统托盘
                     setupTrayIcon(stage, iconView.getImage());
 
-                    // 关闭主窗口时隐藏而非退出
                     stage.setOnCloseRequest(e -> {
                         e.consume();
-                        // 保存主窗口位置和大小
                         savedX = stage.getX();
                         savedY = stage.getY();
                         savedWidth = stage.getWidth();
                         savedHeight = stage.getHeight();
-                        // 隐藏主窗口（从任务栏消失）
                         stage.hide();
                     });
 
@@ -114,9 +111,9 @@ public class AutivaApplication extends Application {
     public void stop() {
         removeTrayIcon();
         ExecutorManager.close();
-        springContext.close();
-        // 钉钉 Stream SDK 的 NetworkSharedResources 创建了静态 NioEventLoopGroup（非守护线程），
-        // SDK 的 stop() 不会关闭它，导致 JVM 无法正常退出
+        if (springContext != null) {
+            springContext.close();
+        }
         System.exit(0);
     }
 
@@ -135,7 +132,6 @@ public class AutivaApplication extends Application {
             return;
         }
 
-        // 创建隐藏的 UTILITY Stage 作为托盘菜单的 owner
         hiddenOwner = new Stage();
         hiddenOwner.initStyle(StageStyle.UTILITY);
         hiddenOwner.setWidth(1);
@@ -146,18 +142,14 @@ public class AutivaApplication extends Application {
 
         SystemTray tray = SystemTray.getSystemTray();
 
-        // Windows 托盘图标标准尺寸 16x16，HiDPI 下 32x32
         int iconSize = tray.getTrayIconSize().width;
         if (iconSize <= 0) iconSize = 16;
         java.awt.Image awtImage = SwingFXUtils.fromFXImage(appIcon, null);
-        // 缩放到系统托盘图标尺寸，保证清晰
         java.awt.Image scaledImage = awtImage.getScaledInstance(iconSize, iconSize, java.awt.Image.SCALE_SMOOTH);
 
-        // 创建 TrayIcon，不使用 AWT PopupMenu（避免中文乱码）
         trayIcon = new TrayIcon(scaledImage, "Autiva");
         trayIcon.setImageAutoSize(true);
 
-        // 双击托盘图标恢复主窗口
         trayIcon.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -188,7 +180,6 @@ public class AutivaApplication extends Application {
             log.warn("添加系统托盘图标失败", e);
         }
 
-        // 预构建 JavaFX ContextMenu（右键菜单）
         buildTrayContextMenu(mainStage);
     }
 
@@ -265,8 +256,6 @@ public class AutivaApplication extends Application {
         if (trayPopup.isShowing()) {
             trayPopup.hide();
         }
-        // Popup 坐标是相对于 owner 窗口的，需要转换
-        // hiddenOwner 在屏幕左上角，所以直接用屏幕坐标
         trayPopup.show(hiddenOwner, screenX, screenY);
     }
 

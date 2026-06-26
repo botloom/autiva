@@ -108,9 +108,7 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         }
 
         Path zipPath = selectedFile.toPath();
-        viewModel.importSkillFromZipAsync(zipPath, () -> {
-            renderSkills();
-        });
+        viewModel.importSkillFromZipAsync(zipPath, this::renderSkills);
     }
 
     @Override

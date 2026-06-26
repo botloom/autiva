@@ -3,6 +3,7 @@ package cn.bitloom.controller;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelTypeEnum;
+import cn.bitloom.agentic.project.ProjectInfo;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
@@ -82,6 +83,10 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private ComboBox<ModelTypeEnum> modelSelector;
     @FXML
     private ComboBox<String> agentSelector;
+    @FXML
+    private MenuButton projectSelectButton;
+    @FXML
+    private Button branchDisplayButton;
 
     private final List<File> attachedFiles = new ArrayList<>();
     private final BooleanProperty shouldScrollToBottom = new SimpleBooleanProperty(false);
@@ -556,6 +561,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             if (newVal != null) {
                 viewModel.switchAgent(newVal);
                 updateAgentSelectorWidth();
+                updateProjectButtonBarVisibility(newVal);
             }
         });
 
@@ -564,6 +570,25 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                 this.agentSelector.setValue(newVal);
             }
         });
+
+        // 初始化项目按钮可见性
+        updateProjectButtonBarVisibility(Store.currentAgent.get());
+
+        // 设置项目选择下拉菜单
+        setupProjectMenu();
+
+        // 初始化分支按钮（默认只显示图标，无文字）
+        this.branchDisplayButton.setText("");
+
+        // 监听当前项目变化，更新分支显示
+        this.viewModel.currentProjectProperty()
+                .addListener((obs, oldVal, newVal) -> {
+                    refreshBranchDisplay(newVal);
+                    refreshProjectMenuText(newVal);
+                    if (indexController != null) {
+                        indexController.updateCurrentProject(newVal);
+                    }
+                });
     }
 
     private void updateAgentSelectorWidth() {
@@ -577,6 +602,96 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         this.agentSelector.setPrefWidth(width);
         this.agentSelector.setMinWidth(width);
         this.agentSelector.setMaxWidth(width);
+    }
+
+    /**
+     * 根据智能体类型控制项目按钮显示/隐藏
+     */
+    private void updateProjectButtonBarVisibility(String agentId) {
+        boolean show = "coder".equals(agentId);
+        projectSelectButton.setVisible(show);
+        projectSelectButton.setManaged(show);
+        branchDisplayButton.setVisible(show);
+        branchDisplayButton.setManaged(show);
+    }
+
+    /**
+     * 设置项目选择下拉菜单
+     * 第一项：选择文件夹（打开 DirectoryChooser）
+     * 后续项：最近打开的项目列表
+     */
+    private void setupProjectMenu() {
+        refreshProjectMenu();
+        refreshProjectMenuText(viewModel.getCurrentProject());
+    }
+
+    /**
+     * 刷新项目下拉菜单内容
+     */
+    private void refreshProjectMenu() {
+        projectSelectButton.getItems().clear();
+
+        // 第一项：选择文件夹
+        MenuItem openFolderItem = new MenuItem("选择文件夹...");
+        openFolderItem.setOnAction(e -> handleOpenLocalFolder());
+        projectSelectButton.getItems().add(openFolderItem);
+
+        // 分隔线
+        projectSelectButton.getItems().add(new SeparatorMenuItem());
+
+        // 最近项目列表
+        List<ProjectInfo> projects = viewModel.listProjects();
+        for (ProjectInfo project : projects) {
+            MenuItem item = new MenuItem(project.name());
+            item.setOnAction(e -> {
+                viewModel.setCurrentProject(project);
+                refreshBranchDisplay(project);
+            });
+            projectSelectButton.getItems().add(item);
+        }
+    }
+
+    /**
+     * 刷新项目选择按钮显示文本
+     */
+    private void refreshProjectMenuText(ProjectInfo project) {
+        if (project != null) {
+            projectSelectButton.setText(project.name());
+        } else {
+            projectSelectButton.setText("选择项目");
+        }
+    }
+
+    /**
+     * 打开本地文件夹选择器
+     */
+    private void handleOpenLocalFolder() {
+        try {
+            javafx.stage.DirectoryChooser dirChooser = new javafx.stage.DirectoryChooser();
+            dirChooser.setTitle("选择项目文件夹");
+            javafx.stage.Stage stage = (javafx.stage.Stage) projectSelectButton.getScene().getWindow();
+            File selectedDir = dirChooser.showDialog(stage);
+            if (selectedDir != null) {
+                String path = selectedDir.getAbsolutePath();
+                String name = selectedDir.getName();
+                viewModel.registerLocalProject(path, name);
+                refreshProjectMenu();
+            }
+        } catch (Exception e) {
+            log.error("打开文件夹选择器失败", e);
+        }
+    }
+
+    /**
+     * 刷新分支显示
+     * 默认只显示图标，选择项目后显示分支名称
+     */
+    private void refreshBranchDisplay(ProjectInfo project) {
+        if (project == null || project.gitBranch() == null || project.gitBranch().isBlank()) {
+            branchDisplayButton.setText("");
+        } else {
+            branchDisplayButton.setText(project.gitBranch());
+        }
     }
 
     @Override
@@ -594,14 +709,40 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @Override
     public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
         return List.of(
+                // 新对话按钮（左对齐）
                 new ButtonBarHolder.ButtonConfig(
                         "newChatButton",
                         "新对话",
                         "dynamic-btn",
-                        event -> {
+                        _ -> {
                             this.viewModel.createNewSession();
                             resetForNewSession();
-                        }));
+                        }),
+                // 终端按钮（右对齐）
+                new ButtonBarHolder.ButtonConfig(
+                        "terminalButton",
+                        "终端",
+                        "button-bar__icon-btn",
+                        "/cn/bitloom/images/terminal.svg",
+                        ButtonBarHolder.Alignment.RIGHT,
+                        _ -> {
+                            if (indexController != null) {
+                                indexController.openTerminal();
+                            }
+                        }),
+                // 右侧边栏按钮（右对齐）
+                new ButtonBarHolder.ButtonConfig(
+                        "toggleRightPanelButton",
+                        "右侧边栏",
+                        "button-bar__icon-btn",
+                        "/cn/bitloom/images/panel-right.svg",
+                        ButtonBarHolder.Alignment.RIGHT,
+                        _ -> {
+                            if (indexController != null) {
+                                indexController.toggleRightSidebar();
+                            }
+                        })
+        );
     }
 
     public void resetForNewSession() {

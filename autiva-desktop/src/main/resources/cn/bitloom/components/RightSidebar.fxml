@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:id="rightSidebar"
+      styleClass="right-sidebar"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.RightSidebarController"
+      stylesheets="@../style/right-sidebar.css"
+      visible="false" managed="false"
+      prefWidth="280" minWidth="240"
+>
+    <SplitPane fx:id="splitPane" orientation="VERTICAL" VBox.vgrow="ALWAYS" styleClass="right-sidebar__split">
+        <VBox styleClass="right-sidebar__section">
+            <TitledPane text="项目文件" expanded="true" styleClass="right-sidebar__titled-pane">
+                <TreeView fx:id="fileTree" styleClass="right-sidebar__file-tree"/>
+            </TitledPane>
+        </VBox>
+        <VBox styleClass="right-sidebar__section">
+            <TitledPane text="修改文件" expanded="true" styleClass="right-sidebar__titled-pane">
+                <ListView fx:id="diffList" styleClass="right-sidebar__diff-list"/>
+            </TitledPane>
+        </VBox>
+    </SplitPane>
+</VBox>

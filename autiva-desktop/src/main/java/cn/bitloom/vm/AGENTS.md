@@ -43,7 +43,8 @@
 - `createNewSession()`: 切换到初始态（session 设为 null，清空消息列表，重置状态，清空 currentProject），不创建真正的 session
 - `switchToSession(String sessionId)`: 切换到指定 session（同步调用 activate 激活，activate 只加载最近 100 条消息，速度足够快；激活后订阅 OutBox 并渲染历史消息）
 - `switchAgent(String agentId)`: 切换智能体（设置 Store.currentAgent，非 coder 智能体时清空 currentProject，调用 createNewSession）
-- `sendMessage(String)`: 发送消息给智能体系统（接收纯文本，内部构建 MessageEvent），懒创建 session（首次发送时才创建），coder 智能体且有 currentProject 时创建带 projectPath 和 reviewDiff=true 的 Session，暂停后恢复时重新激活会话，发送后翻转 Store.refreshHistory 触发侧边栏标题刷新
+- `sendMessage(String)`: 发送消息给智能体系统（接收纯文本，内部构建 MessageEvent），懒创建 session（首次发送时才创建），coder 智能体且有 currentProject 时通过 buildMessageWithContext() 在消息前附加项目信息（格式：`[项目: {name} @ {path}]\n`），暂停后恢复时重新激活会话，发送后翻转 Store.refreshHistory 触发侧边栏标题刷新
+- `buildMessageWithContext(String)`: 构建带项目上下文的消息，coder 智能体且有 currentProject 时在消息前添加项目信息前缀
 - `processMessage(MessageEvent)`: 处理消息流，根据 MessageEvent.Type 分发（USER/ASSISTANT/TOOL），直接访问结构化字段
 - `processAssistantEvent(MessageEvent)`: 处理助手消息（根据 MessageEvent 的 finishReason 判断流式/完成/工具调用，直接调用 AssistantMessageCard.appendContent() 和 complete()）
 - `processToolEvent(MessageEvent)`: 处理工具消息（直接创建 ToolMessageCard）

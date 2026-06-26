@@ -112,24 +112,6 @@ public class AgentDefinitionManager {
     }
 
     /**
-     * 获取指定的 SUBAGENT 定义（按名称列表过滤）。
-     * 如果 names 为空或 null，返回所有 SUBAGENT 定义。
-     *
-     * @param names 允许的子智能体名称列表
-     * @return 过滤后的 SUBAGENT 定义列表
-     */
-    public List<AgentDefinition> getSubagentDefinitions(List<String> names) {
-        List<AgentDefinition> all = getSubagentDefinitions();
-        if (names == null || names.isEmpty()) {
-            return all;
-        }
-        Set<String> allowed = Set.copyOf(names);
-        return all.stream()
-                .filter(d -> allowed.contains(d.name()))
-                .toList();
-    }
-
-    /**
      * 获取所有 MAIN 类型的 agent ID
      */
     public Set<String> getMainAgentIds() {

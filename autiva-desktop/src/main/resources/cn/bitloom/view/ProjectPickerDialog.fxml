@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import cn.bitloom.node.svg.SvgImageView?>
+
+<VBox styleClass="project-picker"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.ProjectPickerDialogController"
+      stylesheets="@../style/project-picker.css"
+      prefWidth="500" prefHeight="400"
+>
+    <HBox styleClass="project-picker__header" alignment="CENTER_LEFT" spacing="8">
+        <Label text="选择项目" styleClass="project-picker__title"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button fx:id="newProjectButton" styleClass="project-picker__new-btn" text="新建项目">
+            <graphic>
+                <SvgImageView fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/plus.svg"/>
+            </graphic>
+        </Button>
+        <Button fx:id="openLocalButton" styleClass="project-picker__open-btn" text="打开本地">
+            <graphic>
+                <SvgImageView fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/folder.svg"/>
+            </graphic>
+        </Button>
+    </HBox>
+
+    <ListView fx:id="projectListView" styleClass="project-picker__list" VBox.vgrow="ALWAYS"/>
+
+    <HBox styleClass="project-picker__footer" alignment="CENTER_RIGHT" spacing="8">
+        <Button fx:id="cancelButton" styleClass="project-picker__cancel-btn" text="取消"/>
+        <Button fx:id="confirmButton" styleClass="project-picker__confirm-btn" text="确定" disable="true"/>
+    </HBox>
+</VBox>

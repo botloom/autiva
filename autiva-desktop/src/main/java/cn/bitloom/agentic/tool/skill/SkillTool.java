@@ -5,12 +5,12 @@ import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.util.Assert;
 
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * 技能调用工具，替代原 SkillManager.buildToolCallback()。
@@ -47,7 +47,7 @@ public class SkillTool extends AbstractTool<SkillTool.Input> {
     ) {}
 
     @Override
-    public ToolResult execute(Input input, ToolContext toolContext) {
+    public @NonNull ToolResult execute(Input input, ToolContext toolContext) {
         log.info("[ToolCall] Skill - 调用技能: {}", input.command());
         Skill skill = skillManager.getSkill(input.command());
 

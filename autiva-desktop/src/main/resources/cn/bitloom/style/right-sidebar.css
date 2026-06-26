@@ -1,0 +1,143 @@
+/* RightSidebar 样式 - Apple 风格设计 */
+
+.right-sidebar {
+    -fx-background-color: #ffffff;
+    -fx-border-width: 0 0 0 1;
+    -fx-border-color: transparent transparent transparent #e5e5ea;
+    -fx-padding: 0;
+}
+
+.right-sidebar__split {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+    -fx-background-insets: 0;
+}
+
+.right-sidebar__split > .split-pane-divider {
+    -fx-background-color: #e5e5ea;
+    -fx-padding: 0 1 0 0;
+}
+
+.right-sidebar__section {
+    -fx-background-color: transparent;
+}
+
+/* TitledPane 样式 */
+.right-sidebar__titled-pane {
+    -fx-background-color: transparent;
+    -fx-text-fill: #1d1d1f;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 12 8 12;
+    -fx-background-insets: 0;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent #f0f0f2 transparent;
+}
+
+.right-sidebar__titled-pane > .title {
+    -fx-background-color: #f5f5f7;
+    -fx-background-insets: 0;
+    -fx-padding: 6 12 6 12;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent #e5e5ea transparent;
+}
+
+.right-sidebar__titled-pane > .title > .arrow-button {
+    -fx-padding: 0 4 0 0;
+}
+
+.right-sidebar__titled-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: #86868b;
+}
+
+.right-sidebar__titled-pane:focused > .title {
+    -fx-background-color: #ebebed;
+}
+
+.right-sidebar__titled-pane > .content {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+}
+
+/* 文件树样式 */
+.right-sidebar__file-tree {
+    -fx-background-color: transparent;
+    -fx-padding: 4 0 4 0;
+    -fx-fixed-cell-size: 28px;
+}
+
+.right-sidebar__file-tree .tree-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #1d1d1f;
+    -fx-font-size: 12px;
+    -fx-padding: 2 12 2 12;
+    -fx-graphic-text-gap: 6px;
+}
+
+.right-sidebar__file-tree .tree-cell:hover {
+    -fx-background-color: #f5f5f7;
+}
+
+.right-sidebar__file-tree .tree-cell:selected {
+    -fx-background-color: #e8e8ed;
+    -fx-text-fill: #1d1d1f;
+}
+
+.right-sidebar__file-tree .tree-cell:filled:selected:focused {
+    -fx-background-color: #e8e8ed;
+    -fx-text-fill: #1d1d1f;
+}
+
+/* diff 列表样式 */
+.right-sidebar__diff-list {
+    -fx-background-color: transparent;
+    -fx-padding: 4 0 4 0;
+    -fx-fixed-cell-size: 28px;
+}
+
+.right-sidebar__diff-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #1d1d1f;
+    -fx-font-size: 12px;
+    -fx-padding: 2 12 2 12;
+}
+
+.right-sidebar__diff-list .list-cell:hover {
+    -fx-background-color: #f5f5f7;
+}
+
+.right-sidebar__diff-list .list-cell:selected {
+    -fx-background-color: #e8e8ed;
+    -fx-text-fill: #1d1d1f;
+}
+
+.right-sidebar__diff-list .list-cell:filled:selected:focused {
+    -fx-background-color: #e8e8ed;
+    -fx-text-fill: #1d1d1f;
+}
+
+/* 滚动条样式 */
+.right-sidebar .scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.right-sidebar .scroll-bar:vertical .thumb {
+    -fx-background-color: #d1d1d6;
+    -fx-background-radius: 3px;
+    -fx-padding: 0 2 0 0;
+}
+
+.right-sidebar .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #b0b0b5;
+}
+
+.right-sidebar .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.right-sidebar .scroll-bar:vertical .increment-button,
+.right-sidebar .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}

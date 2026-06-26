@@ -113,7 +113,7 @@ public class AutivaToolCallingManager implements ToolCallingManager {
                     toolResult = DefaultToolExecutionExceptionProcessor.builder().build().process(ex);
                 }
                 toolResponses.add(new ToolResponseMessage.ToolResponse(
-                        toolCall.id(), toolName, toolResult != null ? toolResult : ""));
+                        toolCall.id(), toolName, toolResult));
             }
         }
 

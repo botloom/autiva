@@ -2,12 +2,17 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import cn.bitloom.node.svg.SvgImageView?>
 
 <HBox styleClass="button-bar" alignment="CENTER_LEFT" prefHeight="50.0" minHeight="50.0" maxHeight="50.0" xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.ButtonBarController"
       stylesheets="@../style/button-bar.css"
 >
-    <Button fx:id="sidebarButton" text="☰" styleClass="button-bar__toggle-btn"/>
+    <Button fx:id="sidebarButton" styleClass="button-bar__icon-btn" prefWidth="26" prefHeight="26">
+        <graphic>
+            <SvgImageView fitWidth="18" fitHeight="18" svgPath="/cn/bitloom/images/panel-left.svg"/>
+        </graphic>
+    </Button>
     <HBox fx:id="dynamicButtonContainer" HBox.hgrow="ALWAYS" alignment="CENTER_LEFT" spacing="8"/>
-    <Label fx:id="statusBarLabel" text="就绪" styleClass="button-bar__status"/>
+    <HBox fx:id="rightButtonContainer" alignment="CENTER_RIGHT" spacing="8"/>
 </HBox>

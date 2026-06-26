@@ -1,0 +1,119 @@
+/* 项目选择对话框样式 - Apple 设计规范 */
+.project-picker {
+    -fx-background-color: #ffffff;
+    -fx-padding: 0;
+}
+
+.project-picker__header {
+    -fx-padding: 16;
+    -fx-background-color: #f5f5f7;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 0 0 1 0;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.project-picker__title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1d1d1f;
+}
+
+.project-picker__new-btn,
+.project-picker__open-btn {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #007aff;
+    -fx-border-color: #007aff;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+    -fx-padding: 6 12;
+    -fx-font-size: 12px;
+}
+
+.project-picker__new-btn:hover,
+.project-picker__open-btn:hover {
+    -fx-background-color: #f0f8ff;
+}
+
+.project-picker__list {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 0;
+}
+
+.project-picker__list .list-cell {
+    -fx-padding: 12 16;
+    -fx-border-color: #f0f0f0;
+    -fx-border-width: 0 0 1 0;
+    -fx-cursor: hand;
+}
+
+.project-picker__list .list-cell:hover {
+    -fx-background-color: #f5f5f7;
+}
+
+.project-picker__list .list-cell:selected {
+    -fx-background-color: #007aff;
+}
+
+.project-picker__list .list-cell:selected .project-picker__item-name,
+.project-picker__list .list-cell:selected .project-picker__item-path,
+.project-picker__list .list-cell:selected .project-picker__item-branch {
+    -fx-text-fill: #ffffff;
+}
+
+.project-picker__item-name {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1d1d1f;
+}
+
+.project-picker__item-path {
+    -fx-font-size: 11px;
+    -fx-text-fill: #86868b;
+}
+
+.project-picker__item-branch {
+    -fx-font-size: 11px;
+    -fx-text-fill: #86868b;
+    -fx-font-style: italic;
+}
+
+.project-picker__footer {
+    -fx-padding: 12 16;
+    -fx-background-color: #f5f5f7;
+    -fx-border-color: #e5e5ea;
+    -fx-border-width: 1 0 0 0;
+}
+
+.project-picker__cancel-btn {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1d1d1f;
+    -fx-border-color: #d1d1d6;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+    -fx-padding: 8 16;
+}
+
+.project-picker__cancel-btn:hover {
+    -fx-background-color: #f5f5f7;
+}
+
+.project-picker__confirm-btn {
+    -fx-background-color: #007aff;
+    -fx-text-fill: #ffffff;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+    -fx-padding: 8 16;
+}
+
+.project-picker__confirm-btn:hover {
+    -fx-background-color: #0056b3;
+}
+
+.project-picker__confirm-btn:disabled {
+    -fx-background-color: #d1d1d6;
+    -fx-cursor: default;
+}

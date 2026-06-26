@@ -3,6 +3,8 @@ package cn.bitloom.vm;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.EventConverter;
 import cn.bitloom.agentic.event.MessageEvent;
+import cn.bitloom.agentic.project.ProjectInfo;
+import cn.bitloom.agentic.project.ProjectRegistry;
 import cn.bitloom.agentic.session.*;
 import cn.bitloom.node.message.AssistantMessageCard;
 import cn.bitloom.node.message.MessageCard;
@@ -10,10 +12,11 @@ import cn.bitloom.node.message.ToolMessageCard;
 import cn.bitloom.node.message.UserMessageCard;
 import cn.bitloom.store.Store;
 import javafx.application.Platform;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
@@ -24,17 +27,31 @@ import java.util.Objects;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class HomePageViewModel {
 
     private final FileSystemSessionManager fileSystemSessionManager;
+    private final ProjectRegistry projectRegistry;
 
     @Getter
     private final ObservableList<MessageCard> messages = FXCollections.observableArrayList();
 
+    private final ObjectProperty<ProjectInfo> currentProject = new SimpleObjectProperty<>();
+
+    /**
+     * 当前项目属性（供 Controller 监听）
+     */
+    public ObjectProperty<ProjectInfo> currentProjectProperty() {
+        return currentProject;
+    }
+
     private Session session;
     private AssistantMessageCard currentAssistantCard = null;
     private Disposable outBoxSubscription;
+
+    public HomePageViewModel(FileSystemSessionManager fileSystemSessionManager, ProjectRegistry projectRegistry) {
+        this.fileSystemSessionManager = fileSystemSessionManager;
+        this.projectRegistry = projectRegistry;
+    }
 
     private void subscribeOutBox() {
         if (this.outBoxSubscription != null) {
@@ -97,7 +114,50 @@ public class HomePageViewModel {
 
     public void switchAgent(String agentId) {
         Store.currentAgent.set(agentId);
+        // 非 coder 智能体时清空当前项目
+        if (!"coder".equals(agentId)) {
+            currentProject.set(null);
+        }
         createNewSession();
+    }
+
+    /**
+     * 设置当前编码项目
+     */
+    public void setCurrentProject(ProjectInfo project) {
+        currentProject.set(project);
+    }
+
+    /**
+     * 获取当前编码项目
+     */
+    public ProjectInfo getCurrentProject() {
+        return currentProject.get();
+    }
+
+    /**
+     * 列出所有已注册项目
+     */
+    public List<ProjectInfo> listProjects() {
+        return projectRegistry.listProjects();
+    }
+
+    /**
+     * 新建项目并设为当前
+     */
+    public ProjectInfo createNewProject(String name) throws java.io.IOException {
+        ProjectInfo project = projectRegistry.createProject(name);
+        currentProject.set(project);
+        return project;
+    }
+
+    /**
+     * 注册本地文件夹并设为当前
+     */
+    public ProjectInfo registerLocalProject(String path, String name) throws java.io.IOException {
+        ProjectInfo project = projectRegistry.registerLocal(path, name);
+        currentProject.set(project);
+        return project;
     }
 
     public void prepareHistoricalMessages() {
@@ -298,9 +358,24 @@ public class HomePageViewModel {
         Store.isStreaming.set(true);
         Store.isPaused.set(false);
         fileSystemSessionManager.updateState(this.session.getId(), SessionState.GENERATING);
-        EventBus.publishIn(MessageEvent.userMessage(this.session.getId(), text));
+        // coder 智能体且有当前项目时，将项目信息附加到消息中
+        String messageText = buildMessageWithContext(text);
+        EventBus.publishIn(MessageEvent.userMessage(this.session.getId(), messageText));
         // 触发侧边栏刷新（更新会话标题）
         Store.refreshHistory.set(!Store.refreshHistory.get());
+    }
+
+    /**
+     * 构建带项目上下文的消息
+     * coder 智能体且有 currentProject 时，在消息前添加项目信息
+     */
+    private String buildMessageWithContext(String text) {
+        String agentId = Store.currentAgent.get();
+        ProjectInfo project = currentProject.get();
+        if ("coder".equals(agentId) && project != null) {
+            return "[项目: " + project.name() + " @ " + project.path() + "]\n" + text;
+        }
+        return text;
     }
 
     public void clear() {

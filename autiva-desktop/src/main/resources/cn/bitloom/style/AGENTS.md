@@ -57,7 +57,9 @@
 主容器样式。
 
 **样式类：**
-- `.window-container`: 窗口容器
+- `.index-root`: 根容器
+- `.index__content-area`: 内容区域（HBox）
+- `.index__main-content`: 主内容区域（VBox，HBox.hgrow="ALWAYS"）
 
 ### button-bar.css
 底部按钮栏样式。
@@ -87,6 +89,32 @@
 - `.sidebar__history-item-title`: 对话标题
 - `.sidebar__history-item-time`: 对话时间
 
+### right-sidebar.css
+右侧边栏样式，Apple 风格设计。
+
+**样式类：**
+- `.right-sidebar`: 容器样式（白色背景，左边框分隔线）
+- `.right-sidebar__split`: 垂直分割面板
+- `.right-sidebar__titled-pane`: Apple 风格折叠面板（12px 加粗标题）
+- `.right-sidebar__file-tree`: 文件树（12px 字体，紧凑行高）
+- `.right-sidebar__diff-list`: diff 列表（12px 字体）
+
+### content-panel.css
+内容面板样式，Apple 风格设计。
+
+**样式类：**
+- `.content-panel`: 容器样式（深色背景 #1e1e1e，12px 圆角）
+- `.content-panel__header`: 标题栏（深色背景 #2d2d30，顶部圆角 12 12 0 0）
+- `.content-panel__title`: 标题文字（浅色 #d4d4d4，13px 加粗）
+- `.content-panel__close-btn`: 关闭按钮（Apple 风格圆形，文字颜色 #d4d4d4，hover 背景 #3d3d3d）
+- `.content-panel__container`: 内容容器
+- `.content-panel__file-content`: 文件内容（浅色 #d4d4d4，等宽字体 12px）
+- `.content-panel__diff-content`: diff 内容（浅色 #d4d4d4，等宽字体 12px）
+- `.content-panel__diff-actions`: diff 审核按钮栏
+- `.content-panel__diff-btn--approve`: 确定按钮（绿色 #34c759）
+- `.content-panel__diff-btn--reject`: 撤销按钮（红色 #ff3b30）
+- `.jedi-terminal-view`: 终端视图（深色背景 #1e1e1e，底部圆角 0 0 12 12）
+
 ### home-page.css
 主页样式。
 
@@ -100,6 +128,8 @@
 - `.home-page__icon-btn--active`: 图标按钮激活状态（红色背景，用于录音状态）
 - `.home-page__icon-btn--stop`: 图标按钮终止状态（红色背景，用于暂停流式生成）
 - `.home-page__model-selector`: 模型选择器
+- `.home-page__project-menu-btn`: 项目选择下拉菜单按钮（胶囊形，与 model-selector 风格一致，宽度自适应文本内容，移除固定最小宽度，移除 FXML 左侧 margin，左侧 padding 0，图标文本间距 2px）
+- `.home-page__branch-btn`: 分支显示按钮（图标+文字，默认只显示图标）
 - `.home-page__agent-selector`: 智能体选择器（胶囊形状，与 modelSelector 风格一致）
 - `.home-page__agent-selector:hover`: 智能体选择器悬停状态
 - `.home-page__agent-selector:pressed`: 智能体选择器按下状态

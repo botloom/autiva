@@ -37,6 +37,16 @@ public class AppBootstrap {
         } catch (Exception e) {
             log.error("初始化默认主智能体失败", e);
         }
+        try {
+            initCoderMainAgent();
+        } catch (Exception e) {
+            log.error("初始化编码主智能体失败", e);
+        }
+        try {
+            initProjectsDir();
+        } catch (Exception e) {
+            log.error("初始化项目目录失败", e);
+        }
 
     }
 
@@ -93,6 +103,46 @@ public class AppBootstrap {
         // 创建 workspace 目录
         Files.createDirectories(AppConstants.MainAgent.sessionsDir(AppConstants.Agents.DEFAULT_AGENT_NAME));
         Files.createDirectories(AppConstants.MainAgent.contextDir(AppConstants.Agents.DEFAULT_AGENT_NAME));
+    }
+
+    /**
+     * 初始化编码主智能体（coder）
+     * 从 classpath:bootstrap/agent/coder/ 复制 agent.md、config.json、memory.md 到 agents/coder/
+     * 注意：不检查目录是否存在，而是逐个文件检查，确保新增文件也能被复制
+     */
+    private static void initCoderMainAgent() throws IOException {
+        String coderAgentId = "coder";
+        Path agentDir = AppConstants.Agents.agentDir(coderAgentId);
+        if (!Files.exists(agentDir)) {
+            Files.createDirectories(agentDir);
+        }
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+
+        // 从 bootstrap/agent/coder/ 复制所有文件到 agents/coder/（已存在的文件跳过）
+        Resource[] coderResources = resolver.getResources("classpath:bootstrap/agent/coder/*");
+        for (Resource resource : coderResources) {
+            if (Objects.isNull(resource.getFilename())) {
+                continue;
+            }
+            Path target = agentDir.resolve(resource.getFilename());
+            if (Files.exists(target)) {
+                continue;
+            }
+            Files.copy(resource.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        // 创建 workspace 目录
+        Files.createDirectories(AppConstants.MainAgent.sessionsDir(coderAgentId));
+        Files.createDirectories(AppConstants.MainAgent.contextDir(coderAgentId));
+    }
+
+    /**
+     * 初始化项目目录（编码智能体场景使用）
+     */
+    private static void initProjectsDir() throws IOException {
+        if (!Files.exists(AppConstants.Base.PROJECTS_DIR)) {
+            Files.createDirectories(AppConstants.Base.PROJECTS_DIR);
+        }
     }
 
 

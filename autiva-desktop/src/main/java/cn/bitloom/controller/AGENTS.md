@@ -46,6 +46,7 @@
 - 初始化所有子控制器
 - 管理路由导航
 - 控制侧边栏显示/隐藏
+- 协调右侧面板与终端操作
 
 **子控制器：**
 - `buttonBarController`: 底部按钮栏
@@ -55,6 +56,18 @@
 - `settingsPageController`: 设置页
 - `skillPageController`: 技能页
 - `taskPageController`: 任务页
+- `rightSidebarController`: 右侧边栏（文件树、diff 列表）
+- `contentPanelController`: 内容面板（终端、文件内容、diff 视图）
+
+**右侧边栏和内容面板协调方法：**
+- `toggleRightSidebar()`: 切换右侧边栏显示/隐藏
+- `showRightSidebar()/hideRightSidebar()`: 显示/隐藏右侧边栏
+- `showContentPanel()/hideContentPanel()`: 显示/隐藏内容面板
+- `openTerminal()`: 打开终端面板，自动获取当前项目路径作为工作目录
+- `closeTerminal()`: 关闭终端面板
+- `showFileInPanel(Path)`: 在内容面板显示文件内容
+- `showDiffView(FileDiff)`: 打开 diff 对比视图
+- `updateCurrentProject(ProjectInfo)`: 通知右侧边栏更新当前项目（构建目录树）
 
 ### HomePageController
 主页控制器，实现聊天交互界面。
@@ -76,7 +89,6 @@
 - 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 管理模型选择 ComboBox
 - 管理智能体选择按钮（agentSelector）：通过 `setupAgentSelector()` 方法初始化，从 `AgentDefinitionManager.getMainAgentIds()` 获取主智能体列表填充到 ComboBox items，默认选中 Store.currentAgent 或 "default"，监听选择变化调用 viewModel.switchAgent()
-- 编码模式项目选择栏管理：agentSelector="coder" 时显示 projectBar（项目选择 ComboBox + 新建项目按钮 + 打开本地文件夹按钮），其他智能体时隐藏
 - 处理语音输入按钮
 - 画布按钮：打开 CanvasDialog 弹窗
 - 动画效果（图标淡出、聊天区域展开）
@@ -84,19 +96,6 @@
 - 自动滚动到底部：通过 `shouldScrollToBottom` 标志 + `PostLayoutPulseListener` 实现延迟滚动。AssistantMessageCard 和 TaskCard 均通过 `onContentChanged` 回调在内容变化时通知 `scrollToBottom()`，确保流式输出期间 ScrollPane 自动向下滚动
 - 防止 ScrollPane 焦点导致布局偏移：`chatScrollPane.setFocusTraversable(false)`，阻止 ScrollPane 获得焦点
 - 防止 TextFlow 重新换行导致布局偏移：`fitToWidth="false"` + `chatContainer.prefWidthProperty().bind(chatScrollPane.widthProperty())`。根因：`fitToWidth=true` 使内容宽度跟随 viewport 宽度，而 viewport 宽度在垂直滚动条出现/消失时会变化（vbarPolicy=AS_NEEDED），导致 TextFlow 重新换行产生"缩进"效果。改为手动绑定 ScrollPane 整体宽度（稳定不变），彻底切断 viewport 宽度变化对内容的影响
-
-**FXML 字段（编码模式）：**
-- `projectBar`：项目选择栏容器（HBox），默认隐藏，coder 模式下显示
-- `projectSelector`：项目选择下拉框（ComboBox<ProjectInfo>），通过 cellFactory 显示项目名
-- `newProjectButton`：新建项目按钮，弹出 TextInputDialog 输入项目名
-- `openLocalButton`：打开本地文件夹按钮，弹出 DirectoryChooser 选择目录
-
-**编码模式核心方法：**
-- `setupProjectBar()`：初始化 projectSelector 的 cellFactory/buttonCell、newProjectButton 和 openLocalButton 事件、projectSelector 选择监听
-- `updateProjectBarVisibility(String agentId)`：根据智能体 ID 控制 projectBar 显示/隐藏，coder 时刷新项目列表
-- `refreshProjectSelector()`：从 viewModel.listProjects() 加载项目列表，保留当前选择
-- `handleNewProject()`：弹出 TextInputDialog 输入项目名，调用 viewModel.createNewProject(name)，刷新并选中新项目
-- `handleOpenLocal()`：弹出 DirectoryChooser 选择目录，调用 viewModel.registerLocalProject(path, name)，刷新并选中
 
 **ViewModel 委托：**
 - `viewModel.sendMessage()` - 发送消息
@@ -336,6 +335,117 @@
 - 显示状态信息
 - 动态更新按钮
 - 状态变化动画
+- 侧边栏切换按钮：使用 panel-left.svg 图标，点击调用 `indexController.toggleSidebar()`
+- 项目选择按钮：coder 智能体时显示，MenuButton 下拉菜单（选择文件夹+最近项目）
+- 分支显示按钮：coder 智能体时显示，默认只显示 git-branch.svg 图标，选择项目后显示分支名（disabled）
+- 终端按钮：点击调用 `indexController.openTerminal()` 打开终端面板
+- 折叠按钮：点击调用 `indexController.toggleRightSidebar()` 切换右侧边栏显示/隐藏
+
+**FXML 字段：**
+- `sidebarButton`: 侧边栏切换按钮，使用 panel-left.svg 图标
+- `projectSelectButton`: 项目选择 MenuButton，使用 folder.svg 图标，默认隐藏，coder 模式下显示
+- `branchDisplayButton`: 分支显示按钮，使用 git-branch.svg 图标，默认隐藏，coder 模式下显示，disabled 状态
+- `terminalButton`: 终端按钮，使用 terminal.svg 图标
+- `toggleRightPanelButton`: 右侧边栏折叠按钮，使用 panel-right.svg 图标
+
+**核心方法：**
+- `setupProjectBinding()`: 设置项目绑定（由 IndexController 在初始化完成后调用），监听 currentProject 变化更新分支显示和通知 IndexController
+- `updateProjectButtonsVisibility(String)`: 根据智能体 ID 控制项目按钮显示/隐藏
+- `setupProjectMenu()`: 设置项目选择下拉菜单（选择文件夹+最近项目列表）
+- `handleOpenLocalFolder()`: 打开 DirectoryChooser 选择本地文件夹
+- `refreshProjectMenu()`: 刷新项目下拉菜单内容
+- `refreshProjectMenuText(ProjectInfo)`: 刷新项目选择按钮显示文本
+- `refreshBranchDisplay(ProjectInfo)`: 更新分支按钮文本（默认空，选择项目后显示分支名）
+
+### RightSidebarController
+右侧边栏控制器，管理项目文件树和修改文件列表（diff），是主区域的一部分。实现 Initializable。
+
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `FileTreeService`: 文件树构建服务
+- `DiffService`: Diff 管理服务
+
+**职责：**
+- 管理项目目录树展示（双击文件通知 IndexController 在内容面板显示）
+- 管理 diff 文件列表（点击通知 IndexController 在内容面板显示 diff 视图）
+- 订阅 DiffEvent 自动刷新 diff 列表
+
+**FXML 字段：**
+- `rightSidebar`: 右侧边栏根容器（VBox），默认 visible=false managed=false
+- `splitPane`: 垂直分割面板（文件树 + diff 列表）
+- `fileTree`: 项目文件树（TreeView<Path>）
+- `diffList`: diff 文件列表（ListView<FileDiff>）
+
+**核心方法：**
+- `show()/hide()/toggle()`: 控制边栏显示/隐藏
+- `isVisible()`: 检查边栏可见性
+- `setCurrentProject(ProjectInfo)`: 设置当前项目，构建目录树
+- `buildFileTree(ProjectInfo)`: 构建文件树
+- `updateDiffList(List<FileDiff>)`: 更新 diff 列表
+- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent 自动刷新 diff 列表
+
+### ContentPanelController
+内容面板控制器，管理终端、文件内容、diff 视图的显示，与主区域并列的独立区域。实现 Initializable。
+
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `PtyTerminalService`: PTY 终端服务
+- `DiffService`: Diff 管理服务
+
+**职责：**
+- 管理文件内容显示面板
+- 管理 diff 视图（带审核按钮：确定/撤销）
+- 管理终端面板（使用 JediTerminalView，异步启动，加载状态，错误重试）
+
+**FXML 字段：**
+- `contentPanel`: 内容面板根容器（VBox），默认 visible=false managed=false
+- `contentTitle`: 内容标题
+- `closeContentButton`: 关闭内容面板按钮
+- `contentScrollPane`: 内容滚动面板
+- `contentContainer`: 内容容器
+
+**核心方法：**
+- `show()/hide()`: 控制面板显示/隐藏
+- `isVisible()`: 检查面板可见性
+- `showFileContent(Path)`: 显示文件内容，读取失败时显示错误
+- `showDiffView(FileDiff)`: 显示 diff 内容和审核按钮（确定/撤销）
+- `createDiffActionBar(FileDiff)`: 创建 diff 审核按钮栏
+- `openTerminal(Path)`: 异步打开终端（JediTerminalView），显示加载状态，失败时提供重试按钮
+- `closeTerminal()`: 关闭终端会话
+- `showLoadingContent(String)`: 显示加载状态（ProgressIndicator + 文本）
+- `showErrorContent(String, Runnable)`: 显示错误信息，可选提供重试按钮
+
+**交互逻辑：**
+- 内容面板与右侧边栏完全独立，打开终端时右侧边栏仍可见
+- 终端启动使用独立线程，避免阻塞 UI
+- diff 审核按钮点击后自动关闭内容面板
+
+### ProjectPickerDialogController
+项目选择对话框控制器，实现 Initializable、WindowManager.StageAware、DialogHolder。
+
+**Spring 注解：** `@Component`
+
+**依赖注入：**
+- `HomePageViewModel`: 视图模型（项目列表数据）
+
+**职责：**
+- 显示已注册项目列表
+- 新建项目：弹出 TextInputDialog 输入项目名
+- 打开本地文件夹：弹出 DirectoryChooser 选择目录
+- 确认选择后通过 `Consumer<ProjectInfo>` 回调返回选中项目
+- 取消关闭对话框
+
+**DialogHolder 配置：**
+- 宽 500、高 400、可调整大小
+
+**核心方法：**
+- `setOnProjectSelected(Consumer<ProjectInfo>)`: 设置项目选择回调
+- `handleNewProject()`: 新建项目并选中
+- `handleOpenLocal()`: 打开本地文件夹并注册为项目
+- `handleConfirm()`: 确认选择
+- `handleCancel()`: 取消
 
 ## 对话框控制器
 

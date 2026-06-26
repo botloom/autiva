@@ -38,19 +38,32 @@
         <TextArea fx:id="sendField" promptText="给呆芽发消息..." styleClass="home-page__send-field"
                   prefRowCount="1" maxWidth="1000" minWidth="300" prefWidth="600" wrapText="true"/>
         <HBox alignment="BOTTOM_RIGHT" spacing="8">
-            <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37">
+            <MenuButton fx:id="projectSelectButton" styleClass="home-page__project-menu-btn" prefHeight="37" visible="false" managed="false">
+                <graphic>
+                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/folder.svg"/>
+                </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>
                 </HBox.margin>
-            </ComboBox>
-            <Button fx:id="addFileButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+            </MenuButton>
+            <Button fx:id="branchDisplayButton" styleClass="home-page__branch-btn" prefHeight="37" visible="false" managed="false" disable="true">
                 <graphic>
-                    <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/plus.svg"/>
+                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/git-branch.svg"/>
                 </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>
                 </HBox.margin>
             </Button>
+            <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37">
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </ComboBox>
+            <ComboBox fx:id="modelSelector" styleClass="home-page__model-selector" prefHeight="37">
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </ComboBox>
             <Button fx:id="canvasButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
                     <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/canvas.svg"/>
@@ -59,11 +72,14 @@
                     <Insets bottom="8"/>
                 </HBox.margin>
             </Button>
-            <ComboBox fx:id="modelSelector" styleClass="home-page__model-selector" prefHeight="37">
+            <Button fx:id="addFileButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
+                <graphic>
+                    <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/plus.svg"/>
+                </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>
                 </HBox.margin>
-            </ComboBox>
+            </Button>
             <Button fx:id="sendButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
                     <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/arrow-up.svg"/>

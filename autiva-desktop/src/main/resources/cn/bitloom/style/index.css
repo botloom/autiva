@@ -7,3 +7,9 @@
     -fx-spacing: 0;
     -fx-padding: 0;
 }
+
+/* 主内容区域（ButtonBar + 页面） */
+.index__main-content {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}

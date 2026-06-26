@@ -10,6 +10,7 @@
 
     <modules>
         <module>autiva-desktop</module>
+        <module>autiva-gene-door</module>
     </modules>
 
     <properties>

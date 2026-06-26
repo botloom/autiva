@@ -60,3 +60,49 @@
 .dynamic-btn:hover {
     -fx-background-color: rgba(0, 0, 0, 0.1);
 }
+
+/* 左侧侧边栏切换按钮（37x37） */
+.button-bar__action-btn {
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-cursor: hand;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 4;
+}
+
+.button-bar__action-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}
+
+.button-bar__action-btn:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+}
+
+/* 首页操作按钮（26px高度，宽度自适应） */
+.button-bar__icon-btn {
+    -fx-font-size: 11px;
+    -fx-font-weight: 400;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 6px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #86868b;
+    -fx-cursor: hand;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 3 6;
+    -fx-pref-height: 26;
+    -fx-content-display: CENTER;
+    -fx-alignment: CENTER;
+    -fx-graphic-text-gap: 4;
+}
+
+.button-bar__icon-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}
+
+.button-bar__icon-btn:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+}

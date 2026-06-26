@@ -101,18 +101,6 @@ public record AgentDefinition(
         );
     }
 
-    /**
-     * 格式化注册信息，用于 Task 工具的描述
-     */
-    public String toRegistrationText() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("- **%s**: %s".formatted(name, description));
-        if (!tools.isEmpty()) {
-            sb.append(" (工具: %s)".formatted(String.join(", ", tools)));
-        }
-        return sb.toString();
-    }
-
     private static String getString(Map<String, Object> frontMatter, String key, String defaultValue) {
         Object value = frontMatter.get(key);
         return value != null ? value.toString() : defaultValue;
