@@ -256,49 +256,50 @@
     -fx-background-color: #1e1e1e;
 }
 
-/* ===== 滚动条 ===== */
+/* ===== 滚动条（统一深色主题，覆盖所有视图：TreeView/ListView/Terminal/CodeArea/DiffArea，垂直+水平） ===== */
 
 .editor-panel .scroll-bar {
     -fx-background-color: transparent;
+    -fx-pref-width: 8;
+    -fx-pref-height: 8;
 }
 
+.editor-panel .scroll-bar .thumb {
+    -fx-background-color: #3d3d3d;
+    -fx-background-radius: 4px;
+}
+
+.editor-panel .scroll-bar .thumb:hover {
+    -fx-background-color: #4d4d4d;
+}
+
+.editor-panel .scroll-bar .thumb:pressed {
+    -fx-background-color: #5d5d5d;
+}
+
+.editor-panel .scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+.editor-panel .scroll-bar .increment-button,
+.editor-panel .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.editor-panel .scroll-bar .increment-arrow,
+.editor-panel .scroll-bar .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+/* 垂直滚动条：thumb 左右留 2px 边距 */
 .editor-panel .scroll-bar:vertical .thumb {
-    -fx-background-color: #3d3d3d;
-    -fx-background-radius: 3px;
-    -fx-padding: 0 2 0 0;
+    -fx-padding: 0 2 0 2;
 }
 
-.editor-panel .scroll-bar:vertical .thumb:hover {
-    -fx-background-color: #4d4d4d;
-}
-
-.editor-panel .scroll-bar:vertical .track {
-    -fx-background-color: transparent;
-}
-
-.editor-panel .scroll-bar:vertical .increment-button,
-.editor-panel .scroll-bar:vertical .decrement-button {
-    -fx-background-color: transparent;
-    -fx-padding: 0;
-}
-
-/* VirtualizedScrollPane 内部滚动条 */
-.editor-panel__code-scroll .scroll-bar:vertical .thumb {
-    -fx-background-color: #3d3d3d;
-    -fx-background-radius: 3px;
-    -fx-padding: 0 2 0 0;
-}
-
-.editor-panel__code-scroll .scroll-bar:vertical .thumb:hover {
-    -fx-background-color: #4d4d4d;
-}
-
-.editor-panel__code-scroll .scroll-bar:vertical .track {
-    -fx-background-color: transparent;
-}
-
-.editor-panel__code-scroll .scroll-bar:vertical .increment-button,
-.editor-panel__code-scroll .scroll-bar:vertical .decrement-button {
-    -fx-background-color: transparent;
-    -fx-padding: 0;
+/* 水平滚动条：thumb 上下留 2px 边距 */
+.editor-panel .scroll-bar:horizontal .thumb {
+    -fx-padding: 2 0 2 0;
 }

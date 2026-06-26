@@ -122,7 +122,7 @@
 - `.editor-panel__error-text`: 错误状态文字
 - `.editor-panel__retry-btn`: 重试按钮
 - `.jedi-terminal-view`: 终端视图（深色背景 #1e1e1e）
-- `.editor-panel .scroll-bar:vertical .thumb`: 滚动条（#3d3d3d，hover #4d4d4d）
+- `.editor-panel .scroll-bar`: 统一深色滚动条（8px 宽/高，#3d3d3d thumb，hover #4d4d4d，pressed #5d5d5d，4px 圆角，覆盖所有视图 TreeView/ListView/Terminal/CodeArea/DiffArea，垂直+水平一致）
 
 ### home-page.css
 主页样式。

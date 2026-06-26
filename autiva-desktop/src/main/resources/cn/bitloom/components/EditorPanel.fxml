@@ -10,7 +10,7 @@
       fx:controller="cn.bitloom.controller.EditorPanelController"
       stylesheets="@../style/editor-panel.css"
       visible="false" managed="false"
-      minWidth="420" prefWidth="640"
+      minWidth="480" prefWidth="640"
 >
     <StackPane fx:id="viewContainer" styleClass="editor-panel__views" VBox.vgrow="ALWAYS">
         <VBox fx:id="terminalView" styleClass="editor-panel__view"

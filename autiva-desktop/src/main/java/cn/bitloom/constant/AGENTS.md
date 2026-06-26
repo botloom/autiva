@@ -35,8 +35,10 @@
 
 ### Stage 常量
 窗口相关常量：
-- `WIDTH`: 默认窗口宽度 (800)
-- `HEIGHT`: 默认窗口高度 (500)
+- `WIDTH`: 默认窗口宽度 (1200)
+- `HEIGHT`: 默认窗口高度 (700)
+- `minWidth`: 窗口最小宽度 (1200，AutivaApplication.java 设置)
+- `minHeight`: 窗口最小高度 (600，AutivaApplication.java 设置)
 - `FXML`: 主 FXML 文件路径
 - `ICON`: 应用图标路径（PNG 格式）
 - `ICON_SVG`: 应用图标路径（SVG 格式）

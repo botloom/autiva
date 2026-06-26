@@ -54,16 +54,13 @@
                     <Insets bottom="8"/>
                 </HBox.margin>
             </Button>
-            <SvgImageView fx:id="agentIcon" fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/robot.svg">
-                <HBox.margin>
-                    <Insets bottom="14"/>
-                </HBox.margin>
-            </SvgImageView>
-            <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37">
+            <HBox fx:id="agentSelectorBox" alignment="CENTER_LEFT" spacing="4" styleClass="home-page__agent-selector-box">
+                <SvgImageView fx:id="agentIcon" fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/robot.svg"/>
+                <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37"/>
                 <HBox.margin>
                     <Insets bottom="8"/>
                 </HBox.margin>
-            </ComboBox>
+            </HBox>
             <Button fx:id="canvasButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
                     <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/canvas.svg"/>

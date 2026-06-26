@@ -569,8 +569,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         Text text = new Text(name);
         text.setFont(javafx.scene.text.Font.font("SF Pro Text", 13));
         double textWidth = text.getLayoutBounds().getWidth();
-        double padding = 28;
-        double width = Math.max(50, textWidth + padding);
+        double padding = 12;
+        double width = Math.max(40, textWidth + padding);
         this.agentSelector.setPrefWidth(width);
         this.agentSelector.setMinWidth(width);
         this.agentSelector.setMaxWidth(width);

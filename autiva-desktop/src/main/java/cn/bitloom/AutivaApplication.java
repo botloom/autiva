@@ -78,8 +78,8 @@ public class AutivaApplication extends Application {
                     stage.initStyle(StageStyle.UNIFIED);
                     stage.setScene(mainScene);
                     stage.getIcons().add(iconView.getImage());
-                    stage.setMinWidth(600);
-                    stage.setMinHeight(400);
+                    stage.setMinWidth(1200);
+                    stage.setMinHeight(800);
 
                     setupTrayIcon(stage, iconView.getImage());
 

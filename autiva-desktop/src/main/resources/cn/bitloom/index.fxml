@@ -17,7 +17,7 @@
                    dividerPositions="0.72" orientation="HORIZONTAL">
             <HBox styleClass="index__content-area" SplitPane.resizableWithParent="true">
                 <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
-                <VBox HBox.hgrow="ALWAYS" styleClass="index__main-content" minWidth="300">
+                <VBox HBox.hgrow="ALWAYS" styleClass="index__main-content" minWidth="480">
                     <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
                     <fx:include source="view/HomePage.fxml" fx:id="homePage"/>
                     <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
