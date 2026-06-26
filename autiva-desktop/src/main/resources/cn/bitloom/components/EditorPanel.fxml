@@ -2,7 +2,6 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-<?import cn.bitloom.node.svg.SvgImageView?>
 
 <VBox fx:id="editorPanel"
       styleClass="editor-panel"
@@ -11,28 +10,33 @@
       fx:controller="cn.bitloom.controller.EditorPanelController"
       stylesheets="@../style/editor-panel.css"
       visible="false" managed="false"
-      prefWidth="640" minWidth="420"
+      minWidth="420" prefWidth="640"
 >
-    <HBox styleClass="editor-panel__header" alignment="CENTER_LEFT" spacing="8">
-        <Button fx:id="toggleFileTreeButton" styleClass="editor-panel__icon-btn" onAction="#handleToggleFileTree">
-            <graphic>
-                <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/panel-left.svg"/>
-            </graphic>
-        </Button>
-        <Region HBox.hgrow="ALWAYS"/>
-        <Button fx:id="closeButton" styleClass="editor-panel__close-btn" onAction="#handleClose">
-            <graphic>
-                <SvgImageView fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/close.svg"/>
-            </graphic>
-        </Button>
-    </HBox>
-    <HBox styleClass="editor-panel__body" VBox.vgrow="ALWAYS">
-        <VBox fx:id="fileTreePanel" styleClass="editor-panel__tree-panel"
-              minWidth="160" prefWidth="200" maxWidth="300">
-            <Label text="项目文件" styleClass="editor-panel__tree-title"/>
-            <TreeView fx:id="fileTree" styleClass="editor-panel__tree" VBox.vgrow="ALWAYS"/>
-        </VBox>
-        <TabPane fx:id="tabPane" styleClass="editor-panel__tabs"
-                 HBox.hgrow="ALWAYS" tabClosingPolicy="ALL_TABS"/>
-    </HBox>
+    <StackPane fx:id="viewContainer" styleClass="editor-panel__views" VBox.vgrow="ALWAYS">
+        <VBox fx:id="terminalView" styleClass="editor-panel__view"
+              visible="false" managed="false" VBox.vgrow="ALWAYS"/>
+        <SplitPane fx:id="projectSplit" styleClass="editor-panel__project-split"
+                   dividerPositions="0.35">
+            <VBox styleClass="editor-panel__tree-panel" minWidth="140" prefWidth="240">
+                <TreeView fx:id="fileTree" styleClass="editor-panel__tree" VBox.vgrow="ALWAYS"/>
+            </VBox>
+            <VBox fx:id="fileContentPanel" styleClass="editor-panel__content-panel" minWidth="200">
+                <Label fx:id="fileContentPlaceholder" text="双击文件查看内容"
+                       styleClass="editor-panel__placeholder" VBox.vgrow="ALWAYS"
+                       maxWidth="Infinity" maxHeight="Infinity"/>
+            </VBox>
+        </SplitPane>
+        <SplitPane fx:id="changesSplit" styleClass="editor-panel__changes-split"
+                   dividerPositions="0.3"
+                   visible="false" managed="false">
+            <VBox styleClass="editor-panel__tree-panel" minWidth="140" prefWidth="240">
+                <ListView fx:id="diffList" styleClass="editor-panel__diff-list" VBox.vgrow="ALWAYS"/>
+            </VBox>
+            <VBox fx:id="diffViewPanel" styleClass="editor-panel__diff-view-panel" minWidth="200">
+                <Label fx:id="diffPlaceholder" text="点击变更文件查看差异"
+                       styleClass="editor-panel__placeholder" VBox.vgrow="ALWAYS"
+                       maxWidth="Infinity" maxHeight="Infinity"/>
+            </VBox>
+        </SplitPane>
+    </StackPane>
 </VBox>

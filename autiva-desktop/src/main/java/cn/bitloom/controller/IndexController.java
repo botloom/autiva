@@ -2,10 +2,14 @@ package cn.bitloom.controller;
 
 import cn.bitloom.agentic.diff.FileDiff;
 import cn.bitloom.agentic.project.ProjectInfo;
+import cn.bitloom.controller.EditorPanelController.ViewType;
 import cn.bitloom.router.Router;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.SplitPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.VBox;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -22,6 +26,8 @@ public class IndexController implements Initializable {
     @FXML
     @Getter
     private BorderPane rootContainer;
+    @FXML
+    private SplitPane mainSplit;
     @FXML
     @Getter
     private ButtonBarController buttonBarController;
@@ -53,6 +59,8 @@ public class IndexController implements Initializable {
     @Getter
     private final Router router;
 
+    private double savedDividerPos = 0.72;
+
     public IndexController(@Lazy Router router) {
         this.router = router;
     }
@@ -67,8 +75,14 @@ public class IndexController implements Initializable {
         this.skillPageController.setIndexController(this);
         this.gepPageController.setIndexController(this);
         this.taskPageController.setIndexController(this);
+        this.editorPanelController.setIndexController(this);
 
-        // 编辑器面板默认隐藏（FXML 中已设置 visible=false managed=false）
+        // 编辑器面板初始从 SplitPane 移除（默认隐藏）
+        VBox editorPanel = editorPanelController.getEditorPanel();
+        if (mainSplit.getItems().contains(editorPanel)) {
+            mainSplit.getItems().remove(editorPanel);
+        }
+
         this.initializeButtonBar();
     }
 
@@ -94,26 +108,83 @@ public class IndexController implements Initializable {
         }
     }
 
+    // ===== 编辑器面板管理 =====
+
     /**
-     * 打开编辑器面板并聚焦终端标签页（供 HomePageController 的"编辑器"按钮调用）
+     * 切换终端面板（toggle）：相同视图再次点击则关闭
      */
-    public void openEditor() {
+    public void toggleTerminalPanel() {
         if (editorPanelController == null) {
             return;
         }
-        Path workingDir = resolveWorkingDir();
-        editorPanelController.show();
-        editorPanelController.openTerminal(workingDir);
+        if (editorPanelController.isVisible()
+                && editorPanelController.getCurrentViewType() == ViewType.TERMINAL) {
+            closeEditorPanel();
+            return;
+        }
+        ensureEditorVisible();
+        editorPanelController.openTerminal(resolveWorkingDir());
     }
 
     /**
-     * 打开终端面板（委托给编辑器面板）
+     * 切换项目面板（toggle）：相同视图再次点击则关闭
      */
-    public void openTerminal() {
+    public void toggleProjectPanel() {
         if (editorPanelController == null) {
             return;
         }
-        editorPanelController.openTerminal(resolveWorkingDir());
+        if (editorPanelController.isVisible()
+                && editorPanelController.getCurrentViewType() == ViewType.PROJECT) {
+            closeEditorPanel();
+            return;
+        }
+        ensureEditorVisible();
+        editorPanelController.showProjectView();
+    }
+
+    /**
+     * 切换变更面板（toggle）：相同视图再次点击则关闭
+     */
+    public void toggleChangesPanel() {
+        if (editorPanelController == null) {
+            return;
+        }
+        if (editorPanelController.isVisible()
+                && editorPanelController.getCurrentViewType() == ViewType.CHANGES) {
+            closeEditorPanel();
+            return;
+        }
+        ensureEditorVisible();
+        editorPanelController.showChangesView();
+    }
+
+    /**
+     * 关闭编辑器面板（保存 divider 位置并从 SplitPane 移除）
+     */
+    public void closeEditorPanel() {
+        if (editorPanelController == null) {
+            return;
+        }
+        VBox editorPanel = editorPanelController.getEditorPanel();
+        if (mainSplit.getItems().contains(editorPanel)) {
+            if (mainSplit.getDividers().size() > 0) {
+                savedDividerPos = mainSplit.getDividerPositions()[0];
+            }
+            mainSplit.getItems().remove(editorPanel);
+        }
+        editorPanelController.hide();
+    }
+
+    /**
+     * 确保编辑器面板在 SplitPane 中可见
+     */
+    private void ensureEditorVisible() {
+        VBox editorPanel = editorPanelController.getEditorPanel();
+        if (!mainSplit.getItems().contains(editorPanel)) {
+            mainSplit.getItems().add(editorPanel);
+            Platform.runLater(() -> mainSplit.setDividerPosition(0, savedDividerPos));
+        }
+        editorPanelController.show();
     }
 
     /**
@@ -132,6 +203,7 @@ public class IndexController implements Initializable {
         if (editorPanelController == null) {
             return;
         }
+        ensureEditorVisible();
         editorPanelController.showFileContent(file);
     }
 
@@ -142,6 +214,7 @@ public class IndexController implements Initializable {
         if (editorPanelController == null) {
             return;
         }
+        ensureEditorVisible();
         editorPanelController.showDiffView(diff);
     }
 

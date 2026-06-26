@@ -87,16 +87,6 @@
             <artifactId>batik-rasterizer</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.dingtalk.open</groupId>
-            <artifactId>dingtalk-stream</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>com.google.zxing</groupId>
-            <artifactId>core</artifactId>
-        </dependency>
-
         <!-- PTY 终端支持 -->
         <dependency>
             <groupId>org.jetbrains.pty4j</groupId>
@@ -121,6 +111,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- ZXing 二维码生成 -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
         </dependency>
 
     </dependencies>

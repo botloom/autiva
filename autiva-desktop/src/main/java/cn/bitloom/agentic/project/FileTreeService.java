@@ -1,6 +1,7 @@
 package cn.bitloom.agentic.project;
 
 import cn.bitloom.agentic.tool.ToolUtils;
+import cn.bitloom.node.project.LazyTreeItem;
 import javafx.scene.control.TreeItem;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -13,7 +14,7 @@ import java.util.stream.Stream;
 
 /**
  * 文件树服务
- * 构建项目目录树，支持延迟加载和忽略目录过滤
+ * 构建项目目录树，使用 LazyTreeItem 实现延迟加载和正确的目录展开行为。
  */
 @Slf4j
 @Component
@@ -26,36 +27,14 @@ public class FileTreeService {
      * @return TreeItem 根节点
      */
     public TreeItem<Path> buildFileTree(Path rootPath) {
-        TreeItem<Path> rootItem = new TreeItem<>(rootPath);
+        LazyTreeItem rootItem = new LazyTreeItem(rootPath, this::loadChildren);
         rootItem.setExpanded(true);
-
-        // 延迟加载子节点
-        addLazyChildren(rootItem);
-
         return rootItem;
     }
 
     /**
-     * 为节点添加延迟加载的子节点
-     */
-    private void addLazyChildren(TreeItem<Path> parent) {
-        Path parentPath = parent.getValue();
-
-        // 设置展开监听器，首次展开时加载子节点
-        parent.expandedProperty().addListener((obs, wasExpanded, isNowExpanded) -> {
-            if (isNowExpanded && parent.getChildren().isEmpty()) {
-                loadChildren(parent);
-            }
-        });
-
-        // 首次加载根节点的直接子节点
-        if (parent.getParent() == null) {
-            loadChildren(parent);
-        }
-    }
-
-    /**
      * 加载子节点
+     * 为每个子节点创建 LazyTreeItem，传入 this::loadChildren 作为延迟加载回调。
      */
     private void loadChildren(TreeItem<Path> parent) {
         Path parentPath = parent.getValue();
@@ -68,18 +47,11 @@ public class FileTreeService {
                             .comparing((Path p) -> !Files.isDirectory(p))
                             .thenComparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
                     .forEach(child -> {
-                        // 过滤忽略目录
                         if (ToolUtils.isIgnoredPath(child)) {
                             return;
                         }
-
-                        TreeItem<Path> childItem = new TreeItem<>(child);
+                        LazyTreeItem childItem = new LazyTreeItem(child, this::loadChildren);
                         parent.getChildren().add(childItem);
-
-                        // 如果是目录，设置延迟加载
-                        if (Files.isDirectory(child)) {
-                            addLazyChildren(childItem);
-                        }
                     });
         } catch (IOException e) {
             log.warn("加载目录失败: {}", parentPath, e);

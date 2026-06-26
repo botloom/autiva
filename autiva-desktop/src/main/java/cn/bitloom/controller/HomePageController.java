@@ -80,8 +80,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private VBox chatContainer;
     @FXML
-    private ComboBox<ModelTypeEnum> modelSelector;
-    @FXML
     private ComboBox<String> agentSelector;
     @FXML
     private MenuButton projectSelectButton;
@@ -108,7 +106,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        this.modelSelector.valueProperty().bindBidirectional(Store.selectedModel);
+        // 默认使用 DeepSeek 模型
+        Store.selectedModel.set(ModelTypeEnum.DEEPSEEK);
 
         // 加载 A2UI 样式
         try {
@@ -173,15 +172,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         chatScrollPane.vvalueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal.doubleValue() <= 0.01 && !isLoadingMore && viewModel.hasMoreMessages()) {
                 loadMoreMessages();
-            }
-        });
-
-        this.modelSelector.getItems().addAll(ModelTypeEnum.values());
-        this.modelSelector.setValue(ModelTypeEnum.DEEPSEEK);
-        this.updateModelSelectorWidth();
-        this.modelSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null) {
-                this.updateModelSelectorWidth();
             }
         });
 
@@ -522,24 +512,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         timeline.play();
     }
 
-    private void updateModelSelectorWidth() {
-        ModelTypeEnum selectedModel = this.modelSelector.getValue();
-        if (selectedModel == null) {
-            return;
-        }
-
-        Text text = new Text(selectedModel.name());
-        text.setFont(javafx.scene.text.Font.font("SF Pro Text", 13));
-
-        double textWidth = text.getLayoutBounds().getWidth();
-        double padding = 26;
-        double width = Math.max(37, textWidth + padding);
-
-        this.modelSelector.setPrefWidth(width);
-        this.modelSelector.setMinWidth(width);
-        this.modelSelector.setMaxWidth(width);
-    }
-
     private void setupAgentSelector() {
         // 从 AgentDefinitionManager 获取主智能体列表并填充到 ComboBox
         Set<String> mainAgentIds = agentDefinitionManager.getMainAgentIds();
@@ -709,7 +681,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @Override
     public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
         return List.of(
-                // 新对话按钮（左对齐）
                 new ButtonBarHolder.ButtonConfig(
                         "newChatButton",
                         "新对话",
@@ -718,16 +689,37 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                             this.viewModel.createNewSession();
                             resetForNewSession();
                         }),
-                // 编辑器按钮（右对齐）
                 new ButtonBarHolder.ButtonConfig(
                         "terminalButton",
-                        "编辑器",
+                        "终端",
                         "button-bar__icon-btn",
                         "/cn/bitloom/images/terminal.svg",
                         ButtonBarHolder.Alignment.RIGHT,
                         _ -> {
                             if (indexController != null) {
-                                indexController.openEditor();
+                                indexController.toggleTerminalPanel();
+                            }
+                        }),
+                new ButtonBarHolder.ButtonConfig(
+                        "changesButton",
+                        "变更",
+                        "button-bar__icon-btn",
+                        "/cn/bitloom/images/diff.svg",
+                        ButtonBarHolder.Alignment.RIGHT,
+                        _ -> {
+                            if (indexController != null) {
+                                indexController.toggleChangesPanel();
+                            }
+                        }),
+                new ButtonBarHolder.ButtonConfig(
+                        "projectButton",
+                        "项目",
+                        "button-bar__icon-btn",
+                        "/cn/bitloom/images/folder.svg",
+                        ButtonBarHolder.Alignment.RIGHT,
+                        _ -> {
+                            if (indexController != null) {
+                                indexController.toggleProjectPanel();
                             }
                         })
         );

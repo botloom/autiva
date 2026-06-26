@@ -22,8 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 
 import javax.swing.*;
 import java.awt.*;
@@ -32,9 +30,6 @@ import java.awt.event.MouseEvent;
 
 @Slf4j
 @SpringBootApplication
-@ComponentScan(excludeFilters = {
-    @ComponentScan.Filter(type = FilterType.REGEX, pattern = "cn\\.bitloom\\.bridge\\.dingtalk\\..*")
-})
 public class AutivaApplication extends Application {
 
     private ConfigurableApplicationContext springContext;

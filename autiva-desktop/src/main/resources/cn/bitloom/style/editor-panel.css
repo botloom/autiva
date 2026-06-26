@@ -1,57 +1,43 @@
 /* EditorPanel 样式 - 统一编辑器面板（深色主题，Apple 风格） */
 
-/* ===== 容器 ===== */
+/* ===== 容器（透明，用 padding 创建上右下留白） ===== */
 
 .editor-panel {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: transparent;
+    -fx-padding: 8 8 8 0;
     -fx-border-width: 0;
-    -fx-border-radius: 12;
+}
+
+/* ===== 视图容器（深色圆角卡片，承载所有内容） ===== */
+
+.editor-panel__views {
+    -fx-background-color: #1e1e1e;
     -fx-background-radius: 12;
-    -fx-padding: 0;
 }
 
-/* 标题栏 */
-.editor-panel__header {
-    -fx-background-color: #2d2d30;
-    -fx-padding: 6 8 6 8;
-    -fx-border-width: 0 0 1 0;
-    -fx-border-color: transparent transparent #3d3d3d transparent;
-    -fx-min-height: 36px;
-    -fx-pref-height: 36px;
-    -fx-background-radius: 12 12 0 0;
+/* ===== 终端视图 ===== */
+
+.editor-panel__view {
+    -fx-background-color: #1e1e1e;
 }
 
-/* 图标按钮（切换文件树、关闭） */
-.editor-panel__icon-btn,
-.editor-panel__close-btn {
+/* ===== SplitPane ===== */
+
+.editor-panel__project-split,
+.editor-panel__changes-split {
     -fx-background-color: transparent;
-    -fx-background-radius: 50%;
-    -fx-min-width: 24px;
-    -fx-min-height: 24px;
-    -fx-pref-width: 24px;
-    -fx-pref-height: 24px;
-    -fx-max-width: 24px;
-    -fx-max-height: 24px;
-    -fx-padding: 0;
-    -fx-cursor: hand;
 }
 
-.editor-panel__icon-btn:hover,
-.editor-panel__close-btn:hover {
+.editor-panel__project-split .split-pane-divider,
+.editor-panel__changes-split .split-pane-divider {
     -fx-background-color: #3d3d3d;
+    -fx-padding: 0 1 0 0;
+    -fx-cursor: h-resize;
 }
 
-.editor-panel__icon-btn:pressed,
-.editor-panel__close-btn:pressed {
-    -fx-background-color: #4d4d4d;
-}
-
-/* ===== 内容区 ===== */
-
-.editor-panel__body {
-    -fx-background-color: transparent;
-    -fx-padding: 0;
-    -fx-spacing: 0;
+.editor-panel__project-split .split-pane-divider:hover,
+.editor-panel__changes-split .split-pane-divider:hover {
+    -fx-background-color: #007aff;
 }
 
 /* ===== 文件树面板 ===== */
@@ -62,16 +48,6 @@
     -fx-border-color: transparent #3d3d3d transparent transparent;
     -fx-padding: 0;
     -fx-spacing: 0;
-}
-
-.editor-panel__tree-title {
-    -fx-text-fill: #d4d4d4;
-    -fx-font-size: 12px;
-    -fx-font-weight: bold;
-    -fx-padding: 8 12 8 12;
-    -fx-background-color: #2d2d30;
-    -fx-border-width: 0 0 1 0;
-    -fx-border-color: transparent transparent #3d3d3d transparent;
 }
 
 .editor-panel__tree {
@@ -106,58 +82,49 @@
     -fx-background-color: #858585;
 }
 
-/* ===== TabPane ===== */
+/* ===== 内容面板（文件内容/diff视图右侧） ===== */
 
-.editor-panel__tabs {
-    -fx-background-color: transparent;
-}
-
-.editor-panel__tabs .tab-header-area {
-    -fx-background-color: #2d2d30;
-    -fx-border-width: 0 0 1 0;
-    -fx-border-color: transparent transparent #3d3d3d transparent;
+.editor-panel__content-panel,
+.editor-panel__diff-view-panel {
+    -fx-background-color: #1e1e1e;
     -fx-padding: 0;
+    -fx-spacing: 0;
 }
 
-.editor-panel__tabs .tab-header-background {
-    -fx-background-color: transparent;
-}
-
-.editor-panel__tabs .tab {
-    -fx-background-color: transparent;
-    -fx-padding: 4 12 4 12;
-    -fx-border-width: 0 0 2 0;
-    -fx-border-color: transparent;
-}
-
-.editor-panel__tabs .tab:selected {
-    -fx-border-color: transparent transparent #007aff transparent;
-}
-
-.editor-panel__tabs .tab-label {
+/* 占位符 */
+.editor-panel__placeholder {
     -fx-text-fill: #858585;
-    -fx-font-size: 12px;
+    -fx-font-size: 13px;
+    -fx-alignment: center;
 }
 
-.editor-panel__tabs .tab:selected .tab-label {
+/* ===== 变更列表 ===== */
+
+.editor-panel__diff-list {
+    -fx-background-color: #1e1e1e;
+    -fx-padding: 4 0 4 0;
+    -fx-fixed-cell-size: 28px;
+}
+
+.editor-panel__diff-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #d4d4d4;
+    -fx-font-size: 12px;
+    -fx-padding: 2 12 2 12;
+}
+
+.editor-panel__diff-list .list-cell:hover {
+    -fx-background-color: #2d2d30;
+}
+
+.editor-panel__diff-list .list-cell:selected {
+    -fx-background-color: #094771;
     -fx-text-fill: #ffffff;
 }
 
-.editor-panel__tabs .tab:hover {
-    -fx-background-color: #2d2d30;
-}
-
-.editor-panel__tabs .tab:selected:hover {
-    -fx-background-color: transparent;
-}
-
-.editor-panel__tabs .tab-close-button {
-    -fx-background-color: #858585;
-    -fx-padding: 0 0 0 0;
-}
-
-.editor-panel__tabs .tab-close-button:hover {
-    -fx-background-color: #d4d4d4;
+.editor-panel__diff-list .list-cell:filled:selected:focused {
+    -fx-background-color: #094771;
+    -fx-text-fill: #ffffff;
 }
 
 /* ===== RichTextFX 代码区与 Diff 视图 ===== */
@@ -283,40 +250,10 @@
 
 .jedi-terminal-view {
     -fx-background-color: #1e1e1e;
-    -fx-background-radius: 0 0 12 12;
 }
 
 .jedi-terminal-view .terminal-wrapper {
     -fx-background-color: #1e1e1e;
-}
-
-/* ===== 变更列表 ===== */
-
-.editor-panel__tabs .list-view {
-    -fx-background-color: #1e1e1e;
-    -fx-padding: 4 0 4 0;
-    -fx-fixed-cell-size: 28px;
-}
-
-.editor-panel__tabs .list-cell {
-    -fx-background-color: transparent;
-    -fx-text-fill: #d4d4d4;
-    -fx-font-size: 12px;
-    -fx-padding: 2 12 2 12;
-}
-
-.editor-panel__tabs .list-cell:hover {
-    -fx-background-color: #2d2d30;
-}
-
-.editor-panel__tabs .list-cell:selected {
-    -fx-background-color: #094771;
-    -fx-text-fill: #ffffff;
-}
-
-.editor-panel__tabs .list-cell:filled:selected:focused {
-    -fx-background-color: #094771;
-    -fx-text-fill: #ffffff;
 }
 
 /* ===== 滚动条 ===== */

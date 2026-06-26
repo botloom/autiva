@@ -60,6 +60,8 @@
 - `.index-root`: 根容器
 - `.index__content-area`: 内容区域（HBox）
 - `.index__main-content`: 主内容区域（VBox，HBox.hgrow="ALWAYS"）
+- `.index__split`: 外层 SplitPane（主区域 + 编辑器面板，透明背景）
+- `.index__split .split-pane-divider`: 分隔条（#e0e0e0，hover #007aff，h-resize 光标）
 
 ### button-bar.css
 底部按钮栏样式。
@@ -90,22 +92,20 @@
 - `.sidebar__history-item-time`: 对话时间
 
 ### editor-panel.css
-统一编辑器面板样式，合并原 right-sidebar.css 和 content-panel.css，深色主题（Apple 风格）。
+统一编辑器面板样式，深色主题（Apple 风格）。通过 StackPane + SplitPane 组织三视图布局。外层容器透明 + padding 留白，viewContainer（StackPane）承载深色圆角卡片。
 
 **样式类：**
-- `.editor-panel`: 容器样式（深色背景 #1e1e1e，12px 圆角）
-- `.editor-panel__header`: 标题栏（深色背景 #2d2d30，顶部圆角 12 12 0 0，36px 高度）
-- `.editor-panel__icon-btn`: 切换文件树按钮（透明背景，hover #3d3d3d，圆形）
-- `.editor-panel__close-btn`: 关闭按钮（同 icon-btn 样式）
-- `.editor-panel__body`: 内容区 HBox
-- `.editor-panel__tree-panel`: 文件树面板 VBox（深色 #252526，右边框 1px #3d3d3d，prefWidth=200）
-- `.editor-panel__tree-title`: "项目文件" 标题（12px 加粗 #d4d4d4）
-- `.editor-panel__tree`: TreeView（透明背景）
-- `.editor-panel__tree .tree-cell`: 深色主题单元格（bg #1e1e1e，text #d4d4d4，hover #2d2d30，selected #094771）
-- `.editor-panel__tabs`: TabPane（透明背景）
-- `.editor-panel__tabs .tab-header-area`: 标签栏背景 #2d2d30
-- `.editor-panel__tabs .tab`: 标签项（hover #2d2d30，selected 底边 #007aff）
-- `.editor-panel__tabs .tab-label`: 标签文字 #d4d4d4，selected 白色
+- `.editor-panel`: 容器样式（透明背景，padding 8 8 8 0 上右下留白/左贴边，留白区域透出 SplitPane 背景色）
+- `.editor-panel__views`: 视图容器 StackPane（#1e1e1e 深色背景，12px 四角圆角，承载所有子视图）
+- `.editor-panel__view`: 终端视图容器（深色背景 #1e1e1e）
+- `.editor-panel__project-split` / `.editor-panel__changes-split`: 内部 SplitPane（透明背景，分隔条 #3d3d3d，hover #007aff，h-resize 光标）
+- `.editor-panel__tree-panel`: 文件树面板 VBox（深色 #252526，右边框 1px #3d3d3d）
+- `.editor-panel__tree`: TreeView（透明背景，固定行高 26px）
+- `.editor-panel__tree .tree-cell`: 深色主题单元格（text #d4d4d4，hover #2d2d30，selected #094771）
+- `.editor-panel__content-panel` / `.editor-panel__diff-view-panel`: 右侧内容面板（深色 #1e1e1e）
+- `.editor-panel__placeholder`: 占位符（灰色 #858585，13px，居中）
+- `.editor-panel__diff-list`: 变更列表 ListView（深色背景 #1e1e1e，固定行高 28px）
+- `.editor-panel__diff-list .list-cell`: 深色主题列表单元格
 - `.editor-panel__code-scroll`: RichTextFX VirtualizedScrollPane 容器（透明背景，自定义滚动条）
 - `.editor-panel__code-area`: 文件内容 CodeArea（等宽字体 SF Mono/Menlo/Consolas 12px，浅色 #d4d4d4）
 - `.editor-panel__diff-area`: diff 视图 StyleClassedTextArea（等宽字体 12px，浅色 #d4d4d4）
@@ -121,7 +121,7 @@
 - `.editor-panel__loading-text`: 加载状态文字
 - `.editor-panel__error-text`: 错误状态文字
 - `.editor-panel__retry-btn`: 重试按钮
-- `.jedi-terminal-view`: 终端视图（深色背景 #1e1e1e，底部圆角 0 0 12 12）
+- `.jedi-terminal-view`: 终端视图（深色背景 #1e1e1e）
 - `.editor-panel .scroll-bar:vertical .thumb`: 滚动条（#3d3d3d，hover #4d4d4d）
 
 ### home-page.css

@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.BorderPane?>
-<?import javafx.geometry.Insets?>
+
 <BorderPane fx:id="rootContainer"
       styleClass="index-root"
       stylesheets="@style/index.css"
@@ -12,22 +13,21 @@
       fx:controller="cn.bitloom.controller.IndexController"
 >
     <center>
-        <HBox styleClass="index__content-area">
-            <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
-            <VBox HBox.hgrow="ALWAYS" styleClass="index__main-content">
-                <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
-                <fx:include source="view/HomePage.fxml" fx:id="homePage"/>
-                <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
-                <fx:include source="view/SettingsPage.fxml" fx:id="settingsPage"/>
-                <fx:include source="view/SkillPage.fxml" fx:id="skillPage"/>
-                <fx:include source="view/GepPage.fxml" fx:id="gepPage"/>
-                <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
-            </VBox>
-            <fx:include source="components/EditorPanel.fxml" fx:id="editorPanel">
-                <HBox.margin>
-                    <Insets top="8" right="8" bottom="8" left="8"/>
-                </HBox.margin>
-            </fx:include>
-        </HBox>
+        <SplitPane fx:id="mainSplit" styleClass="index__split"
+                   dividerPositions="0.72" orientation="HORIZONTAL">
+            <HBox styleClass="index__content-area" SplitPane.resizableWithParent="true">
+                <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
+                <VBox HBox.hgrow="ALWAYS" styleClass="index__main-content" minWidth="300">
+                    <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
+                    <fx:include source="view/HomePage.fxml" fx:id="homePage"/>
+                    <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
+                    <fx:include source="view/SettingsPage.fxml" fx:id="settingsPage"/>
+                    <fx:include source="view/SkillPage.fxml" fx:id="skillPage"/>
+                    <fx:include source="view/GepPage.fxml" fx:id="gepPage"/>
+                    <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
+                </VBox>
+            </HBox>
+            <fx:include source="components/EditorPanel.fxml" fx:id="editorPanel"/>
+        </SplitPane>
     </center>
 </BorderPane>

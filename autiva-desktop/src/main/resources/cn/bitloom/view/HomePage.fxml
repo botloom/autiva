@@ -40,7 +40,7 @@
         <HBox alignment="BOTTOM_RIGHT" spacing="8">
             <MenuButton fx:id="projectSelectButton" styleClass="home-page__project-menu-btn" prefHeight="37" visible="false" managed="false">
                 <graphic>
-                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/folder.svg"/>
+                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/folder-black.svg"/>
                 </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>
@@ -54,12 +54,12 @@
                     <Insets bottom="8"/>
                 </HBox.margin>
             </Button>
-            <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37">
+            <SvgImageView fx:id="agentIcon" fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/robot.svg">
                 <HBox.margin>
-                    <Insets bottom="8"/>
+                    <Insets bottom="14"/>
                 </HBox.margin>
-            </ComboBox>
-            <ComboBox fx:id="modelSelector" styleClass="home-page__model-selector" prefHeight="37">
+            </SvgImageView>
+            <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37">
                 <HBox.margin>
                     <Insets bottom="8"/>
                 </HBox.margin>

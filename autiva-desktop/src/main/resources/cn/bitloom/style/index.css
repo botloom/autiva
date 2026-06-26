@@ -13,3 +13,21 @@
     -fx-background-color: transparent;
     -fx-padding: 0;
 }
+
+/* SplitPane：主区域 + 编辑器面板 */
+.index__split {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-border-width: 0;
+}
+
+.index__split .split-pane-divider {
+    -fx-background-color: #e0e0e0;
+    -fx-padding: 0 1 0 0;
+    -fx-cursor: h-resize;
+}
+
+.index__split .split-pane-divider:hover {
+    -fx-background-color: #007aff;
+}

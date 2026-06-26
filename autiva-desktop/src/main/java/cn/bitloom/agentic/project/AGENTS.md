@@ -45,13 +45,41 @@ Git 服务（Spring `@Component`），仅查询 Git 信息，不支持修改操�
 - 5 秒超时保护
 - 自动检测 .git 目录存在性
 
+### FileTreeService
+文件树构建服务（Spring `@Component`），为编辑器面板构建项目目录树。使用 `LazyTreeItem`（位于 `cn.bitloom.node.project` 包）替代原生 `TreeItem<Path>`，实现正确的目录展开行为和懒加载。
+
+**核心方法：**
+- `TreeItem<Path> buildFileTree(Path rootPath)`: 构建文件树根节点（`LazyTreeItem`），并通过 `setExpanded(true)` 触发首次子节点加载
+- `private void loadChildren(TreeItem<Path> parent)`: 加载子节点（私有方法，作为 `LazyTreeItem` 的展开回调）
+
+**loadChildren 实现细节：**
+- 使用 `Files.list()` 流式读取目录内容
+- 排序规则：目录优先（`!Files.isDirectory(p)` 作为首要排序键）+ 文件名字母序（大小写不敏感）
+- 通过 `ToolUtils.isIgnoredPath(child)` 过滤忽略路径（如 `target/`、`.git/` 等）
+- 为每个子节点创建 `LazyTreeItem`，传入 `this::loadChildren` 作为回调，实现递归懒加载
+
+**相关类：LazyTreeItem**（`cn.bitloom.node.project.LazyTreeItem`）
+
+继承 `javafx.scene.control.TreeItem<Path>`，解决 JavaFX 默认 `TreeItem` 在懒加载场景下深层目录无法展开的问题。
+
+**核心机制：**
+- 重写 `isLeaf()`：返回 `!Files.isDirectory(getValue())`，基于文件系统实际类型判断，与 children 加载状态解耦
+- 构造时接收 `Consumer<TreeItem<Path>>` 回调（通常为 `FileTreeService::loadChildren`）
+- 监听 `expandedProperty`：首次展开时（`isNowExpanded && !loaded`）调用回调加载子节点，`loaded` 标志位避免重复加载
+
+**问题根因（使用原生 TreeItem 的死锁）：**
+原生 `TreeItem.isLeaf()` 默认基于 `getChildren().isEmpty()` 判断。在懒加载场景下，非根目录的 children 尚未加载（为空），因此被误判为叶子节点 → TreeView 不渲染展开箭头 → 用户无法点击展开 → `expandedProperty` 监听器无法触发 → children 永远为空。`LazyTreeItem` 通过将 `isLeaf()` 与 children 状态解耦打破此死锁。
+
 ## 设计模式
 - Repository 模式：ProjectRegistry 管理项目列表的增删改查
 - 服务模式：GitService 封装 Git 命令调用
 - 持久化模式：JSON 文件持久化
+- 懒加载模式：FileTreeService + LazyTreeItem 实现文件树按需加载，避免一次性加载大型项目所有文件
 
 ## 注意事项
 1. ProjectRegistry 在构造时自动加载持久化数据
 2. GitService 使用 ProcessBuilder 执行 git 命令，不依赖 JGit
 3. 项目路径验证：registerLocal 时检查路径是否为有效目录
 4. 线程安全：ProjectRegistry 使用 CopyOnWriteArrayList
+5. FileTreeService 的 `loadChildren` 为私有方法，仅通过 `LazyTreeItem` 的展开回调间接调用
+6. LazyTreeItem 位于 `cn.bitloom.node.project` 包（不在本包），但因与 FileTreeService 紧密耦合，在此一并说明

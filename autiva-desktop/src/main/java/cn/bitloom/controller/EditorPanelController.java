@@ -18,8 +18,10 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
@@ -38,36 +40,56 @@ import java.util.ResourceBundle;
 
 /**
  * 编辑器面板控制器
- * 统一管理文件树、终端、变更列表、文件内容、diff 视图，通过 TabPane 组织
+ * 通过 StackPane 管理三个视图：终端、项目（文件树+文件内容）、变更（diff列表+diff视图）。
  */
 @Slf4j
 @Component
 public class EditorPanelController implements Initializable {
 
+    public enum ViewType { TERMINAL, PROJECT, CHANGES }
+
     @FXML
     @Getter
     private VBox editorPanel;
     @FXML
-    private Button toggleFileTreeButton;
+    private StackPane viewContainer;
     @FXML
-    private Button closeButton;
+    private VBox terminalView;
     @FXML
-    private VBox fileTreePanel;
+    private SplitPane projectSplit;
     @FXML
     private TreeView<Path> fileTree;
     @FXML
-    private TabPane tabPane;
+    private VBox fileContentPanel;
+    @FXML
+    private Label fileContentPlaceholder;
+    @FXML
+    private SplitPane changesSplit;
+    @FXML
+    private ListView<FileDiff> diffList;
+    @FXML
+    private VBox diffViewPanel;
+    @FXML
+    private Label diffPlaceholder;
+
+    @Setter
+    private IndexController indexController;
 
     private final FileTreeService fileTreeService;
     private final PtyTerminalService ptyTerminalService;
     private final DiffService diffService;
 
-    private JediTerminalView terminalView;
+    private JediTerminalView terminalWidget;
     private PtySession terminalSession;
     private Path lastTerminalWorkingDir;
     private ProjectInfo currentProject;
     private Disposable diffEventSubscription;
-    private ListView<FileDiff> diffListView;
+    /**
+     * -- GETTER --
+     *  获取当前视图类型（用于 toggle 判断）
+     */
+    @Getter
+    private ViewType currentViewType = null;
 
     public EditorPanelController(FileTreeService fileTreeService,
                                  PtyTerminalService ptyTerminalService,
@@ -80,8 +102,21 @@ public class EditorPanelController implements Initializable {
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         setupFileTree();
-        setupChangesTab();
+        setupDiffList();
         subscribeDiffEvents();
+        setupRoundedClip();
+    }
+
+    /**
+     * 给 viewContainer 设置圆角裁剪，确保终端/项目/变更三视图的方角都被裁剪到圆角形状
+     */
+    private void setupRoundedClip() {
+        javafx.scene.shape.Rectangle clip = new javafx.scene.shape.Rectangle();
+        clip.widthProperty().bind(viewContainer.widthProperty());
+        clip.heightProperty().bind(viewContainer.heightProperty());
+        clip.setArcWidth(24);
+        clip.setArcHeight(24);
+        viewContainer.setClip(clip);
     }
 
     /**
@@ -100,15 +135,10 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 设置变更标签页（持久标签，显示 pending diff 列表）
+     * 设置变更列表
      */
-    private void setupChangesTab() {
-        Tab changesTab = new Tab("变更");
-        changesTab.setId("changes");
-        changesTab.setClosable(false);
-
-        diffListView = new ListView<>();
-        diffListView.setCellFactory(list -> new ListCell<>() {
+    private void setupDiffList() {
+        diffList.setCellFactory(list -> new ListCell<>() {
             @Override
             protected void updateItem(FileDiff item, boolean empty) {
                 super.updateItem(item, empty);
@@ -120,17 +150,12 @@ public class EditorPanelController implements Initializable {
                 }
             }
         });
-        diffListView.setOnMouseClicked(event -> {
-            FileDiff selected = diffListView.getSelectionModel().getSelectedItem();
+        diffList.setOnMouseClicked(event -> {
+            FileDiff selected = diffList.getSelectionModel().getSelectedItem();
             if (selected != null && event.getClickCount() == 1) {
                 showDiffView(selected);
             }
         });
-
-        VBox wrapper = new VBox(diffListView);
-        VBox.setVgrow(diffListView, Priority.ALWAYS);
-        changesTab.setContent(wrapper);
-        tabPane.getTabs().add(changesTab);
     }
 
     /**
@@ -144,6 +169,53 @@ public class EditorPanelController implements Initializable {
                     Platform.runLater(() -> updateDiffList(pendingDiffs));
                 });
     }
+
+    // ===== 视图切换 =====
+
+    /**
+     * 隐藏所有视图
+     */
+    private void hideAllViews() {
+        terminalView.setVisible(false);
+        terminalView.setManaged(false);
+        projectSplit.setVisible(false);
+        projectSplit.setManaged(false);
+        changesSplit.setVisible(false);
+        changesSplit.setManaged(false);
+    }
+
+    /**
+     * 显示终端视图
+     */
+    public void showTerminalView() {
+        hideAllViews();
+        terminalView.setVisible(true);
+        terminalView.setManaged(true);
+        currentViewType = ViewType.TERMINAL;
+    }
+
+    /**
+     * 显示项目视图
+     */
+    public void showProjectView() {
+        hideAllViews();
+        projectSplit.setVisible(true);
+        projectSplit.setManaged(true);
+        currentViewType = ViewType.PROJECT;
+    }
+
+    /**
+     * 显示变更视图
+     */
+    public void showChangesView() {
+        hideAllViews();
+        changesSplit.setVisible(true);
+        changesSplit.setManaged(true);
+        refreshDiffList();
+        currentViewType = ViewType.CHANGES;
+    }
+
+    // ===== 面板显示/隐藏 =====
 
     /**
      * 显示编辑器面板
@@ -168,6 +240,8 @@ public class EditorPanelController implements Initializable {
         return editorPanel.isVisible();
     }
 
+    // ===== 项目与文件树 =====
+
     /**
      * 设置当前项目，构建目录树
      */
@@ -188,62 +262,85 @@ public class EditorPanelController implements Initializable {
             Path projectPath = Paths.get(project.path());
             TreeItem<Path> root = fileTreeService.buildFileTree(projectPath);
             fileTree.setRoot(root);
-            root.setExpanded(true);
         } catch (Exception e) {
             log.error("构建文件树失败: {}", project.path(), e);
         }
     }
 
     /**
-     * 打开终端标签页（若已存在则聚焦）
+     * 显示文件内容（注入到项目视图右侧）
+     */
+    public void showFileContent(Path filePath) {
+        show();
+        showProjectView();
+
+        try {
+            String content = Files.readString(filePath);
+
+            CodeArea codeArea = new CodeArea();
+            codeArea.setEditable(false);
+            codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
+            codeArea.replaceText(content);
+            codeArea.getStyleClass().add("editor-panel__code-area");
+            codeArea.moveTo(0);
+
+            VirtualizedScrollPane<CodeArea> scrollPane = new VirtualizedScrollPane<>(codeArea);
+            scrollPane.getStyleClass().add("editor-panel__code-scroll");
+
+            fileContentPanel.getChildren().setAll(scrollPane);
+            VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        } catch (IOException e) {
+            log.warn("读取文件失败: {}", filePath, e);
+        } catch (Exception e) {
+            log.error("显示文件内容失败: {}", filePath, e);
+        }
+    }
+
+    // ===== 终端 =====
+
+    /**
+     * 打开终端（注入到终端视图）
      */
     public void openTerminal(Path workingDir) {
         this.lastTerminalWorkingDir = workingDir;
         show();
-
-        Tab terminalTab = findTabById("terminal");
-        if (terminalTab != null) {
-            tabPane.getSelectionModel().select(terminalTab);
-            if (terminalView != null) {
-                Platform.runLater(() -> terminalView.requestFocus());
-            }
-            return;
-        }
-
-        terminalTab = new Tab("终端");
-        terminalTab.setId("terminal");
-        terminalTab.setClosable(false);
-        terminalTab.setContent(createLoadingContent("正在启动终端..."));
-        tabPane.getTabs().add(0, terminalTab);
-        tabPane.getSelectionModel().select(terminalTab);
-
-        startTerminalAsync(workingDir, terminalTab);
+        showTerminalView();
+        ensureTerminalStarted(workingDir);
     }
 
     /**
-     * 异步启动终端会话
+     * 确保终端已启动，若未启动则异步创建
      */
-    private void startTerminalAsync(Path workingDir, Tab terminalTab) {
+    private void ensureTerminalStarted(Path workingDir) {
+        if (terminalWidget != null) {
+            Platform.runLater(() -> terminalWidget.requestFocus());
+            return;
+        }
+
+        terminalView.getChildren().setAll(createLoadingContent("正在启动终端..."));
+
         new Thread(() -> {
             try {
                 closeTerminalInternal();
 
                 terminalSession = ptyTerminalService.createSession(workingDir);
-                terminalView = new JediTerminalView();
-                terminalView.startSession(terminalSession);
+                JediTerminalView newView = new JediTerminalView();
+                newView.startSession(terminalSession);
 
                 Platform.runLater(() -> {
-                    terminalTab.setContent(terminalView);
-                    Platform.runLater(() -> terminalView.requestFocus());
+                    terminalWidget = newView;
+                    terminalView.getChildren().setAll(terminalWidget);
+                    VBox.setVgrow(terminalWidget, Priority.ALWAYS);
+                    Platform.runLater(() -> terminalWidget.requestFocus());
                 });
             } catch (IOException e) {
                 log.error("创建终端会话失败", e);
-                Platform.runLater(() -> terminalTab.setContent(
+                Platform.runLater(() -> terminalView.getChildren().setAll(
                         createErrorContent("终端启动失败: " + e.getMessage(),
                                 () -> openTerminal(lastTerminalWorkingDir))));
             } catch (Exception e) {
                 log.error("终端初始化异常", e);
-                Platform.runLater(() -> terminalTab.setContent(
+                Platform.runLater(() -> terminalView.getChildren().setAll(
                         createErrorContent("终端初始化异常: " + e.getMessage(),
                                 () -> openTerminal(lastTerminalWorkingDir))));
             }
@@ -255,9 +352,8 @@ public class EditorPanelController implements Initializable {
      */
     public void closeTerminal() {
         closeTerminalInternal();
-        Tab terminalTab = findTabById("terminal");
-        if (terminalTab != null) {
-            terminalTab.setContent(createLoadingContent("终端已关闭"));
+        if (terminalView != null) {
+            terminalView.getChildren().setAll(createLoadingContent("终端已关闭"));
         }
     }
 
@@ -265,9 +361,9 @@ public class EditorPanelController implements Initializable {
      * 内部关闭终端方法
      */
     private void closeTerminalInternal() {
-        if (terminalView != null) {
-            terminalView.closeSession();
-            terminalView = null;
+        if (terminalWidget != null) {
+            terminalWidget.closeSession();
+            terminalWidget = null;
         }
         if (terminalSession != null) {
             ptyTerminalService.closeSession(terminalSession.getSessionId());
@@ -275,59 +371,14 @@ public class EditorPanelController implements Initializable {
         }
     }
 
-    /**
-     * 显示文件内容（打开文件标签页，若已存在则聚焦）
-     */
-    public void showFileContent(Path filePath) {
-        show();
-        String tabId = filePath.toAbsolutePath().toString();
-        Tab existing = findTabById(tabId);
-        if (existing != null) {
-            tabPane.getSelectionModel().select(existing);
-            return;
-        }
-
-        try {
-            String content = Files.readString(filePath);
-            Tab fileTab = new Tab(filePath.getFileName().toString());
-            fileTab.setId(tabId);
-            fileTab.setClosable(true);
-
-            CodeArea codeArea = new CodeArea();
-            codeArea.setEditable(false);
-            codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
-            codeArea.replaceText(content);
-            codeArea.getStyleClass().add("editor-panel__code-area");
-            codeArea.moveTo(0);
-
-            VirtualizedScrollPane<CodeArea> scrollPane = new VirtualizedScrollPane<>(codeArea);
-            scrollPane.getStyleClass().add("editor-panel__code-scroll");
-            fileTab.setContent(scrollPane);
-
-            tabPane.getTabs().add(fileTab);
-            tabPane.getSelectionModel().select(fileTab);
-        } catch (IOException e) {
-            log.warn("读取文件失败: {}", filePath, e);
-        } catch (Exception e) {
-            log.error("显示文件内容失败: {}", filePath, e);
-        }
-    }
+    // ===== Diff 视图 =====
 
     /**
-     * 显示 diff 视图（打开 diff 标签页，若已存在则聚焦）
+     * 显示 diff 视图（注入到变更视图右侧）
      */
     public void showDiffView(FileDiff diff) {
         show();
-        String tabId = "diff:" + diff.id();
-        Tab existing = findTabById(tabId);
-        if (existing != null) {
-            tabPane.getSelectionModel().select(existing);
-            return;
-        }
-
-        Tab diffTab = new Tab("Diff: " + diff.filePath());
-        diffTab.setId(tabId);
-        diffTab.setClosable(true);
+        showChangesView();
 
         StyleClassedTextArea diffArea = new StyleClassedTextArea();
         diffArea.setEditable(false);
@@ -381,10 +432,9 @@ public class EditorPanelController implements Initializable {
 
         VBox container = new VBox(scrollPane, createDiffActionBar(diff));
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
-        diffTab.setContent(container);
 
-        tabPane.getTabs().add(diffTab);
-        tabPane.getSelectionModel().select(diffTab);
+        diffViewPanel.getChildren().setAll(container);
+        VBox.setVgrow(container, Priority.ALWAYS);
     }
 
     /**
@@ -401,10 +451,7 @@ public class EditorPanelController implements Initializable {
         approveBtn.getStyleClass().add("editor-panel__diff-btn--approve");
         approveBtn.setOnAction(e -> {
             diffService.approveDiff(diff.id());
-            Tab tab = findTabById("diff:" + diff.id());
-            if (tab != null) {
-                tabPane.getTabs().remove(tab);
-            }
+            resetDiffViewPlaceholder();
             updateDiffList(diffService.getPendingDiffs());
         });
 
@@ -412,10 +459,7 @@ public class EditorPanelController implements Initializable {
         rejectBtn.getStyleClass().add("editor-panel__diff-btn--reject");
         rejectBtn.setOnAction(e -> {
             diffService.rejectDiff(diff.id());
-            Tab tab = findTabById("diff:" + diff.id());
-            if (tab != null) {
-                tabPane.getTabs().remove(tab);
-            }
+            resetDiffViewPlaceholder();
             updateDiffList(diffService.getPendingDiffs());
         });
 
@@ -424,30 +468,33 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 更新变更列表，刷新标签标题
+     * 重置 diff 视图为占位符
      */
-    public void updateDiffList(List<FileDiff> diffs) {
-        Platform.runLater(() -> {
-            diffListView.getItems().clear();
-            diffListView.getItems().addAll(diffs);
-            Tab changesTab = findTabById("changes");
-            if (changesTab != null) {
-                changesTab.setText(diffs.isEmpty() ? "变更" : "变更 (" + diffs.size() + ")");
-            }
-        });
+    private void resetDiffViewPlaceholder() {
+        diffViewPanel.getChildren().setAll(diffPlaceholder);
+        VBox.setVgrow(diffPlaceholder, Priority.ALWAYS);
     }
 
     /**
-     * 根据 id 查找已存在的标签页
+     * 刷新变更列表
      */
-    private Tab findTabById(String id) {
-        for (Tab tab : tabPane.getTabs()) {
-            if (id.equals(tab.getId())) {
-                return tab;
-            }
-        }
-        return null;
+    private void refreshDiffList() {
+        List<FileDiff> pendingDiffs = diffService.getPendingDiffs();
+        diffList.getItems().clear();
+        diffList.getItems().addAll(pendingDiffs);
     }
+
+    /**
+     * 更新变更列表
+     */
+    public void updateDiffList(List<FileDiff> diffs) {
+        Platform.runLater(() -> {
+            diffList.getItems().clear();
+            diffList.getItems().addAll(diffs);
+        });
+    }
+
+    // ===== 加载与错误状态 =====
 
     /**
      * 创建加载状态内容
@@ -480,17 +527,5 @@ public class EditorPanelController implements Initializable {
         box.setAlignment(Pos.CENTER);
         box.setSpacing(8);
         return box;
-    }
-
-    @FXML
-    private void handleToggleFileTree() {
-        boolean visible = !fileTreePanel.isVisible();
-        fileTreePanel.setVisible(visible);
-        fileTreePanel.setManaged(visible);
-    }
-
-    @FXML
-    private void handleClose() {
-        hide();
     }
 }

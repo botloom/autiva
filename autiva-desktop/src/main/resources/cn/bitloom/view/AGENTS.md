@@ -21,8 +21,12 @@ VBox (homePage)
     ├── FlowPane (fileTagsPane) - 文件标签容器（默认隐藏，添加文件后显示）
     ├── AutoResizeTextArea (sendField) - 输入框（支持多行、自动换行、自动调整高度）
     └── HBox - 按钮组
+        ├── MenuButton (projectSelectButton) - 项目选择下拉菜单（coder智能体时显示，folder-black.svg图标）
+        ├── Button (branchDisplayButton) - 分支显示按钮（coder智能体时显示，git-branch.svg图标）
+        ├── SvgImageView (agentIcon) - 智能体图标（robot.svg）
+        ├── ComboBox (agentSelector) - 智能体选择器（胶囊形状）
+        ├── Button (canvasButton) - 画布按钮
         ├── Button (addFileButton) - 添加文件按钮
-        ├── ComboBox (modelSelector) - 模型选择器（胶囊形状）
         ├── Button (sendButton) - 发送按钮
         └── Button (stopButton) - 终止按钮（流式生成时显示，红色，点击暂停生成并保留部分响应）
 ```
@@ -41,8 +45,9 @@ VBox (homePage)
 - Enter 键发送消息，Shift+Enter 换行
 - 添加文件按钮打开 FileChooser，选中的文件以标签形式显示在输入区域上方
 - 文件标签显示文件图标、文件名和关闭按钮，支持逐个移除
-- 模型选择器使用胶囊形状的 ComboBox，直接显示模型名称，点击下拉选择
-- 无下拉箭头，宽度自适应模型名称，最小宽度为圆形（37px）
+- 智能体选择器使用胶囊形状的 ComboBox，左侧显示 robot.svg 图标，直接显示智能体名称
+- 模型默认使用 DeepSeek，无需手动选择
+- 项目选择按钮（coder智能体时显示）使用黑色 folder-black.svg 图标，与 ButtonBar 的蓝色 folder.svg 区分
 - 终止按钮：流式生成时自动切换显示（替代发送按钮），红色圆形按钮，点击暂停当前生成并保留部分响应，暂停后发送按钮重新显示
 
 ### SettingsPage.fxml
