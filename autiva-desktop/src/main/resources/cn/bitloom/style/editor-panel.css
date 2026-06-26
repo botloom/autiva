@@ -1,6 +1,36 @@
-/* EditorPanel 样式 - 统一编辑器面板（深色主题，Apple 风格） */
+/*
+ * EditorPanel 样式 - Apple 深色美学
+ *
+ * 设计原则：
+ * - 配色参考 Apple System Colors (Dark Mode)
+ * - 字体 SF Pro Text / SF Mono
+ * - 圆角 8~12px，宽松内边距
+ * - 选中态使用蓝色填充 + 圆角内嵌效果
+ * - 文件树/列表项采用 BEM 命名
+ */
 
-/* ===== 容器（透明，用 padding 创建上右下留白） ===== */
+/* ===== Apple 系统色变量 ===== */
+
+* {
+    -autiva-bg: #1c1c1e;
+    -autiva-bg-elevated: #2c2c2e;
+    -autiva-bg-surface: #3a3a3c;
+    -autiva-text-primary: #ffffff;
+    -autiva-text-secondary: #8e8e93;
+    -autiva-text-tertiary: #48484a;
+    -autiva-separator: #38383a;
+    -autiva-blue: #0a84ff;
+    -autiva-green: #30d158;
+    -autiva-red: #ff453a;
+    -autiva-orange: #ff9f0a;
+    -autiva-yellow: #ffd60a;
+    -autiva-cyan: #5ac8fa;
+    -autiva-purple: #bf5af2;
+    -autiva-pink: #ff375f;
+    -autiva-gray: #98989d;
+}
+
+/* ===== 容器（透明，用 padding 创建右下留白） ===== */
 
 .editor-panel {
     -fx-background-color: transparent;
@@ -11,14 +41,14 @@
 /* ===== 视图容器（深色圆角卡片，承载所有内容） ===== */
 
 .editor-panel__views {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: -autiva-bg;
     -fx-background-radius: 12;
 }
 
 /* ===== 终端视图 ===== */
 
 .editor-panel__view {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: -autiva-bg;
 }
 
 /* ===== SplitPane ===== */
@@ -30,101 +60,236 @@
 
 .editor-panel__project-split .split-pane-divider,
 .editor-panel__changes-split .split-pane-divider {
-    -fx-background-color: #3d3d3d;
+    -fx-background-color: transparent;
     -fx-padding: 0 1 0 0;
     -fx-cursor: h-resize;
 }
 
 .editor-panel__project-split .split-pane-divider:hover,
 .editor-panel__changes-split .split-pane-divider:hover {
-    -fx-background-color: #007aff;
+    -fx-background-color: -autiva-blue;
 }
 
 /* ===== 文件树面板 ===== */
 
 .editor-panel__tree-panel {
-    -fx-background-color: #252526;
+    -fx-background-color: -autiva-bg-elevated;
     -fx-border-width: 0 1 0 0;
-    -fx-border-color: transparent #3d3d3d transparent transparent;
-    -fx-padding: 0;
+    -fx-border-color: transparent -autiva-separator transparent transparent;
+    -fx-padding: 6 0 6 0;
     -fx-spacing: 0;
 }
 
 .editor-panel__tree {
     -fx-background-color: transparent;
-    -fx-padding: 4 0 4 0;
-    -fx-fixed-cell-size: 26px;
+    -fx-padding: 2 4 2 4;
+    -fx-fixed-cell-size: 28px;
 }
 
+/* 文件树单元格 - Apple 风格选中（填满行宽，箭头/图标/文字对齐） */
 .editor-panel__tree .tree-cell {
     -fx-background-color: transparent;
-    -fx-text-fill: #d4d4d4;
-    -fx-font-size: 12px;
-    -fx-padding: 2 8 2 8;
+    -fx-text-fill: -autiva-text-primary;
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
+    -fx-padding: 0 8 0 8;
     -fx-graphic-text-gap: 6px;
+    -fx-alignment: center-left;
 }
 
 .editor-panel__tree .tree-cell:hover {
-    -fx-background-color: #2d2d30;
+    -fx-background-color: rgba(255, 255, 255, 0.06);
 }
 
 .editor-panel__tree .tree-cell:selected {
-    -fx-background-color: #094771;
-    -fx-text-fill: #ffffff;
+    -fx-background-color: -autiva-blue;
+    -fx-text-fill: -autiva-text-primary;
 }
 
 .editor-panel__tree .tree-cell:filled:selected:focused {
-    -fx-background-color: #094771;
-    -fx-text-fill: #ffffff;
+    -fx-background-color: -autiva-blue;
+    -fx-text-fill: -autiva-text-primary;
 }
 
+/* 隐藏折叠箭头（对齐难以统一，改用双击展开/折叠） */
 .editor-panel__tree .tree-cell .arrow {
-    -fx-background-color: #858585;
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+    -fx-min-width: 0;
+    -fx-pref-width: 0;
+    -fx-max-width: 0;
+}
+
+/* 文件类型修饰类（图标本身已带色，这里微调字色） */
+.file-tree__folder {
+    -fx-font-weight: bold;
+}
+
+.file-tree__file {
+    -fx-font-weight: normal;
+}
+
+.file-tree__file--code {
+    -fx-text-fill: -autiva-text-primary;
+}
+
+.file-tree__file--data {
+    -fx-text-fill: -autiva-text-primary;
+}
+
+.file-tree__file--md {
+    -fx-text-fill: -autiva-text-primary;
+}
+
+.file-tree__file--text {
+    -fx-text-fill: -autiva-text-secondary;
+}
+
+.file-tree__file--image {
+    -fx-text-fill: -autiva-text-primary;
+}
+
+/* 选中态时字色统一为白 */
+.tree-cell:selected .file-tree__file,
+.tree-cell:selected .file-tree__file--code,
+.tree-cell:selected .file-tree__file--data,
+.tree-cell:selected .file-tree__file--md,
+.tree-cell:selected .file-tree__file--text,
+.tree-cell:selected .file-tree__file--image {
+    -fx-text-fill: -autiva-text-primary;
 }
 
 /* ===== 内容面板（文件内容/diff视图右侧） ===== */
 
 .editor-panel__content-panel,
 .editor-panel__diff-view-panel {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: -autiva-bg;
     -fx-padding: 0;
     -fx-spacing: 0;
 }
 
 /* 占位符 */
 .editor-panel__placeholder {
-    -fx-text-fill: #858585;
+    -fx-text-fill: -autiva-text-secondary;
     -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
     -fx-alignment: center;
 }
 
 /* ===== 变更列表 ===== */
 
 .editor-panel__diff-list {
-    -fx-background-color: #1e1e1e;
-    -fx-padding: 4 0 4 0;
-    -fx-fixed-cell-size: 28px;
+    -fx-background-color: -autiva-bg-elevated;
+    -fx-padding: 6 4 6 4;
+    -fx-fixed-cell-size: 56px;
 }
 
 .editor-panel__diff-list .list-cell {
     -fx-background-color: transparent;
-    -fx-text-fill: #d4d4d4;
-    -fx-font-size: 12px;
-    -fx-padding: 2 12 2 12;
+    -fx-text-fill: -autiva-text-primary;
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
+    -fx-padding: 4 8 4 8;
 }
 
 .editor-panel__diff-list .list-cell:hover {
-    -fx-background-color: #2d2d30;
+    -fx-background-color: rgba(255, 255, 255, 0.06);
 }
 
 .editor-panel__diff-list .list-cell:selected {
-    -fx-background-color: #094771;
-    -fx-text-fill: #ffffff;
+    -fx-background-color: -autiva-blue;
+    -fx-text-fill: -autiva-text-primary;
 }
 
 .editor-panel__diff-list .list-cell:filled:selected:focused {
-    -fx-background-color: #094771;
-    -fx-text-fill: #ffffff;
+    -fx-background-color: -autiva-blue;
+    -fx-text-fill: -autiva-text-primary;
+}
+
+/* ===== DiffListCell 富单元格 ===== */
+
+.diff-list-cell {
+    -fx-alignment: center-left;
+    -fx-spacing: 8px;
+    -fx-padding: 0;
+}
+
+.diff-list-cell__icon {
+    -fx-fit-width: 16;
+    -fx-fit-height: 16;
+}
+
+.diff-list-cell__text {
+    -fx-spacing: 1px;
+}
+
+.diff-list-cell__name {
+    -fx-text-fill: -autiva-text-primary;
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+}
+
+.diff-list-cell__path {
+    -fx-text-fill: -autiva-text-secondary;
+    -fx-font-size: 11px;
+}
+
+.diff-list-cell__stats {
+    -fx-alignment: center-right;
+    -fx-spacing: 6px;
+}
+
+/* 变更类型徽章 - 圆角小标签 */
+.diff-list-cell__badge {
+    -fx-text-fill: -autiva-text-primary;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 1 6 1 6;
+    -fx-alignment: center;
+    -fx-min-width: 16;
+}
+
+.diff-list-cell__badge--add {
+    -fx-background-color: -autiva-green;
+    -fx-text-fill: white;
+}
+
+.diff-list-cell__badge--modify {
+    -fx-background-color: -autiva-orange;
+    -fx-text-fill: white;
+}
+
+.diff-list-cell__badge--delete {
+    -fx-background-color: -autiva-red;
+    -fx-text-fill: white;
+}
+
+.diff-list-cell__stat {
+    -fx-font-size: 11px;
+    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+.diff-list-cell__stat--add {
+    -fx-text-fill: -autiva-green;
+}
+
+.diff-list-cell__stat--remove {
+    -fx-text-fill: -autiva-red;
+}
+
+/* 选中态时徽章/统计颜色保持，但字色调整为白色保证可读性 */
+.list-cell:selected .diff-list-cell__name,
+.list-cell:selected .diff-list-cell__path {
+    -fx-text-fill: white;
+}
+
+.list-cell:selected .diff-list-cell__stat--add {
+    -fx-text-fill: #b5ffcb;
+}
+
+.list-cell:selected .diff-list-cell__stat--remove {
+    -fx-text-fill: #ffc4bf;
 }
 
 /* ===== RichTextFX 代码区与 Diff 视图 ===== */
@@ -135,128 +300,233 @@
     -fx-background-color: transparent;
     -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
     -fx-font-size: 12px;
-    -fx-text-fill: #d4d4d4;
-    -fx-padding: 0;
+    -fx-text-fill: -autiva-text-primary;
+    -fx-padding: 8 0 8 0;
 }
 
 .editor-panel__code-area .text,
 .editor-panel__diff-area .text {
-    -fx-fill: #d4d4d4;
+    -fx-fill: -autiva-text-primary;
 }
 
-/* 行号列 */
+/* 行号列（不透明背景，避免水平滚动时内容透出） */
 .editor-panel__code-area .lineno,
 .editor-panel__diff-area .lineno {
-    -fx-background-color: transparent;
-    -fx-text-fill: #858585;
+    -fx-background-color: -autiva-bg;
+    -fx-text-fill: -autiva-text-tertiary;
     -fx-font-size: 11px;
-    -fx-padding: 0 10 0 10;
+    -fx-padding: 0 12 0 12;
     -fx-border-width: 0 1 0 0;
-    -fx-border-color: transparent #3d3d3d transparent transparent;
+    -fx-border-color: transparent -autiva-separator transparent transparent;
 }
 
-/* ===== Diff 行级着色 ===== */
+/* ===== 语法高亮 Token（参考 Xcode 深色主题） ===== */
+
+.syntax-keyword {
+    -fx-fill: #ff5e8a;
+    -fx-font-weight: normal;
+}
+
+.syntax-string {
+    -fx-fill: #30d158;
+}
+
+.syntax-comment {
+    -fx-fill: #6c6c70;
+    -fx-font-style: italic;
+}
+
+.syntax-number {
+    -fx-fill: #ff9f0a;
+}
+
+.syntax-annotation {
+    -fx-fill: #ffd60a;
+}
+
+.syntax-literal {
+    -fx-fill: #0a84ff;
+}
+
+.syntax-type {
+    -fx-fill: #5ac8fa;
+}
+
+.syntax-key {
+    -fx-fill: #bf5af2;
+}
+
+.syntax-operator {
+    -fx-fill: #ff375f;
+}
+
+/* ===== Diff 元信息条（顶部） ===== */
+
+.editor-panel__meta-bar {
+    -fx-background-color: -autiva-bg-elevated;
+    -fx-alignment: center-left;
+    -fx-spacing: 10px;
+    -fx-padding: 10 14 10 14;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent -autiva-separator transparent transparent;
+}
+
+.editor-panel__meta-path {
+    -fx-text-fill: -autiva-text-primary;
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+.editor-panel__meta-badge {
+    -fx-text-fill: white;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 2 6 2 6;
+    -fx-alignment: center;
+    -fx-min-width: 18;
+}
+
+.editor-panel__meta-badge--add {
+    -fx-background-color: -autiva-green;
+}
+
+.editor-panel__meta-badge--delete {
+    -fx-background-color: -autiva-red;
+}
+
+.editor-panel__meta-badge--modify {
+    -fx-background-color: -autiva-orange;
+}
+
+.editor-panel__meta-stat {
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    -fx-font-weight: bold;
+}
+
+.editor-panel__meta-stat--add {
+    -fx-text-fill: -autiva-green;
+}
+
+.editor-panel__meta-stat--remove {
+    -fx-text-fill: -autiva-red;
+}
+
+/* ===== Diff 行级着色（Hunk/Header/Add/Remove/Context） ===== */
 
 .diff-meta {
     -fx-background-color: transparent;
-    -fx-text-fill: #858585;
+    -fx-text-fill: -autiva-text-secondary;
 }
 
 .diff-hunk-header {
-    -fx-background-color: rgba(0, 122, 255, 0.14);
-    -fx-text-fill: #4da3ff;
+    -fx-background-color: rgba(10, 132, 255, 0.16);
+    -fx-text-fill: #5ac8fa;
 }
 
 .diff-line-add {
-    -fx-background-color: rgba(52, 199, 89, 0.16);
-    -fx-text-fill: #6cd97e;
+    -fx-background-color: rgba(48, 209, 88, 0.18);
+    -fx-text-fill: #8de8a4;
 }
 
 .diff-line-remove {
-    -fx-background-color: rgba(255, 59, 48, 0.16);
-    -fx-text-fill: #ff8a80;
+    -fx-background-color: rgba(255, 69, 58, 0.18);
+    -fx-text-fill: #ff9a92;
 }
 
 .diff-line-context {
     -fx-background-color: transparent;
-    -fx-text-fill: #d4d4d4;
+    -fx-text-fill: -autiva-text-primary;
 }
 
-/* ===== Diff 审核按钮 ===== */
+/* ===== Diff 审核按钮栏 ===== */
 
 .editor-panel__diff-actions {
     -fx-alignment: center-right;
     -fx-spacing: 8px;
-    -fx-padding: 8 12 8 12;
-    -fx-background-color: #252526;
+    -fx-padding: 10 14 10 14;
+    -fx-background-color: -autiva-bg-elevated;
     -fx-border-width: 1 0 0 0;
-    -fx-border-color: #3d3d3d transparent transparent transparent;
+    -fx-border-color: -autiva-separator transparent transparent transparent;
 }
 
+/* 确定按钮 - 蓝色 primary（主要操作） */
 .editor-panel__diff-btn--approve {
-    -fx-background-color: #34c759;
+    -fx-background-color: -autiva-blue;
     -fx-text-fill: white;
-    -fx-background-radius: 6px;
-    -fx-padding: 6 16 6 16;
+    -fx-background-radius: 6;
+    -fx-padding: 6 18 6 18;
     -fx-font-size: 12px;
     -fx-font-weight: bold;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
     -fx-cursor: hand;
+    -fx-border-width: 0;
 }
 
 .editor-panel__diff-btn--approve:hover {
-    -fx-background-color: #2db84e;
+    -fx-background-color: #0070ee;
 }
 
+/* 撤销按钮 - 浅色背景 + 红字 secondary（危险操作，弱化视觉权重） */
 .editor-panel__diff-btn--reject {
-    -fx-background-color: #ff3b30;
-    -fx-text-fill: white;
-    -fx-background-radius: 6px;
-    -fx-padding: 6 16 6 16;
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+    -fx-text-fill: -autiva-red;
+    -fx-background-radius: 6;
+    -fx-padding: 6 18 6 18;
     -fx-font-size: 12px;
-    -fx-font-weight: bold;
+    -fx-font-weight: normal;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
     -fx-cursor: hand;
+    -fx-border-color: rgba(255, 69, 58, 0.25);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
 }
 
 .editor-panel__diff-btn--reject:hover {
-    -fx-background-color: #e62e26;
+    -fx-background-color: rgba(255, 69, 58, 0.12);
+    -fx-border-color: rgba(255, 69, 58, 0.4);
 }
 
 /* ===== 加载与错误状态 ===== */
 
 .editor-panel__loading-text {
-    -fx-text-fill: #858585;
+    -fx-text-fill: -autiva-text-secondary;
     -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
 }
 
 .editor-panel__error-text {
-    -fx-text-fill: #ff6b6b;
+    -fx-text-fill: -autiva-red;
     -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
 }
 
 .editor-panel__retry-btn {
-    -fx-background-color: #007aff;
+    -fx-background-color: -autiva-blue;
     -fx-text-fill: white;
-    -fx-background-radius: 6px;
+    -fx-background-radius: 6;
     -fx-padding: 6 16 6 16;
     -fx-font-size: 12px;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
     -fx-cursor: hand;
 }
 
 .editor-panel__retry-btn:hover {
-    -fx-background-color: #006ed6;
+    -fx-background-color: #0070ee;
 }
 
 /* ===== 终端 ===== */
 
 .jedi-terminal-view {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: -autiva-bg;
 }
 
 .jedi-terminal-view .terminal-wrapper {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: -autiva-bg;
 }
 
-/* ===== 滚动条（统一深色主题，覆盖所有视图：TreeView/ListView/Terminal/CodeArea/DiffArea，垂直+水平） ===== */
+/* ===== 滚动条（Apple 风格细滚动条） ===== */
 
 .editor-panel .scroll-bar {
     -fx-background-color: transparent;
@@ -265,16 +535,16 @@
 }
 
 .editor-panel .scroll-bar .thumb {
-    -fx-background-color: #3d3d3d;
-    -fx-background-radius: 4px;
+    -fx-background-color: rgba(255, 255, 255, 0.18);
+    -fx-background-radius: 4;
 }
 
 .editor-panel .scroll-bar .thumb:hover {
-    -fx-background-color: #4d4d4d;
+    -fx-background-color: rgba(255, 255, 255, 0.28);
 }
 
 .editor-panel .scroll-bar .thumb:pressed {
-    -fx-background-color: #5d5d5d;
+    -fx-background-color: rgba(255, 255, 255, 0.38);
 }
 
 .editor-panel .scroll-bar .track {

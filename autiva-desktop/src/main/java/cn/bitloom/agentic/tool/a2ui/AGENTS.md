@@ -30,7 +30,7 @@ interface A2UIHandler {
 由 ToolUIBridge.handleA2UIMessage 实现。
 
 ### 组件 JSON 解析
-- `parseComponents(String)` - 解析组件 JSON 数组
+- `parseComponents(String)` - 解析组件 JSON 数组，格式错误时抛出异常并返回友好错误提示（告诉 AI 数组必须用 `]` 结束）
 - `parseComponent(JsonNode)` - 解析单个组件(id/component/properties/action/checks)
 - `parseAction(JsonNode)` - 解析动作(Event/FunctionCall)
 - `parseCheck(JsonNode)` - 解析验证规则

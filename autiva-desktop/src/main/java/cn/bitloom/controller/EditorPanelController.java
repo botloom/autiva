@@ -6,6 +6,9 @@ import cn.bitloom.agentic.event.DiffEvent;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.project.FileTreeService;
 import cn.bitloom.agentic.project.ProjectInfo;
+import cn.bitloom.node.diff.DiffListCell;
+import cn.bitloom.node.editor.syntax.SyntaxHighlighter;
+import cn.bitloom.node.editor.syntax.SyntaxHighlighterFactory;
 import cn.bitloom.node.project.FileTreeCell;
 import cn.bitloom.node.terminal.JediTerminalView;
 import cn.bitloom.node.terminal.PtySession;
@@ -13,13 +16,9 @@ import cn.bitloom.node.terminal.PtyTerminalService;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -138,18 +137,7 @@ public class EditorPanelController implements Initializable {
      * 设置变更列表
      */
     private void setupDiffList() {
-        diffList.setCellFactory(list -> new ListCell<>() {
-            @Override
-            protected void updateItem(FileDiff item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setGraphic(null);
-                } else {
-                    setText(item.filePath());
-                }
-            }
-        });
+        diffList.setCellFactory(list -> new DiffListCell());
         diffList.setOnMouseClicked(event -> {
             FileDiff selected = diffList.getSelectionModel().getSelectedItem();
             if (selected != null && event.getClickCount() == 1) {
@@ -282,6 +270,8 @@ public class EditorPanelController implements Initializable {
             codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
             codeArea.replaceText(content);
             codeArea.getStyleClass().add("editor-panel__code-area");
+            SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(filePath);
+            highlighter.apply(codeArea, content);
             codeArea.moveTo(0);
 
             VirtualizedScrollPane<CodeArea> scrollPane = new VirtualizedScrollPane<>(codeArea);
@@ -386,23 +376,6 @@ public class EditorPanelController implements Initializable {
         diffArea.getStyleClass().add("editor-panel__diff-area");
 
         int paragraph = 0;
-        diffArea.appendText("文件: " + diff.filePath() + "\n");
-        diffArea.setParagraphStyle(paragraph, List.of("diff-meta"));
-        paragraph++;
-        if (diff.isCreate()) {
-            diffArea.appendText("(新建文件)\n");
-            diffArea.setParagraphStyle(paragraph, List.of("diff-meta"));
-            paragraph++;
-        }
-        if (diff.isDelete()) {
-            diffArea.appendText("(删除文件)\n");
-            diffArea.setParagraphStyle(paragraph, List.of("diff-meta"));
-            paragraph++;
-        }
-        diffArea.appendText("\n");
-        diffArea.setParagraphStyle(paragraph, List.of("diff-meta"));
-        paragraph++;
-
         for (FileDiff.Hunk hunk : diff.hunks()) {
             String hunkHeader = String.format("@@ -%d,%d +%d,%d @@",
                     hunk.oldStart(), hunk.oldCount(), hunk.newStart(), hunk.newCount());
@@ -430,7 +403,7 @@ public class EditorPanelController implements Initializable {
         VirtualizedScrollPane<StyleClassedTextArea> scrollPane = new VirtualizedScrollPane<>(diffArea);
         scrollPane.getStyleClass().add("editor-panel__code-scroll");
 
-        VBox container = new VBox(scrollPane, createDiffActionBar(diff));
+        VBox container = new VBox(createFileMetaBar(diff), scrollPane);
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
         diffViewPanel.getChildren().setAll(container);
@@ -438,22 +411,17 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 创建 diff 审核按钮栏
+     * 创建 diff 文件元信息条（顶部）
+     * 左侧显示文件路径，右侧放审核按钮（撤销/确定）
      */
-    private HBox createDiffActionBar(FileDiff diff) {
-        HBox actionBar = new HBox();
-        actionBar.getStyleClass().add("editor-panel__diff-actions");
-        actionBar.setAlignment(Pos.CENTER_RIGHT);
-        actionBar.setSpacing(8);
-        actionBar.setPadding(new Insets(8, 0, 0, 0));
+    private HBox createFileMetaBar(FileDiff diff) {
+        String filePath = diff.filePath();
 
-        Button approveBtn = new Button("确定");
-        approveBtn.getStyleClass().add("editor-panel__diff-btn--approve");
-        approveBtn.setOnAction(e -> {
-            diffService.approveDiff(diff.id());
-            resetDiffViewPlaceholder();
-            updateDiffList(diffService.getPendingDiffs());
-        });
+        Label pathLabel = new Label(filePath);
+        pathLabel.getStyleClass().add("editor-panel__meta-path");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button rejectBtn = new Button("撤销");
         rejectBtn.getStyleClass().add("editor-panel__diff-btn--reject");
@@ -463,8 +431,17 @@ public class EditorPanelController implements Initializable {
             updateDiffList(diffService.getPendingDiffs());
         });
 
-        actionBar.getChildren().addAll(approveBtn, rejectBtn);
-        return actionBar;
+        Button approveBtn = new Button("确定");
+        approveBtn.getStyleClass().add("editor-panel__diff-btn--approve");
+        approveBtn.setOnAction(e -> {
+            diffService.approveDiff(diff.id());
+            resetDiffViewPlaceholder();
+            updateDiffList(diffService.getPendingDiffs());
+        });
+
+        HBox metaBar = new HBox(pathLabel, spacer, rejectBtn, approveBtn);
+        metaBar.getStyleClass().add("editor-panel__meta-bar");
+        return metaBar;
     }
 
     /**

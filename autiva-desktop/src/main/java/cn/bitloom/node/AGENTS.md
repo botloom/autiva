@@ -1,7 +1,7 @@
 # Node 包
 
 ## 概述
-本包定义了自定义 JavaFX 节点组件，包括通用 SVG 组件、聊天消息卡片组件和画布相关组件。
+本包定义了自定义 JavaFX 节点组件，包括通用 SVG 组件、聊天消息卡片组件、编辑器相关节点（语法高亮、文件树单元格、变更列表单元格）和画布相关组件。
 
 ## 子包
 
@@ -53,6 +53,49 @@
 - 工具切换和鼠标事件分发
 - 缩放/平移变换（Ctrl+滚轮缩放、中键平移）
 - 选中元素回调通知
+
+### editor/syntax
+代码语法高亮框架，基于 RichTextFX 的 `StyleClassedTextArea.setStyleClass` API 实现。所有高亮器无状态、线程安全，工厂内单例缓存。
+
+**设计模式：**
+- `SyntaxHighlighter`：接口，`void apply(StyleClassedTextArea area, String text)`
+- `AbstractRegexHighlighter`：抽象基类，子类提供 `List<TokenGroup>`（regex + styleClass），基类将其用 `|` 拼接为 alternation 模式，按捕获组序号应用样式。**正则中只允许非捕获分组 `(?:...)`**，否则破坏基类的捕获组序号映射。alternation 中靠前的组优先匹配，因此注释/字符串等宽匹配规则放在前面
+- `SyntaxHighlighterFactory`：单例工厂，按扩展名返回 highlighter。`forPath(Path)` / `forExtension(String)` 两个入口；未知扩展名返回 `PlainTextHighlighter`（no-op）
+
+**支持语言与扩展名映射：**
+| Highlighter | 扩展名 |
+|---|---|
+| `JavaSyntaxHighlighter` | java/kt/kts/scala/groovy/gradle |
+| `JavaScriptSyntaxHighlighter`（含 TS） | js/jsx/mjs/cjs/ts/tsx/mts/cts |
+| `PythonSyntaxHighlighter` | py/pyw/pyi |
+| `JsonSyntaxHighlighter` | json/json5/geojson/tsbuildinfo |
+| `XmlSyntaxHighlighter` | xml/fxml/html/htm/xhtml/svg/xsd/xsl/xslt/dtd/tld/plist |
+| `YamlSyntaxHighlighter` | yml/yaml |
+| `PropertiesSyntaxHighlighter` | properties/ini/conf/cfg/config/env |
+| `MarkdownSyntaxHighlighter` | md/markdown/mdx |
+
+**Token 样式类（与 editor-panel.css 中 `.syntax-*` 对应）：**
+- `syntax-comment`：注释（块注释、行注释）
+- `syntax-string`：字符串、字符、模板字符串
+- `syntax-keyword`：语言关键字
+- `syntax-literal`：字面量（true/false/null/None 等）
+- `syntax-number`：数字
+- `syntax-annotation`：注解/装饰器（`@Override`、`@decorator`）
+- `syntax-type`：类型名（大写开头标识符）
+- `syntax-key`：JSON/YAML 键名
+- `syntax-operator`：操作符
+
+**特殊实现技巧：**
+- `JsonSyntaxHighlighter`：用零宽断言 `(?<=...)` 区分 key 与 string
+- `YamlSyntaxHighlighter`：开启 `MULTILINE` flag，识别文档分隔符 `---`、锚点 `&anchor`、别名 `*alias`
+- `PythonSyntaxHighlighter`：支持三引号字符串、f/r/b 前缀
+- `JavaScriptSyntaxHighlighter`：包含 TypeScript 关键字和模板字符串 `${...}`
+
+### diff
+变更文件列表的富单元格组件。
+
+**核心类：**
+- `DiffListCell`: 变更文件富 ListCell，渲染 FileDiff
 
 ## 核心类
 
@@ -260,18 +303,82 @@ ToolGroupCard (VBox)
 - 进度条和完成统计
 
 ### FileTreeCell
-文件树单元格，用于 RightPanelController 的项目目录树展示。位于 `node/project` 子包。
+文件树单元格，用于 EditorPanelController 的项目目录树展示。位于 `node/project` 子包。
 
 **继承：** `TreeCell<Path>`
 
 **职责：**
 - 显示文件/文件夹名称
-- 使用 SvgImageView 加载 SVG 图标（folder.svg / file.svg），图标尺寸 16x16
-- 文件夹使用 `file-tree__folder` 样式类（粗体），文件使用 `file-tree__file` 样式类
+- 使用 SvgImageView 加载 SVG 图标（16x16），按文件扩展名选择对应类型图标：
+  - 文件夹 → `folder.svg`（蓝色 #0071e3）
+  - 代码文件 → `file-code.svg`（青色 #5ac8fa，`</>` 符号）
+  - 数据/配置文件 → `file-data.svg`（橙色 #ff9f0a，`{}` 符号）
+  - Markdown 文件 → `file-md.svg`（蓝色 #0a84ff，`#` 符号）
+  - 纯文本文件 → `file-text.svg`（灰色 #98989d，横线）
+  - 图片文件 → `file-image.svg`（绿色 #30d158，山形+圆）
+  - 其他 → `file.svg`（白色，兜底）
+
+**扩展名集合：**
+- `CODE_EXTS`：java/kt/scala/groovy/gradle/js/jsx/mjs/cjs/ts/tsx/mts/cts/py/pyw/pyi/c/cpp/cc/h/hpp/go/rs/rb/php/swift/m/mm/sh/bash/zsh/bat/cmd/ps1
+- `DATA_EXTS`：json/json5/geojson/tsbuildinfo/xml/fxml/html/htm/xhtml/svg/xsd/xsl/xslt/dtd/tld/plist/yml/yaml/properties/ini/conf/cfg/config/env/toml
+- `MD_EXTS`：md/markdown/mdx
+- `TEXT_EXTS`：txt/log/csv/tsv
+- `IMAGE_EXTS`：png/jpg/jpeg/gif/bmp/webp/ico/icns/tiff/tif
+
+**样式类（BEM）：**
+- `file-tree__folder`：文件夹（粗体）
+- `file-tree__file`：文件（常规）
+- 修饰类：`file-tree__file--code` / `--data` / `--md` / `--text` / `--image`（与图标颜色对应，字色微调；选中态由 CSS 强制为白色）
+
+**实现细节：**
+- `updateItem` 中先移除所有样式类再按文件类型添加，避免复用 cell 时残留旧类
+- `extensionOf` 方法：处理 dot <= 0（隐藏文件无扩展名）和 dot == length-1（结尾是点）边界情况
 
 **设计规范：**
 - 符合 Apple 设计规范，使用 SVG 矢量图标替代 emoji
 - 图标通过 `cn.bitloom.node.svg.SvgImageView` 加载
+- 扩展名集合与 DiffListCell 保持一致，保证文件树与变更列表的图标语义统一
+
+### DiffListCell
+变更文件列表富单元格，用于 EditorPanelController 的变更列表展示。位于 `node/diff` 子包。
+
+**继承：** `ListCell<FileDiff>`
+
+**职责：**
+- 富渲染变更文件：文件类型图标 + 文件名 + 相对目录 + 行数统计（+N -M）
+- 行数统计遍历 hunks/lines 累加 ADD/REMOVE 行数
+- 图标解析与 FileTreeCell 完全一致（复用相同的扩展名集合）
+
+**组件结构：**
+```
+DiffListCell (ListCell)
+└── HBox (diff-list-cell, center-left, spacing 8)
+    ├── SvgImageView (diff-list-cell__icon, 16x16)
+    ├── VBox (diff-list-cell__text)
+    │   ├── Label (diff-list-cell__name, 13px 白)
+    │   └── Label (diff-list-cell__path, 11px 次要色)
+    ├── Region (spacer)
+    └── HBox (diff-list-cell__stats)
+        ├── Label (diff-list-cell__stat--add, "+N" 11px 等宽绿)
+        └── Label (diff-list-cell__stat--remove, "-M" 11px 等宽红)
+```
+
+**样式类（BEM）：**
+- `diff-list-cell`：根 HBox
+- `diff-list-cell__icon` / `__text` / `__name` / `__path` / `__stats`
+- `diff-list-cell__stat` + `--add`（绿）/ `--remove`（红）：行数统计
+- 选中态时由 CSS 调整子元素字色（路径变白、统计颜色调亮）保证可读性
+
+**辅助方法：**
+- `extractFileName(path)`：从路径中提取文件名
+- `extractDirPath(path)`：从路径中提取相对目录
+- `computeStats(diff)`（静态）：遍历 hunks/lines 统计 ADD/REMOVE 行数
+- `extensionOf(fileName)`：解析扩展名
+
+**设计规范：**
+- 行高 56px，富信息显示，与 Xcode/GitHub Desktop 的变更列表风格一致
+- 与 FileTreeCell 共享扩展名集合，保证图标语义统一
+- 不再显示 A/M/D 徽章色块（变更类型由 diff 视图顶部 meta bar 体现）
 
 ### DiffReviewCard
 Diff 审核卡片，用于 WriteTool/EditTool 的文件修改审核展示。参考 QuestionCard 的设计模式。

@@ -92,37 +92,80 @@
 - `.sidebar__history-item-time`: 对话时间
 
 ### editor-panel.css
-统一编辑器面板样式，深色主题（Apple 风格）。通过 StackPane + SplitPane 组织三视图布局。外层容器透明 + padding 留白，viewContainer（StackPane）承载深色圆角卡片。
+统一编辑器面板样式，Apple 深色美学。通过 StackPane + SplitPane 组织三视图布局。外层容器透明 + padding 留白，viewContainer（StackPane）承载深色圆角卡片。
+
+**配色系统（Apple System Colors - Dark Mode）：**
+通过 `*` 选择器定义 CSS 变量，全文件复用：
+- `-autiva-bg` `#1c1c1e`：主背景
+- `-autiva-bg-elevated` `#2c2c2e`：次级背景（文件树面板、变更列表、元信息条）
+- `-autiva-bg-surface` `#3a3a3c`：表面色
+- `-autiva-text-primary` `#ffffff`：主要文字
+- `-autiva-text-secondary` `#8e8e93`：次要文字（路径、占位符）
+- `-autiva-text-tertiary` `#48484a`：三级文字（行号）
+- `-autiva-separator` `#38383a`：分隔线
+- `-autiva-blue` `#0a84ff`、`-autiva-green` `#30d158`、`-autiva-red` `#ff453a`、`-autiva-orange` `#ff9f0a`、`-autiva-yellow` `#ffd60a`、`-autiva-cyan` `#5ac8fa`、`-autiva-purple` `#bf5af2`、`-autiva-pink` `#ff375f`、`-autiva-gray` `#98989d`
+
+**字体系统：**
+- UI 文本：`"SF Pro Text", "Segoe UI", "PingFang SC", sans-serif`
+- 等宽（代码/diff/路径）：`"SF Mono", "Menlo", "Consolas", monospace`
 
 **样式类：**
 - `.editor-panel`: 容器样式（透明背景，padding 8 8 8 0 上右下留白/左贴边，留白区域透出 SplitPane 背景色）
-- `.editor-panel__views`: 视图容器 StackPane（#1e1e1e 深色背景，12px 四角圆角，承载所有子视图）
-- `.editor-panel__view`: 终端视图容器（深色背景 #1e1e1e）
-- `.editor-panel__project-split` / `.editor-panel__changes-split`: 内部 SplitPane（透明背景，分隔条 #3d3d3d，hover #007aff，h-resize 光标）
-- `.editor-panel__tree-panel`: 文件树面板 VBox（深色 #252526，右边框 1px #3d3d3d）
-- `.editor-panel__tree`: TreeView（透明背景，固定行高 26px）
-- `.editor-panel__tree .tree-cell`: 深色主题单元格（text #d4d4d4，hover #2d2d30，selected #094771）
-- `.editor-panel__content-panel` / `.editor-panel__diff-view-panel`: 右侧内容面板（深色 #1e1e1e）
-- `.editor-panel__placeholder`: 占位符（灰色 #858585，13px，居中）
-- `.editor-panel__diff-list`: 变更列表 ListView（深色背景 #1e1e1e，固定行高 28px）
-- `.editor-panel__diff-list .list-cell`: 深色主题列表单元格
+- `.editor-panel__views`: 视图容器 StackPane（#1c1c1e 深色背景，12px 四角圆角，承载所有子视图）
+- `.editor-panel__view`: 终端视图容器（深色背景 #1c1c1e）
+- `.editor-panel__project-split` / `.editor-panel__changes-split`: 内部 SplitPane（透明背景，分隔条透明 hover 蓝色，h-resize 光标）
+- `.editor-panel__tree-panel`: 文件树面板 VBox（#2c2c2e 次级背景，右边框 1px #38383a，padding 6 0 6 0）
+- `.editor-panel__tree`: TreeView（透明背景，固定行高 28px，padding 2 4 2 4）
+- `.editor-panel__tree .tree-cell`: Apple 风格选中（透明背景，填满行宽保证箭头/图标/文字对齐；hover rgba(255,255,255,0.06)；selected 蓝色 #0a84ff 填充 + 白字）
+- `.editor-panel__tree .tree-cell .arrow`: 隐藏折叠箭头（宽度设为0），改用双击展开/折叠
+- `.file-tree__folder`: 文件夹粗体样式
+- `.file-tree__file`: 文件常规样式
+- `.file-tree__file--code/--data/--md/--text/--image`: 文件类型修饰类（图标本身已带色，字色微调）
+- `.tree-cell:selected .file-tree__file--*`: 选中态时字色统一为白色
+- `.editor-panel__content-panel` / `.editor-panel__diff-view-panel`: 右侧内容面板（#1c1c1e 主背景）
+- `.editor-panel__placeholder`: 占位符（次要文字色 #8e8e93，13px，居中）
+- `.editor-panel__diff-list`: 变更列表 ListView（#2c2c2e 次级背景，固定行高 56px 富单元格）
+- `.editor-panel__diff-list .list-cell`: Apple 风格圆角选中（同 tree-cell，hover 浅白透明，selected 蓝色填充）
+- `.diff-list-cell`: DiffListCell 根 HBox（center-left，spacing 8px）
+- `.diff-list-cell__icon`: 文件图标（16x16）
+- `.diff-list-cell__text`: VBox 文本框（spacing 1px）
+- `.diff-list-cell__name`: 文件名（13px，白色）
+- `.diff-list-cell__path`: 相对路径（11px，次要文字色）
+- `.diff-list-cell__stats`: 统计区 HBox（center-right，spacing 6px），仅含 +N -M 统计（不再含 A/M/D 徽章）
+- `.diff-list-cell__stat`: 行数统计（11px 等宽）
+- `.diff-list-cell__stat--add/--remove`: 加/减行数颜色（绿/红）
+- `.list-cell:selected .diff-list-cell__*`: 选中态字色调整（路径变白，统计颜色调亮以保证可读性）
 - `.editor-panel__code-scroll`: RichTextFX VirtualizedScrollPane 容器（透明背景，自定义滚动条）
-- `.editor-panel__code-area`: 文件内容 CodeArea（等宽字体 SF Mono/Menlo/Consolas 12px，浅色 #d4d4d4）
-- `.editor-panel__diff-area`: diff 视图 StyleClassedTextArea（等宽字体 12px，浅色 #d4d4d4）
-- `.editor-panel__code-area .lineno` / `.editor-panel__diff-area .lineno`: 行号列（灰色 #858585，11px，右侧 1px 分隔线）
-- `.diff-meta`: diff 元信息行（文件头、空行，灰色 #858585）
-- `.diff-hunk-header`: Hunk 头（`@@ ... @@`，蓝色半透明背景 rgba(0,122,255,0.14)，蓝色文字 #4da3ff）
-- `.diff-line-add`: 新增行（绿色半透明背景 rgba(52,199,89,0.16)，绿色文字 #6cd97e）
-- `.diff-line-remove`: 删除行（红色半透明背景 rgba(255,59,48,0.16)，红色文字 #ff8a80）
-- `.diff-line-context`: 上下文行（透明背景，浅色文字 #d4d4d4）
-- `.editor-panel__diff-actions`: diff 审核按钮栏
-- `.editor-panel__diff-btn--approve`: 确定按钮（绿色 #34c759）
-- `.editor-panel__diff-btn--reject`: 撤销按钮（红色 #ff3b30）
-- `.editor-panel__loading-text`: 加载状态文字
-- `.editor-panel__error-text`: 错误状态文字
-- `.editor-panel__retry-btn`: 重试按钮
-- `.jedi-terminal-view`: 终端视图（深色背景 #1e1e1e）
-- `.editor-panel .scroll-bar`: 统一深色滚动条（8px 宽/高，#3d3d3d thumb，hover #4d4d4d，pressed #5d5d5d，4px 圆角，覆盖所有视图 TreeView/ListView/Terminal/CodeArea/DiffArea，垂直+水平一致）
+- `.editor-panel__code-area`: 文件内容 CodeArea（等宽字体 12px，白色文字，padding 8 0 8 0）
+- `.editor-panel__diff-area`: diff 视图 StyleClassedTextArea（等宽字体 12px，白色文字）
+- `.editor-panel__code-area .lineno` / `.editor-panel__diff-area .lineno`: 行号列（不透明背景 #1c1c1e，避免水平滚动时内容透出；三级文字色 #48484a，11px，右侧 1px 分隔线）
+- **语法高亮 Token（参考 Xcode 深色主题）：**
+  - `.syntax-keyword` `#ff5e8a` 粉红：关键字（如 `class`/`if`/`public`）
+  - `.syntax-string` `#30d158` 绿色：字符串、字符
+  - `.syntax-comment` `#6c6c70` 灰色斜体：注释
+  - `.syntax-number` `#ff9f0a` 橙色：数字
+  - `.syntax-annotation` `#ffd60a` 黄色：注解（如 `@Override`）
+  - `.syntax-literal` `#0a84ff` 蓝色：字面量（如 `true`/`false`/`null`）
+  - `.syntax-type` `#5ac8fa` 青色：类型名（大写开头标识符）
+  - `.syntax-key` `#bf5af2` 紫色：JSON/YAML 键名
+  - `.syntax-operator` `#ff375f` 粉红：操作符
+- **Diff 元信息条（顶部，左侧路径 + 右侧审核按钮）：**
+  - `.editor-panel__meta-bar`: HBox（#2c2c2e 背景，center-left，spacing 10px，padding 10 14 10 14，底部 1px 分隔线）。右侧通过 spacer（Hgrow ALWAYS）推入审核按钮
+  - `.editor-panel__meta-path`: 文件路径（13px 等宽，白色）
+- **Diff 行级着色：**
+  - `.diff-meta`: diff 元信息行（透明背景，次要文字色）
+  - `.diff-hunk-header`: Hunk 头（`@@ ... @@`，蓝色半透明背景 rgba(10,132,255,0.16)，青色文字 #5ac8fa）
+  - `.diff-line-add`: 新增行（绿色半透明背景 rgba(48,209,88,0.18)，浅绿文字 #8de8a4）
+  - `.diff-line-remove`: 删除行（红色半透明背景 rgba(255,69,58,0.18)，浅红文字 #ff9a92）
+  - `.diff-line-context`: 上下文行（透明背景，白色文字）
+- `.editor-panel__diff-actions`: （已弃用，审核按钮已移至 meta bar 右侧）
+- `.editor-panel__diff-btn--approve`: 确定按钮（蓝色 primary #0a84ff + 白字，主要操作，位于 meta bar 最右）
+- `.editor-panel__diff-btn--reject`: 撤销按钮（浅色背景 rgba(255,255,255,0.06) + 红字 #ff453a + 红色细边框，secondary 危险操作，位于 meta bar 右侧倒数第二）
+- `.editor-panel__loading-text`: 加载状态文字（次要文字色）
+- `.editor-panel__error-text`: 错误状态文字（红色 #ff453a）
+- `.editor-panel__retry-btn`: 重试按钮（蓝色 #0a84ff，hover #0070ee）
+- `.jedi-terminal-view`: 终端视图（深色背景 #1c1c1e）
+- `.editor-panel .scroll-bar`: Apple 风格细滚动条（8px 宽/高，thumb rgba(255,255,255,0.18) + 4px 圆角，hover 0.28，pressed 0.38，覆盖所有视图 TreeView/ListView/Terminal/CodeArea/DiffArea，垂直+水平一致；thumb 上下/左右各留 2px 边距）
 
 ### home-page.css
 主页样式。

@@ -187,16 +187,16 @@ public class A2UITool extends AbstractTool<A2UITool.Input> {
         try {
             JsonNode array = JsonUtils.parse(componentsJson);
             if (array == null || !array.isArray()) {
-                return List.of();
+                throw new RuntimeException("components 必须是 JSON 数组格式，例如 [{\"id\": \"...\", \"component\": \"...\"}]");
             }
             List<A2UIComponent> components = new ArrayList<>();
             for (JsonNode node : array) {
                 components.add(parseComponent(node));
             }
             return components;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Failed to parse components JSON", e);
-            return List.of();
+            throw new RuntimeException("JSON 格式错误: " + e.getCause().getMessage() + "。请检查 components 字段是否为有效的 JSON 数组格式，确保数组用 ] 结束而非 }，且所有对象正确闭合。");
         }
     }
 

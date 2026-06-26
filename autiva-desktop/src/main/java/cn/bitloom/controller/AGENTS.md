@@ -371,11 +371,11 @@
 **职责：**
 - 管理三视图切换（终端/项目/变更），通过 StackPane + visible/managed 控制
 - 追踪当前视图类型（`currentViewType`），供 IndexController 的 toggle 判断使用
-- 管理项目目录树展示（双击文件在项目视图右侧显示文件内容）
-- 管理变更列表（订阅 DiffEvent 自动刷新，点击列表项在变更视图右侧显示 diff）
+- 管理项目目录树展示（双击文件在项目视图右侧显示文件内容，文件树用 `FileTreeCell` 渲染图标和样式）
+- 管理变更列表（订阅 DiffEvent 自动刷新，点击列表项在变更视图右侧显示 diff，列表用 `DiffListCell` 富单元格渲染图标/路径/徽章/统计）
 - 管理终端（使用 JediTerminalView，异步启动，加载状态，错误重试）
-- 管理文件内容显示（RichTextFX CodeArea + 行号）
-- 管理 diff 视图（RichTextFX StyleClassedTextArea + 审核按钮栏）
+- 管理文件内容显示（RichTextFX CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 注入语法高亮）
+- 管理 diff 视图（顶部元信息条 + RichTextFX StyleClassedTextArea + 底部审核按钮栏）
 
 **内部枚举：**
 - `ViewType.TERMINAL` / `ViewType.PROJECT` / `ViewType.CHANGES`: 三种视图类型，由 `currentViewType` 字段追踪
@@ -396,6 +396,8 @@
 **核心方法：**
 - `show()/hide()/isVisible()`: 控制面板显隐
 - `setupRoundedClip()`: 给 viewContainer 设置 Rectangle clip（arcWidth/arcHeight=24），裁剪终端/项目/变更三视图的方角到 12px 圆角形状
+- `setupFileTree()`: 设置文件树，注入 `FileTreeCell` 工厂，绑定双击事件
+- `setupDiffList()`: 设置变更列表，注入 `DiffListCell` 工厂，绑定点击事件
 - `showTerminalView()`: 切换到终端视图，设置 currentViewType=TERMINAL
 - `showProjectView()`: 切换到项目视图，设置 currentViewType=PROJECT
 - `showChangesView()`: 切换到变更视图，设置 currentViewType=CHANGES
@@ -404,11 +406,11 @@
 - `openTerminal(Path)`: 打开终端，异步启动 JediTerminalView
 - `ensureTerminalStarted(Path)`: 确保终端已启动，若未启动则异步创建
 - `closeTerminal()`: 关闭终端会话
-- `showFileContent(Path)`: 在项目视图右侧显示文件内容（RichTextFX CodeArea + 行号）
-- `showDiffView(FileDiff)`: 在变更视图右侧显示 diff（StyleClassedTextArea + 审核按钮栏）
+- `showFileContent(Path)`: 在项目视图右侧显示文件内容（CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 应用语法高亮）
+- `showDiffView(FileDiff)`: 在变更视图右侧显示 diff（顶部 `createFileMetaBar` + 中部 StyleClassedTextArea）。diffArea 仅包含 hunk header 与 +/- 行，文件路径由顶部元信息条显示，审核按钮在元信息条右侧
+- `createFileMetaBar(FileDiff)`: 创建 diff 文件元信息条（HBox：左侧路径 + spacer + 右侧撤销/确定按钮）。按钮点击后调用 `diffService.approveDiff/rejectDiff` 并刷新列表
 - `updateDiffList(List<FileDiff>)`: 刷新变更列表
-- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent
-- `createDiffActionBar(FileDiff)`: 创建 diff 审核按钮栏（确定/撤销）
+- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent，自动刷新变更列表
 - `createLoadingContent(String)`: 创建加载状态内容（ProgressIndicator + 文本）
 - `createErrorContent(String, Runnable)`: 创建错误状态内容（带重试按钮）
 
