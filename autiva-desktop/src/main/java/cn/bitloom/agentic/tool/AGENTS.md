@@ -47,11 +47,11 @@ Spring @Component，统一管理工具注册和构建。
 - `agentDefinitionManager`: AgentDefinitionManager
 - `taskRepository`: TaskRepository（@Component 单例，解决状态共享）
 - `processManager`: ProcessManager（@Component 单例，解决状态共享）
-- `diffService`: DiffService（编码智能体 Diff 生成服务）
+- `diffService`: DiffService（编码智能体 Diff 生成服务，注入到 WriteTool/EditTool 用于写文件后生成 diff 并发布 DiffEvent）
 
 **核心方法：**
 - `buildToolCallbacks(AgentDefinition)`: 根据 AgentDefinition 构建工具回调列表，按 kind 分流
-- `buildAllTools()`: 构建工具集（文件、搜索、命令、交互、定时、Task、记忆、技能、管理、MCP），支持 config.json 白名单过滤。构建 WriteTool/EditTool 时传入 GuiDiffReviewHandler 和 DiffService（编码智能体 Diff 审核支持）
+- `buildAllTools()`: 构建工具集（文件、搜索、命令、交互、定时、Task、记忆、技能、管理、MCP），支持 config.json 白名单过滤。构建 WriteTool/EditTool 时注入 `diffService` 字段（编码智能体 Diff 生成支持）
 
 ### AutivaToolCallingManager
 自定义 `ToolCallingManager` 实现，注入到 `ToolCallingAdvisor` 中，替代 Spring AI 默认的 `DefaultToolCallingManager`。
@@ -202,14 +202,15 @@ tool/
   - 行截断：超长行（>2000字符）自动截断
   - Token 超限警告：超出 Token 预算时返回 WARNING 状态，提示用户使用 offset/limit 分段读取
   - 使用 TokenEstimator 工具类进行 Token 估算
-  - **图片/二进制文件检测**（解决 LLM 读取截图卡死问题）：
+  - **图片/二进制文件检测**（双保险，解决 LLM 读取截图卡死与源代码误判问题）：
     * 支持的图片格式：PNG, JPG, JPEG, GIF, WEBP, BMP, ICO, SVG, TIFF 等
     * 对于图片文件：返回基本信息（格式、大小、路径），不尝试读取内容，避免 UI 卡死
-    * 支持的二进制格式：EXE, DLL, ZIP, PDF, MP3, MP4, Office 文档等
+    * 支持的二进制格式：EXE, DLL, CLASS, JAR, WAR, PYC, O, A, LIB, NODE, WASM, ZIP, PDF, MP3, MP4, Office 文档等（含编译产物与序列化文件）
     * 对于二进制文件：返回类型提示和专用工具建议
-    * 通过文件头（Magic Bytes）额外检测未知二进制文件，防止误读
-- **WriteTool**: 文件写入工具（继承 AbstractTool\<WriteTool.Input\>）。写入/覆盖文件，自动创建父目录。成功时 data 含 file/bytes/action。**Diff 审核机制**：Builder 接受 DiffReviewHandler 和 DiffService，execute() 中检查 ToolContext 的 reviewDiff 标志，启用时生成 FileDiff 并通过 DiffReviewHandler 阻塞等待用户审核（GuiDiffReviewHandler 通过 ToolUIBridge.showDiffReview 展示 DiffReviewCard），批准后才写入真实文件，拒绝则返回错误
-- **EditTool**: 文件编辑工具（继承 AbstractTool\<EditTool.Input\>）。精确字符串替换，支持 replace_all。成功时 data 含 file/occurrences/replace_all，rawOutput 保留 cat-n 片段。使用 ToolUtils 静态方法。**Diff 审核机制**：同 WriteTool，Builder 接受 DiffReviewHandler 和 DiffService，reviewDiff 标志启用时阻塞审核
+    * **文本扩展名白名单（TEXT_EXTENSIONS）**：覆盖 100+ 种源代码与文本扩展名（java/kt/py/go/rs/c/cpp/js/ts/css/scss/json/yaml/md 等），命中后直接放行不做任何二进制检测，从根上杜绝含中文注释的源代码被误判
+    * **UTF-8 严格解码兜底**：未知扩展名用 CharsetDecoder + CodingErrorAction.REPORT 严格解码前 8KB 字节，任何 malformed/unmappable 字符即判定为二进制（替代原 Magic Bytes 启发式，避免 UTF-8 中文文件误判）
+- **WriteTool**: 文件写入工具（继承 AbstractTool\<WriteTool.Input\>）。写入/覆盖文件，自动创建父目录。成功时 data 含 file/bytes/action。**Diff 生成（非阻塞）**：Builder 接受 `DiffService`，execute() 在写文件**之后**读取旧内容（已存在文件）并调用 `diffService.generateDiff(path, oldContent, newContent)` 发布 `DiffEvent`，diff 生成失败不影响写入结果；用户事后在右侧"修改文件"列表查看 diff 并可"撤销"回滚文件
+- **EditTool**: 文件编辑工具（继承 AbstractTool\<EditTool.Input\>）。精确字符串替换，支持 replace_all。成功时 data 含 file/occurrences/replace_all，rawOutput 保留 cat-n 片段。使用 ToolUtils 静态方法。**Diff 生成（非阻塞）**：同 WriteTool，Builder 接受 `DiffService`，execute() 在写回新内容**之后**调用 `diffService.generateDiff(path, originalContent, newContent)`，originalContent 复用第 70 行已读取的旧内容
 
 ### search 包 (`cn.bitloom.agentic.tool.search`)
 搜索类工具，统一继承 AbstractTool。

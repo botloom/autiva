@@ -46,7 +46,7 @@
 - 初始化所有子控制器
 - 管理路由导航
 - 控制侧边栏显示/隐藏
-- 协调右侧面板与终端操作
+- 协调编辑器面板操作
 
 **子控制器：**
 - `buttonBarController`: 底部按钮栏
@@ -56,18 +56,16 @@
 - `settingsPageController`: 设置页
 - `skillPageController`: 技能页
 - `taskPageController`: 任务页
-- `rightSidebarController`: 右侧边栏（文件树、diff 列表）
-- `contentPanelController`: 内容面板（终端、文件内容、diff 视图）
+- `editorPanelController`: 编辑器面板（文件树、终端、变更列表、文件内容、diff 视图）
 
-**右侧边栏和内容面板协调方法：**
-- `toggleRightSidebar()`: 切换右侧边栏显示/隐藏
-- `showRightSidebar()/hideRightSidebar()`: 显示/隐藏右侧边栏
-- `showContentPanel()/hideContentPanel()`: 显示/隐藏内容面板
+**编辑器面板协调方法：**
+- `openEditor()`: 打开编辑器面板并聚焦终端标签页（供 HomePageController 的"编辑器"按钮调用）
 - `openTerminal()`: 打开终端面板，自动获取当前项目路径作为工作目录
-- `closeTerminal()`: 关闭终端面板
-- `showFileInPanel(Path)`: 在内容面板显示文件内容
+- `closeTerminal()`: 关闭终端会话
+- `showFileInPanel(Path)`: 在编辑器面板显示文件内容
 - `showDiffView(FileDiff)`: 打开 diff 对比视图
-- `updateCurrentProject(ProjectInfo)`: 通知右侧边栏更新当前项目（构建目录树）
+- `updateCurrentProject(ProjectInfo)`: 通知编辑器面板更新当前项目（构建目录树）
+- `resolveWorkingDir()`: 解析当前工作目录（当前项目路径或 null）
 
 ### HomePageController
 主页控制器，实现聊天交互界面。
@@ -338,15 +336,15 @@
 - 侧边栏切换按钮：使用 panel-left.svg 图标，点击调用 `indexController.toggleSidebar()`
 - 项目选择按钮：coder 智能体时显示，MenuButton 下拉菜单（选择文件夹+最近项目）
 - 分支显示按钮：coder 智能体时显示，默认只显示 git-branch.svg 图标，选择项目后显示分支名（disabled）
-- 终端按钮：点击调用 `indexController.openTerminal()` 打开终端面板
-- 折叠按钮：点击调用 `indexController.toggleRightSidebar()` 切换右侧边栏显示/隐藏
+- 编辑器按钮：使用 terminal.svg 图标，点击调用 `indexController.openEditor()` 打开编辑器面板
 
 **FXML 字段：**
 - `sidebarButton`: 侧边栏切换按钮，使用 panel-left.svg 图标
-- `projectSelectButton`: 项目选择 MenuButton，使用 folder.svg 图标，默认隐藏，coder 模式下显示
-- `branchDisplayButton`: 分支显示按钮，使用 git-branch.svg 图标，默认隐藏，coder 模式下显示，disabled 状态
-- `terminalButton`: 终端按钮，使用 terminal.svg 图标
-- `toggleRightPanelButton`: 右侧边栏折叠按钮，使用 panel-right.svg 图标
+- `dynamicButtonContainer`: 动态按钮容器（左对齐按钮）
+- `rightButtonContainer`: 右侧动态按钮容器（右对齐按钮，编辑器按钮注入此处）
+
+**按钮配置来源：**
+各页面控制器通过实现 `ButtonBarHolder.getButtonConfigs()` 提供动态按钮配置，由 ButtonBarController 注入到 `dynamicButtonContainer`（Alignment.LEFT）或 `rightButtonContainer`（Alignment.RIGHT）。HomePageController 提供"新对话"（左）和"编辑器"（右）两个按钮。
 
 **核心方法：**
 - `setupProjectBinding()`: 设置项目绑定（由 IndexController 在初始化完成后调用），监听 currentProject 变化更新分支显示和通知 IndexController
@@ -357,70 +355,62 @@
 - `refreshProjectMenuText(ProjectInfo)`: 刷新项目选择按钮显示文本
 - `refreshBranchDisplay(ProjectInfo)`: 更新分支按钮文本（默认空，选择项目后显示分支名）
 
-### RightSidebarController
-右侧边栏控制器，管理项目文件树和修改文件列表（diff），是主区域的一部分。实现 Initializable。
+### EditorPanelController
+统一编辑器面板控制器，合并了原 RightSidebarController（文件树、diff 列表）和 ContentPanelController（终端、文件内容、diff 视图）的功能。通过 TabPane 统一管理 4 类标签页。实现 Initializable。
 
 **Spring 注解：** `@Component`
 
 **依赖注入：**
 - `FileTreeService`: 文件树构建服务
-- `DiffService`: Diff 管理服务
-
-**职责：**
-- 管理项目目录树展示（双击文件通知 IndexController 在内容面板显示）
-- 管理 diff 文件列表（点击通知 IndexController 在内容面板显示 diff 视图）
-- 订阅 DiffEvent 自动刷新 diff 列表
-
-**FXML 字段：**
-- `rightSidebar`: 右侧边栏根容器（VBox），默认 visible=false managed=false
-- `splitPane`: 垂直分割面板（文件树 + diff 列表）
-- `fileTree`: 项目文件树（TreeView<Path>）
-- `diffList`: diff 文件列表（ListView<FileDiff>）
-
-**核心方法：**
-- `show()/hide()/toggle()`: 控制边栏显示/隐藏
-- `isVisible()`: 检查边栏可见性
-- `setCurrentProject(ProjectInfo)`: 设置当前项目，构建目录树
-- `buildFileTree(ProjectInfo)`: 构建文件树
-- `updateDiffList(List<FileDiff>)`: 更新 diff 列表
-- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent 自动刷新 diff 列表
-
-### ContentPanelController
-内容面板控制器，管理终端、文件内容、diff 视图的显示，与主区域并列的独立区域。实现 Initializable。
-
-**Spring 注解：** `@Component`
-
-**依赖注入：**
 - `PtyTerminalService`: PTY 终端服务
 - `DiffService`: Diff 管理服务
 
 **职责：**
-- 管理文件内容显示面板
-- 管理 diff 视图（带审核按钮：确定/撤销）
-- 管理终端面板（使用 JediTerminalView，异步启动，加载状态，错误重试）
+- 管理项目目录树展示（双击文件直接在内部打开文件标签页，无需 IndexController 中转）
+- 管理变更列表标签页（订阅 DiffEvent 自动刷新，点击列表项打开 diff 标签页）
+- 管理终端标签页（使用 JediTerminalView，异步启动，加载状态，错误重试）
+- 管理文件内容标签页（RichTextFX CodeArea + 行号）
+- 管理 diff 视图标签页（RichTextFX StyleClassedTextArea + 审核按钮栏）
+- 切换文件树面板显隐
 
 **FXML 字段：**
-- `contentPanel`: 内容面板根容器（VBox），默认 visible=false managed=false
-- `contentTitle`: 内容标题
-- `closeContentButton`: 关闭内容面板按钮
-- `contentScrollPane`: 内容滚动面板
-- `contentContainer`: 内容容器
+- `editorPanel`: 编辑器面板根容器（VBox），默认 visible=false managed=false
+- `toggleFileTreeButton`: 切换文件树按钮
+- `closeButton`: 关闭按钮
+- `fileTreePanel`: 文件树面板容器（VBox）
+- `fileTree`: 项目文件树（TreeView<Path>），直接在 VBox 中，无 TitledPane 嵌套
+- `tabPane`: 标签页容器（TabPane，tabClosingPolicy=ALL_TABS）
+
+**标签页类型：**
+| 标签页 | id 格式 | closable | 内容 | 生命周期 |
+| ---- | ---- | ---- | ---- | ---- |
+| 终端 | `terminal` | false | JediTerminalView | 持久（面板关闭时销毁会话） |
+| 变更 | `changes` | false | ListView<FileDiff> | 持久（订阅 DiffEvent 自动刷新） |
+| 文件 | 文件路径绝对值 | true | VirtualizedScrollPane<CodeArea> | 按需（双击文件树打开） |
+| diff | `diff:` + diffId | true | VirtualizedScrollPane<StyleClassedTextArea> + 审核按钮栏 | 按需（点击变更列表项打开） |
 
 **核心方法：**
-- `show()/hide()`: 控制面板显示/隐藏
-- `isVisible()`: 检查面板可见性
-- `showFileContent(Path)`: 显示文件内容，读取失败时显示错误
-- `showDiffView(FileDiff)`: 显示 diff 内容和审核按钮（确定/撤销）
-- `createDiffActionBar(FileDiff)`: 创建 diff 审核按钮栏
-- `openTerminal(Path)`: 异步打开终端（JediTerminalView），显示加载状态，失败时提供重试按钮
+- `show()/hide()/isVisible()`: 控制面板显隐
+- `setCurrentProject(ProjectInfo)`: 设置当前项目，构建目录树
+- `openTerminal(Path)`: 打开/聚焦终端标签页，异步启动 JediTerminalView
 - `closeTerminal()`: 关闭终端会话
-- `showLoadingContent(String)`: 显示加载状态（ProgressIndicator + 文本）
-- `showErrorContent(String, Runnable)`: 显示错误信息，可选提供重试按钮
+- `showFileContent(Path)`: 打开文件标签页（RichTextFX CodeArea + 行号），若已存在则聚焦
+- `showDiffView(FileDiff)`: 打开 diff 标签页（StyleClassedTextArea + 审核按钮栏）
+- `updateDiffList(List<FileDiff>)`: 刷新变更标签页内容，更新标签标题为 "变更 (N)"
+- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent
+- `handleToggleFileTree()`: 切换 fileTreePanel 显隐
+- `handleClose()`: 隐藏整个面板
+- `findTabById(String)`: 根据 id 查找已存在的标签页
+- `createDiffActionBar(FileDiff)`: 创建 diff 审核按钮栏（确定/撤销）
+- `createLoadingContent(String)`: 创建加载状态内容（ProgressIndicator + 文本）
+- `createErrorContent(String, Runnable)`: 创建错误状态内容（带重试按钮）
 
 **交互逻辑：**
-- 内容面板与右侧边栏完全独立，打开终端时右侧边栏仍可见
+- 终端标签页持久化：面板关闭时仅隐藏 UI，终端会话保持；下次打开恢复
+- 文件标签页去重：同一文件多次双击只打开一个标签页，已存在则聚焦
+- diff 审核按钮点击后自动关闭 diff 标签页并刷新变更列表（撤销会触发 `DiffService.rejectDiff` 回滚文件内容）
+- 变更标签页标题动态更新：无 diff 时为 "变更"，有 N 个待处理时为 "变更 (N)"
 - 终端启动使用独立线程，避免阻塞 UI
-- diff 审核按钮点击后自动关闭内容面板
 
 ### ProjectPickerDialogController
 项目选择对话框控制器，实现 Initializable、WindowManager.StageAware、DialogHolder。

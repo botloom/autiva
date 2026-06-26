@@ -48,10 +48,7 @@ public class IndexController implements Initializable {
     private TaskPageController taskPageController;
     @FXML
     @Getter
-    private RightSidebarController rightSidebarController;
-    @FXML
-    @Getter
-    private ContentPanelController contentPanelController;
+    private EditorPanelController editorPanelController;
 
     @Getter
     private final Router router;
@@ -70,10 +67,8 @@ public class IndexController implements Initializable {
         this.skillPageController.setIndexController(this);
         this.gepPageController.setIndexController(this);
         this.taskPageController.setIndexController(this);
-        this.rightSidebarController.setIndexController(this);
-        this.contentPanelController.setIndexController(this);
 
-        // 右侧边栏和内容面板默认隐藏（FXML 中已设置 visible=false managed=false）
+        // 编辑器面板默认隐藏（FXML 中已设置 visible=false managed=false）
         this.initializeButtonBar();
     }
 
@@ -100,104 +95,76 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 切换右侧边栏显示/隐藏
+     * 打开编辑器面板并聚焦终端标签页（供 HomePageController 的"编辑器"按钮调用）
      */
-    public void toggleRightSidebar() {
-        if (rightSidebarController != null) {
-            rightSidebarController.toggle();
+    public void openEditor() {
+        if (editorPanelController == null) {
+            return;
         }
+        Path workingDir = resolveWorkingDir();
+        editorPanelController.show();
+        editorPanelController.openTerminal(workingDir);
     }
 
     /**
-     * 显示右侧边栏
-     */
-    public void showRightSidebar() {
-        if (rightSidebarController != null) {
-            rightSidebarController.show();
-        }
-    }
-
-    /**
-     * 隐藏右侧边栏
-     */
-    public void hideRightSidebar() {
-        if (rightSidebarController != null) {
-            rightSidebarController.hide();
-        }
-    }
-
-    /**
-     * 显示内容面板
-     */
-    public void showContentPanel() {
-        if (contentPanelController != null) {
-            contentPanelController.show();
-        }
-    }
-
-    /**
-     * 隐藏内容面板
-     */
-    public void hideContentPanel() {
-        if (contentPanelController != null) {
-            contentPanelController.hide();
-        }
-    }
-
-    /**
-     * 打开终端面板
+     * 打开终端面板（委托给编辑器面板）
      */
     public void openTerminal() {
-        if (contentPanelController == null) {
+        if (editorPanelController == null) {
             return;
         }
-        // 获取工作目录（当前项目路径或用户主目录）
-        Path workingDir = null;
-        if (homePageController != null && homePageController.getViewModel() != null) {
-            ProjectInfo project = homePageController.getViewModel().getCurrentProject();
-            if (project != null) {
-                workingDir = Path.of(project.path());
-            }
-        }
-        contentPanelController.openTerminal(workingDir);
+        editorPanelController.openTerminal(resolveWorkingDir());
     }
 
     /**
-     * 关闭终端面板
+     * 关闭终端会话
      */
     public void closeTerminal() {
-        if (contentPanelController != null) {
-            contentPanelController.closeTerminal();
+        if (editorPanelController != null) {
+            editorPanelController.closeTerminal();
         }
     }
 
     /**
-     * 在内容面板显示文件内容
+     * 在编辑器面板显示文件内容
      */
     public void showFileInPanel(Path file) {
-        if (contentPanelController == null) {
+        if (editorPanelController == null) {
             return;
         }
-        contentPanelController.showFileContent(file);
+        editorPanelController.showFileContent(file);
     }
 
     /**
      * 打开 diff 对比视图
      */
     public void showDiffView(FileDiff diff) {
-        if (contentPanelController == null) {
+        if (editorPanelController == null) {
             return;
         }
-        contentPanelController.showDiffView(diff);
+        editorPanelController.showDiffView(diff);
     }
 
     /**
-     * 更新当前项目（通知右侧边栏构建目录树）
+     * 更新当前项目（通知编辑器面板构建目录树）
      */
     public void updateCurrentProject(ProjectInfo project) {
-        if (rightSidebarController != null) {
-            rightSidebarController.setCurrentProject(project);
+        if (editorPanelController != null) {
+            editorPanelController.setCurrentProject(project);
         }
+    }
+
+    /**
+     * 解析当前工作目录（当前项目路径或 null）
+     */
+    private Path resolveWorkingDir() {
+        if (homePageController != null && homePageController.getViewModel() != null) {
+            ProjectInfo project = homePageController.getViewModel().getCurrentProject();
+            if (project != null) {
+                return Path.of(project.path());
+            }
+        }
+        return null;
     }
 
 }

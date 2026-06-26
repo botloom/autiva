@@ -89,31 +89,40 @@
 - `.sidebar__history-item-title`: 对话标题
 - `.sidebar__history-item-time`: 对话时间
 
-### right-sidebar.css
-右侧边栏样式，Apple 风格设计。
+### editor-panel.css
+统一编辑器面板样式，合并原 right-sidebar.css 和 content-panel.css，深色主题（Apple 风格）。
 
 **样式类：**
-- `.right-sidebar`: 容器样式（白色背景，左边框分隔线）
-- `.right-sidebar__split`: 垂直分割面板
-- `.right-sidebar__titled-pane`: Apple 风格折叠面板（12px 加粗标题）
-- `.right-sidebar__file-tree`: 文件树（12px 字体，紧凑行高）
-- `.right-sidebar__diff-list`: diff 列表（12px 字体）
-
-### content-panel.css
-内容面板样式，Apple 风格设计。
-
-**样式类：**
-- `.content-panel`: 容器样式（深色背景 #1e1e1e，12px 圆角）
-- `.content-panel__header`: 标题栏（深色背景 #2d2d30，顶部圆角 12 12 0 0）
-- `.content-panel__title`: 标题文字（浅色 #d4d4d4，13px 加粗）
-- `.content-panel__close-btn`: 关闭按钮（Apple 风格圆形，文字颜色 #d4d4d4，hover 背景 #3d3d3d）
-- `.content-panel__container`: 内容容器
-- `.content-panel__file-content`: 文件内容（浅色 #d4d4d4，等宽字体 12px）
-- `.content-panel__diff-content`: diff 内容（浅色 #d4d4d4，等宽字体 12px）
-- `.content-panel__diff-actions`: diff 审核按钮栏
-- `.content-panel__diff-btn--approve`: 确定按钮（绿色 #34c759）
-- `.content-panel__diff-btn--reject`: 撤销按钮（红色 #ff3b30）
+- `.editor-panel`: 容器样式（深色背景 #1e1e1e，12px 圆角）
+- `.editor-panel__header`: 标题栏（深色背景 #2d2d30，顶部圆角 12 12 0 0，36px 高度）
+- `.editor-panel__icon-btn`: 切换文件树按钮（透明背景，hover #3d3d3d，圆形）
+- `.editor-panel__close-btn`: 关闭按钮（同 icon-btn 样式）
+- `.editor-panel__body`: 内容区 HBox
+- `.editor-panel__tree-panel`: 文件树面板 VBox（深色 #252526，右边框 1px #3d3d3d，prefWidth=200）
+- `.editor-panel__tree-title`: "项目文件" 标题（12px 加粗 #d4d4d4）
+- `.editor-panel__tree`: TreeView（透明背景）
+- `.editor-panel__tree .tree-cell`: 深色主题单元格（bg #1e1e1e，text #d4d4d4，hover #2d2d30，selected #094771）
+- `.editor-panel__tabs`: TabPane（透明背景）
+- `.editor-panel__tabs .tab-header-area`: 标签栏背景 #2d2d30
+- `.editor-panel__tabs .tab`: 标签项（hover #2d2d30，selected 底边 #007aff）
+- `.editor-panel__tabs .tab-label`: 标签文字 #d4d4d4，selected 白色
+- `.editor-panel__code-scroll`: RichTextFX VirtualizedScrollPane 容器（透明背景，自定义滚动条）
+- `.editor-panel__code-area`: 文件内容 CodeArea（等宽字体 SF Mono/Menlo/Consolas 12px，浅色 #d4d4d4）
+- `.editor-panel__diff-area`: diff 视图 StyleClassedTextArea（等宽字体 12px，浅色 #d4d4d4）
+- `.editor-panel__code-area .lineno` / `.editor-panel__diff-area .lineno`: 行号列（灰色 #858585，11px，右侧 1px 分隔线）
+- `.diff-meta`: diff 元信息行（文件头、空行，灰色 #858585）
+- `.diff-hunk-header`: Hunk 头（`@@ ... @@`，蓝色半透明背景 rgba(0,122,255,0.14)，蓝色文字 #4da3ff）
+- `.diff-line-add`: 新增行（绿色半透明背景 rgba(52,199,89,0.16)，绿色文字 #6cd97e）
+- `.diff-line-remove`: 删除行（红色半透明背景 rgba(255,59,48,0.16)，红色文字 #ff8a80）
+- `.diff-line-context`: 上下文行（透明背景，浅色文字 #d4d4d4）
+- `.editor-panel__diff-actions`: diff 审核按钮栏
+- `.editor-panel__diff-btn--approve`: 确定按钮（绿色 #34c759）
+- `.editor-panel__diff-btn--reject`: 撤销按钮（红色 #ff3b30）
+- `.editor-panel__loading-text`: 加载状态文字
+- `.editor-panel__error-text`: 错误状态文字
+- `.editor-panel__retry-btn`: 重试按钮
 - `.jedi-terminal-view`: 终端视图（深色背景 #1e1e1e，底部圆角 0 0 12 12）
+- `.editor-panel .scroll-bar:vertical .thumb`: 滚动条（#3d3d3d，hover #4d4d4d）
 
 ### home-page.css
 主页样式。

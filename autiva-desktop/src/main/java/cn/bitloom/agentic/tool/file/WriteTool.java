@@ -1,7 +1,9 @@
 package cn.bitloom.agentic.tool.file;
 
+import cn.bitloom.agentic.diff.DiffService;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -9,6 +11,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
@@ -17,6 +21,7 @@ import java.util.Map;
 /**
  * 文件写入工具，将内容写入本地文件系统。
  */
+@Slf4j
 public class WriteTool extends AbstractTool<WriteTool.Input> {
 
 	private static final String DESCRIPTION = """
@@ -30,8 +35,11 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 			- 仅在用户明确请求时使用表情符号。除非被要求，否则避免向文件写入表情符号。
 			""";
 
-	private WriteTool() {
+	private final DiffService diffService;
+
+	private WriteTool(DiffService diffService) {
 		super("Write", DESCRIPTION, Input.class);
+		this.diffService = diffService;
 	}
 
 	public record Input(
@@ -42,11 +50,9 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 	@Override
 	public ToolResult execute(Input input, ToolContext context) {
 		String filePath = input.filePath();
-		String content = input.content();
+		String content = input.content() != null ? input.content() : "";
 
 		try {
-			content = content != null ? content : "";
-
 			Path path = Paths.get(filePath);
 			File file = path.toFile();
 
@@ -58,9 +64,21 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 			}
 
 			boolean fileExists = file.exists();
+			String oldContent = fileExists
+					? Files.readString(path, StandardCharsets.UTF_8)
+					: null;
 
 			try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
 				writer.write(content);
+			}
+
+			// 写入后生成 diff（非阻塞，失败不影响写入结果）
+			if (diffService != null) {
+				try {
+					diffService.generateDiff(path, oldContent, content);
+				} catch (Exception e) {
+					log.warn("生成 Diff 失败（不影响写入）: {}", filePath, e);
+				}
 			}
 
 			String action = fileExists ? "覆盖" : "创建";
@@ -87,8 +105,15 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 	}
 
 	public static class Builder {
+		private DiffService diffService;
+
+		public Builder diffService(DiffService diffService) {
+			this.diffService = diffService;
+			return this;
+		}
+
 		public WriteTool build() {
-			return new WriteTool();
+			return new WriteTool(diffService);
 		}
 	}
 

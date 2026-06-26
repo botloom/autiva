@@ -1,8 +1,10 @@
 package cn.bitloom.agentic.tool.file;
 
+import cn.bitloom.agentic.diff.DiffService;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
 import cn.bitloom.agentic.tool.ToolUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -12,12 +14,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * 文件编辑工具，在文件中执行精确的字符串替换。
  */
+@Slf4j
 public class EditTool extends AbstractTool<EditTool.Input> {
 
 	private static final String DESCRIPTION = """
@@ -32,8 +36,11 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 			- 使用`replace_all`在文件中替换和重命名字符串。如果你想要重命名变量，此参数很有用。
 			""";
 
-	private EditTool() {
+	private final DiffService diffService;
+
+	private EditTool(DiffService diffService) {
 		super("Edit", DESCRIPTION, Input.class);
+		this.diffService = diffService;
 	}
 
 	public record Input(
@@ -52,6 +59,7 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 
 		try {
 			File file = new File(filePath);
+			Path path = file.toPath();
 
 			if (!file.exists()) {
 				return ToolResult.error("文件不存在: " + filePath);
@@ -67,7 +75,7 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 
 			String originalContent;
 			try {
-				originalContent = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+				originalContent = Files.readString(path, StandardCharsets.UTF_8);
 			}
 			catch (IOException e) {
 				return ToolResult.error("读取文件内容时出错: " + e.getMessage());
@@ -93,6 +101,15 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 
 			try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
 				writer.write(newContent);
+			}
+
+			// 写入后生成 diff（非阻塞，失败不影响写入结果）
+			if (diffService != null) {
+				try {
+					diffService.generateDiff(path, originalContent, newContent);
+				} catch (Exception e) {
+					log.warn("生成 Diff 失败（不影响写入）: {}", filePath, e);
+				}
 			}
 
 			String snippet = ToolUtils.generateEditSnippet(newContent, new_string);
@@ -123,8 +140,15 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 	}
 
 	public static class Builder {
+		private DiffService diffService;
+
+		public Builder diffService(DiffService diffService) {
+			this.diffService = diffService;
+			return this;
+		}
+
 		public EditTool build() {
-			return new EditTool();
+			return new EditTool(diffService);
 		}
 	}
 

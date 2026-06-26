@@ -84,71 +84,74 @@ VBox (sideBar)
 - 菜单项（`.sidebar__option`）、分隔线（`.sidebar__divider`）、区域标题（`.sidebar__section-label`）都设置了 `min-height`，确保在历史对话列表变多时不会被压缩
 - 只有 `ScrollPane` 会随着内容增长而扩展，其他元素保持固定高度
 
-### RightSidebar.fxml
-右侧边栏组件，管理项目文件树和修改文件列表（diff），是主区域的一部分。
+### EditorPanel.fxml
+统一编辑器面板组件，合并原 RightSidebar 和 ContentPanel 的功能。默认隐藏，点击"编辑器"按钮后显示，像终端一样嵌入主区域。通过 TabPane 统一管理终端、变更列表、文件内容、diff 视图 4 类标签页。
 
 **功能：**
-- 项目文件树展示（双击文件在内容面板显示）
-- 修改文件列表（diff，点击在内容面板显示 diff 视图）
-- 订阅 DiffEvent 自动刷新 diff 列表
+- 内嵌文件树（可折叠，双击文件打开文件标签页）
+- 终端标签页（JediTerminalView，支持 ANSI 解析、光标控制）
+- 变更列表标签页（ListView<FileDiff>，订阅 DiffEvent 自动刷新，点击打开 diff 标签页）
+- 文件内容标签页（RichTextFX CodeArea + 行号，按需打开）
+- diff 视图标签页（RichTextFX StyleClassedTextArea + 审核按钮栏）
+- 关闭按钮（隐藏整个面板，终端会话保持）
 
-**控制器：** RightSidebarController
+**控制器：** EditorPanelController
 
 **结构：**
 ```
-VBox (rightSidebar, 默认隐藏)
-└── SplitPane (splitPane, 垂直方向)
-    ├── VBox
-    │   └── TitledPane "项目文件"
-    │       └── TreeView (fileTree)
-    └── VBox
-        └── TitledPane "修改文件"
-            └── ListView (diffList)
-```
-
-**样式表：** `@../style/right-sidebar.css`
-
-**样式类：**
-- `.right-sidebar`: 容器样式（白色背景，左边框分隔线）
-- `.right-sidebar__split`: 分割面板
-- `.right-sidebar__titled-pane`: Apple 风格折叠面板
-- `.right-sidebar__file-tree`: 文件树
-- `.right-sidebar__diff-list`: diff 列表
-
-### ContentPanel.fxml
-内容面板组件，管理终端、文件内容、diff 视图的显示，与主区域并列的独立区域。
-
-**功能：**
-- 显示文件内容（等宽字体）
-- 显示 diff 视图（带审核按钮：确定/撤销）
-- 显示终端（JediTerminalView，支持 ANSI 解析、光标控制）
-- 加载状态和错误状态显示
-
-**控制器：** ContentPanelController
-
-**结构：**
-```
-VBox (contentPanel, 默认隐藏)
-├── HBox (content-panel__header)
-│   ├── Label (contentTitle)
+VBox (editorPanel, 默认隐藏 visible=false managed=false)
+├── HBox (editor-panel__header)
+│   ├── Button (toggleFileTreeButton) - 切换文件树按钮
 │   ├── Region (弹性间隔)
-│   └── Button (closeContentButton)
-└── ScrollPane (contentScrollPane)
-    └── VBox (contentContainer)
+│   └── Button (closeButton) - 关闭面板按钮
+└── HBox (editor-panel__body, VBox.vgrow=ALWAYS)
+    ├── VBox (fileTreePanel, 可折叠)
+    │   ├── Label "项目文件"
+    │   └── TreeView (fileTree, VBox.vgrow=ALWAYS)  ← 直接在 VBox 中，无 TitledPane 嵌套
+    └── TabPane (tabPane, HBox.hgrow=ALWAYS, tabClosingPolicy=ALL_TABS)
 ```
 
-**样式表：** `@../style/content-panel.css`
+**布局说明：** TreeView 直接放在 VBox 中并设置 `VBox.vgrow="ALWAYS"`，彻底消除了旧 RightSidebar 中 `TitledPane + SplitPane` 嵌套导致的高度传递失败问题。文件树面板可折叠（点击 toggleFileTreeButton 切换显隐），折叠后 TabPane 占满宽度。
+
+**标签页类型：**
+| 标签页 | id 格式 | closable | 内容 |
+| ---- | ---- | ---- | ---- |
+| 终端 | `terminal` | false | JediTerminalView |
+| 变更 | `changes` | false | ListView<FileDiff> |
+| 文件 | 文件路径绝对值 | true | VirtualizedScrollPane<CodeArea> |
+| diff | `diff:` + diffId | true | VirtualizedScrollPane<StyleClassedTextArea> + 审核按钮栏 |
+
+**样式表：** `@../style/editor-panel.css`
 
 **样式类：**
-- `.content-panel`: 容器样式（深色背景 #1e1e1e，12px 圆角）
-- `.content-panel__header`: 标题栏（深色背景 #2d2d30，顶部圆角 12 12 0 0）
-- `.content-panel__title`: 标题文字（浅色 #d4d4d4）
-- `.content-panel__close-btn`: 关闭按钮（Apple 风格圆形，hover 背景 #3d3d3d）
-- `.content-panel__container`: 内容容器
-- `.content-panel__file-content`: 文件内容（浅色文字 #d4d4d4，等宽字体）
-- `.content-panel__diff-content`: diff 内容（浅色文字 #d4d4d4，等宽字体）
-- `.content-panel__diff-btn--approve`: 确定按钮（绿色 #34c759）
-- `.content-panel__diff-btn--reject`: 撤销按钮（红色 #ff3b30）
+- `.editor-panel`: 容器样式（深色背景 #1e1e1e，12px 圆角）
+- `.editor-panel__header`: 标题栏（深色背景 #2d2d30，顶部圆角 12 12 0 0）
+- `.editor-panel__icon-btn`: 切换文件树按钮（透明背景，hover #3d3d3d，圆形）
+- `.editor-panel__close-btn`: 关闭按钮（同 icon-btn 样式）
+- `.editor-panel__body`: 内容区 HBox
+- `.editor-panel__tree-panel`: 文件树面板 VBox（深色 #252526，右边框 1px #3d3d3d）
+- `.editor-panel__tree-title`: "项目文件" 标题（12px 加粗 #d4d4d4）
+- `.editor-panel__tree`: TreeView（透明背景）
+- `.editor-panel__tree .tree-cell`: 深色主题单元格（bg #1e1e1e，text #d4d4d4，hover #2d2d30，selected #094771）
+- `.editor-panel__tabs`: TabPane（透明背景）
+- `.editor-panel__tabs .tab-header-area`: 标签栏背景 #2d2d30
+- `.editor-panel__tabs .tab`: 标签项（hover #2d2d30，selected 底边 #007aff）
+- `.editor-panel__tabs .tab-label`: 标签文字 #d4d4d4，selected 白色
+- `.editor-panel__code-scroll`: RichTextFX VirtualizedScrollPane 容器（透明背景，自定义滚动条）
+- `.editor-panel__code-area`: 文件内容 CodeArea（等宽字体 SF Mono/Menlo/Consolas 12px，浅色 #d4d4d4）
+- `.editor-panel__diff-area`: diff 视图 StyleClassedTextArea（等宽字体 12px，浅色 #d4d4d4）
+- `.editor-panel__code-area .lineno` / `.editor-panel__diff-area .lineno`: 行号列（灰色 #858585，11px）
+- `.diff-meta`: diff 元信息行（灰色 #858585）
+- `.diff-hunk-header`: Hunk 头（蓝色背景 rgba(0,122,255,0.14)，蓝字 #4da3ff）
+- `.diff-line-add`: 新增行（绿色背景 rgba(52,199,89,0.16)，绿字 #6cd97e）
+- `.diff-line-remove`: 删除行（红色背景 rgba(255,59,48,0.16)，红字 #ff8a80）
+- `.diff-line-context`: 上下文行（浅色文字 #d4d4d4）
+- `.editor-panel__diff-actions`: diff 审核按钮栏
+- `.editor-panel__diff-btn--approve`: 确定按钮（绿色 #34c759）
+- `.editor-panel__diff-btn--reject`: 撤销按钮（红色 #ff3b30）
+- `.editor-panel__loading-text`: 加载状态文字
+- `.editor-panel__error-text`: 错误状态文字
+- `.editor-panel__retry-btn`: 重试按钮
 - `.jedi-terminal-view`: 终端视图（深色背景 #1e1e1e，底部圆角 0 0 12 12）
 
 ## 使用方式

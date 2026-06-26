@@ -10,8 +10,12 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,14 +71,75 @@ public class ReadTool extends AbstractTool<ReadTool.Input> {
 
 	/**
 	 * 支持的二进制文件扩展名（不应作为文本读取）
+	 * 包含可执行文件、编译产物、压缩包、媒体文件、Office 文档、字体、序列化文件等
 	 */
 	private static final Set<String> BINARY_EXTENSIONS = Set.of(
-			"exe", "dll", "so", "dylib", "bin", "dat", "db", "sqlite", "mdb",
+			// 可执行与库
+			"exe", "dll", "so", "dylib", "bin", "lib", "node", "wasm",
+			// 编译产物（JVM/Python/C/Go 等）
+			"class", "jar", "war", "ear",
+			"pyc", "pyo", "pyd",
+			"o", "a", "ko", "elf", "dex",
+			// 数据库与数据文件
+			"dat", "db", "sqlite", "mdb", "db-wal", "db-shm",
+			// 序列化文件
+			"pkl", "pickle", "bson", "msgpack", "protobuf", "pb",
+			// 压缩包
 			"zip", "tar", "gz", "rar", "7z", "bz2", "xz",
+			// 音频
 			"mp3", "wav", "ogg", "flac", "aac", "m4a", "wma",
+			// 视频
 			"mp4", "avi", "mkv", "mov", "wmv", "flv", "webm",
+			// Office 与 PDF
 			"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+			// 字体
 			"otf", "ttf", "woff", "woff2", "eot"
+	);
+
+	/**
+	 * 文本文件扩展名白名单
+	 * 命中后直接放行，不再做任何二进制检测，从根上杜绝源代码（含中文注释的 java/css 等）被误判
+	 * 覆盖 100+ 种常见源代码与文本扩展名
+	 */
+	private static final Set<String> TEXT_EXTENSIONS = Set.of(
+			// JVM 系
+			"java", "kt", "kts", "scala", "groovy", "clj", "cljs", "cljc", "edn",
+			"gradle", "g4", "jj", "jjt",
+			// Python 系
+			"py", "pyi", "pyx", "pxd", "ipynb", "toml",
+			// JS/TS 系
+			"js", "mjs", "cjs", "jsx", "ts", "tsx", "mts", "cts", "vue", "svelte", "astro",
+			// 样式
+			"css", "scss", "sass", "less", "styl", "stylus", "pcss",
+			// 配置与标记
+			"json", "json5", "jsonc", "yaml", "yml", "ini", "cfg", "conf", "env",
+			"properties", "props", "editorconfig", "prettierrc", "eslintrc", "babelrc",
+			"gitignore", "gitattributes", "dockerignore", "npmignore", "gitmodules",
+			// C/C++ 系
+			"c", "h", "cpp", "hpp", "cc", "cxx", "hxx", "hh", "mm", "mii", "inl",
+			// Rust/Go 系
+			"rs", "go", "mod", "sum",
+			// Ruby/PHP 系
+			"rb", "erb", "php", "phtml", "rake", "gemspec",
+			// Shell/脚本
+			"sh", "bash", "zsh", "fish", "ps1", "psm1", "bat", "cmd",
+			// Web 标记
+			"html", "htm", "xhtml", "xml", "svg", "md", "markdown", "rst", "adoc", "asciidoc",
+			// SQL
+			"sql", "psql", "plsql", "mysql", "postgresql", "ddl",
+			// 文档
+			"txt", "text", "log", "changelog", "license", "authors", "contributors",
+			// 科学/数据
+			"r", "jl", "m", "matlab", "mathematica",
+			// 函数式
+			"hs", "lhs", "lisp", "scm", "ss", "rkt",
+			// .NET
+			"cs", "fs", "vb", "xaml", "csproj", "vbproj", "fsproj", "sln",
+			// 其他语言与工具
+			"lua", "cmake", "tf", "hcl", "proto", "graphql", "gql", "prisma",
+			"dtd", "xsl", "xslt", "ent",
+			// 数据
+			"csv", "tsv", "vtt", "srt"
 	);
 
 	private static final String DESCRIPTION = """
@@ -147,8 +212,9 @@ public class ReadTool extends AbstractTool<ReadTool.Input> {
 				return handleBinaryFile(file, filePath, fileSizeBytes, fileExtension);
 			}
 
-			// 额外检测：通过文件头（Magic Bytes）检测二进制文件
-			if (isBinaryFileByContent(file)) {
+			// 检测文件类型：文本文件白名单直接放行；未知扩展名用 UTF-8 严格解码兜底
+			// 避免含中文注释的源代码（java/css 等）被 Magic Bytes 启发式误判为二进制
+			if (!TEXT_EXTENSIONS.contains(fileExtension) && !isTextByUtf8Decoding(file)) {
 				return handleBinaryFile(file, filePath, fileSizeBytes, "unknown");
 			}
 
@@ -347,52 +413,28 @@ public class ReadTool extends AbstractTool<ReadTool.Input> {
 	}
 
 	/**
-	 * 通过文件内容检测是否为二进制文件
-	 * 读取文件前几个字节，检查是否包含非文本字符
+	 * 通过 UTF-8 严格解码检测文件是否为文本文件
+	 * 用 CharsetDecoder + CodingErrorAction.REPORT 严格解码前 8KB 字节
+	 * 任何 malformed 或 unmappable 字符即判定为二进制
+	 * 替代原 isBinaryFileByContent 的 Magic Bytes 启发式，避免中文 UTF-8 文件误判
 	 */
-	private boolean isBinaryFileByContent(File file) {
+	private boolean isTextByUtf8Decoding(File file) {
 		try {
-			Path path = file.toPath();
-			byte[] bytes = Files.readAllBytes(path);
-			
-			// 只检查前 8192 字节（8KB）
+			byte[] bytes = Files.readAllBytes(file.toPath());
 			int checkLength = Math.min(bytes.length, 8192);
-			
-			for (int i = 0; i < checkLength; i++) {
-				byte b = bytes[i];
-				// 检查是否为控制字符（除了常见的换行、回车、制表符）
-				if (b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D) {
-					return true;
-				}
-				// 检查是否为高位字节（> 127 且不是 UTF-8 多字节序列的一部分）
-				if (b > 0x7F && !isUtf8ContinuationByte(b)) {
-					// 简单启发式：如果连续出现多个高位字节，可能是 UTF-8 编码的中文
-					// 但如果单个高位字节孤立出现，可能是二进制数据
-					int highByteCount = 0;
-					for (int j = i; j < Math.min(i + 4, checkLength); j++) {
-						if (bytes[j] > 0x7F) {
-							highByteCount++;
-						}
-					}
-					if (highByteCount < 2) {
-						return true;
-					}
-				}
-			}
+			ByteBuffer buffer = ByteBuffer.wrap(bytes, 0, checkLength);
+			CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+					.onMalformedInput(CodingErrorAction.REPORT)
+					.onUnmappableCharacter(CodingErrorAction.REPORT);
+			decoder.decode(buffer);
+			return true;
+		}
+		catch (CharacterCodingException e) {
 			return false;
 		}
 		catch (IOException e) {
-			// 如果无法读取，保守地假设为文本文件
 			return false;
 		}
-	}
-
-	/**
-	 * 检查字节是否为 UTF-8 多字节序列的后续字节
-	 * UTF-8 后续字节的范围：0x80-0xBF (10xxxxxx)
-	 */
-	private boolean isUtf8ContinuationByte(byte b) {
-		return (b & 0xC0) == 0x80;
 	}
 
 	/**

@@ -2,6 +2,7 @@ package cn.bitloom.agentic.tool;
 
 import cn.bitloom.agentic.agent.AgentDefinition;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
+import cn.bitloom.agentic.diff.DiffService;
 import cn.bitloom.agentic.memory.MemoryManager;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.session.InMemorySessionManager;
@@ -80,6 +81,7 @@ public class Toolkit {
     private final TaskRepository taskRepository;
     private final ProcessManager processManager;
     private final InMemorySessionManager inMemorySessionManager;
+    private final DiffService diffService;
 
     @PostConstruct
     public void init() {
@@ -136,8 +138,8 @@ public class Toolkit {
 
         // 文件操作
         tools.add(ReadTool.builder().build());
-        tools.add(WriteTool.builder().build());
-        tools.add(EditTool.builder().build());
+        tools.add(WriteTool.builder().diffService(diffService).build());
+        tools.add(EditTool.builder().diffService(diffService).build());
         // 搜索
         tools.add(GlobTool.builder().build());
         tools.add(GrepTool.builder().build());

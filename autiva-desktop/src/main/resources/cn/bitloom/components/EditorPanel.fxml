@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import cn.bitloom.node.svg.SvgImageView?>
+
+<VBox fx:id="editorPanel"
+      styleClass="editor-panel"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.EditorPanelController"
+      stylesheets="@../style/editor-panel.css"
+      visible="false" managed="false"
+      prefWidth="640" minWidth="420"
+>
+    <HBox styleClass="editor-panel__header" alignment="CENTER_LEFT" spacing="8">
+        <Button fx:id="toggleFileTreeButton" styleClass="editor-panel__icon-btn" onAction="#handleToggleFileTree">
+            <graphic>
+                <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/panel-left.svg"/>
+            </graphic>
+        </Button>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button fx:id="closeButton" styleClass="editor-panel__close-btn" onAction="#handleClose">
+            <graphic>
+                <SvgImageView fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/close.svg"/>
+            </graphic>
+        </Button>
+    </HBox>
+    <HBox styleClass="editor-panel__body" VBox.vgrow="ALWAYS">
+        <VBox fx:id="fileTreePanel" styleClass="editor-panel__tree-panel"
+              minWidth="160" prefWidth="200" maxWidth="300">
+            <Label text="项目文件" styleClass="editor-panel__tree-title"/>
+            <TreeView fx:id="fileTree" styleClass="editor-panel__tree" VBox.vgrow="ALWAYS"/>
+        </VBox>
+        <TabPane fx:id="tabPane" styleClass="editor-panel__tabs"
+                 HBox.hgrow="ALWAYS" tabClosingPolicy="ALL_TABS"/>
+    </HBox>
+</VBox>

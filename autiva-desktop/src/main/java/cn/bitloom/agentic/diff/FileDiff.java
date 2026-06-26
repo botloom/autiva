@@ -13,7 +13,8 @@ public record FileDiff(
         @JsonProperty("filePath") String filePath,
         @JsonProperty("hunks") List<Hunk> hunks,
         @JsonProperty("isCreate") boolean isCreate,
-        @JsonProperty("isDelete") boolean isDelete
+        @JsonProperty("isDelete") boolean isDelete,
+        @JsonProperty("oldContent") String oldContent
 ) {
     @JsonCreator
     public FileDiff {

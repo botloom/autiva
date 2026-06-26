@@ -1,0 +1,367 @@
+/* EditorPanel 样式 - 统一编辑器面板（深色主题，Apple 风格） */
+
+/* ===== 容器 ===== */
+
+.editor-panel {
+    -fx-background-color: #1e1e1e;
+    -fx-border-width: 0;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-padding: 0;
+}
+
+/* 标题栏 */
+.editor-panel__header {
+    -fx-background-color: #2d2d30;
+    -fx-padding: 6 8 6 8;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent #3d3d3d transparent;
+    -fx-min-height: 36px;
+    -fx-pref-height: 36px;
+    -fx-background-radius: 12 12 0 0;
+}
+
+/* 图标按钮（切换文件树、关闭） */
+.editor-panel__icon-btn,
+.editor-panel__close-btn {
+    -fx-background-color: transparent;
+    -fx-background-radius: 50%;
+    -fx-min-width: 24px;
+    -fx-min-height: 24px;
+    -fx-pref-width: 24px;
+    -fx-pref-height: 24px;
+    -fx-max-width: 24px;
+    -fx-max-height: 24px;
+    -fx-padding: 0;
+    -fx-cursor: hand;
+}
+
+.editor-panel__icon-btn:hover,
+.editor-panel__close-btn:hover {
+    -fx-background-color: #3d3d3d;
+}
+
+.editor-panel__icon-btn:pressed,
+.editor-panel__close-btn:pressed {
+    -fx-background-color: #4d4d4d;
+}
+
+/* ===== 内容区 ===== */
+
+.editor-panel__body {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+    -fx-spacing: 0;
+}
+
+/* ===== 文件树面板 ===== */
+
+.editor-panel__tree-panel {
+    -fx-background-color: #252526;
+    -fx-border-width: 0 1 0 0;
+    -fx-border-color: transparent #3d3d3d transparent transparent;
+    -fx-padding: 0;
+    -fx-spacing: 0;
+}
+
+.editor-panel__tree-title {
+    -fx-text-fill: #d4d4d4;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 12 8 12;
+    -fx-background-color: #2d2d30;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent #3d3d3d transparent;
+}
+
+.editor-panel__tree {
+    -fx-background-color: transparent;
+    -fx-padding: 4 0 4 0;
+    -fx-fixed-cell-size: 26px;
+}
+
+.editor-panel__tree .tree-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #d4d4d4;
+    -fx-font-size: 12px;
+    -fx-padding: 2 8 2 8;
+    -fx-graphic-text-gap: 6px;
+}
+
+.editor-panel__tree .tree-cell:hover {
+    -fx-background-color: #2d2d30;
+}
+
+.editor-panel__tree .tree-cell:selected {
+    -fx-background-color: #094771;
+    -fx-text-fill: #ffffff;
+}
+
+.editor-panel__tree .tree-cell:filled:selected:focused {
+    -fx-background-color: #094771;
+    -fx-text-fill: #ffffff;
+}
+
+.editor-panel__tree .tree-cell .arrow {
+    -fx-background-color: #858585;
+}
+
+/* ===== TabPane ===== */
+
+.editor-panel__tabs {
+    -fx-background-color: transparent;
+}
+
+.editor-panel__tabs .tab-header-area {
+    -fx-background-color: #2d2d30;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent #3d3d3d transparent;
+    -fx-padding: 0;
+}
+
+.editor-panel__tabs .tab-header-background {
+    -fx-background-color: transparent;
+}
+
+.editor-panel__tabs .tab {
+    -fx-background-color: transparent;
+    -fx-padding: 4 12 4 12;
+    -fx-border-width: 0 0 2 0;
+    -fx-border-color: transparent;
+}
+
+.editor-panel__tabs .tab:selected {
+    -fx-border-color: transparent transparent #007aff transparent;
+}
+
+.editor-panel__tabs .tab-label {
+    -fx-text-fill: #858585;
+    -fx-font-size: 12px;
+}
+
+.editor-panel__tabs .tab:selected .tab-label {
+    -fx-text-fill: #ffffff;
+}
+
+.editor-panel__tabs .tab:hover {
+    -fx-background-color: #2d2d30;
+}
+
+.editor-panel__tabs .tab:selected:hover {
+    -fx-background-color: transparent;
+}
+
+.editor-panel__tabs .tab-close-button {
+    -fx-background-color: #858585;
+    -fx-padding: 0 0 0 0;
+}
+
+.editor-panel__tabs .tab-close-button:hover {
+    -fx-background-color: #d4d4d4;
+}
+
+/* ===== RichTextFX 代码区与 Diff 视图 ===== */
+
+.editor-panel__code-scroll,
+.editor-panel__code-area,
+.editor-panel__diff-area {
+    -fx-background-color: transparent;
+    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    -fx-font-size: 12px;
+    -fx-text-fill: #d4d4d4;
+    -fx-padding: 0;
+}
+
+.editor-panel__code-area .text,
+.editor-panel__diff-area .text {
+    -fx-fill: #d4d4d4;
+}
+
+/* 行号列 */
+.editor-panel__code-area .lineno,
+.editor-panel__diff-area .lineno {
+    -fx-background-color: transparent;
+    -fx-text-fill: #858585;
+    -fx-font-size: 11px;
+    -fx-padding: 0 10 0 10;
+    -fx-border-width: 0 1 0 0;
+    -fx-border-color: transparent #3d3d3d transparent transparent;
+}
+
+/* ===== Diff 行级着色 ===== */
+
+.diff-meta {
+    -fx-background-color: transparent;
+    -fx-text-fill: #858585;
+}
+
+.diff-hunk-header {
+    -fx-background-color: rgba(0, 122, 255, 0.14);
+    -fx-text-fill: #4da3ff;
+}
+
+.diff-line-add {
+    -fx-background-color: rgba(52, 199, 89, 0.16);
+    -fx-text-fill: #6cd97e;
+}
+
+.diff-line-remove {
+    -fx-background-color: rgba(255, 59, 48, 0.16);
+    -fx-text-fill: #ff8a80;
+}
+
+.diff-line-context {
+    -fx-background-color: transparent;
+    -fx-text-fill: #d4d4d4;
+}
+
+/* ===== Diff 审核按钮 ===== */
+
+.editor-panel__diff-actions {
+    -fx-alignment: center-right;
+    -fx-spacing: 8px;
+    -fx-padding: 8 12 8 12;
+    -fx-background-color: #252526;
+    -fx-border-width: 1 0 0 0;
+    -fx-border-color: #3d3d3d transparent transparent transparent;
+}
+
+.editor-panel__diff-btn--approve {
+    -fx-background-color: #34c759;
+    -fx-text-fill: white;
+    -fx-background-radius: 6px;
+    -fx-padding: 6 16 6 16;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+
+.editor-panel__diff-btn--approve:hover {
+    -fx-background-color: #2db84e;
+}
+
+.editor-panel__diff-btn--reject {
+    -fx-background-color: #ff3b30;
+    -fx-text-fill: white;
+    -fx-background-radius: 6px;
+    -fx-padding: 6 16 6 16;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+
+.editor-panel__diff-btn--reject:hover {
+    -fx-background-color: #e62e26;
+}
+
+/* ===== 加载与错误状态 ===== */
+
+.editor-panel__loading-text {
+    -fx-text-fill: #858585;
+    -fx-font-size: 13px;
+}
+
+.editor-panel__error-text {
+    -fx-text-fill: #ff6b6b;
+    -fx-font-size: 13px;
+}
+
+.editor-panel__retry-btn {
+    -fx-background-color: #007aff;
+    -fx-text-fill: white;
+    -fx-background-radius: 6px;
+    -fx-padding: 6 16 6 16;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+}
+
+.editor-panel__retry-btn:hover {
+    -fx-background-color: #006ed6;
+}
+
+/* ===== 终端 ===== */
+
+.jedi-terminal-view {
+    -fx-background-color: #1e1e1e;
+    -fx-background-radius: 0 0 12 12;
+}
+
+.jedi-terminal-view .terminal-wrapper {
+    -fx-background-color: #1e1e1e;
+}
+
+/* ===== 变更列表 ===== */
+
+.editor-panel__tabs .list-view {
+    -fx-background-color: #1e1e1e;
+    -fx-padding: 4 0 4 0;
+    -fx-fixed-cell-size: 28px;
+}
+
+.editor-panel__tabs .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #d4d4d4;
+    -fx-font-size: 12px;
+    -fx-padding: 2 12 2 12;
+}
+
+.editor-panel__tabs .list-cell:hover {
+    -fx-background-color: #2d2d30;
+}
+
+.editor-panel__tabs .list-cell:selected {
+    -fx-background-color: #094771;
+    -fx-text-fill: #ffffff;
+}
+
+.editor-panel__tabs .list-cell:filled:selected:focused {
+    -fx-background-color: #094771;
+    -fx-text-fill: #ffffff;
+}
+
+/* ===== 滚动条 ===== */
+
+.editor-panel .scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.editor-panel .scroll-bar:vertical .thumb {
+    -fx-background-color: #3d3d3d;
+    -fx-background-radius: 3px;
+    -fx-padding: 0 2 0 0;
+}
+
+.editor-panel .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #4d4d4d;
+}
+
+.editor-panel .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.editor-panel .scroll-bar:vertical .increment-button,
+.editor-panel .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+/* VirtualizedScrollPane 内部滚动条 */
+.editor-panel__code-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: #3d3d3d;
+    -fx-background-radius: 3px;
+    -fx-padding: 0 2 0 0;
+}
+
+.editor-panel__code-scroll .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #4d4d4d;
+}
+
+.editor-panel__code-scroll .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.editor-panel__code-scroll .scroll-bar:vertical .increment-button,
+.editor-panel__code-scroll .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}

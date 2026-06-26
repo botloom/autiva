@@ -718,28 +718,16 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                             this.viewModel.createNewSession();
                             resetForNewSession();
                         }),
-                // 终端按钮（右对齐）
+                // 编辑器按钮（右对齐）
                 new ButtonBarHolder.ButtonConfig(
                         "terminalButton",
-                        "终端",
+                        "编辑器",
                         "button-bar__icon-btn",
                         "/cn/bitloom/images/terminal.svg",
                         ButtonBarHolder.Alignment.RIGHT,
                         _ -> {
                             if (indexController != null) {
-                                indexController.openTerminal();
-                            }
-                        }),
-                // 右侧边栏按钮（右对齐）
-                new ButtonBarHolder.ButtonConfig(
-                        "toggleRightPanelButton",
-                        "右侧边栏",
-                        "button-bar__icon-btn",
-                        "/cn/bitloom/images/panel-right.svg",
-                        ButtonBarHolder.Alignment.RIGHT,
-                        _ -> {
-                            if (indexController != null) {
-                                indexController.toggleRightSidebar();
+                                indexController.openEditor();
                             }
                         })
         );
