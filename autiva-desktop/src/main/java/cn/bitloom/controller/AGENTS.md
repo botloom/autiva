@@ -386,7 +386,7 @@
 - 管理项目目录树展示（双击文件在项目视图右侧显示文件内容，文件树用 `FileTreeCell` 渲染图标和样式）
 - 管理变更列表（订阅 DiffEvent 自动刷新，点击列表项在变更视图右侧显示 diff，列表用 `DiffListCell` 富单元格渲染图标/路径/徽章/统计）
 - 管理终端（使用 JediTerminalView，异步启动，加载状态，错误重试）
-- 管理文件内容显示（RichTextFX CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 注入语法高亮）
+- 管理文件内容显示与编辑（RichTextFX CodeArea 可编辑 + 行号 + `SyntaxHighlighterFactory.forPath` 注入语法高亮 + Ctrl+S 保存）
 - 管理 diff 视图（顶部元信息条 + RichTextFX StyleClassedTextArea + 底部审核按钮栏）
 
 **内部枚举：**
