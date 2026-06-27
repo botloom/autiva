@@ -19,12 +19,12 @@ import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.flowless.VirtualizedScrollPane;
+import org.fxmisc.richtext.Caret;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
 import org.fxmisc.richtext.StyleClassedTextArea;
@@ -261,7 +261,7 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 显示文件内容（注入到项目视图右侧）
+     * 显示文件内容（注入到项目视图右侧，支持编辑和 Ctrl+S 保存）
      */
     public void showFileContent(Path filePath) {
         show();
@@ -271,7 +271,8 @@ public class EditorPanelController implements Initializable {
             String content = Files.readString(filePath);
 
             CodeArea codeArea = new CodeArea();
-            codeArea.setEditable(false);
+            codeArea.setEditable(true);
+            codeArea.setShowCaret(Caret.CaretVisibility.ON);
             codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
             codeArea.replaceText(content);
             codeArea.getStyleClass().add("editor-panel__code-area");
@@ -279,11 +280,22 @@ public class EditorPanelController implements Initializable {
             highlighter.apply(codeArea, content);
             codeArea.moveTo(0);
 
+            // Ctrl+S 保存文件
+            codeArea.setOnKeyPressed(e -> {
+                if (e.isControlDown() && e.getCode() == javafx.scene.input.KeyCode.S) {
+                    e.consume();
+                    saveFileContent(filePath, codeArea.getText());
+                }
+            });
+
             VirtualizedScrollPane<CodeArea> scrollPane = new VirtualizedScrollPane<>(codeArea);
             scrollPane.getStyleClass().add("editor-panel__code-scroll");
 
             fileContentPanel.getChildren().setAll(scrollPane);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
+
+            // 请求焦点以显示光标
+            Platform.runLater(codeArea::requestFocus);
 
             // 右键菜单：选中文本后可"添加到对话框"
             setupCodeAreaContextMenu(codeArea);
@@ -291,6 +303,18 @@ public class EditorPanelController implements Initializable {
             log.warn("读取文件失败: {}", filePath, e);
         } catch (Exception e) {
             log.error("显示文件内容失败: {}", filePath, e);
+        }
+    }
+
+    /**
+     * 保存文件内容到磁盘
+     */
+    private void saveFileContent(Path filePath, String content) {
+        try {
+            Files.writeString(filePath, content);
+            log.info("文件已保存: {}", filePath);
+        } catch (IOException e) {
+            log.error("保存文件失败: {}", filePath, e);
         }
     }
 
@@ -391,6 +415,7 @@ public class EditorPanelController implements Initializable {
 
         StyleClassedTextArea diffArea = new StyleClassedTextArea();
         diffArea.setEditable(false);
+        diffArea.setShowCaret(Caret.CaretVisibility.ON);
         diffArea.getStyleClass().add("editor-panel__diff-area");
 
         List<DiffLineInfo> lineInfos = new ArrayList<>();

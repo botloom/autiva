@@ -421,7 +421,8 @@
 - `openTerminal(Path)`: 打开终端，异步启动 JediTerminalView
 - `ensureTerminalStarted(Path)`: 确保终端已启动，若未启动则异步创建
 - `closeTerminal()`: 关闭终端会话
-- `showFileContent(Path)`: 在项目视图右侧显示文件内容（CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 应用语法高亮）
+- `showFileContent(Path)`: 在项目视图右侧显示文件内容（CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 应用语法高亮）。**支持编辑**（`setEditable(true)` + `setShowCaret(ON)` 显示光标），Ctrl+S 保存文件内容到磁盘（调用 `saveFileContent`），显示后 `requestFocus()` 聚焦以显示光标
+- `saveFileContent(Path, String)`: 保存文件内容到磁盘（`Files.writeString`），Ctrl+S 时由 `showFileContent` 的按键监听器调用
 - `showDiffView(FileDiff)`: 在变更视图右侧显示 diff。已在 CHANGES 视图时不调用 showChangesView（避免 refreshDiffList 清空列表导致选中闪烁）。先用 `diffService.recomputeDiff` 重新计算（历史对话场景文件可能已修改），再渲染：StackPane 叠加（VirtualizedScrollPane + 顶部悬浮横幅 + hunk 局部按钮）。**隐藏 @@ hunk 头和 +/- 前缀，纯色覆盖**。Hunk 头占位段落用 `.diff-hunk-header--hidden` 压缩高度到 0
 - `createDiffBanner(FileDiff, StyleClassedTextArea, List<int[]>)`: 创建顶部悬浮横幅（文件名 + spacer + ↑/↓ 导航 + 撤销/保留按钮），半透明深色背景 + 圆角 + 阴影。导航按钮循环跳转 hunk
 - `createHunkActions()`: 创建 hunk 局部撤销/保留按钮组（HBox，默认隐藏），贴附到当前顶部可见 hunk
