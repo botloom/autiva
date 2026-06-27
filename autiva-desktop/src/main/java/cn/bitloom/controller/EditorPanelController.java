@@ -7,7 +7,6 @@ import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.project.FileTreeService;
 import cn.bitloom.agentic.project.ProjectInfo;
 import cn.bitloom.node.diff.DiffListCell;
-import cn.bitloom.node.editor.AddToChatButton;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighter;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighterFactory;
 import cn.bitloom.node.project.FileTreeCell;
@@ -20,7 +19,7 @@ import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.input.MouseEvent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -92,9 +91,6 @@ public class EditorPanelController implements Initializable {
     private ProjectInfo currentProject;
     private Disposable diffEventSubscription;
 
-    private AddToChatButton addToChatButton;
-    private double lastMouseX = 10;
-    private double lastMouseY = 10;
     /**
      * -- GETTER --
      *  获取当前视图类型（用于 toggle 判断）
@@ -116,29 +112,6 @@ public class EditorPanelController implements Initializable {
         setupDiffList();
         subscribeDiffEvents();
         setupRoundedClip();
-        setupAddToChatButton();
-    }
-
-    /**
-     * 设置"添加到对话框"悬浮按钮：
-     * 添加到 viewContainer 顶层（叠加在所有视图之上），监听鼠标释放位置以定位。
-     * 使用事件过滤器在捕获阶段捕获 MOUSE_RELEASED，确保即使子节点（终端/CodeArea/DiffArea）
-     * 消费了事件也能获取鼠标释放位置，使按钮跟随选中区域定位。
-     */
-    private void setupAddToChatButton() {
-        addToChatButton = new AddToChatButton();
-        addToChatButton.setOnAddToChat(text -> {
-            if (indexController != null) {
-                indexController.addTextToChat(text);
-            }
-        });
-        viewContainer.getChildren().add(addToChatButton);
-        // 追踪鼠标释放位置（viewContainer 坐标系），用于悬浮按钮定位
-        viewContainer.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
-            var point = viewContainer.sceneToLocal(event.getSceneX(), event.getSceneY());
-            lastMouseX = point.getX();
-            lastMouseY = point.getY();
-        });
     }
 
     /**
@@ -202,10 +175,6 @@ public class EditorPanelController implements Initializable {
         projectSplit.setManaged(false);
         changesSplit.setVisible(false);
         changesSplit.setManaged(false);
-        // 切换视图时隐藏悬浮按钮，避免按钮残留
-        if (addToChatButton != null) {
-            addToChatButton.hide();
-        }
     }
 
     /**
@@ -316,8 +285,8 @@ public class EditorPanelController implements Initializable {
             fileContentPanel.getChildren().setAll(scrollPane);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
-            // 监听文件内容选择变化，显示"添加到对话框"悬浮按钮
-            setupFileContentSelectionListener(codeArea);
+            // 右键菜单：选中文本后可"添加到对话框"
+            setupCodeAreaContextMenu(codeArea);
         } catch (IOException e) {
             log.warn("读取文件失败: {}", filePath, e);
         } catch (Exception e) {
@@ -360,8 +329,8 @@ public class EditorPanelController implements Initializable {
                     terminalWidget = newView;
                     terminalView.getChildren().setAll(terminalWidget);
                     VBox.setVgrow(terminalWidget, Priority.ALWAYS);
-                    // 监听终端选择变化，显示"添加到对话框"悬浮按钮
-                    setupTerminalSelectionListener(terminalWidget);
+                    // 右键菜单：选中文本后可"添加到对话框"
+                    setupTerminalContextMenu(terminalWidget);
                     Platform.runLater(() -> terminalWidget.requestFocus());
                 });
             } catch (IOException e) {
@@ -489,8 +458,8 @@ public class EditorPanelController implements Initializable {
         diffViewPanel.getChildren().setAll(stack);
         VBox.setVgrow(stack, Priority.ALWAYS);
 
-        // 监听 diff 选择变化，显示"添加到对话框"悬浮按钮
-        setupDiffSelectionListener(diffArea);
+        // 右键菜单：选中文本后可"添加到对话框"
+        setupDiffAreaContextMenu(diffArea);
     }
 
     /**
@@ -719,68 +688,58 @@ public class EditorPanelController implements Initializable {
         return box;
     }
 
-    // ===== 文本选择 → 对话框联动 =====
+    // ===== 右键菜单 → 对话框联动 =====
 
     /**
-     * 监听终端选中文本变化，非空时在鼠标位置附近显示"添加到对话框"悬浮按钮。
+     * 为终端设置右键菜单：选中文本后右键可"添加到对话框"。
+     * JediTerminalView 不是 Control，无法使用 setContextMenu，
+     * 改用 setOnContextMenuRequested + ContextMenu.show() 实现。
      */
-    private void setupTerminalSelectionListener(JediTerminalView view) {
-        var prop = view.selectedTextProperty();
-        if (prop == null) {
-            return;
-        }
-        prop.addListener((obs, oldV, newV) -> {
-            Platform.runLater(() -> showAddToChatButtonIfNeeded(newV));
+    private void setupTerminalContextMenu(JediTerminalView view) {
+        ContextMenu menu = new ContextMenu();
+        MenuItem addToChatItem = new MenuItem("添加到对话框");
+        addToChatItem.setOnAction(e -> {
+            String selected = view.getSelectedText();
+            if (selected != null && !selected.isBlank() && indexController != null) {
+                indexController.addTextToChat(selected);
+            }
+        });
+        menu.getItems().add(addToChatItem);
+        view.setOnContextMenuRequested(e -> {
+            menu.show(view, e.getScreenX(), e.getScreenY());
+            e.consume();
         });
     }
 
     /**
-     * 监听文件内容选中文本变化，非空时在鼠标位置附近显示"添加到对话框"悬浮按钮。
+     * 为文件内容 CodeArea 设置右键菜单：选中文本后右键可"添加到对话框"。
      */
-    private void setupFileContentSelectionListener(CodeArea codeArea) {
-        codeArea.selectionProperty().addListener((obs, oldV, newV) -> {
+    private void setupCodeAreaContextMenu(CodeArea codeArea) {
+        ContextMenu menu = new ContextMenu();
+        MenuItem addToChatItem = new MenuItem("添加到对话框");
+        addToChatItem.setOnAction(e -> {
             String selected = codeArea.getSelectedText();
-            showAddToChatButtonIfNeeded(selected);
+            if (selected != null && !selected.isBlank() && indexController != null) {
+                indexController.addTextToChat(selected);
+            }
         });
+        menu.getItems().add(addToChatItem);
+        codeArea.setContextMenu(menu);
     }
 
     /**
-     * 监听 diff 选中文本变化，非空时在鼠标位置附近显示"添加到对话框"悬浮按钮。
+     * 为 diff StyleClassedTextArea 设置右键菜单：选中文本后右键可"添加到对话框"。
      */
-    private void setupDiffSelectionListener(StyleClassedTextArea diffArea) {
-        diffArea.selectionProperty().addListener((obs, oldV, newV) -> {
+    private void setupDiffAreaContextMenu(StyleClassedTextArea diffArea) {
+        ContextMenu menu = new ContextMenu();
+        MenuItem addToChatItem = new MenuItem("添加到对话框");
+        addToChatItem.setOnAction(e -> {
             String selected = diffArea.getSelectedText();
-            showAddToChatButtonIfNeeded(selected);
+            if (selected != null && !selected.isBlank() && indexController != null) {
+                indexController.addTextToChat(selected);
+            }
         });
-    }
-
-    /**
-     * 根据选中文本是否非空，显示或隐藏悬浮按钮。
-     * 按钮定位在鼠标当前位置右下方 12px 处，并限制在 viewContainer 边界内。
-     */
-    private void showAddToChatButtonIfNeeded(String selected) {
-        if (addToChatButton == null) {
-            return;
-        }
-        if (selected == null || selected.isBlank()) {
-            addToChatButton.hide();
-            return;
-        }
-        double offsetX = 12;
-        double offsetY = 12;
-        double x = lastMouseX + offsetX;
-        double y = lastMouseY + offsetY;
-        // 边界保护：避免按钮超出 viewContainer 可视区域
-        double containerW = viewContainer.getWidth();
-        double containerH = viewContainer.getHeight();
-        double btnW = addToChatButton.prefWidth(-1);
-        double btnH = addToChatButton.prefHeight(-1);
-        if (containerW > 0 && x + btnW > containerW) {
-            x = Math.max(0, containerW - btnW - 4);
-        }
-        if (containerH > 0 && y + btnH > containerH) {
-            y = Math.max(0, containerH - btnH - 4);
-        }
-        addToChatButton.show(selected, x, y);
+        menu.getItems().add(addToChatItem);
+        diffArea.setContextMenu(menu);
     }
 }

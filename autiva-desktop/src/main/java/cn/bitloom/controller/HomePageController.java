@@ -450,9 +450,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         }
         sendField.requestFocus();
         sendField.end();
-        if (!chatScrollPane.isVisible()) {
-            animateToChatState();
-        }
+        // 仅追加文本，不触发界面状态切换动画（避免 logo 消失）
     }
 
     /**

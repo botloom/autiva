@@ -90,7 +90,7 @@ PtySession 与 JediTermFX 之间的 TtyConnector 适配器，实现 `com.techsen
 - `isRunning()`: 检查终端是否正在运行
 - `requestFocus()`: 请求焦点（转发到 widget.getPreferredFocusableNode()）
 - `getSelectedText()`: 获取终端当前选中的文本（可能为 null 或空字符串）。通过 `selectedTextProperty().get()` 获取，兼容 JediTermFX 1.1.0（该版本 `TerminalPanel.getSelectedText()` 为 private，但 `selectedTextProperty()` 是 public）
-- `selectedTextProperty()`: 返回终端选中文本的 `ReadOnlyStringProperty`，可在 widget 就绪后监听选择变化。仅在会话启动后可用，启动前返回 null。供 EditorPanelController 监听选择并显示"添加到对话框"悬浮按钮
+- `selectedTextProperty()`: 返回终端选中文本的 `ReadOnlyStringProperty`，可在 widget 就绪后监听选择变化。仅在会话启动后可用，启动前返回 null。供 EditorPanelController 右键菜单"添加到对话框"获取选中文本
 
 **构造函数：**
 - `JediTerminalView()`: 使用 DefaultSettingsProvider

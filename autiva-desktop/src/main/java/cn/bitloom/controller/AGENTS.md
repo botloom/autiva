@@ -122,7 +122,7 @@
 - `viewModel.listProjects()` - 列出所有注册项目
 
 **编辑器面板联动方法：**
-- `appendTextToChat(String text)`: 将选中文本追加到输入框末尾（已有内容时换行分隔），由 IndexController.addTextToChat 转发调用
+- `appendTextToChat(String text)`: 将选中文本追加到输入框末尾（已有内容时换行分隔），由 IndexController.addTextToChat 转发调用。仅追加文本和聚焦输入框，不触发界面状态切换动画
 - `addAttachedFile(File file)`: 添加附件文件（去重处理），复用 attachedFiles 机制，由 IndexController.addFileToChat 转发调用或拖拽释放时直接调用
 - `setupDragDrop()`: 将 sendBox 注册为拖拽目标，接收来自文件树/Diff 列表的文件拖拽
 - `handleDragOver(DragEvent)`: 拖拽悬停时接受 COPY 传输模式
@@ -410,12 +410,9 @@
 - `setupRoundedClip()`: 给 viewContainer 设置 Rectangle clip（arcWidth/arcHeight=24），裁剪终端/项目/变更三视图的方角到 12px 圆角形状
 - `setupFileTree()`: 设置文件树，注入 `FileTreeCell` 工厂，绑定双击事件
 - `setupDiffList()`: 设置变更列表，注入 `DiffListCell` 工厂，绑定点击事件
-- `setupAddToChatButton()`: 创建 `AddToChatButton` 悬浮按钮实例添加到 viewContainer 顶层，注册点击回调（通过 indexController.addTextToChat 追加到对话框），使用事件过滤器（`addEventFilter` 捕获 `MOUSE_MOVED` + `MOUSE_DRAGGED`）追踪鼠标位置（viewContainer 坐标系），使按钮跟随选中区域定位（捕获阶段注册确保即使子节点消费了事件也能获取位置）
-- `handleMousePosition(MouseEvent)`: 记录鼠标在 viewContainer 坐标系中的位置，供悬浮按钮定位
-- `setupTerminalSelectionListener(JediTerminalView)`: 监听终端 selectedTextProperty，选择非空时显示悬浮按钮
-- `setupFileContentSelectionListener(CodeArea)`: 监听文件内容 CodeArea selectionProperty，选择非空时显示悬浮按钮
-- `setupDiffSelectionListener(StyleClassedTextArea)`: 监听 diff StyleClassedTextArea selectionProperty，选择非空时显示悬浮按钮
-- `showAddToChatButtonIfNeeded(String)`: 根据选中文本是否非空显示/隐藏悬浮按钮，定位到鼠标右下方 12px 处并限制在 viewContainer 边界内
+- `setupTerminalContextMenu(JediTerminalView)`: 为终端设置右键菜单（"添加到对话框"），使用 `setOnContextMenuRequested` + `ContextMenu.show()` 实现（JediTerminalView 不是 Control，无法使用 setContextMenu）
+- `setupCodeAreaContextMenu(CodeArea)`: 为文件内容 CodeArea 设置右键菜单（"添加到对话框"），使用 `setContextMenu`
+- `setupDiffAreaContextMenu(StyleClassedTextArea)`: 为 diff StyleClassedTextArea 设置右键菜单（"添加到对话框"），使用 `setContextMenu`
 - `showTerminalView()`: 切换到终端视图，设置 currentViewType=TERMINAL
 - `showProjectView()`: 切换到项目视图，设置 currentViewType=PROJECT
 - `showChangesView()`: 切换到变更视图，设置 currentViewType=CHANGES

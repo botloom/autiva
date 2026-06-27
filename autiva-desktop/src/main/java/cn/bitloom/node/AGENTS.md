@@ -92,10 +92,7 @@
 - `JavaScriptSyntaxHighlighter`：包含 TypeScript 关键字和模板字符串 `${...}`
 
 ### editor（通用编辑器组件）
-通用编辑器相关组件。
-
-**核心类：**
-- `AddToChatButton`: "添加到对话框"悬浮按钮，继承 `Button`。在编辑器面板选中文本后浮现，点击后将选中文本通过回调追加到对话框输入框。默认不可见（visible=false, managed=false），始终保持 managed=false 以支持 StackPane 内的绝对定位（setLayoutX/setLayoutY），通过 `show(text, x, y)` 定位显示（仅切换 visible），`hide()` 隐藏。样式类 `add-to-chat-button`（Apple 风格圆角半透明深色背景 + 阴影，hover 蓝色高亮）。
+通用编辑器相关组件（语法高亮子包见上方 editor/syntax 部分）。
 
 ### diff
 变更文件列表的富单元格组件。
