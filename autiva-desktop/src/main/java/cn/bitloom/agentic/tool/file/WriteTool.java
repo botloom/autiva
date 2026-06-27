@@ -9,12 +9,12 @@ import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -68,7 +68,8 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 					? Files.readString(path, StandardCharsets.UTF_8)
 					: null;
 
-			try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
+			try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8,
+					StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
 				writer.write(content);
 			}
 

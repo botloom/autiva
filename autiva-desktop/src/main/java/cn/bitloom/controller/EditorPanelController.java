@@ -7,6 +7,7 @@ import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.project.FileTreeService;
 import cn.bitloom.agentic.project.ProjectInfo;
 import cn.bitloom.node.diff.DiffListCell;
+import cn.bitloom.node.editor.AddToChatButton;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighter;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighterFactory;
 import cn.bitloom.node.project.FileTreeCell;
@@ -17,7 +18,9 @@ import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,8 +37,10 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.function.IntFunction;
 
 /**
  * 编辑器面板控制器
@@ -44,6 +49,9 @@ import java.util.ResourceBundle;
 @Slf4j
 @Component
 public class EditorPanelController implements Initializable {
+
+    /** Diff 行信息，用于自定义行号渲染 */
+    private record DiffLineInfo(boolean hunkHeader, int oldLine, int newLine, int hunkIndex) {}
 
     public enum ViewType { TERMINAL, PROJECT, CHANGES }
 
@@ -83,6 +91,10 @@ public class EditorPanelController implements Initializable {
     private Path lastTerminalWorkingDir;
     private ProjectInfo currentProject;
     private Disposable diffEventSubscription;
+
+    private AddToChatButton addToChatButton;
+    private double lastMouseX = 10;
+    private double lastMouseY = 10;
     /**
      * -- GETTER --
      *  获取当前视图类型（用于 toggle 判断）
@@ -104,6 +116,29 @@ public class EditorPanelController implements Initializable {
         setupDiffList();
         subscribeDiffEvents();
         setupRoundedClip();
+        setupAddToChatButton();
+    }
+
+    /**
+     * 设置"添加到对话框"悬浮按钮：
+     * 添加到 viewContainer 顶层（叠加在所有视图之上），监听鼠标释放位置以定位。
+     * 使用事件过滤器在捕获阶段捕获 MOUSE_RELEASED，确保即使子节点（终端/CodeArea/DiffArea）
+     * 消费了事件也能获取鼠标释放位置，使按钮跟随选中区域定位。
+     */
+    private void setupAddToChatButton() {
+        addToChatButton = new AddToChatButton();
+        addToChatButton.setOnAddToChat(text -> {
+            if (indexController != null) {
+                indexController.addTextToChat(text);
+            }
+        });
+        viewContainer.getChildren().add(addToChatButton);
+        // 追踪鼠标释放位置（viewContainer 坐标系），用于悬浮按钮定位
+        viewContainer.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
+            var point = viewContainer.sceneToLocal(event.getSceneX(), event.getSceneY());
+            lastMouseX = point.getX();
+            lastMouseY = point.getY();
+        });
     }
 
     /**
@@ -152,10 +187,7 @@ public class EditorPanelController implements Initializable {
     private void subscribeDiffEvents() {
         this.diffEventSubscription = EventBus.outBoxFlux()
                 .filter(event -> event instanceof DiffEvent)
-                .subscribe(event -> {
-                    List<FileDiff> pendingDiffs = diffService.getPendingDiffs();
-                    Platform.runLater(() -> updateDiffList(pendingDiffs));
-                });
+                .subscribe(event -> refreshDiffList());
     }
 
     // ===== 视图切换 =====
@@ -170,6 +202,10 @@ public class EditorPanelController implements Initializable {
         projectSplit.setManaged(false);
         changesSplit.setVisible(false);
         changesSplit.setManaged(false);
+        // 切换视图时隐藏悬浮按钮，避免按钮残留
+        if (addToChatButton != null) {
+            addToChatButton.hide();
+        }
     }
 
     /**
@@ -279,6 +315,9 @@ public class EditorPanelController implements Initializable {
 
             fileContentPanel.getChildren().setAll(scrollPane);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
+
+            // 监听文件内容选择变化，显示"添加到对话框"悬浮按钮
+            setupFileContentSelectionListener(codeArea);
         } catch (IOException e) {
             log.warn("读取文件失败: {}", filePath, e);
         } catch (Exception e) {
@@ -321,6 +360,8 @@ public class EditorPanelController implements Initializable {
                     terminalWidget = newView;
                     terminalView.getChildren().setAll(terminalWidget);
                     VBox.setVgrow(terminalWidget, Priority.ALWAYS);
+                    // 监听终端选择变化，显示"添加到对话框"悬浮按钮
+                    setupTerminalSelectionListener(terminalWidget);
                     Platform.runLater(() -> terminalWidget.requestFocus());
                 });
             } catch (IOException e) {
@@ -365,83 +406,247 @@ public class EditorPanelController implements Initializable {
 
     /**
      * 显示 diff 视图（注入到变更视图右侧）
+     * - 隐藏 @@ hunk 头和 +/- 前缀，纯色覆盖
+     * - 顶部无标题栏，改为 StackPane 叠加的悬浮横幅（撤销/保留 + 上/下变更导航）
+     * - 每个变更块（hunk）悬浮时右上角显示局部撤销/保留按钮
      */
     public void showDiffView(FileDiff diff) {
         show();
-        showChangesView();
+        // 已在变更视图时不调用 showChangesView，避免 refreshDiffList 清空列表导致选中闪烁
+        if (currentViewType != ViewType.CHANGES) {
+            showChangesView();
+        }
+
+        // 用 JGit 重新计算 diff，因为可能打开的是历史对话，文件已被进一步修改
+        FileDiff freshDiff = diffService.recomputeDiff(diff);
 
         StyleClassedTextArea diffArea = new StyleClassedTextArea();
         diffArea.setEditable(false);
-        diffArea.setParagraphGraphicFactory(LineNumberFactory.get(diffArea));
         diffArea.getStyleClass().add("editor-panel__diff-area");
 
+        List<DiffLineInfo> lineInfos = new ArrayList<>();
+        // 记录每个 hunk 的段落索引范围（含 hunkHeader 行及其后所有 diff 行）
+        List<int[]> hunkRanges = new ArrayList<>();
         int paragraph = 0;
-        for (FileDiff.Hunk hunk : diff.hunks()) {
-            String hunkHeader = String.format("@@ -%d,%d +%d,%d @@",
-                    hunk.oldStart(), hunk.oldCount(), hunk.newStart(), hunk.newCount());
-            diffArea.appendText(hunkHeader + "\n");
-            diffArea.setParagraphStyle(paragraph, List.of("diff-hunk-header"));
-            paragraph++;
-            for (FileDiff.DiffLine line : hunk.lines()) {
-                String prefix = switch (line.type()) {
-                    case ADD -> "+";
-                    case REMOVE -> "-";
-                    case CONTEXT -> " ";
-                };
-                diffArea.appendText(prefix + line.content() + "\n");
-                String styleCls = switch (line.type()) {
-                    case ADD -> "diff-line-add";
-                    case REMOVE -> "diff-line-remove";
-                    case CONTEXT -> "diff-line-context";
-                };
-                diffArea.setParagraphStyle(paragraph, List.of(styleCls));
+
+        if (freshDiff.hunks() != null) {
+            int hunkIndex = 0;
+            for (FileDiff.Hunk hunk : freshDiff.hunks()) {
+                int hunkStartParagraph = paragraph;
+                int currentOldLine = hunk.oldStart();
+                int currentNewLine = hunk.newStart();
+
+                // Hunk 头占位（用 0 宽度内容占位，由 CSS 隐藏背景与文字）
+                diffArea.appendText("\n");
+                diffArea.setParagraphStyle(paragraph, List.of("diff-hunk-header", "diff-hunk-header--hidden"));
+                lineInfos.add(new DiffLineInfo(true, 0, 0, hunkIndex));
                 paragraph++;
+
+                if (hunk.lines() != null) {
+                    for (FileDiff.DiffLine line : hunk.lines()) {
+                        // 直接追加内容，不带 +/- 前缀
+                        diffArea.appendText(line.content() + "\n");
+
+                        // 段落级背景色（纯色覆盖）
+                        String styleCls = switch (line.type()) {
+                            case ADD -> "diff-line-add";
+                            case REMOVE -> "diff-line-remove";
+                            case CONTEXT -> "diff-line-context";
+                        };
+                        diffArea.setParagraphStyle(paragraph, List.of(styleCls));
+
+                        // 记录行号信息
+                        int oldLine = -1, newLine = -1;
+                        switch (line.type()) {
+                            case ADD -> newLine = currentNewLine++;
+                            case REMOVE -> oldLine = currentOldLine++;
+                            case CONTEXT -> { oldLine = currentOldLine++; newLine = currentNewLine++; }
+                        }
+                        lineInfos.add(new DiffLineInfo(false, oldLine, newLine, hunkIndex));
+                        paragraph++;
+                    }
+                }
+                hunkRanges.add(new int[]{hunkStartParagraph, paragraph - 1, hunkIndex});
+                hunkIndex++;
             }
         }
         diffArea.moveTo(0);
+        diffArea.setParagraphGraphicFactory(createDiffLineNumberFactory(lineInfos));
 
         VirtualizedScrollPane<StyleClassedTextArea> scrollPane = new VirtualizedScrollPane<>(diffArea);
         scrollPane.getStyleClass().add("editor-panel__code-scroll");
 
-        VBox container = new VBox(createFileMetaBar(diff), scrollPane);
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        // 悬浮横幅（文件名 + 上一个/下一个 + 撤销全部/保留全部）
+        HBox banner = createDiffBanner(freshDiff, diffArea, hunkRanges);
+        banner.setMaxWidth(Region.USE_PREF_SIZE);
+        banner.setMaxHeight(Region.USE_PREF_SIZE);
 
-        diffViewPanel.getChildren().setAll(container);
-        VBox.setVgrow(container, Priority.ALWAYS);
+        StackPane stack = new StackPane(scrollPane, banner);
+        StackPane.setAlignment(banner, Pos.TOP_CENTER);
+        StackPane.setMargin(banner, new javafx.geometry.Insets(8, 12, 0, 12));
+        VBox.setVgrow(stack, Priority.ALWAYS);
+
+        diffViewPanel.getChildren().setAll(stack);
+        VBox.setVgrow(stack, Priority.ALWAYS);
+
+        // 监听 diff 选择变化，显示"添加到对话框"悬浮按钮
+        setupDiffSelectionListener(diffArea);
     }
 
     /**
-     * 创建 diff 文件元信息条（顶部）
-     * 左侧显示文件路径，右侧放审核按钮（撤销/确定）
+     * 创建 diff 悬浮横幅：左侧文件名，右侧 上一个/下一个/撤销/保留 按钮。
      */
-    private HBox createFileMetaBar(FileDiff diff) {
+    private HBox createDiffBanner(FileDiff diff, StyleClassedTextArea diffArea, List<int[]> hunkRanges) {
         String filePath = diff.filePath();
+        String fileName = Paths.get(filePath).getFileName().toString();
 
-        Label pathLabel = new Label(filePath);
-        pathLabel.getStyleClass().add("editor-panel__meta-path");
+        Label pathLabel = new Label(fileName);
+        pathLabel.getStyleClass().add("diff-banner__path");
+        pathLabel.setTooltip(new Tooltip(filePath));
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        Region spring = new Region();
+        HBox.setHgrow(spring, Priority.ALWAYS);
+
+        Button prevBtn = new Button("↑");
+        prevBtn.getStyleClass().addAll("diff-banner__btn", "diff-banner__btn--nav");
+        prevBtn.setTooltip(new Tooltip("上一个变更"));
+        Button nextBtn = new Button("↓");
+        nextBtn.getStyleClass().addAll("diff-banner__btn", "diff-banner__btn--nav");
+        nextBtn.setTooltip(new Tooltip("下一个变更"));
 
         Button rejectBtn = new Button("撤销");
-        rejectBtn.getStyleClass().add("editor-panel__diff-btn--reject");
+        rejectBtn.getStyleClass().addAll("diff-banner__btn", "diff-banner__btn--reject");
+        Button approveBtn = new Button("保留");
+        approveBtn.getStyleClass().addAll("diff-banner__btn", "diff-banner__btn--approve");
+
+        // 导航：滚动到对应 hunk 的起始段落
+        prevBtn.setOnAction(e -> navigateHunk(diffArea, hunkRanges, -1));
+        nextBtn.setOnAction(e -> navigateHunk(diffArea, hunkRanges, 1));
+
         rejectBtn.setOnAction(e -> {
-            diffService.rejectDiff(diff.id());
+            diffService.rejectFileDiff(diff);
             resetDiffViewPlaceholder();
-            updateDiffList(diffService.getPendingDiffs());
+            refreshDiffList();
         });
-
-        Button approveBtn = new Button("确定");
-        approveBtn.getStyleClass().add("editor-panel__diff-btn--approve");
         approveBtn.setOnAction(e -> {
-            diffService.approveDiff(diff.id());
+            diffService.approveFileDiff(diff);
             resetDiffViewPlaceholder();
-            updateDiffList(diffService.getPendingDiffs());
+            refreshDiffList();
         });
 
-        HBox metaBar = new HBox(pathLabel, spacer, rejectBtn, approveBtn);
-        metaBar.getStyleClass().add("editor-panel__meta-bar");
-        return metaBar;
+        HBox banner = new HBox(pathLabel, spring, prevBtn, nextBtn, rejectBtn, approveBtn);
+        banner.getStyleClass().add("diff-banner");
+        return banner;
+    }
+
+    /** 当前导航到的 hunk 索引，-1 表示未定位 */
+    private int currentNavHunkIndex = -1;
+
+    /**
+     * 导航到上一个/下一个变更块（hunk）。
+     * @param direction -1 上一个，1 下一个
+     */
+    private void navigateHunk(StyleClassedTextArea diffArea, List<int[]> hunkRanges, int direction) {
+        if (hunkRanges.isEmpty()) return;
+        int next;
+        if (currentNavHunkIndex < 0) {
+            next = direction > 0 ? 0 : hunkRanges.size() - 1;
+        } else {
+            next = currentNavHunkIndex + direction;
+            if (next < 0) next = hunkRanges.size() - 1;
+            if (next >= hunkRanges.size()) next = 0;
+        }
+        currentNavHunkIndex = next;
+        int[] range = hunkRanges.get(next);
+        int targetParagraph = range[0] + 1; // 跳过隐藏的 hunk 头行
+        diffArea.moveTo(targetParagraph, 0);
+        diffArea.requestFollowCaret();
+        diffArea.showParagraphAtTop(targetParagraph);
+    }
+
+    /**
+     * 创建自定义 diff 行号工厂，显示 old/new 双列行号和 gutter 指示器。
+     * Hunk 头行返回空节点（视觉上隐藏）。
+     */
+    private IntFunction<Node> createDiffLineNumberFactory(List<DiffLineInfo> lineInfos) {
+        final double colWidth = 38;
+        final double gutterWidth = 3;
+
+        return idx -> {
+            HBox box = new HBox();
+            box.getStyleClass().add("diff-lineno-box");
+            box.setAlignment(Pos.CENTER_LEFT);
+            box.setMinWidth(gutterWidth + colWidth * 2 + 8);
+            box.setPrefWidth(gutterWidth + colWidth * 2 + 8);
+
+            if (idx < 0 || idx >= lineInfos.size()) {
+                return box;
+            }
+
+            DiffLineInfo info = lineInfos.get(idx);
+
+            if (info.hunkHeader()) {
+                // Hunk 头行号区域返回空（整行由 CSS 隐藏）
+                box.setPrefHeight(0);
+                box.setMinHeight(0);
+                box.setMaxHeight(0);
+                return box;
+            }
+
+            boolean isAdd = info.oldLine() < 0;
+            boolean isRemove = info.newLine() < 0;
+
+            // Gutter 指示条
+            Region gutter = new Region();
+            gutter.getStyleClass().add("diff-gutter-indicator");
+            gutter.setPrefWidth(gutterWidth);
+            gutter.setMinWidth(gutterWidth);
+            gutter.setMaxWidth(gutterWidth);
+            if (isAdd) {
+                gutter.getStyleClass().add("diff-gutter-indicator--add");
+            } else if (isRemove) {
+                gutter.getStyleClass().add("diff-gutter-indicator--remove");
+            }
+
+            // Old 行号
+            Label oldLabel = new Label(info.oldLine() > 0 ? String.valueOf(info.oldLine()) : "");
+            oldLabel.getStyleClass().add("diff-lineno");
+            oldLabel.setAlignment(Pos.CENTER_RIGHT);
+            oldLabel.setPrefWidth(colWidth);
+            oldLabel.setMinWidth(colWidth);
+            if (isRemove) {
+                oldLabel.getStyleClass().add("diff-lineno--remove");
+            }
+
+            // New 行号
+            Label newLabel = new Label(info.newLine() > 0 ? String.valueOf(info.newLine()) : "");
+            newLabel.getStyleClass().add("diff-lineno");
+            newLabel.setAlignment(Pos.CENTER_RIGHT);
+            newLabel.setPrefWidth(colWidth);
+            newLabel.setMinWidth(colWidth);
+            if (isAdd) {
+                newLabel.getStyleClass().add("diff-lineno--add");
+            }
+
+            box.getChildren().addAll(gutter, oldLabel, newLabel);
+            return box;
+        };
+    }
+
+    /**
+     * 统计 diff 的 ADD/REMOVE 行数
+     */
+    private static int[] computeDiffStats(FileDiff diff) {
+        int added = 0, removed = 0;
+        if (diff.hunks() == null) return new int[]{0, 0};
+        for (FileDiff.Hunk hunk : diff.hunks()) {
+            if (hunk.lines() == null) continue;
+            for (FileDiff.DiffLine line : hunk.lines()) {
+                if (line.type() == FileDiff.Type.ADD) added++;
+                else if (line.type() == FileDiff.Type.REMOVE) removed++;
+            }
+        }
+        return new int[]{added, removed};
     }
 
     /**
@@ -453,12 +658,20 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 刷新变更列表
+     * 刷新变更列表 - 用 JGit 扫描工作区未提交变更（异步）
      */
     private void refreshDiffList() {
-        List<FileDiff> pendingDiffs = diffService.getPendingDiffs();
-        diffList.getItems().clear();
-        diffList.getItems().addAll(pendingDiffs);
+        if (currentProject == null) {
+            diffList.getItems().clear();
+            return;
+        }
+        new Thread(() -> {
+            List<FileDiff> diffs = diffService.scanWorkingTreeDiffs(Paths.get(currentProject.path()));
+            Platform.runLater(() -> {
+                diffList.getItems().clear();
+                diffList.getItems().addAll(diffs);
+            });
+        }).start();
     }
 
     /**
@@ -504,5 +717,70 @@ public class EditorPanelController implements Initializable {
         box.setAlignment(Pos.CENTER);
         box.setSpacing(8);
         return box;
+    }
+
+    // ===== 文本选择 → 对话框联动 =====
+
+    /**
+     * 监听终端选中文本变化，非空时在鼠标位置附近显示"添加到对话框"悬浮按钮。
+     */
+    private void setupTerminalSelectionListener(JediTerminalView view) {
+        var prop = view.selectedTextProperty();
+        if (prop == null) {
+            return;
+        }
+        prop.addListener((obs, oldV, newV) -> {
+            Platform.runLater(() -> showAddToChatButtonIfNeeded(newV));
+        });
+    }
+
+    /**
+     * 监听文件内容选中文本变化，非空时在鼠标位置附近显示"添加到对话框"悬浮按钮。
+     */
+    private void setupFileContentSelectionListener(CodeArea codeArea) {
+        codeArea.selectionProperty().addListener((obs, oldV, newV) -> {
+            String selected = codeArea.getSelectedText();
+            showAddToChatButtonIfNeeded(selected);
+        });
+    }
+
+    /**
+     * 监听 diff 选中文本变化，非空时在鼠标位置附近显示"添加到对话框"悬浮按钮。
+     */
+    private void setupDiffSelectionListener(StyleClassedTextArea diffArea) {
+        diffArea.selectionProperty().addListener((obs, oldV, newV) -> {
+            String selected = diffArea.getSelectedText();
+            showAddToChatButtonIfNeeded(selected);
+        });
+    }
+
+    /**
+     * 根据选中文本是否非空，显示或隐藏悬浮按钮。
+     * 按钮定位在鼠标当前位置右下方 12px 处，并限制在 viewContainer 边界内。
+     */
+    private void showAddToChatButtonIfNeeded(String selected) {
+        if (addToChatButton == null) {
+            return;
+        }
+        if (selected == null || selected.isBlank()) {
+            addToChatButton.hide();
+            return;
+        }
+        double offsetX = 12;
+        double offsetY = 12;
+        double x = lastMouseX + offsetX;
+        double y = lastMouseY + offsetY;
+        // 边界保护：避免按钮超出 viewContainer 可视区域
+        double containerW = viewContainer.getWidth();
+        double containerH = viewContainer.getHeight();
+        double btnW = addToChatButton.prefWidth(-1);
+        double btnH = addToChatButton.prefHeight(-1);
+        if (containerW > 0 && x + btnW > containerW) {
+            x = Math.max(0, containerW - btnW - 4);
+        }
+        if (containerH > 0 && y + btnH > containerH) {
+            y = Math.max(0, containerH - btnH - 4);
+        }
+        addToChatButton.show(selected, x, y);
     }
 }

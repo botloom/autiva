@@ -91,11 +91,17 @@
 - `PythonSyntaxHighlighter`：支持三引号字符串、f/r/b 前缀
 - `JavaScriptSyntaxHighlighter`：包含 TypeScript 关键字和模板字符串 `${...}`
 
+### editor（通用编辑器组件）
+通用编辑器相关组件。
+
+**核心类：**
+- `AddToChatButton`: "添加到对话框"悬浮按钮，继承 `Button`。在编辑器面板选中文本后浮现，点击后将选中文本通过回调追加到对话框输入框。默认不可见（visible=false, managed=false），始终保持 managed=false 以支持 StackPane 内的绝对定位（setLayoutX/setLayoutY），通过 `show(text, x, y)` 定位显示（仅切换 visible），`hide()` 隐藏。样式类 `add-to-chat-button`（Apple 风格圆角半透明深色背景 + 阴影，hover 蓝色高亮）。
+
 ### diff
 变更文件列表的富单元格组件。
 
 **核心类：**
-- `DiffListCell`: 变更文件富 ListCell，渲染 FileDiff
+- `DiffListCell`: 变更文件富 ListCell，渲染 FileDiff。支持拖拽变更文件到对话框（`setOnDragDetected` 将 filePath 转为 File 放入 Dragboard）
 
 ## 核心类
 
@@ -114,15 +120,15 @@
 **功能：**
 - 重写 `computePrefHeight(double width)`，根据内容计算首选高度
 - 内容变化时调用 `requestLayout()` 触发重新布局
-- 高度范围：48px（1行）~ 236px（10行）
-- 超过10行后固定高度，内部自动显示滚动条
+- 高度范围：48px（1行）~ 126px（5行）
+- 超过5行后固定高度，内部自动显示滚动条
 - 使用 Text 节点测量内容实际高度（包含自动换行）
 
 **常量：**
 - `LINE_HEIGHT = 22`：单行高度（含行间距）
 - `VERTICAL_PADDING = 16`：上下内边距总和
 - `MIN_HEIGHT = 48`：最小高度（1行）
-- `MAX_HEIGHT = 236`：最大高度（10行）
+- `MAX_HEIGHT = 126`：最大高度（5行）
 - `CONTENT_WIDTH_OFFSET = 76`：内容宽度偏移（padding + 滚动条预留）
 
 **设计原理：**
@@ -309,7 +315,7 @@ ToolGroupCard (VBox)
 
 **职责：**
 - 显示文件/文件夹名称
-- 使用 SvgImageView 加载 SVG 图标（16x16），按文件扩展名选择对应类型图标：
+- 使用 SvgImageView 加载 SVG 图标（16x16），按文件扩展名选择对应类型图标
   - 文件夹 → `folder.svg`（蓝色 #0071e3）
   - 代码文件 → `file-code.svg`（青色 #5ac8fa，`</>` 符号）
   - 数据/配置文件 → `file-data.svg`（橙色 #ff9f0a，`{}` 符号）
@@ -317,6 +323,7 @@ ToolGroupCard (VBox)
   - 纯文本文件 → `file-text.svg`（灰色 #98989d，横线）
   - 图片文件 → `file-image.svg`（绿色 #30d158，山形+圆）
   - 其他 → `file.svg`（白色，兜底）
+- 支持拖拽文件到对话框：仅文件（`Files.isRegularFile`）注册 `setOnDragDetected`，将文件转为 File 放入 Dragboard（COPY 传输模式），目录不注册拖拽
 
 **扩展名集合：**
 - `CODE_EXTS`：java/kt/scala/groovy/gradle/js/jsx/mjs/cjs/ts/tsx/mts/cts/py/pyw/pyi/c/cpp/cc/h/hpp/go/rs/rb/php/swift/m/mm/sh/bash/zsh/bat/cmd/ps1
@@ -348,6 +355,7 @@ ToolGroupCard (VBox)
 - 富渲染变更文件：文件类型图标 + 文件名 + 相对目录 + 行数统计（+N -M）
 - 行数统计遍历 hunks/lines 累加 ADD/REMOVE 行数
 - 图标解析与 FileTreeCell 完全一致（复用相同的扩展名集合）
+- **变更类型通过整体底色区分（不展示文字徽章）**：cell 添加修饰类 `diff-list-cell--add/--modify/--delete`，由 CSS 控制整体背景色（绿/橙/红，10% 透明度），hover 时透明度提升到 20%，selected 时统一为蓝色填充
 
 **组件结构：**
 ```
@@ -367,7 +375,7 @@ DiffListCell (ListCell)
 - `diff-list-cell`：根 HBox
 - `diff-list-cell__icon` / `__text` / `__name` / `__path` / `__stats`
 - `diff-list-cell__stat` + `--add`（绿）/ `--remove`（红）：行数统计
-- 选中态时由 CSS 调整子元素字色（路径变白、统计颜色调亮）保证可读性
+- `diff-list-cell--add` / `--modify` / `--delete`：**cell 级修饰类**（加在 ListCell 上，非 HBox），控制整体背景色区分新建/修改/删除
 
 **辅助方法：**
 - `extractFileName(path)`：从路径中提取文件名
@@ -378,7 +386,7 @@ DiffListCell (ListCell)
 **设计规范：**
 - 行高 56px，富信息显示，与 Xcode/GitHub Desktop 的变更列表风格一致
 - 与 FileTreeCell 共享扩展名集合，保证图标语义统一
-- 不再显示 A/M/D 徽章色块（变更类型由 diff 视图顶部 meta bar 体现）
+- 不再显示 A/M/D 徽章色块（变更类型由 cell 整体底色体现）
 
 ### DiffReviewCard
 Diff 审核卡片，用于 WriteTool/EditTool 的文件修改审核展示。参考 QuestionCard 的设计模式。
@@ -386,16 +394,27 @@ Diff 审核卡片，用于 WriteTool/EditTool 的文件修改审核展示。参�
 **样式类：** `chat-message`, `chat-message--tool`, `diff-review-card`
 
 **构造参数：**
-- `diffJson`: Diff 内容 JSON（FileDiff 序列化格式，包含 filePath/hunks/isCreate/isDelete）
+- `diff`: FileDiff 对象
 - `reviewId`: 审核 ID（UUID，用于关联 CompletableFuture）
 - `onReviewed`: BiConsumer<String, String> 回调（reviewId, resultJson），通知 ToolUIBridge 完成审核
 
+**组件结构（每行 HBox）：**
+```
+lineRow (HBox)
+├── gutter (Region, 3px 指示条：绿/红)
+├── oldLineLabel (Label, 36px 右对齐)
+├── newLineLabel (Label, 36px 右对齐)
+└── lineFlow (TextFlow: prefixText + contentText)
+```
+
 **特性：**
 - 展示文件路径和操作类型（新建/修改/删除）
-- 解析 hunks 数组，按 hunk 渲染 @@ 行号范围头 + Diff 行
-- Diff 行着色：ADD 行绿色背景（rgba(34,197,94,0.12)），REMOVE 行红色背景（rgba(239,68,68,0.12)），CONTEXT 行无背景
+- **不展示 @@ hunk 头行和 +/- 前缀**，纯色覆盖
+- 双列行号（old/new）：ADD 行显示 new 行号（绿色），REMOVE 行显示 old 行号（红色），CONTEXT 行显示双列
+- Gutter 指示条：ADD 行绿色竖条（#22c55e），REMOVE 行红色竖条（#ef4444）
+- 行级背景色：ADD 行绿色背景（rgba(34,197,94,0.12)），REMOVE 行红色背景（rgba(239,68,68,0.12)）
 - 滚动面板展示完整 Diff（最大高度 400px）
-- "批准修改"按钮（绿色渐变）和"拒绝修改"按钮（红色渐变）
+- "批准修改"按钮（绿色）和"拒绝修改"按钮（红色）
 - 点击后禁用按钮，通过 onReviewed 回调返回结果 JSON（{"approved":true/false, "comment":""}）
 
 ### TaskCard

@@ -2,6 +2,7 @@ package cn.bitloom.agentic.tool.command;
 
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -73,7 +74,7 @@ public class CommandTool extends AbstractTool<CommandTool.Input> {
     }
 
     @Override
-    public ToolResult execute(Input input, ToolContext context) {
+    public @NonNull ToolResult execute(Input input, ToolContext context) {
         // 验证命令长度
         if (input.command() != null && input.command().length() > CommandExecutor.MAX_COMMAND_LENGTH) {
             return ToolResult.error("命令过长 (" + input.command().length() + " 字符)，最大允许 "

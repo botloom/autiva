@@ -2,6 +2,7 @@ package cn.bitloom.node.terminal;
 
 import com.techsenger.jeditermfx.ui.JediTermFxWidget;
 import com.techsenger.jeditermfx.ui.settings.SettingsProvider;
+import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.geometry.Insets;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
@@ -84,5 +85,28 @@ public class JediTerminalView extends BorderPane {
         if (widget != null) {
             widget.getPreferredFocusableNode().requestFocus();
         }
+    }
+
+    /**
+     * 获取终端当前选中的文本（可能为 null 或空字符串）。
+     * 通过 selectedTextProperty().get() 获取，兼容 JediTermFX 1.1.0。
+     */
+    public String getSelectedText() {
+        if (widget != null) {
+            ReadOnlyStringProperty prop = widget.getTerminalPanel().selectedTextProperty();
+            return prop != null ? prop.get() : null;
+        }
+        return null;
+    }
+
+    /**
+     * 终端选中文本属性（ReadOnlyStringProperty），可在 widget 就绪后监听选择变化。
+     * 仅在会话启动后可用，启动前返回 null。
+     */
+    public ReadOnlyStringProperty selectedTextProperty() {
+        if (widget != null) {
+            return widget.getTerminalPanel().selectedTextProperty();
+        }
+        return null;
     }
 }

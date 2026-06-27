@@ -4,6 +4,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import cn.bitloom.node.svg.SvgImageView?>
+<?import cn.bitloom.node.AutoResizeTextArea?>
 
 <VBox fx:id="homePage" styleClass="home-page" xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.HomePageController"
@@ -32,12 +33,16 @@
           alignment="TOP_CENTER"
           prefWidth="600" maxWidth="1000" minWidth="300"
     >
-        <FlowPane fx:id="fileTagsPane" styleClass="home-page__file-tags"
-                  prefWidth="600" maxWidth="1000" minWidth="300"
-                  visible="false" managed="false"/>
-        <TextArea fx:id="sendField" promptText="给呆芽发消息..." styleClass="home-page__send-field"
-                  prefRowCount="1" maxWidth="1000" minWidth="300" prefWidth="600" wrapText="true"/>
-        <HBox alignment="BOTTOM_RIGHT" spacing="8">
+        <ScrollPane fx:id="fileTagsScroll" styleClass="home-page__file-tags-scroll"
+                    prefWidth="600" maxWidth="1000" minWidth="300"
+                    fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="NEVER"
+                    visible="false" managed="false">
+            <FlowPane fx:id="fileTagsPane" styleClass="home-page__file-tags"/>
+        </ScrollPane>
+        <AutoResizeTextArea fx:id="sendField" promptText="给呆芽发消息..." styleClass="home-page__send-field"
+                            maxWidth="1000" minWidth="300" prefWidth="600" wrapText="true"
+                            VBox.vgrow="ALWAYS"/>
+        <HBox alignment="BOTTOM_RIGHT" spacing="8" VBox.vgrow="NEVER">
             <MenuButton fx:id="projectSelectButton" styleClass="home-page__project-menu-btn" prefHeight="37" visible="false" managed="false">
                 <graphic>
                     <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/folder-black.svg"/>
@@ -54,13 +59,14 @@
                     <Insets bottom="8"/>
                 </HBox.margin>
             </Button>
-            <HBox fx:id="agentSelectorBox" alignment="CENTER_LEFT" spacing="4" styleClass="home-page__agent-selector-box">
-                <SvgImageView fx:id="agentIcon" fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/robot.svg"/>
-                <ComboBox fx:id="agentSelector" styleClass="home-page__model-selector" prefHeight="37"/>
+            <MenuButton fx:id="agentSelector" styleClass="home-page__agent-menu-btn" prefHeight="37">
+                <graphic>
+                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/robot.svg"/>
+                </graphic>
                 <HBox.margin>
                     <Insets bottom="8"/>
                 </HBox.margin>
-            </HBox>
+            </MenuButton>
             <Button fx:id="canvasButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
                     <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/canvas.svg"/>

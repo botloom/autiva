@@ -4,10 +4,16 @@ import cn.bitloom.agentic.diff.FileDiff;
 import cn.bitloom.node.svg.SvgImageView;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Label;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+
+import java.io.File;
+import java.util.List;
 
 /**
  * 变更文件列表单元格。
@@ -34,9 +40,12 @@ public class DiffListCell extends ListCell<FileDiff> {
     @Override
     protected void updateItem(FileDiff item, boolean empty) {
         super.updateItem(item, empty);
+        // 先清除上次的状态样式类
+        getStyleClass().removeAll("diff-list-cell--add", "diff-list-cell--modify", "diff-list-cell--delete");
         if (empty || item == null) {
             setText(null);
             setGraphic(null);
+            setOnDragDetected(null);
             return;
         }
 
@@ -48,8 +57,27 @@ public class DiffListCell extends ListCell<FileDiff> {
         int added = stats[0];
         int removed = stats[1];
 
+        // 按变更类型给整个 cell 加修饰类，由 CSS 控制背景色
+        if (item.isCreate()) {
+            getStyleClass().add("diff-list-cell--add");
+        } else if (item.isDelete()) {
+            getStyleClass().add("diff-list-cell--delete");
+        } else {
+            getStyleClass().add("diff-list-cell--modify");
+        }
+
         setGraphic(buildGraphic(fileName, dirPath, added, removed));
         setText(null);
+
+        // 支持拖拽变更文件到对话框
+        setOnDragDetected(event -> {
+            File file = new File(filePath);
+            Dragboard db = startDragAndDrop(TransferMode.COPY);
+            ClipboardContent content = new ClipboardContent();
+            content.putFiles(List.of(file));
+            db.setContent(content);
+            event.consume();
+        });
     }
 
     private HBox buildGraphic(String fileName, String dirPath, int added, int removed) {

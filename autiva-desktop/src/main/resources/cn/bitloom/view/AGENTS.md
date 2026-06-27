@@ -17,14 +17,14 @@ VBox (homePage)
 │   └── ImageView - 应用图标
 ├── ScrollPane (chatScrollPane) - 聊天内容滚动容器
 │   └── VBox (chatContainer) - 聊天消息容器
-└── VBox (sendBox) - 发送输入框
-    ├── FlowPane (fileTagsPane) - 文件标签容器（默认隐藏，添加文件后显示）
-    ├── AutoResizeTextArea (sendField) - 输入框（支持多行、自动换行、自动调整高度）
-    └── HBox - 按钮组
+└── VBox (sendBox) - 发送输入框（max-height 280，防止文件标签过多时挤出按钮区）
+    ├── ScrollPane (fileTagsScroll) - 文件标签滚动容器（默认隐藏，添加文件后显示；max-height 96，fitToWidth=true，vbarPolicy=NEVER 隐藏滚动条）
+    │   └── FlowPane (fileTagsPane) - 文件标签容器
+    ├── AutoResizeTextArea (sendField) - 输入框（VBox.vgrow=ALWAYS，支持多行、自动换行、自动调整高度，高度范围 48~126px）
+    └── HBox - 按钮组（VBox.vgrow=NEVER，确保不被压缩）
         ├── MenuButton (projectSelectButton) - 项目选择下拉菜单（coder智能体时显示，folder-black.svg图标）
         ├── Button (branchDisplayButton) - 分支显示按钮（coder智能体时显示，git-branch.svg图标）
-        ├── SvgImageView (agentIcon) - 智能体图标（robot.svg）
-        ├── ComboBox (agentSelector) - 智能体选择器（胶囊形状）
+        ├── MenuButton (agentSelector) - 智能体选择下拉菜单（robot.svg图标，文字显示当前智能体名称）
         ├── Button (canvasButton) - 画布按钮
         ├── Button (addFileButton) - 添加文件按钮
         ├── Button (sendButton) - 发送按钮
@@ -39,13 +39,14 @@ VBox (homePage)
 - 发送框具有悬浮阴影效果（hover 时加深），样式与 MCP 卡片一致
 - 输入区域使用 AutoResizeTextArea 自定义组件，支持多行输入和自动换行
 - AutoResizeTextArea 重写 computePrefHeight，布局系统自然获取正确高度
-- 高度范围 48px（1行）~ 236px（10行），由组件内部控制
+- 高度范围 48px（1行）~ 126px（5行），由组件内部控制
 - 输入内容增加时，sendBox 向上扩展，chatScrollPane 自动缩小
-- 超过10行后固定高度，TextArea 自动显示滚动条
+- 超过5行后固定高度，TextArea 自动显示滚动条
+- sendField 设置 VBox.vgrow=ALWAYS，按钮组 HBox 设置 VBox.vgrow=NEVER，确保按钮区不被压缩
 - Enter 键发送消息，Shift+Enter 换行
 - 添加文件按钮打开 FileChooser，选中的文件以标签形式显示在输入区域上方
 - 文件标签显示文件图标、文件名和关闭按钮，支持逐个移除
-- 智能体选择器使用胶囊形状的 ComboBox，左侧显示 robot.svg 图标，直接显示智能体名称
+- 智能体选择器使用 MenuButton（与项目选择按钮风格一致），左侧显示 robot.svg 图标，文字显示当前智能体名称
 - 模型默认使用 DeepSeek，无需手动选择
 - 项目选择按钮（coder智能体时显示）使用黑色 folder-black.svg 图标，与 ButtonBar 的蓝色 folder.svg 区分
 - 终止按钮：流式生成时自动切换显示（替代发送按钮），红色圆形按钮，点击暂停当前生成并保留部分响应，暂停后发送按钮重新显示

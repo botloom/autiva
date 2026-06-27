@@ -2,10 +2,15 @@ package cn.bitloom.node.project;
 
 import cn.bitloom.node.svg.SvgImageView;
 import javafx.scene.control.TreeCell;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -72,6 +77,7 @@ public class FileTreeCell extends TreeCell<Path> {
                     "file-tree__file--code", "file-tree__file--data",
                     "file-tree__file--md", "file-tree__file--text", "file-tree__file--image"
             );
+            setOnDragDetected(null);
             return;
         }
 
@@ -80,6 +86,19 @@ public class FileTreeCell extends TreeCell<Path> {
         setGraphic(createIcon(item));
 
         refreshStyleClasses(item, fileName);
+
+        // 仅文件可拖拽到对话框（目录无意义）
+        if (Files.isRegularFile(item)) {
+            setOnDragDetected(event -> {
+                Dragboard db = startDragAndDrop(TransferMode.COPY);
+                ClipboardContent content = new ClipboardContent();
+                content.putFiles(List.of(item.toFile()));
+                db.setContent(content);
+                event.consume();
+            });
+        } else {
+            setOnDragDetected(null);
+        }
     }
 
     private SvgImageView createIcon(Path path) {

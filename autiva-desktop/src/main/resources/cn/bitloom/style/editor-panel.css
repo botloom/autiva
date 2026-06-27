@@ -86,9 +86,11 @@
     -fx-fixed-cell-size: 28px;
 }
 
-/* 文件树单元格 - Apple 风格选中（填满行宽，箭头/图标/文字对齐） */
+/* 文件树单元格 - Apple 风格微圆角选中（上下1px间隙显圆角，左右填满对齐） */
 .editor-panel__tree .tree-cell {
     -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-background-insets: 1 0 1 0;
     -fx-text-fill: -autiva-text-primary;
     -fx-font-size: 13px;
     -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
@@ -186,6 +188,8 @@
 
 .editor-panel__diff-list .list-cell {
     -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-background-insets: 1 0 1 0;
     -fx-text-fill: -autiva-text-primary;
     -fx-font-size: 13px;
     -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
@@ -278,18 +282,36 @@
     -fx-text-fill: -autiva-red;
 }
 
-/* 选中态时徽章/统计颜色保持，但字色调整为白色保证可读性 */
-.list-cell:selected .diff-list-cell__name,
-.list-cell:selected .diff-list-cell__path {
-    -fx-text-fill: white;
+/* ===== Diff 列表项 - 按变更类型整体底色区分 ===== */
+
+.editor-panel__diff-list .list-cell.diff-list-cell--add {
+    -fx-background-color: rgba(48, 209, 88, 0.10);
 }
 
-.list-cell:selected .diff-list-cell__stat--add {
-    -fx-text-fill: #b5ffcb;
+.editor-panel__diff-list .list-cell.diff-list-cell--modify {
+    -fx-background-color: rgba(255, 159, 10, 0.10);
 }
 
-.list-cell:selected .diff-list-cell__stat--remove {
-    -fx-text-fill: #ffc4bf;
+.editor-panel__diff-list .list-cell.diff-list-cell--delete {
+    -fx-background-color: rgba(255, 69, 58, 0.10);
+}
+
+/* hover/selected 时叠加更亮的覆盖色 */
+.editor-panel__diff-list .list-cell.diff-list-cell--add:hover {
+    -fx-background-color: rgba(48, 209, 88, 0.20);
+}
+.editor-panel__diff-list .list-cell.diff-list-cell--modify:hover {
+    -fx-background-color: rgba(255, 159, 10, 0.20);
+}
+.editor-panel__diff-list .list-cell.diff-list-cell--delete:hover {
+    -fx-background-color: rgba(255, 69, 58, 0.20);
+}
+
+.editor-panel__diff-list .list-cell.diff-list-cell--add:selected,
+.editor-panel__diff-list .list-cell.diff-list-cell--modify:selected,
+.editor-panel__diff-list .list-cell.diff-list-cell--delete:selected {
+    -fx-background-color: -autiva-blue;
+    -fx-text-fill: -autiva-text-primary;
 }
 
 /* ===== RichTextFX 代码区与 Diff 视图 ===== */
@@ -321,46 +343,48 @@
 }
 
 /* ===== 语法高亮 Token（参考 Xcode 深色主题） ===== */
+/* 使用 .text.syntax-* 组合选择器，特异性 (0,2,0) 与默认 .editor-panel__code-area .text 相同，
+   但本节在默认规则之后定义，相同特异性下后者胜出，确保高亮颜色不被默认白色覆盖。 */
 
-.syntax-keyword {
+.text.syntax-keyword {
     -fx-fill: #ff5e8a;
     -fx-font-weight: normal;
 }
 
-.syntax-string {
+.text.syntax-string {
     -fx-fill: #30d158;
 }
 
-.syntax-comment {
+.text.syntax-comment {
     -fx-fill: #6c6c70;
     -fx-font-style: italic;
 }
 
-.syntax-number {
+.text.syntax-number {
     -fx-fill: #ff9f0a;
 }
 
-.syntax-annotation {
+.text.syntax-annotation {
     -fx-fill: #ffd60a;
 }
 
-.syntax-literal {
+.text.syntax-literal {
     -fx-fill: #0a84ff;
 }
 
-.syntax-type {
+.text.syntax-type {
     -fx-fill: #5ac8fa;
 }
 
-.syntax-key {
+.text.syntax-key {
     -fx-fill: #bf5af2;
 }
 
-.syntax-operator {
+.text.syntax-operator {
     -fx-fill: #ff375f;
 }
 
-/* ===== Diff 元信息条（顶部） ===== */
+/* ===== Diff 元信息条（已弃用，由悬浮横幅 .diff-banner 替代） ===== */
 
 .editor-panel__meta-bar {
     -fx-background-color: -autiva-bg-elevated;
@@ -413,6 +437,56 @@
     -fx-text-fill: -autiva-red;
 }
 
+/* ===== Diff 悬浮横幅（顶部叠加层） ===== */
+
+.diff-banner {
+    -fx-background-color: rgba(44, 44, 46, 0.92);
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(255, 255, 255, 0.08);
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-padding: 4 8 4 10;
+    -fx-spacing: 4;
+    -fx-alignment: CENTER_LEFT;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 10, 0, 0, 3);
+}
+
+.diff-banner__path {
+    -fx-text-fill: -autiva-text-primary;
+    -fx-font-size: 12px;
+    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    -fx-font-weight: bold;
+}
+
+.diff-banner__btn {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-background-radius: 5;
+    -fx-background-insets: 0;
+    -fx-padding: 3 7 3 7;
+    -fx-cursor: hand;
+    -fx-text-fill: -autiva-text-primary;
+}
+
+.diff-banner__btn:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.16);
+}
+
+.diff-banner__btn--nav {
+    -fx-padding: 2 6 2 6;
+    -fx-font-size: 12px;
+}
+
+.diff-banner__btn--reject {
+    -fx-text-fill: -autiva-red;
+}
+
+.diff-banner__btn--approve {
+    -fx-text-fill: -autiva-green;
+}
+
 /* ===== Diff 行级着色（Hunk/Header/Add/Remove/Context） ===== */
 
 .diff-meta {
@@ -420,24 +494,83 @@
     -fx-text-fill: -autiva-text-secondary;
 }
 
+/* Hunk 头：默认半透明蓝色背景 + 青色文字；
+   --hidden 修饰类将其完全压缩隐藏（不展示 @@ 行号信息）。 */
 .diff-hunk-header {
-    -fx-background-color: rgba(10, 132, 255, 0.16);
+    -fx-background-color: rgba(10, 132, 255, 0.20);
     -fx-text-fill: #5ac8fa;
 }
 
+.diff-hunk-header--hidden {
+    -fx-background-color: transparent;
+    -fx-text-fill: transparent;
+    -fx-font-size: 1px;
+    -fx-padding: 0;
+    -fx-cell-size: 0;
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
+}
+
 .diff-line-add {
-    -fx-background-color: rgba(48, 209, 88, 0.18);
+    -fx-background-color: rgba(48, 209, 88, 0.22);
     -fx-text-fill: #8de8a4;
 }
 
 .diff-line-remove {
-    -fx-background-color: rgba(255, 69, 58, 0.18);
+    -fx-background-color: rgba(255, 69, 58, 0.22);
     -fx-text-fill: #ff9a92;
 }
 
 .diff-line-context {
     -fx-background-color: transparent;
     -fx-text-fill: -autiva-text-primary;
+}
+
+/* ===== Diff 双列行号区域 ===== */
+
+.diff-lineno-box {
+    -fx-background-color: -autiva-bg;
+    -fx-padding: 0 8 0 0;
+    -fx-border-width: 0 1 0 0;
+    -fx-border-color: transparent -autiva-separator transparent transparent;
+}
+
+.diff-lineno {
+    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    -fx-font-size: 11px;
+    -fx-text-fill: -autiva-text-tertiary;
+    -fx-alignment: center-right;
+}
+
+.diff-lineno--add {
+    -fx-text-fill: rgba(48, 209, 88, 0.8);
+}
+
+.diff-lineno--remove {
+    -fx-text-fill: rgba(255, 69, 58, 0.8);
+}
+
+.diff-lineno-hunk {
+    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    -fx-font-size: 11px;
+    -fx-text-fill: -autiva-cyan;
+}
+
+/* ===== Diff Gutter 指示条 ===== */
+
+.diff-gutter-indicator {
+    -fx-background-color: transparent;
+}
+
+.diff-gutter-indicator--add {
+    -fx-background-color: -autiva-green;
+    -fx-background-radius: 1;
+}
+
+.diff-gutter-indicator--remove {
+    -fx-background-color: -autiva-red;
+    -fx-background-radius: 1;
 }
 
 /* ===== Diff 审核按钮栏 ===== */
@@ -451,41 +584,30 @@
     -fx-border-color: -autiva-separator transparent transparent transparent;
 }
 
-/* 确定按钮 - 蓝色 primary（主要操作） */
-.editor-panel__diff-btn--approve {
-    -fx-background-color: -autiva-blue;
-    -fx-text-fill: white;
-    -fx-background-radius: 6;
-    -fx-padding: 6 18 6 18;
-    -fx-font-size: 12px;
-    -fx-font-weight: bold;
-    -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
-    -fx-cursor: hand;
-    -fx-border-width: 0;
-}
-
-.editor-panel__diff-btn--approve:hover {
-    -fx-background-color: #0070ee;
-}
-
-/* 撤销按钮 - 浅色背景 + 红字 secondary（危险操作，弱化视觉权重） */
+/* Diff 审核按钮 - 与首页 .dynamic-btn 风格统一（深色版：半透明背景 + 8px 圆角） */
+.editor-panel__diff-btn--approve,
 .editor-panel__diff-btn--reject {
-    -fx-background-color: rgba(255, 255, 255, 0.06);
-    -fx-text-fill: -autiva-red;
-    -fx-background-radius: 6;
-    -fx-padding: 6 18 6 18;
     -fx-font-size: 12px;
-    -fx-font-weight: normal;
+    -fx-font-weight: 600;
     -fx-font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+    -fx-background-radius: 8;
+    -fx-background-insets: 0;
+    -fx-padding: 6 12 6 12;
     -fx-cursor: hand;
-    -fx-border-color: rgba(255, 69, 58, 0.25);
-    -fx-border-width: 1;
-    -fx-border-radius: 6;
 }
 
+.editor-panel__diff-btn--approve {
+    -fx-text-fill: #0a84ff;
+}
+
+.editor-panel__diff-btn--reject {
+    -fx-text-fill: #ff453a;
+}
+
+.editor-panel__diff-btn--approve:hover,
 .editor-panel__diff-btn--reject:hover {
-    -fx-background-color: rgba(255, 69, 58, 0.12);
-    -fx-border-color: rgba(255, 69, 58, 0.4);
+    -fx-background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ===== 加载与错误状态 ===== */
@@ -572,4 +694,34 @@
 /* 水平滚动条：thumb 上下留 2px 边距 */
 .editor-panel .scroll-bar:horizontal .thumb {
     -fx-padding: 2 0 2 0;
+}
+
+/* 消除 ListView 水平/垂直滚动条交汇处的白色角块 */
+.editor-panel .virtual-flow > .corner {
+    -fx-background-color: transparent;
+}
+
+/* ===== "添加到对话框"悬浮按钮 ===== */
+
+.add-to-chat-button {
+    -fx-background-color: rgba(58, 58, 60, 0.95);
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(255, 255, 255, 0.1);
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-padding: 6 12 6 12;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 8, 0, 0, 2);
+}
+
+.add-to-chat-button:hover {
+    -fx-background-color: -autiva-blue;
+    -fx-border-color: -autiva-blue;
+}
+
+.add-to-chat-button:pressed {
+    -fx-background-color: derive(-autiva-blue, -10%);
 }

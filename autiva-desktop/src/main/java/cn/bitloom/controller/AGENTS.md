@@ -67,6 +67,8 @@
 - `showFileInPanel(Path)`: 在编辑器面板显示文件内容
 - `showDiffView(FileDiff)`: 打开 diff 对比视图
 - `updateCurrentProject(ProjectInfo)`: 通知编辑器面板更新当前项目（构建目录树）
+- `addTextToChat(String)`: 将选中文本追加到对话框输入框（编辑器面板选择联动）
+- `addFileToChat(File)`: 将文件添加到对话框附件（编辑器面板拖拽联动）
 - `resolveWorkingDir()`: 解析当前工作目录（当前项目路径或 null）
 
 **布局管理：** 主区域与编辑器面板通过 `SplitPane` (`mainSplit`) 组织，支持拖拽调整大小。编辑器面板默认从 SplitPane 移除（隐藏），打开时通过 `ensureEditorVisible()` 添加回 SplitPane 并恢复 divider 位置。
@@ -88,9 +90,11 @@
 - 工具调用分组折叠：连续的 TOOL 类型消息自动归入 `ToolGroupCard`，非 TOOL 消息中断分组。通过 `currentToolGroup` 字段追踪当前活跃的工具分组，清除对话时重置
 - 滚动到顶部加载更多历史消息：监听 ScrollPane vvalue 变化，当滚动到顶部时调用 `viewModel.loadMoreMessages(30)` 获取更早的消息，再调用 `viewModel.prependHistoricalMessages()` 在头部插入，ListChangeListener 自动创建卡片并保持滚动位置不变
 - 处理发送输入框和发送按钮事件
+- sendField 使用 AutoResizeTextArea 自定义组件（重写 computePrefHeight 按实际渲染高度计算），无需手动调整高度；原 adjustTextAreaHeight() 方法已置空保留
+- 文件标签容器（fileTagsPane）包装在 ScrollPane（fileTagsScroll）中，限制最大高度 96px 并支持垂直滚动，防止数十个文件标签挤出按钮区；updateFileTagsPaneVisibility() 控制 fileTagsScroll 的 visible/managed
 - 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 默认使用 DeepSeek 模型，无需手动选择
-- 管理智能体选择按钮（agentSelector）：通过 `setupAgentSelector()` 方法初始化，从 `AgentDefinitionManager.getMainAgentIds()` 获取主智能体列表填充到 ComboBox items，默认选中 Store.currentAgent 或 "default"，监听选择变化调用 viewModel.switchAgent()
+- 管理智能体选择按钮（agentSelector）：MenuButton 类型（与 projectSelectButton 风格一致），通过 `setupAgentSelector()` 方法初始化，从 `AgentDefinitionManager.getMainAgentIds()` 获取主智能体列表填充到 MenuItem 项，点击 MenuItem 设置 MenuButton 文字并调用 viewModel.switchAgent()，监听 Store.currentAgent 变化同步文字（切换历史会话时触发）
 - 处理语音输入按钮
 - 画布按钮：打开 CanvasDialog 弹窗
 - 动画效果（图标淡出、聊天区域展开）
@@ -116,6 +120,14 @@
 - `viewModel.createNewProject(String name)` - 新建项目并设为当前
 - `viewModel.registerLocalProject(String path, String name)` - 注册本地文件夹并设为当前
 - `viewModel.listProjects()` - 列出所有注册项目
+
+**编辑器面板联动方法：**
+- `appendTextToChat(String text)`: 将选中文本追加到输入框末尾（已有内容时换行分隔），由 IndexController.addTextToChat 转发调用
+- `addAttachedFile(File file)`: 添加附件文件（去重处理），复用 attachedFiles 机制，由 IndexController.addFileToChat 转发调用或拖拽释放时直接调用
+- `setupDragDrop()`: 将 sendBox 注册为拖拽目标，接收来自文件树/Diff 列表的文件拖拽
+- `handleDragOver(DragEvent)`: 拖拽悬停时接受 COPY 传输模式
+- `handleDragDropped(DragEvent)`: 拖拽释放时将文件添加为附件（仅添加附件，不触发界面状态切换动画）
+- `updateSelectorLockState(boolean locked)`: 根据是否已有对话消息锁定/解锁智能体选择器（agentSelector）和项目选择按钮（projectSelectButton）。一个 session 只能绑定一个智能体和一个项目，有了对话后不可修改；消息列表清空（新建会话/清除对话）后自动解锁。在消息列表 ListChangeListener 中根据 `!messages.isEmpty()` 调用
 
 ### AgentPageController
 智能体配置页控制器，实现 Initializable、ButtonBarHolder、PageHolder。
@@ -398,6 +410,12 @@
 - `setupRoundedClip()`: 给 viewContainer 设置 Rectangle clip（arcWidth/arcHeight=24），裁剪终端/项目/变更三视图的方角到 12px 圆角形状
 - `setupFileTree()`: 设置文件树，注入 `FileTreeCell` 工厂，绑定双击事件
 - `setupDiffList()`: 设置变更列表，注入 `DiffListCell` 工厂，绑定点击事件
+- `setupAddToChatButton()`: 创建 `AddToChatButton` 悬浮按钮实例添加到 viewContainer 顶层，注册点击回调（通过 indexController.addTextToChat 追加到对话框），使用事件过滤器（`addEventFilter` 捕获 `MOUSE_MOVED` + `MOUSE_DRAGGED`）追踪鼠标位置（viewContainer 坐标系），使按钮跟随选中区域定位（捕获阶段注册确保即使子节点消费了事件也能获取位置）
+- `handleMousePosition(MouseEvent)`: 记录鼠标在 viewContainer 坐标系中的位置，供悬浮按钮定位
+- `setupTerminalSelectionListener(JediTerminalView)`: 监听终端 selectedTextProperty，选择非空时显示悬浮按钮
+- `setupFileContentSelectionListener(CodeArea)`: 监听文件内容 CodeArea selectionProperty，选择非空时显示悬浮按钮
+- `setupDiffSelectionListener(StyleClassedTextArea)`: 监听 diff StyleClassedTextArea selectionProperty，选择非空时显示悬浮按钮
+- `showAddToChatButtonIfNeeded(String)`: 根据选中文本是否非空显示/隐藏悬浮按钮，定位到鼠标右下方 12px 处并限制在 viewContainer 边界内
 - `showTerminalView()`: 切换到终端视图，设置 currentViewType=TERMINAL
 - `showProjectView()`: 切换到项目视图，设置 currentViewType=PROJECT
 - `showChangesView()`: 切换到变更视图，设置 currentViewType=CHANGES
@@ -407,10 +425,17 @@
 - `ensureTerminalStarted(Path)`: 确保终端已启动，若未启动则异步创建
 - `closeTerminal()`: 关闭终端会话
 - `showFileContent(Path)`: 在项目视图右侧显示文件内容（CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 应用语法高亮）
-- `showDiffView(FileDiff)`: 在变更视图右侧显示 diff（顶部 `createFileMetaBar` + 中部 StyleClassedTextArea）。diffArea 仅包含 hunk header 与 +/- 行，文件路径由顶部元信息条显示，审核按钮在元信息条右侧
-- `createFileMetaBar(FileDiff)`: 创建 diff 文件元信息条（HBox：左侧路径 + spacer + 右侧撤销/确定按钮）。按钮点击后调用 `diffService.approveDiff/rejectDiff` 并刷新列表
-- `updateDiffList(List<FileDiff>)`: 刷新变更列表
-- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent，自动刷新变更列表
+- `showDiffView(FileDiff)`: 在变更视图右侧显示 diff。已在 CHANGES 视图时不调用 showChangesView（避免 refreshDiffList 清空列表导致选中闪烁）。先用 `diffService.recomputeDiff` 重新计算（历史对话场景文件可能已修改），再渲染：StackPane 叠加（VirtualizedScrollPane + 顶部悬浮横幅 + hunk 局部按钮）。**隐藏 @@ hunk 头和 +/- 前缀，纯色覆盖**。Hunk 头占位段落用 `.diff-hunk-header--hidden` 压缩高度到 0
+- `createDiffBanner(FileDiff, StyleClassedTextArea, List<int[]>)`: 创建顶部悬浮横幅（文件名 + spacer + ↑/↓ 导航 + 撤销/保留按钮），半透明深色背景 + 圆角 + 阴影。导航按钮循环跳转 hunk
+- `createHunkActions()`: 创建 hunk 局部撤销/保留按钮组（HBox，默认隐藏），贴附到当前顶部可见 hunk
+- `setupHunkActions(HBox, FileDiff, StyleClassedTextArea, List<int[]>)`: 监听 `estimatedScrollYProperty` 变化，估算当前可见段落，按 hunkRanges 范围判断是否在某个 hunk 内，控制局部按钮可见性。按钮点击调用 DiffService 整文件操作（DiffService 当前仅支持文件级撤销/保留）
+- `updateHunkActionsVisibility(HBox, StyleClassedTextArea, List<int[]>)`: 通过 `estimatedScrollYProperty.getValue()` / `getTotalHeightEstimate()` / 段落总数估算 firstVisible 段落，匹配 hunkRanges 范围控制按钮显示
+- `navigateHunk(StyleClassedTextArea, List<int[]>, int)`: 循环导航到上一个/下一个 hunk（跳过隐藏的 hunk 头行），调用 `showParagraphAtTop`
+- `createDiffLineNumberFactory(List<DiffLineInfo>)`: 创建自定义 diff 行号工厂，显示 old/new 双列行号和 3px gutter 指示条（ADD=绿/REMOVE=红）。Hunk 头行返回高度为 0 的空节点（视觉上隐藏）
+- `computeDiffStats(FileDiff)`: 静态方法，遍历 hunks/lines 统计 ADD/REMOVE 行数，返回 int[2]
+- `currentNavHunkIndex`: 当前导航到的 hunk 索引字段（-1 表示未定位）
+- `refreshDiffList()`: 异步用 JGit 扫描工作区未提交变更（`diffService.scanWorkingTreeDiffs`），刷新变更列表。无项目时清空列表
+- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent，收到事件后触发 `refreshDiffList`（基于 git 工作区扫描而非 pendingDiffs）
 - `createLoadingContent(String)`: 创建加载状态内容（ProgressIndicator + 文本）
 - `createErrorContent(String, Runnable)`: 创建错误状态内容（带重试按钮）
 

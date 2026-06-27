@@ -8,7 +8,6 @@ import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -232,7 +231,7 @@ public class ReadTool extends AbstractTool<ReadTool.Input> {
 			int totalTokens = 0;
 			boolean tokenBudgetExceeded = false;
 
-			try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+			try (BufferedReader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
 				String line;
 				while ((line = reader.readLine()) != null) {
 					currentLine++;

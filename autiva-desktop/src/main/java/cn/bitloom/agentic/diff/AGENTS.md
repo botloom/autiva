@@ -29,6 +29,11 @@ Diff 服务（Spring `@Component`），生成和管理文件 Diff，使用 JGit 
 - `List<FileDiff> getPendingDiffs()`: 获取待审核 Diff 列表
 - `void approveDiff(String diffId)`: 批准 Diff（仅从待审核列表移除，不修改文件）
 - `void rejectDiff(String diffId)`: 拒绝 Diff 并回滚文件内容（新建文件 → 删除；修改文件 → 用 oldContent 覆盖恢复）
+- `FileDiff recomputeDiff(FileDiff original)`: 重新计算 Diff（基于当前文件内容与 original.oldContent 用 JGit 重新生成 hunks）。用于历史对话场景，文件可能已被进一步修改。不存储/发布事件，读取失败时返回原始 diff
+- `List<FileDiff> scanWorkingTreeDiffs(Path projectPath)`: 扫描 Git 工作区未提交变更。用 JGit status 获取 modified/untracked/missing 文件，对比 HEAD 版本生成 FileDiff 列表。不存入 pendingDiffs，仅返回供 UI 显示。非 Git 仓库返回空列表
+- `void approveFileDiff(FileDiff diff)`: 批准文件 Diff（直接基于 FileDiff 对象，从 pendingDiffs 移除，不修改文件）
+- `void rejectFileDiff(FileDiff diff)`: 拒绝文件 Diff 并回滚文件内容（直接基于 FileDiff 对象，新建文件删除，修改文件用 oldContent 覆盖）
+- `readHeadContent(Repository, ObjectId, String)`: 私有方法，读取 HEAD 版本中指定文件的内容
 
 **设计：**
 - 使用 `ConcurrentHashMap` 存储待审核 Diff

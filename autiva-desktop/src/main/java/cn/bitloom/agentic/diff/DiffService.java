@@ -3,12 +3,20 @@ package cn.bitloom.agentic.diff;
 import cn.bitloom.agentic.event.DiffEvent;
 import cn.bitloom.agentic.event.EventBus;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.diff.DiffAlgorithm;
 import org.eclipse.jgit.diff.Edit;
 import org.eclipse.jgit.diff.EditList;
 import org.eclipse.jgit.diff.HistogramDiff;
 import org.eclipse.jgit.diff.RawText;
 import org.eclipse.jgit.diff.RawTextComparator;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.api.Status;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.treewalk.TreeWalk;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -18,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -91,6 +100,118 @@ public class DiffService {
         } catch (IOException e) {
             log.error("回滚文件失败: {} ({})", diff.filePath(), diffId, e);
         }
+    }
+
+    /**
+     * 批准文件 Diff（直接基于 FileDiff 对象，不依赖 pendingDiffs）
+     */
+    public void approveFileDiff(FileDiff diff) {
+        pendingDiffs.remove(diff.id());
+        log.info("批准文件 Diff: {}", diff.filePath());
+    }
+
+    /**
+     * 拒绝文件 Diff 并回滚文件内容（直接基于 FileDiff 对象）
+     */
+    public void rejectFileDiff(FileDiff diff) {
+        pendingDiffs.remove(diff.id());
+        try {
+            Path path = Paths.get(diff.filePath());
+            if (diff.isCreate()) {
+                Files.deleteIfExists(path);
+            } else if (diff.oldContent() != null) {
+                Files.writeString(path, diff.oldContent(), StandardCharsets.UTF_8);
+            }
+            log.info("撤销文件 Diff 并回滚: {}", diff.filePath());
+        } catch (IOException e) {
+            log.error("回滚文件失败: {}", diff.filePath(), e);
+        }
+    }
+
+    /**
+     * 扫描 Git 工作区未提交变更
+     * <p>
+     * 用 JGit status 扫描工作区，对比 HEAD 版本生成 FileDiff 列表。
+     * 不存入 pendingDiffs，仅返回供 UI 显示。
+     */
+    public List<FileDiff> scanWorkingTreeDiffs(Path projectPath) {
+        List<FileDiff> result = new ArrayList<>();
+        if (!Files.isDirectory(projectPath.resolve(".git"))) {
+            return result;
+        }
+        try (Git git = Git.open(projectPath.toFile())) {
+            Repository repo = git.getRepository();
+            Status status = git.status().call();
+            ObjectId head = repo.resolve("HEAD");
+            Path workTree = repo.getWorkTree().toPath();
+
+            for (String path : status.getModified()) {
+                String oldContent = readHeadContent(repo, head, path);
+                Path filePath = workTree.resolve(path);
+                String newContent = Files.exists(filePath) ? Files.readString(filePath, StandardCharsets.UTF_8) : "";
+                List<FileDiff.Hunk> hunks = generateHunks(oldContent, newContent);
+                result.add(new FileDiff(UUID.randomUUID().toString(),
+                        filePath.toString(), hunks, false, false, oldContent));
+            }
+            for (String path : status.getUntracked()) {
+                Path filePath = workTree.resolve(path);
+                if (!Files.isRegularFile(filePath)) continue;
+                String newContent = Files.readString(filePath, StandardCharsets.UTF_8);
+                List<FileDiff.Hunk> hunks = generateHunks("", newContent);
+                result.add(new FileDiff(UUID.randomUUID().toString(),
+                        filePath.toString(), hunks, true, false, ""));
+            }
+            for (String path : status.getMissing()) {
+                String oldContent = readHeadContent(repo, head, path);
+                List<FileDiff.Hunk> hunks = generateHunks(oldContent, "");
+                result.add(new FileDiff(UUID.randomUUID().toString(),
+                        workTree.resolve(path).toString(), hunks, false, true, oldContent));
+            }
+        } catch (Exception e) {
+            log.error("扫描工作区 diff 失败: {}", projectPath, e);
+        }
+        return result;
+    }
+
+    /**
+     * 读取 HEAD 版本中指定文件的内容
+     */
+    private String readHeadContent(Repository repo, ObjectId head, String path) {
+        if (head == null) return "";
+        try (RevWalk walk = new RevWalk(repo)) {
+            RevCommit commit = walk.parseCommit(head);
+            try (TreeWalk treeWalk = TreeWalk.forPath(repo, path, commit.getTree())) {
+                if (treeWalk == null) return "";
+                ObjectLoader loader = repo.open(treeWalk.getObjectId(0));
+                return new String(loader.getBytes(), StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * 重新计算 Diff（基于当前文件内容）
+     * <p>
+     * 用于历史对话场景：文件可能已被进一步修改，需要用 JGit 重新生成 hunks。
+     * 不存储/发布事件，仅返回新的 FileDiff 供 UI 显示。
+     * 读取文件失败时返回原始 diff。
+     */
+    public FileDiff recomputeDiff(FileDiff original) {
+        Path filePath = Paths.get(original.filePath());
+        String oldContent = original.oldContent() != null ? original.oldContent() : "";
+        String newContent = "";
+        try {
+            if (Files.exists(filePath)) {
+                newContent = Files.readString(filePath, StandardCharsets.UTF_8);
+            }
+        } catch (IOException e) {
+            log.warn("重新计算 Diff 时读取文件失败: {}, 使用原始 diff", filePath, e);
+            return original;
+        }
+        List<FileDiff.Hunk> hunks = generateHunks(oldContent, newContent);
+        return new FileDiff(original.id(), original.filePath(), hunks,
+                original.isCreate(), original.isDelete(), original.oldContent());
     }
 
     /**

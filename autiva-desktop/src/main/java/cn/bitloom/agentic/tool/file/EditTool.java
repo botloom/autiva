@@ -10,11 +10,11 @@ import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -81,10 +81,22 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 				return ToolResult.error("读取文件内容时出错: " + e.getMessage());
 			}
 
-			int occurrences = ToolUtils.countOccurrences(originalContent, old_string);
+			// 检测原始行尾风格并归一化为 LF 进行匹配
+			// 解决 Windows CRLF 文件与 LLM 提供的 LF 行尾不匹配导致 indexOf 失败的问题
+			boolean useCrlf = originalContent.contains("\r\n");
+			String normalizedContent = useCrlf ? originalContent.replace("\r\n", "\n") : originalContent;
+			String normalizedOld = old_string.replace("\r\n", "\n");
+			String normalizedNew = new_string.replace("\r\n", "\n");
+
+			int occurrences = ToolUtils.countOccurrences(normalizedContent, normalizedOld);
 
 			if (occurrences == 0) {
-				return ToolResult.error("在文件中未找到old_string: " + filePath);
+				return ToolResult.error(String.format(
+						"在文件中未找到old_string: %s。可能原因：" +
+						"(1) 缩进字符不匹配（Tab/Space 混用）；" +
+						"(2) old_string 误包含了 Read 输出的行号前缀（应为空格+行号+制表符之后的内容，不要包含前缀）；" +
+						"(3) 字符串大小写或空白字符差异。建议使用 Grep 工具（outputMode=content, showLineNumbers=true）定位实际内容。",
+						filePath));
 			}
 
 			boolean replaceAll = Boolean.TRUE.equals(replace_all);
@@ -95,11 +107,15 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 						occurrences));
 			}
 
-			String newContent = replaceAll
-					? ToolUtils.replaceAll(originalContent, old_string, new_string)
-					: ToolUtils.replaceFirst(originalContent, old_string, new_string);
+			String normalizedResult = replaceAll
+					? ToolUtils.replaceAll(normalizedContent, normalizedOld, normalizedNew)
+					: ToolUtils.replaceFirst(normalizedContent, normalizedOld, normalizedNew);
 
-			try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
+			// 还原原始行尾风格，保持文件行尾一致性
+			String newContent = useCrlf ? normalizedResult.replace("\n", "\r\n") : normalizedResult;
+
+			try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8,
+					StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
 				writer.write(newContent);
 			}
 
@@ -112,7 +128,7 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 				}
 			}
 
-			String snippet = ToolUtils.generateEditSnippet(newContent, new_string);
+			String snippet = ToolUtils.generateEditSnippet(normalizedResult, normalizedNew);
 			String rawOutput = String.format(
 					"文件%s已更新。以下是对已编辑文件运行`cat -n`的结果片段:\n%s",
 					filePath, snippet);

@@ -195,7 +195,7 @@ tool/
 ### file 包 (`cn.bitloom.agentic.tool.file`)
 文件系统操作工具，每个工具独立继承 AbstractTool。
 
-- **ReadTool**: 文件读取工具（继承 AbstractTool\<ReadTool.Input\>）。支持 offset/limit 分页，行号格式输出。成功时 data 含 file/start_line/end_line/total_lines/tokens_used/token_budget，rawOutput 保留原始格式化文本。**大文件保护机制**（参考 Claude Code）：
+- **ReadTool**: 文件读取工具（继承 AbstractTool\<ReadTool.Input\>）。支持 offset/limit 分页，行号格式输出（`%6d\t` 空格补齐6位+制表符）。成功时 data 含 file/start_line/end_line/total_lines/tokens_used/token_budget，rawOutput 保留原始格式化文本。**强制 UTF-8 编码读取**（`Files.newBufferedReader(path, StandardCharsets.UTF_8)`，与 GrepTool/DiffService 一致，避免 Windows GBK 默认编码导致中文乱码）。**大文件保护机制**（参考 Claude Code）：
   - 文件大小预检查：超过 10MB 的文件直接拒绝，返回错误提示
   - Token 预算控制：使用上下文窗口 60% 的 Token 预算（默认 120K tokens）
   - 流式读取：边读边计算 Token，达到预算立即停止，避免内存溢出和 UI 卡死
@@ -209,8 +209,8 @@ tool/
     * 对于二进制文件：返回类型提示和专用工具建议
     * **文本扩展名白名单（TEXT_EXTENSIONS）**：覆盖 100+ 种源代码与文本扩展名（java/kt/py/go/rs/c/cpp/js/ts/css/scss/json/yaml/md 等），命中后直接放行不做任何二进制检测，从根上杜绝含中文注释的源代码被误判
     * **UTF-8 严格解码兜底**：未知扩展名用 CharsetDecoder + CodingErrorAction.REPORT 严格解码前 8KB 字节，任何 malformed/unmappable 字符即判定为二进制（替代原 Magic Bytes 启发式，避免 UTF-8 中文文件误判）
-- **WriteTool**: 文件写入工具（继承 AbstractTool\<WriteTool.Input\>）。写入/覆盖文件，自动创建父目录。成功时 data 含 file/bytes/action。**Diff 生成（非阻塞）**：Builder 接受 `DiffService`，execute() 在写文件**之后**读取旧内容（已存在文件）并调用 `diffService.generateDiff(path, oldContent, newContent)` 发布 `DiffEvent`，diff 生成失败不影响写入结果；用户事后在右侧"修改文件"列表查看 diff 并可"撤销"回滚文件
-- **EditTool**: 文件编辑工具（继承 AbstractTool\<EditTool.Input\>）。精确字符串替换，支持 replace_all。成功时 data 含 file/occurrences/replace_all，rawOutput 保留 cat-n 片段。使用 ToolUtils 静态方法。**Diff 生成（非阻塞）**：同 WriteTool，Builder 接受 `DiffService`，execute() 在写回新内容**之后**调用 `diffService.generateDiff(path, originalContent, newContent)`，originalContent 复用第 70 行已读取的旧内容
+- **WriteTool**: 文件写入工具（继承 AbstractTool\<WriteTool.Input\>）。写入/覆盖文件，自动创建父目录。**强制 UTF-8 编码写入**（`Files.newBufferedWriter(path, UTF_8, TRUNCATE_EXISTING, CREATE)`，与读取侧一致，避免 Windows GBK 默认编码导致中文乱码）。成功时 data 含 file/bytes/action。**Diff 生成（非阻塞）**：Builder 接受 `DiffService`，execute() 在写文件**之后**读取旧内容（已存在文件）并调用 `diffService.generateDiff(path, oldContent, newContent)` 发布 `DiffEvent`，diff 生成失败不影响写入结果；用户事后在右侧"修改文件"列表查看 diff 并可"撤销"回滚文件
+- **EditTool**: 文件编辑工具（继承 AbstractTool\<EditTool.Input\>）。精确字符串替换，支持 replace_all。成功时 data 含 file/occurrences/replace_all，rawOutput 保留 cat-n 片段（行号前缀 `%6d\t` 与 ReadTool 输出一致）。使用 ToolUtils 静态方法。**强制 UTF-8 编码读写**（读 `Files.readString(UTF_8)`，写 `Files.newBufferedWriter(UTF_8, TRUNCATE_EXISTING, CREATE)`，与 WriteTool 一致，避免 Windows GBK 默认编码导致中文乱码）。**CRLF 归一化匹配**：execute() 读取 originalContent 后检测原始行尾风格（`contains("\r\n")` → CRLF），将文件内容与 old_string/new_string 都归一为 LF 做 indexOf 匹配，替换后再按原始风格还原（LF→CRLF），解决 Windows CRLF 文件与 LLM 提供的 LF 行尾不匹配导致"未找到 old_string"的问题。**错误提示增强**：未找到 old_string 时返回三类可能原因（缩进 Tab/Space 混用、误含 Read 输出的行号前缀、空白字符差异）并建议用 Grep 工具定位实际内容，避免 LLM 盲试。**Diff 生成（非阻塞）**：同 WriteTool，Builder 接受 `DiffService`，execute() 在写回新内容**之后**调用 `diffService.generateDiff(path, originalContent, newContent)`，originalContent 复用已读取的旧内容
 
 ### search 包 (`cn.bitloom.agentic.tool.search`)
 搜索类工具，统一继承 AbstractTool。
@@ -320,7 +320,7 @@ MCP服务器配置管理工具，每个工具独立继承 AbstractTool。
 - `countOccurrences(String, String)`: 统计子字符串出现次数
 - `replaceFirst(String, String, String)`: 替换第一个匹配项
 - `replaceAll(String, String, String)`: 替换所有匹配项
-- `generateEditSnippet(String, String)`: 生成编辑位置周围的上下文片段（带行号）
+- `generateEditSnippet(String, String)`: 生成编辑位置周围的上下文片段，行号前缀格式 `%6d\t`（空格补齐6位+制表符，与 ReadTool 输出和 EditTool.DESCRIPTION 描述一致，避免 LLM 混淆行号前缀字符）
 
 ## 日志规范
 

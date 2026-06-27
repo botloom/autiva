@@ -24,6 +24,7 @@
     -fx-border-radius: 25px;
     -fx-border-insets: 0;
     -fx-min-height: 110;
+    -fx-max-height: 280;
     -fx-padding: 8 0 0 0;
 }
 
@@ -44,8 +45,6 @@
     -fx-padding: 8 60 0 16;
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
-    -fx-pref-height: 48;
-    -fx-max-height: 200;
     -fx-wrap-text: true;
 }
 
@@ -248,6 +247,72 @@
     -fx-padding: 4 0 4 0;
 }
 
+/* 智能体选择下拉菜单按钮（MenuButton，类似 project-menu-btn） */
+.home-page__agent-menu-btn {
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 18px;
+    -fx-background-insets: 0;
+    -fx-border-color: rgba(0, 0, 0, 0.1);
+    -fx-border-width: 1px;
+    -fx-border-radius: 18px;
+    -fx-border-insets: 0;
+    -fx-padding: 0 12 0 0;
+    -fx-pref-height: 37;
+    -fx-content-display: LEFT;
+    -fx-graphic-text-gap: 4;
+    -fx-cursor: hand;
+}
+
+.home-page__agent-menu-btn:hover {
+    -fx-background-color: #f5f5f7;
+    -fx-border-color: rgba(0, 0, 0, 0.15);
+}
+
+.home-page__agent-menu-btn:disabled {
+    -fx-opacity: 0.5;
+    -fx-cursor: default;
+}
+
+.home-page__agent-menu-btn .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+    -fx-pref-width: 0;
+    -fx-opacity: 0;
+}
+
+.home-page__agent-menu-btn .arrow {
+    -fx-background-color: transparent;
+    -fx-shape: none;
+    -fx-padding: 0;
+}
+
+.home-page__agent-menu-btn .context-menu {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12px;
+    -fx-border-color: rgba(0, 0, 0, 0.1);
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 12, 0, 0, 2);
+    -fx-padding: 4;
+}
+
+.home-page__agent-menu-btn .menu-item {
+    -fx-padding: 8 12 8 12;
+    -fx-background-radius: 8px;
+    -fx-cursor: hand;
+}
+
+.home-page__agent-menu-btn .menu-item:hover {
+    -fx-background-color: #f5f5f7;
+}
+
+.home-page__agent-menu-btn .menu-item .label {
+    -fx-text-fill: #1d1d1f;
+    -fx-font-size: 13px;
+}
+
 /* 智能体选择器容器（图标+ComboBox 组合） */
 .home-page__agent-selector-box {
     -fx-background-color: #ffffff;
@@ -346,10 +411,27 @@
     -fx-padding: 0;
 }
 
-.home-page__file-tags {
+.home-page__file-tags-scroll {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
     -fx-padding: 6 16 0 16;
+    -fx-max-height: 96;
+    -fx-pref-width: 600;
+    -fx-max-width: 1000;
+    -fx-min-width: 300;
+}
+
+.home-page__file-tags-scroll .viewport {
+    -fx-background-color: transparent;
+}
+
+.home-page__file-tags {
+    -fx-padding: 0;
     -fx-hgap: 6;
     -fx-vgap: 4;
+    -fx-pref-width: 568;
 }
 
 .home-page__file-tag {

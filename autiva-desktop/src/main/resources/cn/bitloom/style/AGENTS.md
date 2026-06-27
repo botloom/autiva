@@ -116,7 +116,7 @@
 - `.editor-panel__project-split` / `.editor-panel__changes-split`: 内部 SplitPane（透明背景，分隔条透明 hover 蓝色，h-resize 光标）
 - `.editor-panel__tree-panel`: 文件树面板 VBox（#2c2c2e 次级背景，右边框 1px #38383a，padding 6 0 6 0）
 - `.editor-panel__tree`: TreeView（透明背景，固定行高 28px，padding 2 4 2 4）
-- `.editor-panel__tree .tree-cell`: Apple 风格选中（透明背景，填满行宽保证箭头/图标/文字对齐；hover rgba(255,255,255,0.06)；selected 蓝色 #0a84ff 填充 + 白字）
+- `.editor-panel__tree .tree-cell`: Apple 风格微圆角选中（background-radius 4 + insets 1 0 1 0：上下1px间隙显圆角，左右填满对齐；hover rgba(255,255,255,0.06)；selected 蓝色 #0a84ff 填充 + 白字）
 - `.editor-panel__tree .tree-cell .arrow`: 隐藏折叠箭头（宽度设为0），改用双击展开/折叠
 - `.file-tree__folder`: 文件夹粗体样式
 - `.file-tree__file`: 文件常规样式
@@ -149,23 +149,48 @@
   - `.syntax-type` `#5ac8fa` 青色：类型名（大写开头标识符）
   - `.syntax-key` `#bf5af2` 紫色：JSON/YAML 键名
   - `.syntax-operator` `#ff375f` 粉红：操作符
-- **Diff 元信息条（顶部，左侧路径 + 右侧审核按钮）：**
-  - `.editor-panel__meta-bar`: HBox（#2c2c2e 背景，center-left，spacing 10px，padding 10 14 10 14，底部 1px 分隔线）。右侧通过 spacer（Hgrow ALWAYS）推入审核按钮
-  - `.editor-panel__meta-path`: 文件路径（13px 等宽，白色）
+- **Diff 列表项整体底色区分（不加文字徽章）：**
+  - `.diff-list-cell--add/--modify/--delete`：cell 级修饰类（加在 ListCell 上），整体背景色区分新建（绿 10%）/修改（橙 10%）/删除（红 10%），hover 提升到 20%，selected 统一为蓝色填充
+- **Diff 元信息条（已弃用，由悬浮横幅 .diff-banner 替代）：**
+  - `.editor-panel__meta-bar` / `.editor-panel__meta-path` / `.editor-panel__meta-badge` + `--add/--delete/--modify` / `.editor-panel__meta-stat` + `--add/--remove`：保留但未使用
+- **Diff 悬浮横幅（顶部叠加层）：**
+  - `.diff-banner`：HBox（rgba(44,44,46,0.92) 半透明深色背景，10px 圆角，1px 边框，阴影，padding 6 10 6 12，spacing 6）
+  - `.diff-banner__path`：文件名（13px 等宽粗体白色）
+  - `.diff-banner__btn`：横幅按钮基础样式（rgba(255,255,255,0.08) 背景，6px 圆角，hover 提升到 0.16）
+  - `.diff-banner__btn--nav`：导航按钮（↑/↓，padding 4 8）
+  - `.diff-banner__btn--reject`：撤销按钮（红字 #ff453a）
+  - `.diff-banner__btn--approve`：保留按钮（绿字 #30d158）
+- **Diff Hunk 局部操作按钮（滚动时贴附到当前可见 hunk 右上角）：**
+  - `.diff-hunk-action`：HBox 容器（rgba(58,58,60,0.95) 背景，8px 圆角，阴影，默认隐藏，仅当可见段落落在 hunk 范围内时显示）
+  - `.diff-hunk-action__btn`：按钮基础样式（透明背景，5px 圆角，hover rgba(255,255,255,0.10)）
+  - `.diff-hunk-action__btn--approve/--reject`：保留/撤销按钮（绿/红文字）
 - **Diff 行级着色：**
   - `.diff-meta`: diff 元信息行（透明背景，次要文字色）
-  - `.diff-hunk-header`: Hunk 头（`@@ ... @@`，蓝色半透明背景 rgba(10,132,255,0.16)，青色文字 #5ac8fa）
-  - `.diff-line-add`: 新增行（绿色半透明背景 rgba(48,209,88,0.18)，浅绿文字 #8de8a4）
-  - `.diff-line-remove`: 删除行（红色半透明背景 rgba(255,69,58,0.18)，浅红文字 #ff9a92）
+  - `.diff-hunk-header`: Hunk 头默认样式（蓝色半透明背景 rgba(10,132,255,0.20)，青色文字 #5ac8fa）
+  - `.diff-hunk-header--hidden`: **Hunk 头隐藏修饰类**，将背景/文字设为透明，高度压缩到 0（不展示 @@ 行号信息）
+  - `.diff-line-add`: 新增行（绿色半透明背景 rgba(48,209,88,0.22)，浅绿文字 #8de8a4）
+  - `.diff-line-remove`: 删除行（红色半透明背景 rgba(255,69,58,0.22)，浅红文字 #ff9a92）
   - `.diff-line-context`: 上下文行（透明背景，白色文字）
+- **Diff 双列行号区域：**
+  - `.diff-lineno-box`: 行号 HBox 容器（#1c1c1e 背景，右侧分隔线）
+  - `.diff-lineno`: 行号基础样式（11px 等宽，三级文字色）
+  - `.diff-lineno--add`: ADD 行新行号（绿色 rgba(48,209,88,0.8)）
+  - `.diff-lineno--remove`: REMOVE 行旧行号（红色 rgba(255,69,58,0.8)）
+  - `.diff-lineno-hunk`: Hunk 头行号（保留，当前未使用）
+- **Diff Gutter 指示条：**
+  - `.diff-gutter-indicator`: 基础样式（透明）
+  - `.diff-gutter-indicator--add`: ADD 行指示条（绿色 #30d158，1px 圆角）
+  - `.diff-gutter-indicator--remove`: REMOVE 行指示条（红色 #ff453a，1px 圆角）
 - `.editor-panel__diff-actions`: （已弃用，审核按钮已移至 meta bar 右侧）
-- `.editor-panel__diff-btn--approve`: 确定按钮（蓝色 primary #0a84ff + 白字，主要操作，位于 meta bar 最右）
-- `.editor-panel__diff-btn--reject`: 撤销按钮（浅色背景 rgba(255,255,255,0.06) + 红字 #ff453a + 红色细边框，secondary 危险操作，位于 meta bar 右侧倒数第二）
+- `.editor-panel__diff-btn--approve` / `--reject`: Diff 审核按钮（与首页 .dynamic-btn 风格统一：rgba(255,255,255,0.06) 半透明背景 + 8px 圆角 + 12px 600 字重，hover rgba(255,255,255,0.1)）
+- `.editor-panel__diff-btn--approve`: 确定按钮（蓝字 #0a84ff）
+- `.editor-panel__diff-btn--reject`: 撤销按钮（红字 #ff453a）
 - `.editor-panel__loading-text`: 加载状态文字（次要文字色）
 - `.editor-panel__error-text`: 错误状态文字（红色 #ff453a）
 - `.editor-panel__retry-btn`: 重试按钮（蓝色 #0a84ff，hover #0070ee）
 - `.jedi-terminal-view`: 终端视图（深色背景 #1c1c1e）
 - `.editor-panel .scroll-bar`: Apple 风格细滚动条（8px 宽/高，thumb rgba(255,255,255,0.18) + 4px 圆角，hover 0.28，pressed 0.38，覆盖所有视图 TreeView/ListView/Terminal/CodeArea/DiffArea，垂直+水平一致；thumb 上下/左右各留 2px 边距）
+- `.editor-panel .virtual-flow > .corner`: ListView 水平/垂直滚动条交汇处角块（透明背景，避免深色主题下出现白色方块）
 
 ### home-page.css
 主页样式。
@@ -174,7 +199,7 @@
 - `.home-page`: 主页容器
 - `.home-page__icon`: 图标区域
 - `.home-page__chat-scroll-pane`: 聊天滚动面板
-- `.home-page__send-box`: 发送框容器
+- `.home-page__send-box`: 发送框容器（max-height 280，防止文件标签过多时挤出按钮区；min-height 110）
 - `.home-page__send-field`: 发送输入框
 - `.home-page__icon-btn`: 图标按钮
 - `.home-page__icon-btn--active`: 图标按钮激活状态（红色背景，用于录音状态）
@@ -182,9 +207,13 @@
 - `.home-page__model-selector`: 模型选择器
 - `.home-page__project-menu-btn`: 项目选择下拉菜单按钮（胶囊形，与 model-selector 风格一致，宽度自适应文本内容，移除固定最小宽度，移除 FXML 左侧 margin，左侧 padding 0，图标文本间距 2px）
 - `.home-page__branch-btn`: 分支显示按钮（图标+文字，默认只显示图标）
-- `.home-page__agent-selector`: 智能体选择器（胶囊形状，与 modelSelector 风格一致）
-- `.home-page__agent-selector:hover`: 智能体选择器悬停状态
-- `.home-page__agent-selector:pressed`: 智能体选择器按下状态
+- `.home-page__agent-menu-btn`: 智能体选择下拉菜单按钮（MenuButton，与 project-menu-btn 风格一致，胶囊形，左侧 robot.svg 图标 + 智能体名称，hover 浅灰，disabled 半透明）
+- `.home-page__file-tags-scroll`: 文件标签滚动容器（max-height 96，透明背景，vbarPolicy=NEVER 隐藏滚动条，padding 6 16 0 16）
+- `.home-page__file-tags`: 文件标签 FlowPane（pref-width 568，hgap 6，vgap 4）
+- `.home-page__file-tag`: 文件标签项（浅灰背景 #e8e8ed，12px 圆角，padding 3 4 3 8）
+- `.home-page__file-tag-icon`: 文件标签图标（12x12）
+- `.home-page__file-tag-name`: 文件标签文件名（12px，max-width 180）
+- `.home-page__file-tag-close`: 文件标签关闭按钮（18x18 圆形，透明背景）
 - `.chat-scroll-pane`: 聊天滚动面板
 - `.chat-container`: 聊天消息容器
 - `.chat-message`: 消息卡片基础样式

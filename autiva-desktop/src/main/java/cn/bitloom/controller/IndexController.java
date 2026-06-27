@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.ResourceBundle;
@@ -224,6 +225,24 @@ public class IndexController implements Initializable {
     public void updateCurrentProject(ProjectInfo project) {
         if (editorPanelController != null) {
             editorPanelController.setCurrentProject(project);
+        }
+    }
+
+    /**
+     * 将选中文本追加到对话框输入框（编辑器面板 → 对话框联动）
+     */
+    public void addTextToChat(String text) {
+        if (homePageController != null) {
+            homePageController.appendTextToChat(text);
+        }
+    }
+
+    /**
+     * 将文件添加到对话框附件（编辑器面板拖拽 → 对话框联动）
+     */
+    public void addFileToChat(File file) {
+        if (homePageController != null) {
+            homePageController.addAttachedFile(file);
         }
     }
 

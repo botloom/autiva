@@ -102,7 +102,7 @@ public final class ToolUtils {
 
         StringBuilder snippet = new StringBuilder();
         for (int i = startLine; i <= endLine; i++) {
-            snippet.append(String.format("%6d→%s", i + 1, lines[i]));
+            snippet.append(String.format("%6d\t%s", i + 1, lines[i]));
             if (i < endLine) {
                 snippet.append("\n");
             }

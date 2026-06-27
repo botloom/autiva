@@ -40,34 +40,83 @@
 
 .diff-review-card__content {
     -fx-background-color: #ffffff;
-    -fx-padding: 8;
-    -fx-spacing: 2;
+    -fx-padding: 4 0;
+    -fx-spacing: 0;
 }
 
 .diff-review-card__hunk-header {
     -fx-font-family: "Menlo", "Consolas", monospace;
     -fx-font-size: 11px;
-    -fx-text-fill: #86868b;
+    -fx-text-fill: #0071e3;
     -fx-padding: 4 8;
-    -fx-background-color: #f5f5f7;
+    -fx-background-color: rgba(0, 113, 227, 0.08);
 }
 
-.diff-review-card__line {
-    -fx-font-family: "Menlo", "Consolas", monospace;
-    -fx-font-size: 12px;
-    -fx-padding: 1 8;
-}
+/* ===== Diff 行（HBox 行布局：gutter + old行号 + new行号 + 文本） ===== */
 
-.diff-review-card__line--add {
+.diff-review-card__line-row--add {
     -fx-background-color: rgba(34, 197, 94, 0.12);
 }
 
-.diff-review-card__line--remove {
+.diff-review-card__line-row--remove {
     -fx-background-color: rgba(239, 68, 68, 0.12);
 }
 
-.diff-review-card__line--context {
+.diff-review-card__line-row--context {
     -fx-background-color: transparent;
+}
+
+/* Gutter 指示条 */
+.diff-review-card__gutter {
+    -fx-background-color: transparent;
+}
+
+.diff-review-card__gutter--add {
+    -fx-background-color: #22c55e;
+    -fx-background-radius: 1;
+}
+
+.diff-review-card__gutter--remove {
+    -fx-background-color: #ef4444;
+    -fx-background-radius: 1;
+}
+
+/* 双列行号 */
+.diff-review-card__lineno {
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 11px;
+    -fx-text-fill: #aeaeb2;
+    -fx-padding: 0 6 0 4;
+}
+
+.diff-review-card__lineno--add {
+    -fx-text-fill: rgba(34, 197, 94, 0.7);
+}
+
+.diff-review-card__lineno--remove {
+    -fx-text-fill: rgba(239, 68, 68, 0.7);
+}
+
+/* 文本行 */
+.diff-review-card__line {
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 12px;
+    -fx-padding: 1 8 1 4;
+}
+
+/* +/- 前缀着色 */
+.diff-review-card__prefix--add {
+    -fx-fill: #16a34a;
+    -fx-font-weight: bold;
+}
+
+.diff-review-card__prefix--remove {
+    -fx-fill: #dc2626;
+    -fx-font-weight: bold;
+}
+
+.diff-review-card__prefix--context {
+    -fx-fill: #aeaeb2;
 }
 
 .diff-review-card__buttons {

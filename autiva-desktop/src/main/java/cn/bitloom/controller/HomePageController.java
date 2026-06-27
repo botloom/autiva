@@ -10,6 +10,7 @@ import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.message.AssistantMessageCard;
 import cn.bitloom.node.message.MessageCard;
 import cn.bitloom.node.message.ToolMessageCard;
+import cn.bitloom.node.AutoResizeTextArea;
 import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.node.tool.TaskCard;
 import cn.bitloom.node.tool.ToolGroupCard;
@@ -33,8 +34,10 @@ import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.DragEvent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
 import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
@@ -62,7 +65,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private VBox sendBox;
     @FXML
-    private TextArea sendField;
+    private AutoResizeTextArea sendField;
     @FXML
     private Button sendButton;
     @FXML
@@ -74,13 +77,15 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private FlowPane fileTagsPane;
     @FXML
+    private ScrollPane fileTagsScroll;
+    @FXML
     private VBox icon;
     @FXML
     private ScrollPane chatScrollPane;
     @FXML
     private VBox chatContainer;
     @FXML
-    private ComboBox<String> agentSelector;
+    private MenuButton agentSelector;
     @FXML
     private MenuButton projectSelectButton;
     @FXML
@@ -128,8 +133,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             }
         });
 
-        // TextArea 自动调整高度
-        this.sendField.textProperty().addListener((obs, oldVal, newVal) -> adjustTextAreaHeight());
+        // sendField 使用 AutoResizeTextArea，高度由 computePrefHeight 自动计算，无需手动调整
 
         // 添加文件按钮
         this.addFileButton.setOnAction(event -> this.handleAddFile());
@@ -188,12 +192,46 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                     }
                 }
             }
+            // 有对话消息后锁定智能体和项目选择器（一个 session 只能绑定一个智能体和一个项目）
+            updateSelectorLockState(!this.viewModel.getMessages().isEmpty());
         });
 
         if (this.viewModel.hasHistoricalMessages()) {
             this.animateToChatState();
             this.viewModel.prepareHistoricalMessages();
         }
+
+        // 注册对话框为拖拽目标（接收来自文件树/Diff 列表的文件拖拽）
+        this.setupDragDrop();
+    }
+
+    /**
+     * 将 sendBox 注册为拖拽目标，接收来自文件树/Diff 列表的文件拖拽。
+     * 拖拽文件释放后作为附件添加（复用 attachedFiles 机制）。
+     */
+    private void setupDragDrop() {
+        sendBox.setOnDragOver(this::handleDragOver);
+        sendBox.setOnDragDropped(this::handleDragDropped);
+    }
+
+    private void handleDragOver(DragEvent event) {
+        if (event.getGestureSource() != sendBox && event.getDragboard().hasFiles()) {
+            event.acceptTransferModes(TransferMode.COPY);
+        }
+        event.consume();
+    }
+
+    private void handleDragDropped(DragEvent event) {
+        boolean success = false;
+        if (event.getDragboard().hasFiles()) {
+            for (File file : event.getDragboard().getFiles()) {
+                addAttachedFile(file);
+            }
+            success = true;
+            // 拖拽文件仅添加附件，不触发界面状态切换动画（避免 logo 消失）
+        }
+        event.setDropCompleted(success);
+        event.consume();
     }
 
     private void addChatCard(MessageCard card) {
@@ -396,6 +434,38 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         }
     }
 
+    /**
+     * 将选中文本追加到对话框输入框末尾（编辑器面板联动入口）。
+     * 已有内容时用换行分隔。
+     */
+    public void appendTextToChat(String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        String current = sendField.getText();
+        if (current != null && !current.isEmpty()) {
+            sendField.setText(current + "\n" + text);
+        } else {
+            sendField.setText(text);
+        }
+        sendField.requestFocus();
+        sendField.end();
+        if (!chatScrollPane.isVisible()) {
+            animateToChatState();
+        }
+    }
+
+    /**
+     * 添加附件文件（供拖拽调用，去重处理）。
+     */
+    public void addAttachedFile(File file) {
+        if (file != null && !this.attachedFiles.contains(file)) {
+            this.attachedFiles.add(file);
+            this.addFileTag(file);
+            this.updateFileTagsPaneVisibility();
+        }
+    }
+
     private void handleOpenCanvas() {
         windowManager.showDialog("cn/bitloom/view/CanvasDialog.fxml", this.sendBox.getScene().getWindow(), controller -> {
             if (controller instanceof CanvasDialogController canvasController) {
@@ -447,20 +517,14 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
     private void updateFileTagsPaneVisibility() {
         boolean hasFiles = !this.attachedFiles.isEmpty();
-        this.fileTagsPane.setVisible(hasFiles);
-        this.fileTagsPane.setManaged(hasFiles);
+        // 由外层 ScrollPane 控制可见性，FlowPane 跟随
+        this.fileTagsScroll.setVisible(hasFiles);
+        this.fileTagsScroll.setManaged(hasFiles);
     }
 
     private void adjustTextAreaHeight() {
-        String text = this.sendField.getText();
-        int lineCount = 1;
-        if (text != null && !text.isEmpty()) {
-            lineCount = (int) text.chars().filter(c -> c == '\n').count() + 1;
-        }
-        double lineHeight = 22;
-        double padding = 16;
-        double height = Math.max(48, Math.min(200, lineCount * lineHeight + padding));
-        this.sendField.setPrefHeight(height);
+        // AutoResizeTextArea 通过 computePrefHeight 自动调整高度，此方法保留为空实现
+        // 以避免破坏其他可能的调用点（如有）
     }
 
     private void scrollToBottom() {
@@ -513,33 +577,25 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     }
 
     private void setupAgentSelector() {
-        // 从 AgentDefinitionManager 获取主智能体列表并填充到 ComboBox
+        // 从 AgentDefinitionManager 获取主智能体列表并填充到 MenuButton
         Set<String> mainAgentIds = agentDefinitionManager.getMainAgentIds();
-        this.agentSelector.getItems().addAll(mainAgentIds);
+        refreshAgentMenu(mainAgentIds);
 
-        // 设置默认值
+        // 设置默认值（MenuButton 文字）
         String currentAgent = Store.currentAgent.get();
         if (currentAgent != null && mainAgentIds.contains(currentAgent)) {
-            this.agentSelector.setValue(currentAgent);
+            agentSelector.setText(currentAgent);
         } else if (mainAgentIds.contains("default")) {
-            this.agentSelector.setValue("default");
+            agentSelector.setText("default");
         } else if (!mainAgentIds.isEmpty()) {
-            this.agentSelector.setValue(mainAgentIds.iterator().next());
+            agentSelector.setText(mainAgentIds.iterator().next());
         }
 
-        updateAgentSelectorWidth();
-
-        this.agentSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null) {
-                viewModel.switchAgent(newVal);
-                updateAgentSelectorWidth();
-                updateProjectButtonBarVisibility(newVal);
-            }
-        });
-
+        // 监听全局 currentAgent 变化，同步 MenuButton 文字（切换历史会话时触发）
         Store.currentAgent.addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !newVal.equals(this.agentSelector.getValue())) {
-                this.agentSelector.setValue(newVal);
+            if (newVal != null && !newVal.equals(agentSelector.getText())) {
+                agentSelector.setText(newVal);
+                updateProjectButtonBarVisibility(newVal);
             }
         });
 
@@ -563,17 +619,20 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                 });
     }
 
-    private void updateAgentSelectorWidth() {
-        String current = this.agentSelector.getValue();
-        String name = current != null ? current : "default";
-        Text text = new Text(name);
-        text.setFont(javafx.scene.text.Font.font("SF Pro Text", 13));
-        double textWidth = text.getLayoutBounds().getWidth();
-        double padding = 12;
-        double width = Math.max(40, textWidth + padding);
-        this.agentSelector.setPrefWidth(width);
-        this.agentSelector.setMinWidth(width);
-        this.agentSelector.setMaxWidth(width);
+    /**
+     * 刷新智能体下拉菜单项
+     */
+    private void refreshAgentMenu(Set<String> mainAgentIds) {
+        agentSelector.getItems().clear();
+        for (String agentId : mainAgentIds) {
+            MenuItem item = new MenuItem(agentId);
+            item.setOnAction(e -> {
+                agentSelector.setText(agentId);
+                viewModel.switchAgent(agentId);
+                updateProjectButtonBarVisibility(agentId);
+            });
+            agentSelector.getItems().add(item);
+        }
     }
 
     /**
@@ -585,6 +644,16 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         projectSelectButton.setManaged(show);
         branchDisplayButton.setVisible(show);
         branchDisplayButton.setManaged(show);
+    }
+
+    /**
+     * 根据是否已有对话消息锁定/解锁智能体选择器和项目选择按钮。
+     * 一个 session 只能绑定一个智能体和一个项目：有了对话后不可修改，
+     * 新建会话或清除对话后自动解锁。
+     */
+    private void updateSelectorLockState(boolean locked) {
+        agentSelector.setDisable(locked);
+        projectSelectButton.setDisable(locked);
     }
 
     /**
