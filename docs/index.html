@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Autiva — 会进化的桌面智能体</title>
+<meta name="description" content="Autiva 是一款基于 Spring Boot + JavaFX 的桌面 AI 智能体，融合统一 Agent 系统、GeneOS 自进化引擎、30+ 工具集、A2UI 动态界面与两层记忆架构。" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Manrope:wght@300..800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#07090C;
+    --bg-2:#0A0E12;
+    --surface:#11161C;
+    --surface-2:#161C24;
+    --line:rgba(232,237,242,0.08);
+    --line-2:rgba(232,237,242,0.14);
+    --text:#E8EDF2;
+    --muted:#8B96A3;
+    --muted-2:#5E6772;
+    --teal:#2DD4BF;
+    --teal-soft:rgba(45,212,191,0.14);
+    --amber:#F6B95A;
+    --amber-soft:rgba(246,185,90,0.14);
+    --green:#7DD3A0;
+    --green-soft:rgba(125,211,160,0.14);
+    --violet:#9B8CFF;
+    --radius:14px;
+    --radius-lg:22px;
+    --maxw:1200px;
+    --shadow:0 30px 80px -30px rgba(0,0,0,0.7);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Manrope",system-ui,sans-serif;
+    font-weight:400;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  ::selection{background:var(--teal);color:#04201c}
+  a{color:inherit;text-decoration:none}
+  .container{max-width:var(--maxw);margin:0 auto;padding:0 32px}
+  .mono{font-family:"JetBrains Mono",monospace}
+  .display{font-family:"Fraunces",serif;font-optical-sizing:auto}
+
+  /* ---------- background canvas ---------- */
+  #dna{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.55}
+  .bg-grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0.5;
+    background-image:radial-gradient(rgba(255,255,255,0.025) 1px,transparent 1px);
+    background-size:3px 3px;mix-blend-mode:overlay}
+  .bg-glow{position:fixed;z-index:0;pointer-events:none;filter:blur(80px);opacity:0.4}
+  .bg-glow.g1{top:-200px;left:-200px;width:600px;height:600px;background:radial-gradient(circle,#0f5d56,transparent 70%)}
+  .bg-glow.g2{bottom:-300px;right:-200px;width:700px;height:700px;background:radial-gradient(circle,#3a2a08,transparent 70%);opacity:0.5}
+
+  /* ---------- nav ---------- */
+  nav{position:fixed;top:0;left:0;right:0;z-index:50;transition:all .4s ease}
+  nav .bar{display:flex;align-items:center;justify-content:space-between;height:64px;
+    backdrop-filter:blur(18px) saturate(140%);
+    background:rgba(7,9,12,0.55);border-bottom:1px solid transparent;transition:all .4s}
+  nav.scrolled .bar{border-bottom:1px solid var(--line);background:rgba(7,9,12,0.8)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-0.01em}
+  .brand-mark{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--teal),#0f7a6f);box-shadow:0 0 24px rgba(45,212,191,0.45)}
+  .brand-mark svg{width:16px;height:16px}
+  .brand-name{font-family:"Fraunces",serif;font-size:20px;font-weight:600;letter-spacing:-0.02em}
+  .nav-links{display:flex;gap:30px;align-items:center}
+  .nav-links a{font-size:13.5px;color:var(--muted);font-weight:500;transition:color .25s;position:relative}
+  .nav-links a:hover{color:var(--text)}
+  .nav-links a::after{content:"";position:absolute;left:0;bottom:-6px;width:0;height:1.5px;background:var(--teal);transition:width .3s}
+  .nav-links a:hover::after{width:100%}
+  .nav-cta{font-size:13px;padding:8px 16px;border-radius:10px;border:1px solid var(--line-2);color:var(--text);font-weight:600;transition:all .25s}
+  .nav-cta:hover{border-color:var(--teal);color:var(--teal);box-shadow:0 0 0 4px var(--teal-soft)}
+  @media(max-width:880px){.nav-links{display:none}}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;z-index:2;min-height:100vh;display:flex;align-items:center;padding-top:64px}
+  .hero-inner{display:grid;grid-template-columns:1.2fr .8fr;gap:60px;align-items:center;width:100%}
+  @media(max-width:980px){.hero-inner{grid-template-columns:1fr;gap:40px}}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;
+    background:var(--teal-soft);border:1px solid rgba(45,212,191,0.25);font-size:12px;font-weight:600;
+    color:var(--teal);font-family:"JetBrains Mono",monospace;letter-spacing:0.04em}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  h1.title{font-family:"Fraunces",serif;font-weight:340;font-size:clamp(44px,7vw,92px);line-height:0.98;
+    letter-spacing:-0.035em;margin:24px 0 0}
+  h1.title em{font-style:italic;font-weight:300;background:linear-gradient(120deg,var(--teal),var(--green) 60%,var(--amber));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:18px;color:var(--muted);max-width:560px;margin:26px 0 0;line-height:1.65}
+  .cta-row{display:flex;gap:14px;margin-top:36px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:9px;padding:14px 22px;border-radius:12px;font-weight:600;font-size:14.5px;
+    transition:all .25s;cursor:pointer;border:1px solid transparent}
+  .btn-primary{background:linear-gradient(135deg,var(--teal),#16a894);color:#04201c;box-shadow:0 0 0 0 var(--teal-soft),0 20px 40px -20px rgba(45,212,191,0.6)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 0 0 6px var(--teal-soft),0 24px 50px -20px rgba(45,212,191,0.8)}
+  .btn-ghost{background:rgba(232,237,242,0.04);border:1px solid var(--line-2);color:var(--text);backdrop-filter:blur(8px)}
+  .btn-ghost:hover{border-color:var(--teal);color:var(--teal);transform:translateY(-2px)}
+  .btn svg{width:16px;height:16px}
+  .hero-meta{display:flex;gap:28px;margin-top:48px;flex-wrap:wrap}
+  .meta-item .num{font-family:"Fraunces",serif;font-size:30px;font-weight:500;color:var(--text);letter-spacing:-0.02em}
+  .meta-item .num span{color:var(--teal)}
+  .meta-item .lbl{font-size:12px;color:var(--muted-2);text-transform:uppercase;letter-spacing:0.1em;margin-top:2px;font-family:"JetBrains Mono",monospace}
+
+  /* hero visual card */
+  .hero-card{position:relative;border-radius:var(--radius-lg);overflow:hidden;
+    background:linear-gradient(180deg,rgba(22,28,36,0.9),rgba(11,15,20,0.95));
+    border:1px solid var(--line-2);box-shadow:var(--shadow);min-height:440px;
+    backdrop-filter:blur(20px)}
+  .hero-card::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(circle at 80% 0%,rgba(45,212,191,0.18),transparent 50%),
+    radial-gradient(circle at 0% 100%,rgba(246,185,90,0.12),transparent 50%);pointer-events:none}
+  .hc-bar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);position:relative;z-index:2}
+  .hc-bar .tl{width:11px;height:11px;border-radius:50%}
+  .hc-bar .tl.r{background:#ff5f57}.hc-bar .tl.y{background:#febc2e}.hc-bar .tl.g{background:#28c840}
+  .hc-bar .title{font-size:12px;color:var(--muted);margin-left:10px;font-family:"JetBrains Mono",monospace}
+  .hc-body{padding:22px;position:relative;z-index:2;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.9}
+  .hc-line{display:flex;gap:14px;opacity:0;animation:typeIn .5s forwards}
+  .hc-line .ln{color:var(--muted-2);width:18px;text-align:right;user-select:none}
+  .hc-line .tk{color:var(--text)}
+  .hc-line .c{color:var(--muted)}
+  .hc-line .k{color:var(--teal)}
+  .hc-line .s{color:var(--amber)}
+  .hc-line .g{color:var(--green)}
+  .hc-line.cursor::after{content:"▍";color:var(--teal);animation:blink 1s infinite;margin-left:2px}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+  @keyframes typeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  .hc-line:nth-child(1){animation-delay:.3s}
+  .hc-line:nth-child(2){animation-delay:.7s}
+  .hc-line:nth-child(3){animation-delay:1.1s}
+  .hc-line:nth-child(4){animation-delay:1.5s}
+  .hc-line:nth-child(5){animation-delay:1.9s}
+  .hc-line:nth-child(6){animation-delay:2.3s}
+  .hc-line:nth-child(7){animation-delay:2.7s}
+  .hc-line:nth-child(8){animation-delay:3.1s}
+
+  .scroll-hint{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:3;
+    display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted-2);font-size:11px;
+    letter-spacing:0.15em;text-transform:uppercase;font-family:"JetBrains Mono",monospace}
+  .scroll-hint .mouse{width:22px;height:34px;border:1.5px solid var(--muted-2);border-radius:12px;position:relative}
+  .scroll-hint .mouse::before{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:3px;height:7px;border-radius:2px;background:var(--teal);animation:scrollWheel 1.8s infinite}
+  @keyframes scrollWheel{0%{opacity:0;transform:translate(-50%,0)}40%{opacity:1}80%{opacity:0;transform:translate(-50%,10px)}100%{opacity:0}}
+
+  /* ---------- section ---------- */
+  section{position:relative;z-index:2;padding:120px 0}
+  .sec-head{max-width:720px;margin-bottom:64px}
+  .sec-tag{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--teal);letter-spacing:0.18em;text-transform:uppercase;font-weight:600}
+  .sec-title{font-family:"Fraunces",serif;font-weight:340;font-size:clamp(32px,4.5vw,52px);line-height:1.05;letter-spacing:-0.03em;margin:14px 0 0}
+  .sec-title em{font-style:italic;color:var(--teal)}
+  .sec-desc{color:var(--muted);font-size:16.5px;margin-top:18px;max-width:620px}
+
+  /* overview value cards */
+  .value-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  @media(max-width:880px){.value-grid{grid-template-columns:1fr}}
+  .value-card{padding:30px;border-radius:var(--radius-lg);background:linear-gradient(180deg,rgba(22,28,36,0.7),rgba(11,15,20,0.7));
+    border:1px solid var(--line);transition:all .35s;backdrop-filter:blur(10px)}
+  .value-card:hover{border-color:var(--line-2);transform:translateY(-4px);box-shadow:var(--shadow)}
+  .vc-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;margin-bottom:18px;border:1px solid var(--line-2)}
+  .vc-icon svg{width:22px;height:22px}
+  .value-card h3{font-family:"Fraunces",serif;font-weight:400;font-size:22px;margin:0 0 8px;letter-spacing:-0.01em}
+  .value-card p{color:var(--muted);font-size:14.5px;margin:0;line-height:1.6}
+  .vc-teal{color:var(--teal);background:var(--teal-soft)}
+  .vc-amber{color:var(--amber);background:var(--amber-soft)}
+  .vc-green{color:var(--green);background:var(--green-soft)}
+
+  /* capability cards */
+  .cap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  @media(max-width:980px){.cap-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:680px){.cap-grid{grid-template-columns:1fr}}
+  .cap-card{position:relative;padding:32px;border-radius:var(--radius-lg);
+    background:linear-gradient(180deg,rgba(22,28,36,0.85),rgba(11,15,20,0.85));
+    border:1px solid var(--line);overflow:hidden;transition:all .4s;backdrop-filter:blur(10px)}
+  .cap-card::before{content:"";position:absolute;inset:0;border-radius:var(--radius-lg);padding:1px;
+    background:linear-gradient(135deg,transparent 40%,var(--accent,var(--teal)) 130%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .4s}
+  .cap-card:hover{transform:translateY(-6px);border-color:transparent}
+  .cap-card:hover::before{opacity:1}
+  .cap-card:hover .cap-icon{transform:scale(1.08) rotate(-3deg)}
+  .cap-icon{width:48px;height:48px;border-radius:13px;display:grid;place-items:center;margin-bottom:22px;
+    background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line);transition:transform .4s}
+  .cap-icon svg{width:24px;height:24px}
+  .cap-card h3{font-family:"Fraunces",serif;font-weight:400;font-size:24px;margin:0 0 4px;letter-spacing:-0.015em}
+  .cap-card .sub{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted-2);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px}
+  .cap-card p{color:var(--muted);font-size:14.5px;margin:0 0 18px;line-height:1.6}
+  .cap-points{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+  .cap-points li{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;color:var(--text);opacity:0.9}
+  .cap-points li svg{width:14px;height:14px;flex-shrink:0;margin-top:3px;color:var(--accent)}
+
+  /* architecture layers */
+  .arch{display:flex;flex-direction:column;gap:12px}
+  .arch-layer{display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:center;
+    padding:22px 26px;border-radius:var(--radius);background:rgba(17,22,28,0.6);
+    border:1px solid var(--line);position:relative;overflow:hidden;transition:all .3s;backdrop-filter:blur(8px)}
+  .arch-layer:hover{border-color:var(--accent);background:rgba(22,28,36,0.8);transform:translateX(6px)}
+  .arch-layer::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+  .arch-layer .lname{font-family:"Fraunces",serif;font-size:20px;font-weight:400;letter-spacing:-0.01em}
+  .arch-layer .ltag{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--accent);letter-spacing:0.1em;text-transform:uppercase;display:block;margin-bottom:4px}
+  .arch-modules{display:flex;flex-wrap:wrap;gap:8px}
+  .arch-chip{font-family:"JetBrains Mono",monospace;font-size:11.5px;padding:5px 11px;border-radius:7px;
+    background:rgba(232,237,242,0.04);border:1px solid var(--line);color:var(--muted);transition:all .25s}
+  .arch-layer:hover .arch-chip{color:var(--text);border-color:var(--line-2)}
+  @media(max-width:680px){.arch-layer{grid-template-columns:1fr;gap:12px}}
+
+  /* evolution loop */
+  .loop-wrap{position:relative;padding:30px 0}
+  .loop{display:grid;grid-template-columns:repeat(6,1fr);gap:0;position:relative}
+  @media(max-width:980px){.loop{grid-template-columns:repeat(2,1fr);gap:24px}}
+  .loop-node{text-align:center;position:relative;padding:0 8px}
+  .loop-node .ring{width:74px;height:74px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;
+    background:rgba(17,22,28,0.8);border:1.5px solid var(--line-2);position:relative;transition:all .4s}
+  .loop-node .ring svg{width:28px;height:28px;color:var(--accent)}
+  .loop-node .ring::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1px solid var(--accent);opacity:0;transition:opacity .4s}
+  .loop-node.active .ring::after{opacity:0.6;animation:ringPulse 2s infinite}
+  @keyframes ringPulse{0%{transform:scale(1);opacity:0.6}100%{transform:scale(1.4);opacity:0}}
+  .loop-node .step{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--accent);letter-spacing:0.12em;margin-bottom:4px}
+  .loop-node .name{font-family:"Fraunces",serif;font-size:17px;font-weight:400;margin-bottom:6px;letter-spacing:-0.01em}
+  .loop-node .desc{font-size:12px;color:var(--muted);line-height:1.5;padding:0 4px}
+  .loop-arrow{position:absolute;top:37px;left:50%;width:100%;height:2px;color:var(--line-2)}
+  .loop-arrow svg{position:absolute;top:-9px;left:0;width:100%;height:20px}
+  @media(max-width:980px){.loop-arrow{display:none}}
+
+  /* tool matrix */
+  .tool-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+  @media(max-width:780px){.tool-grid{grid-template-columns:1fr}}
+  .tool-cat{padding:24px;border-radius:var(--radius);background:rgba(17,22,28,0.5);border:1px solid var(--line);transition:all .3s}
+  .tool-cat:hover{border-color:var(--line-2)}
+  .tc-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .tc-icon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--teal-soft);color:var(--teal);border:1px solid rgba(45,212,191,0.2)}
+  .tc-icon svg{width:17px;height:17px}
+  .tc-name{font-family:"Fraunces",serif;font-size:18px;font-weight:400}
+  .tc-count{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted-2)}
+  .tc-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-family:"JetBrains Mono",monospace;font-size:11.5px;padding:4px 10px;border-radius:6px;
+    background:rgba(232,237,242,0.04);border:1px solid var(--line);color:var(--text);opacity:0.85;transition:all .2s}
+  .chip:hover{background:var(--teal-soft);border-color:rgba(45,212,191,0.3);color:var(--teal);opacity:1}
+
+  /* UI demo */
+  .demo-frame{border-radius:var(--radius-lg);overflow:hidden;background:#0b0f14;border:1px solid var(--line-2);box-shadow:var(--shadow)}
+  .demo-tabs{display:flex;align-items:center;gap:4px;padding:10px 14px;background:rgba(7,9,12,0.8);border-bottom:1px solid var(--line)}
+  .demo-tab{padding:8px 14px;border-radius:8px;font-size:13px;color:var(--muted);font-weight:500;cursor:pointer;transition:all .25s;display:flex;align-items:center;gap:7px}
+  .demo-tab svg{width:14px;height:14px}
+  .demo-tab:hover{color:var(--text);background:rgba(232,237,242,0.04)}
+  .demo-tab.active{color:var(--teal);background:var(--teal-soft)}
+  .demo-tab .x{margin-left:auto;font-size:14px;color:var(--muted-2);margin-left:8px}
+  .demo-body{min-height:440px;font-family:"JetBrains Mono",monospace;font-size:13px;position:relative}
+  .demo-panel{display:none;padding:0;height:100%}
+  .demo-panel.active{display:flex}
+  /* chat panel */
+  .chat-panel{flex-direction:column;padding:22px;gap:14px;overflow:hidden}
+  .msg{display:flex;gap:12px;max-width:88%;animation:msgIn .5s}
+  @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .msg .ava{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;font-size:12px;font-weight:700}
+  .msg.user .ava{background:var(--amber-soft);color:var(--amber)}
+  .msg.bot .ava{background:var(--teal-soft);color:var(--teal)}
+  .msg .bubble{background:rgba(232,237,242,0.04);border:1px solid var(--line);padding:10px 14px;border-radius:12px;color:var(--text);line-height:1.55;font-size:13px}
+  .msg.bot .bubble{background:rgba(45,212,191,0.06);border-color:rgba(45,212,191,0.2)}
+  .tool-card{margin-top:8px;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:12px}
+  .tool-card .th{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(232,237,242,0.03)}
+  .tool-card .th .status{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  .tool-card .tb{padding:8px 12px;color:var(--muted);border-top:1px solid var(--line);font-family:"JetBrains Mono",monospace;font-size:11.5px}
+  /* canvas panel */
+  .canvas-panel{padding:0;position:relative;background:#0a0e12}
+  .canvas-svg{width:100%;height:440px;display:block}
+  /* terminal panel */
+  .term-panel{flex-direction:column;padding:18px;gap:2px;background:#0a0e12;color:var(--text);overflow:hidden}
+  .term-line{line-height:1.7;white-space:pre-wrap}
+  .term-line .p{color:var(--teal)}
+  .term-line .c{color:var(--muted)}
+  .term-line .o{color:var(--amber)}
+  .term-line .g{color:var(--green)}
+  /* editor panel */
+  .editor-panel{padding:0;flex-direction:row}
+  .ed-sidebar{width:180px;background:rgba(7,9,12,0.6);border-right:1px solid var(--line);padding:14px 10px;font-size:12px}
+  .ed-file{padding:5px 10px;border-radius:6px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer}
+  .ed-file:hover{background:rgba(232,237,242,0.04);color:var(--text)}
+  .ed-file.active{background:var(--teal-soft);color:var(--teal)}
+  .ed-file svg{width:13px;height:13px}
+  .ed-code{flex:1;padding:18px;overflow:hidden;position:relative}
+  .ed-code .ln-line{display:flex;gap:16px;line-height:1.7}
+  .ed-code .ln{color:var(--muted-2);width:22px;text-align:right;user-select:none}
+  .ed-code .kw{color:#c084fc}
+  .ed-code .ty{color:var(--teal)}
+  .ed-code .st{color:var(--amber)}
+  .ed-code .cm{color:var(--muted-2);font-style:italic}
+  .ed-code .fn{color:var(--green)}
+
+  /* tech stack */
+  .stack-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:880px){.stack-grid{grid-template-columns:repeat(2,1fr)}}
+  .stack-item{padding:20px;border-radius:var(--radius);background:rgba(17,22,28,0.5);border:1px solid var(--line);text-align:center;transition:all .3s;position:relative;overflow:hidden}
+  .stack-item:hover{border-color:var(--teal);transform:translateY(-3px);box-shadow:0 12px 30px -16px rgba(45,212,191,0.4)}
+  .stack-item .nm{font-weight:700;font-size:14px;margin-bottom:3px}
+  .stack-item .vr{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted-2)}
+  .stack-item .gd{position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,var(--teal-soft),transparent 60%);opacity:0;transition:opacity .3s}
+  .stack-item:hover .gd{opacity:1}
+
+  /* quick start */
+  .qs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media(max-width:880px){.qs-grid{grid-template-columns:1fr}}
+  .qs-step{padding:0;border-radius:var(--radius);background:rgba(11,15,20,0.7);border:1px solid var(--line);overflow:hidden}
+  .qs-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .qs-num{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-family:"Fraunces",serif;font-size:15px;background:var(--teal-soft);color:var(--teal);border:1px solid rgba(45,212,191,0.25)}
+  .qs-title{font-size:14px;font-weight:600}
+  .qs-code{padding:16px 20px;font-family:"JetBrains Mono",monospace;font-size:12.5px;line-height:1.8;color:var(--text);position:relative}
+  .qs-code .cm{color:var(--muted-2)}
+  .qs-code .pr{color:var(--teal)}
+  .qs-code .ar{color:var(--amber)}
+  .copy-btn{position:absolute;top:10px;right:10px;padding:5px 9px;border-radius:6px;background:rgba(232,237,242,0.06);border:1px solid var(--line-2);color:var(--muted);font-size:11px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:5px}
+  .copy-btn:hover{color:var(--teal);border-color:var(--teal)}
+  .copy-btn svg{width:12px;height:12px}
+  .copy-btn.copied{color:var(--green);border-color:var(--green)}
+
+  /* footer */
+  footer{position:relative;z-index:2;border-top:1px solid var(--line);padding:60px 0 40px;background:rgba(7,9,12,0.6)}
+  .foot-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px}
+  @media(max-width:780px){.foot-grid{grid-template-columns:1fr 1fr}}
+  .foot-brand p{color:var(--muted);font-size:13.5px;margin:14px 0 0;max-width:300px;line-height:1.6}
+  .foot-col h4{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted-2);letter-spacing:0.12em;text-transform:uppercase;margin:0 0 14px}
+  .foot-col a{display:block;color:var(--muted);font-size:13.5px;margin-bottom:9px;transition:color .2s}
+  .foot-col a:hover{color:var(--teal)}
+  .foot-bottom{display:flex;justify-content:space-between;align-items:center;padding-top:24px;border-top:1px solid var(--line);font-size:12px;color:var(--muted-2);font-family:"JetBrains Mono",monospace;flex-wrap:wrap;gap:12px}
+
+  /* reveal animations */
+  .reveal{opacity:0;transform:translateY(28px);transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1)}
+  .reveal.in{opacity:1;transform:none}
+  .reveal.d1{transition-delay:.08s}
+  .reveal.d2{transition-delay:.16s}
+  .reveal.d3{transition-delay:.24s}
+  .reveal.d4{transition-delay:.32s}
+  .reveal.d5{transition-delay:.4s}
+  .reveal.d6{transition-delay:.48s}
+
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="dna"></canvas>
+<div class="bg-grain"></div>
+<div class="bg-glow g1"></div>
+<div class="bg-glow g2"></div>
+
+<nav id="nav">
+  <div class="container bar">
+    <a href="#top" class="brand">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#04201c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12c0-4 3-7 8-7s8 3 8 7-3 7-8 7-8-3-8-7Z"/><path d="M4 12c2 0 4 1 6 1s4-1 6-1 4 1 6 1" opacity="0.5"/></svg>
+      </span>
+      <span class="brand-name">Autiva</span>
+    </a>
+    <div class="nav-links">
+      <a href="#capabilities">能力</a>
+      <a href="#architecture">架构</a>
+      <a href="#evolution">进化</a>
+      <a href="#tools">工具</a>
+      <a href="#demo">演示</a>
+      <a href="#start">开始</a>
+    </div>
+    <a class="nav-cta" href="#start">快速开始</a>
+  </div>
+</nav>
+
+<!-- ===================== HERO ===================== -->
+<header class="hero" id="top">
+  <div class="container hero-inner">
+    <div>
+      <span class="eyebrow reveal"><span class="dot"></span>GeneOS · 自进化智能体运行时</span>
+      <h1 class="title reveal d1">会<em>进化</em>的<br>桌面智能体。</h1>
+      <p class="lede reveal d2">Autiva 把"基因、经验、进化"概念落到工程实现——基于 Spring Boot + JavaFX，让智能体在使用中持续自我改进。本地优先、可版本回溯、工具可扩展。</p>
+      <div class="cta-row reveal d3">
+        <a class="btn btn-primary" href="#start">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          开始使用
+        </a>
+        <a class="btn btn-ghost" href="#demo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+          查看演示
+        </a>
+      </div>
+      <div class="hero-meta reveal d4">
+        <div class="meta-item"><div class="num">30<span>+</span></div><div class="lbl">工具集</div></div>
+        <div class="meta-item"><div class="num">6</div><div class="lbl">能力模块</div></div>
+        <div class="meta-item"><div class="num">100<span>%</span></div><div class="lbl">本地化</div></div>
+      </div>
+    </div>
+    <div class="hero-card reveal d2">
+      <div class="hc-bar">
+        <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+        <span class="title">~/.autiva/evolve/genes/gene_repair_from_errors</span>
+      </div>
+      <div class="hc-body">
+        <div class="hc-line"><span class="ln">1</span><span class="tk"><span class="c">// 种子基因：从错误信号中修复</span></span></div>
+        <div class="hc-line"><span class="ln">2</span><span class="tk"><span class="k">signals</span>: [<span class="s">"LOG_ERROR"</span>, <span class="s">"RECURRING_ERROR"</span>]</span></div>
+        <div class="hc-line"><span class="ln">3</span><span class="tk"><span class="k">strategy</span>: <span class="s">"分析根因 → 查找修复方案"</span></span></div>
+        <div class="hc-line"><span class="ln">4</span><span class="tk"><span class="k">runtime</span>: <span class="g">JAVA</span></span></div>
+        <div class="hc-line"><span class="ln">5</span><span class="tk"><span class="k">epigenetic</span>: <span class="g">1.20</span> <span class="c">// 成功增强</span></span></div>
+        <div class="hc-line"><span class="ln">6</span><span class="tk"><span class="k">mutation</span>: <span class="s">"LLM 驱动代码改写"</span></span></div>
+        <div class="hc-line"><span class="ln">7</span><span class="tk"><span class="k">version</span>: <span class="amber">v3</span> <span class="c">parentId: v2</span></span></div>
+        <div class="hc-line cursor"><span class="ln">8</span><span class="tk"><span class="c">// JGit 已提交，下次执行改进</span></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <div class="mouse"></div>
+    <span>SCROLL</span>
+  </div>
+</header>
+
+<!-- ===================== OVERVIEW ===================== -->
+<section id="overview">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">概览 · OVERVIEW</div>
+      <h2 class="sec-title">一个能在<em>使用中</em>持续改进的本地智能体。</h2>
+      <p class="sec-desc">Autiva 不只是一个聊天框。它把执行日志沉淀为经验，把经验驱动基因突变、路由更新与规则沉淀，再用 JGit 版本化固化——形成自我进化的闭环。</p>
+    </div>
+    <div class="value-grid">
+      <div class="value-card reveal d1">
+        <div class="vc-icon vc-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg></div>
+        <h3>本地优先</h3>
+        <p>智能体定义、会话、记忆、基因全部存于 ~/.autiva/，数据不出本机。JGit 管理基因版本，可随时 diff 与回滚。</p>
+      </div>
+      <div class="value-card reveal d2">
+        <div class="vc-icon vc-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg></div>
+        <h3>自我进化</h3>
+        <p>GeneOS 三层架构：基因执行 → 经验提取 → 进化决策。表观遗传值基于历史成功率动态调整，越用越聪明。</p>
+      </div>
+      <div class="value-card reveal d3">
+        <div class="vc-icon vc-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg></div>
+        <h3>可扩展工具</h3>
+        <p>30+ 内置工具覆盖文件、搜索、命令、交互、任务、定时、记忆与 MCP。AbstractTool + Toolkit 模式，一个工具一个类。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CAPABILITIES ===================== -->
+<section id="capabilities">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">核心能力 · CAPABILITIES</div>
+      <h2 class="sec-title">六个模块，<em>协同</em>驱动智能体。</h2>
+      <p class="sec-desc">从统一 Agent 模型到 A2UI 声明式界面，从自进化引擎到两层记忆，每个模块都为"越用越聪明"这一目标服务。</p>
+    </div>
+    <div class="cap-grid">
+      <div class="cap-card reveal d1" style="--accent:#2DD4BF;--accent-soft:rgba(45,212,191,0.14);--accent-line:rgba(45,212,191,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg></div>
+        <h3>统一 Agent</h3>
+        <div class="sub">UNIFIED AGENT MODEL</div>
+        <p>主智能体与子智能体同为 Agent 实例，区别仅在 AgentDefinition 配置。纯 POJO 设计，依赖通过 RuntimeContext 运行时传递。</p>
+        <ul class="cap-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Builder 方法链启用可选能力</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>基于 Spring AI Advisor 拦截</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>子智能体内置不可配置</li>
+        </ul>
+      </div>
+      <div class="cap-card reveal d2" style="--accent:#F6B95A;--accent-soft:rgba(246,185,90,0.14);--accent-line:rgba(246,185,90,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h10"/><path d="M12 21V3"/><path d="M5 8c3 0 5 2 7 5 2 3 4 5 7 5"/></svg></div>
+        <h3>自进化引擎</h3>
+        <div class="sub">GENEOS · EVOLUTION</div>
+        <p>基于 GeneOS 三层架构：基因执行层、经验引擎层、进化引擎层。基因可突变、路由可更新、规则可沉淀。</p>
+        <ul class="cap-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>表观遗传动态权重</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>JGit 基因版本仓库</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>金丝雀检查 + 安全防护</li>
+        </ul>
+      </div>
+      <div class="cap-card reveal d3" style="--accent:#7DD3A0;--accent-soft:rgba(125,211,160,0.14);--accent-line:rgba(125,211,160,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg></div>
+        <h3>工具系统</h3>
+        <div class="sub">30+ BUILT-IN TOOLS</div>
+        <p>AbstractTool&lt;I&gt; + Toolkit 模式，统一 ToolResult 返回。AutivaToolCallingManager 实现工具校验与权限控制，LLM 幻觉工具名时友好降级。</p>
+        <ul class="cap-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>跨平台 Shell 抽象</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>MCP 客户端集成</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>白名单注册机制</li>
+        </ul>
+      </div>
+      <div class="cap-card reveal d4" style="--accent:#9B8CFF;--accent-soft:rgba(155,140,255,0.14);--accent-line:rgba(155,140,255,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div>
+        <h3>技能系统</h3>
+        <div class="sub">SKILL · KNOWLEDGE</div>
+        <p>SKILL.md + YAML frontmatter 定义专业知识技能。支持 ZIP 导入、文件系统 / JAR / 类路径多来源加载，技能信息注入系统提示词。</p>
+        <ul class="cap-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>动态加载与重载</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>ZIP / URL 导入</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>MarkdownParser 解析</li>
+        </ul>
+      </div>
+      <div class="cap-card reveal d5" style="--accent:#2DD4BF;--accent-soft:rgba(45,212,191,0.14);--accent-line:rgba(45,212,191,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg></div>
+        <h3>A2UI 动态界面</h3>
+        <div class="sub">AGENT-TO-UI v0.9.1</div>
+        <p>声明式动态 UI 生成协议。Agent 通过 A2UITool 创建 Surface、更新组件、更新数据模型，用户交互回流为事件触发新一轮推理。</p>
+        <ul class="cap-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>邻接列表组件模型</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>事件 / 函数调用双轨</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>验证规则与禁用逻辑</li>
+        </ul>
+      </div>
+      <div class="cap-card reveal d6" style="--accent:#F6B95A;--accent-soft:rgba(246,185,90,0.14);--accent-line:rgba(246,185,90,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"/><path d="M21 3v6h-6"/><path d="M21 9c-1.5-2-4-3-7-3"/></svg></div>
+        <h3>两层记忆</h3>
+        <div class="sub">COMPACT CHAT MEMORY</div>
+        <p>热记忆（memory.md）智能体主动读写；上下文桥接（session.summary）压缩早期对话。游标感知 + 事件驱动异步压缩。</p>
+        <ul class="cap-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>UsageAdvisor 触发压缩</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>工具调用成对性保障</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>ProactiveContextAdvisor 注入</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ARCHITECTURE ===================== -->
+<section id="architecture">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">架构 · ARCHITECTURE</div>
+      <h2 class="sec-title">六层分层，<em>各司其职</em>。</h2>
+      <p class="sec-desc">从 JavaFX 视图到文件系统持久化，Autiva 的六层架构清晰解耦。Agent 保持纯 POJO，依赖在运行时通过 RuntimeContext 传递。</p>
+    </div>
+    <div class="arch reveal">
+      <div class="arch-layer" style="--accent:#2DD4BF">
+        <div><span class="ltag">L6 · PRESENTATION</span><div class="lname">UI 层</div></div>
+        <div class="arch-modules">
+          <span class="arch-chip">AgentPage</span><span class="arch-chip">CanvasDialog</span><span class="arch-chip">JediTerminal</span><span class="arch-chip">EditorPanel</span><span class="arch-chip">A2UISurface</span><span class="arch-chip">TaskCard</span>
+        </div>
+      </div>
+      <div class="arch-layer" style="--accent:#9B8CFF">
+        <div><span class="ltag">L5 · BRIDGE</span><div class="lname">桥接层</div></div>
+        <div class="arch-modules">
+          <span class="arch-chip">ToolUIBridge</span><span class="arch-chip">EventBus</span><span class="arch-chip">WechatILink</span><span class="arch-chip">ToolUIBridge</span>
+        </div>
+      </div>
+      <div class="arch-layer" style="--accent:#7DD3A0">
+        <div><span class="ltag">L4 · AGENT</span><div class="lname">Agent 层</div></div>
+        <div class="arch-modules">
+          <span class="arch-chip">Agent</span><span class="arch-chip">AgentDefinition</span><span class="arch-chip">RuntimeContext</span><span class="arch-chip">Session</span><span class="arch-chip">Advisor</span><span class="arch-chip">SkillManager</span>
+        </div>
+      </div>
+      <div class="arch-layer" style="--accent:#F6B95A">
+        <div><span class="ltag">L3 · TOOL</span><div class="lname">工具层</div></div>
+        <div class="arch-modules">
+          <span class="arch-chip">AbstractTool</span><span class="arch-chip">Toolkit</span><span class="arch-chip">AutivaToolCallingManager</span><span class="arch-chip">MCP Client</span><span class="arch-chip">30+ Tools</span>
+        </div>
+      </div>
+      <div class="arch-layer" style="--accent:#2DD4BF">
+        <div><span class="ltag">L2 · EVOLVE</span><div class="lname">进化层</div></div>
+        <div class="arch-modules">
+          <span class="arch-chip">EvolutionEngine</span><span class="arch-chip">ExperienceEngine</span><span class="arch-chip">GeneMutator</span><span class="arch-chip">RoutingEngine</span><span class="arch-chip">MemoryEngine</span><span class="arch-chip">GeneRepository</span>
+        </div>
+      </div>
+      <div class="arch-layer" style="--accent:#8B96A3">
+        <div><span class="ltag">L1 · PERSISTENCE</span><div class="lname">持久化层</div></div>
+        <div class="arch-modules">
+          <span class="arch-chip">~/.autiva/agents/</span><span class="arch-chip">workspace/sessions/</span><span class="arch-chip">memory.md</span><span class="arch-chip">evolve/genes/</span><span class="arch-chip">JGit</span><span class="arch-chip">JSONL</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== EVOLUTION LOOP ===================== -->
+<section id="evolution">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">进化闭环 · EVOLUTION LOOP</div>
+      <h2 class="sec-title">执行 → 经验 → <em>进化</em> → 固化。</h2>
+      <p class="sec-desc">每次执行都被记录、提取为经验、驱动进化决策，再经金丝雀检查与 JGit 提交固化，最终在下次执行中改进。这是一个真正闭环的自我改进系统。</p>
+    </div>
+    <div class="loop-wrap reveal">
+      <div class="loop" id="loop">
+        <div class="loop-node" style="--accent:#2DD4BF">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 7-7 7 7"/><path d="M12 2v13"/><path d="M5 9c0 4 3 7 7 7"/></svg></div>
+          <div class="step">STEP 01</div>
+          <div class="name">基因执行</div>
+          <div class="desc">GeneRuntime 分发到 Shell / Java / Strategy 执行器</div>
+        </div>
+        <div class="loop-node" style="--accent:#9B8CFF">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg></div>
+          <div class="step">STEP 02</div>
+          <div class="name">执行记录</div>
+          <div class="desc">ExecutionRecorder 写入 logs/executions/*.jsonl</div>
+        </div>
+        <div class="loop-node" style="--accent:#7DD3A0">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg></div>
+          <div class="step">STEP 03</div>
+          <div class="name">经验提取</div>
+          <div class="desc">LLM 从日志挖掘失败模式与根因，置信度 ≥ 0.7</div>
+        </div>
+        <div class="loop-node" style="--accent:#F6B95A">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg></div>
+          <div class="step">STEP 04</div>
+          <div class="name">进化决策</div>
+          <div class="desc">基因突变 + 路由更新 + 规则沉淀</div>
+        </div>
+        <div class="loop-node" style="--accent:#2DD4BF">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div>
+          <div class="step">STEP 05</div>
+          <div class="name">JGit 提交</div>
+          <div class="desc">金丝雀检查通过后，GeneRepository 版本化固化</div>
+        </div>
+        <div class="loop-node" style="--accent:#7DD3A0">
+          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></div>
+          <div class="step">STEP 06</div>
+          <div class="name">下次改进</div>
+          <div class="desc">表观遗传增强，连续成功 ≥3 次生成胶囊</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== TOOL MATRIX ===================== -->
+<section id="tools">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">工具矩阵 · TOOLKIT</div>
+      <h2 class="sec-title">30+ 工具，<em>开箱即用</em>。</h2>
+      <p class="sec-desc">从文件读写到网络搜索，从跨平台命令到子代理任务，从定时调度到记忆管理。AbstractTool&lt;I&gt; 抽象基类统一注册，Builder 模式注入依赖。</p>
+    </div>
+    <div class="tool-grid">
+      <div class="tool-cat reveal d1">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div><div class="tc-name">文件操作</div><div class="tc-count">3 tools</div></div>
+        <div class="tc-chips"><span class="chip">Read</span><span class="chip">Write</span><span class="chip">Edit</span></div>
+      </div>
+      <div class="tool-cat reveal d1">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><div class="tc-name">搜索</div><div class="tc-count">3 tools</div></div>
+        <div class="tc-chips"><span class="chip">Glob</span><span class="chip">Grep</span><span class="chip">WebSearch</span><span class="chip">WebFetch</span></div>
+      </div>
+      <div class="tool-cat reveal d2">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="m12 19 8-8-8-8"/></svg></div><div class="tc-name">命令执行</div><div class="tc-count">2 tools</div></div>
+        <div class="tc-chips"><span class="chip">Command</span><span class="chip">Process</span><span class="chip">跨平台 Shell</span></div>
+      </div>
+      <div class="tool-cat reveal d2">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="tc-name">交互</div><div class="tc-count">2 tools</div></div>
+        <div class="tc-chips"><span class="chip">AskUserQuestion</span><span class="chip">TodoWrite</span></div>
+      </div>
+      <div class="tool-cat reveal d3">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg></div><div class="tc-name">子代理任务</div><div class="tc-count">2 tools</div></div>
+        <div class="tc-chips"><span class="chip">Task</span><span class="chip">TaskOutput</span><span class="chip">explore / plan / doctor / code</span></div>
+      </div>
+      <div class="tool-cat reveal d3">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="tc-name">定时任务</div><div class="tc-count">4 tools</div></div>
+        <div class="tc-chips"><span class="chip">cron_create</span><span class="chip">cron_list</span><span class="chip">cron_delete</span><span class="chip">cron_trigger</span></div>
+      </div>
+      <div class="tool-cat reveal d4">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/></svg></div><div class="tc-name">技能</div><div class="tc-count">1 tool</div></div>
+        <div class="tc-chips"><span class="chip">Skill</span><span class="chip">skill_config_list</span><span class="chip">skill_config_reload</span></div>
+      </div>
+      <div class="tool-cat reveal d4">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"/><path d="M21 3v6h-6"/></svg></div><div class="tc-name">记忆</div><div class="tc-count">4 tools</div></div>
+        <div class="tc-chips"><span class="chip">memory_save</span><span class="chip">memory_update</span><span class="chip">memory_delete</span><span class="chip">memory_search</span></div>
+      </div>
+      <div class="tool-cat reveal d5">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6"/><path d="M15 2v6"/><path d="M3 8h18"/><path d="M5 8v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M9 14h6"/></svg></div><div class="tc-name">MCP 配置</div><div class="tc-count">3 tools</div></div>
+        <div class="tc-chips"><span class="chip">mcp_config_list</span><span class="chip">mcp_config_update</span><span class="chip">mcp_config_path</span></div>
+      </div>
+      <div class="tool-cat reveal d5">
+        <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></div><div class="tc-name">应用管理</div><div class="tc-count">4 tools</div></div>
+        <div class="tc-chips"><span class="chip">app_config_read</span><span class="chip">app_config_get</span><span class="chip">app_config_path</span><span class="chip">app_config_set_isolation</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DEMO ===================== -->
+<section id="demo">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">界面演示 · LIVE PREVIEW</div>
+      <h2 class="sec-title">桌面端四视图，<em>一站式</em>工作台。</h2>
+      <p class="sec-desc">对话流、画布、终端、编辑器同处一屏。下面是 Autiva 桌面端的界面还原，可切换 Tab 体验。</p>
+    </div>
+    <div class="demo-frame reveal">
+      <div class="demo-tabs">
+        <div class="demo-tab active" data-tab="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</div>
+        <div class="demo-tab" data-tab="canvas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6"/><path d="m15 9-6 6"/></svg>画布</div>
+        <div class="demo-tab" data-tab="terminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>终端</div>
+        <div class="demo-tab" data-tab="editor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 13 2 2 4-4"/></svg>编辑器</div>
+      </div>
+      <div class="demo-body">
+        <!-- chat -->
+        <div class="demo-panel active chat-panel" data-panel="chat">
+          <div class="msg user"><div class="ava">U</div><div class="bubble">帮我把 README 里所有的"AI Agent"统一替换成"智能体"，并提交一个 commit。</div></div>
+          <div class="msg bot"><div class="ava">A</div><div class="bubble">好的，我会先读取 README，定位所有"AI Agent"出现位置，再逐处替换并生成 diff 供你审核。
+            <div class="tool-card"><div class="th"><span class="status"></span>Grep · 搜索 "AI Agent"</div><div class="tb">找到 7 处匹配 · README.md</div></div>
+            <div class="tool-card"><div class="th"><span class="status"></span>Edit · replace_all</div><div class="tb">occurrences: 7 · 已生成 diff</div></div>
+          </div></div>
+          <div class="msg bot"><div class="ava">A</div><div class="bubble">已替换 7 处。右侧"修改文件"列表可查看 diff 并撤销。是否提交 commit？</div></div>
+          <div class="msg user"><div class="ava">U</div><div class="bubble">提交吧，message 写"docs: 统一术语为智能体"。</div></div>
+          <div class="msg bot"><div class="ava">A</div><div class="bubble"><span style="color:var(--green)">✓</span> 已提交 commit a1f3c2d。</div></div>
+        </div>
+        <!-- canvas -->
+        <div class="demo-panel canvas-panel" data-panel="canvas">
+          <svg class="canvas-svg" viewBox="0 0 600 440" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path d="M24 0H0V24" fill="none" stroke="rgba(232,237,242,0.05)" stroke-width="1"/>
+              </pattern>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2DD4BF"/></marker>
+            </defs>
+            <rect width="600" height="440" fill="#0a0e12"/>
+            <rect width="600" height="440" fill="url(#grid)"/>
+            <!-- nodes -->
+            <g font-family="JetBrains Mono, monospace" font-size="12">
+              <rect x="40" y="40" width="140" height="60" rx="10" fill="rgba(45,212,191,0.08)" stroke="#2DD4BF" stroke-width="1.5"/>
+              <text x="110" y="68" fill="#2DD4BF" text-anchor="middle" font-weight="600">用户消息</text>
+              <text x="110" y="86" fill="#8B96A3" text-anchor="middle" font-size="10">UserMessage</text>
+
+              <rect x="230" y="40" width="140" height="60" rx="10" fill="rgba(155,140,255,0.08)" stroke="#9B8CFF" stroke-width="1.5"/>
+              <text x="300" y="68" fill="#9B8CFF" text-anchor="middle" font-weight="600">Agent</text>
+              <text x="300" y="86" fill="#8B96A3" text-anchor="middle" font-size="10">runStream</text>
+
+              <rect x="420" y="40" width="140" height="60" rx="10" fill="rgba(246,185,90,0.08)" stroke="#F6B95A" stroke-width="1.5"/>
+              <text x="490" y="68" fill="#F6B95A" text-anchor="middle" font-weight="600">工具调用</text>
+              <text x="490" y="86" fill="#8B96A3" text-anchor="middle" font-size="10">Toolkit</text>
+
+              <rect x="230" y="180" width="140" height="60" rx="10" fill="rgba(125,211,160,0.08)" stroke="#7DD3A0" stroke-width="1.5"/>
+              <text x="300" y="208" fill="#7DD3A0" text-anchor="middle" font-weight="600">进化引擎</text>
+              <text x="300" y="226" fill="#8B96A3" text-anchor="middle" font-size="10">EvolutionEngine</text>
+
+              <rect x="40" y="320" width="140" height="60" rx="10" fill="rgba(232,237,242,0.04)" stroke="#8B96A3" stroke-width="1.5"/>
+              <text x="110" y="348" fill="#E8EDF2" text-anchor="middle" font-weight="600">会话</text>
+              <text x="110" y="366" fill="#8B96A3" text-anchor="middle" font-size="10">Session</text>
+
+              <rect x="420" y="320" width="140" height="60" rx="10" fill="rgba(232,237,242,0.04)" stroke="#8B96A3" stroke-width="1.5"/>
+              <text x="490" y="348" fill="#E8EDF2" text-anchor="middle" font-weight="600">JGit</text>
+              <text x="490" y="366" fill="#8B96A3" text-anchor="middle" font-size="10">GeneRepository</text>
+
+              <!-- arrows -->
+              <path d="M180 70 L230 70" stroke="#2DD4BF" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+              <path d="M370 70 L420 70" stroke="#F6B95A" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+              <path d="M300 100 L300 180" stroke="#9B8CFF" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+              <path d="M265 240 L150 320" stroke="#7DD3A0" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+              <path d="M335 240 L450 320" stroke="#7DD3A0" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+
+              <text x="300" y="130" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">推理循环</text>
+              <text x="210" y="285" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">固化</text>
+              <text x="395" y="285" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">版本化</text>
+            </g>
+          </svg>
+        </div>
+        <!-- terminal -->
+        <div class="demo-panel term-panel" data-panel="terminal">
+          <div class="term-line"><span class="p">autiva@desktop</span>:<span class="o">~/project</span>$ autiva run "分析项目结构"</div>
+          <div class="term-line"><span class="c">[Bootstrap]</span> 正在初始化智能体 <span class="g">default</span>...</div>
+          <div class="term-line"><span class="c">[Agent]</span> 加载定义: ~/.autiva/agents/default/agent.md</div>
+          <div class="term-line"><span class="c">[Tool]</span> 注册工具 30 个 · 白名单已合并 config.json</div>
+          <div class="term-line"><span class="c">[Session]</span> 创建会话 default-chat-ui-<span class="g">a1f3c2d</span></div>
+          <div class="term-line"><span class="c">[Evolve]</span> 加载基因 4 个 · 路由表 12 条</div>
+          <div class="term-line"><span class="c">[Memory]</span> 注入热记忆 1.2KB · 摘要 0.4KB</div>
+          <div class="term-line"><span class="c">[Agent]</span> <span class="g">●</span> 流式推理中...</div>
+          <div class="term-line"><span class="p">autiva@desktop</span>:<span class="o">~/project</span>$ <span style="color:var(--teal)">▍</span></div>
+        </div>
+        <!-- editor -->
+        <div class="demo-panel editor-panel" data-panel="editor">
+          <div class="ed-sidebar">
+            <div class="ed-file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>agent.md</div>
+            <div class="ed-file active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Agent.java</div>
+            <div class="ed-file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>config.json</div>
+            <div class="ed-file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>memory.md</div>
+          </div>
+          <div class="ed-code">
+            <div class="ln-line"><span class="ln">1</span><span><span class="cm">// 纯 POJO 设计，依赖通过 Builder 注入</span></span></div>
+            <div class="ln-line"><span class="ln">2</span><span><span class="kw">public final class</span> <span class="ty">Agent</span> {</span></div>
+            <div class="ln-line"><span class="ln">3</span><span>  <span class="kw">private final</span> <span class="ty">AgentDefinition</span> definition;</span></div>
+            <div class="ln-line"><span class="ln">4</span><span>  <span class="kw">private final</span> <span class="ty">ChatClient</span> chatClient;</span></div>
+            <div class="ln-line"><span class="ln">5</span><span>  <span class="kw">private final</span> <span class="ty">List</span>&lt;<span class="ty">ToolCallback</span>&gt; tools;</span></div>
+            <div class="ln-line"><span class="ln">6</span><span></span></div>
+            <div class="ln-line"><span class="ln">7</span><span>  <span class="kw">public</span> <span class="ty">Flux</span>&lt;<span class="ty">AssistantMessage</span>&gt; <span class="fn">runStream</span>(</span></div>
+            <div class="ln-line"><span class="ln">8</span><span>      <span class="ty">RuntimeContext</span> ctx, <span class="ty">Message</span> msg) {</span></div>
+            <div class="ln-line"><span class="ln">9</span><span>    <span class="kw">return</span> chatClient.<span class="fn">prompt</span>()</span></div>
+            <div class="ln-line"><span class="ln">10</span><span>      .<span class="fn">system</span>(systemPrompt)</span></div>
+            <div class="ln-line"><span class="ln">11</span><span>      .<span class="fn">user</span>(msg)</span></div>
+            <div class="ln-line"><span class="ln">12</span><span>      .<span class="fn">advisors</span>(a -&gt; a.<span class="fn">param</span>(<span class="st">"rt"</span>, ctx))</span></div>
+            <div class="ln-line"><span class="ln">13</span><span>      .<span class="fn">stream</span>().<span class="fn">content</span>();</span></div>
+            <div class="ln-line"><span class="ln">14</span><span>  }</span></div>
+            <div class="ln-line"><span class="ln">15</span><span>}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== TECH STACK ===================== -->
+<section id="stack">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">技术栈 · TECH STACK</div>
+      <h2 class="sec-title">站在<em>成熟</em>生态之上。</h2>
+      <p class="sec-desc">Spring AI 提供推理与工具调用骨架，JavaFX 承载原生体验，JGit 管理基因版本，JediTermFX 还原终端。</p>
+    </div>
+    <div class="stack-grid reveal">
+      <div class="stack-item"><div class="gd"></div><div class="nm">Spring Boot</div><div class="vr">3.x</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">Spring AI</div><div class="vr">OpenAI · MCP</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">JavaFX</div><div class="vr">OpenJFX</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">JGit</div><div class="vr">7.1</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">RichTextFX</div><div class="vr">0.11.7</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">JediTermFX</div><div class="vr">1.1.0</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">CommonMark</div><div class="vr">+ GFM Tables</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">Flexmark</div><div class="vr">html2md</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">Batik</div><div class="vr">SVG</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">ZXing</div><div class="vr">QR</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">Jackson</div><div class="vr">+ JSR310</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">Lombok</div><div class="vr">annotation</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== QUICK START ===================== -->
+<section id="start">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="sec-tag">快速开始 · QUICK START</div>
+      <h2 class="sec-title">三步<em>启动</em>你的 Autiva。</h2>
+      <p class="sec-desc">克隆仓库、构建产物、运行桌面端。首次启动会从种子基因初始化 ~/.autiva/ 目录。</p>
+    </div>
+    <div class="qs-grid">
+      <div class="qs-step reveal d1">
+        <div class="qs-head"><div class="qs-num">1</div><div class="qs-title">克隆仓库</div></div>
+        <div class="qs-code">
+          <button class="copy-btn" data-copy="git clone https://github.com/your-org/autiva.git&#10;cd autiva"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</button>
+          <span class="cm"># 克隆并进入项目</span><br>
+          <span class="pr">git</span> clone https://github.com/your-org/autiva.git<br>
+          <span class="pr">cd</span> autiva
+        </div>
+      </div>
+      <div class="qs-step reveal d2">
+        <div class="qs-head"><div class="qs-num">2</div><div class="qs-title">构建产物</div></div>
+        <div class="qs-code">
+          <button class="copy-btn" data-copy="mvn -pl autiva-desktop -am clean package -DskipTests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</button>
+          <span class="cm"># 构建 desktop 模块</span><br>
+          <span class="pr">mvn</span> -pl autiva-desktop -am \<br>
+          &nbsp;&nbsp;clean package <span class="ar">-DskipTests</span>
+        </div>
+      </div>
+      <div class="qs-step reveal d3">
+        <div class="qs-head"><div class="qs-num">3</div><div class="qs-title">运行桌面端</div></div>
+        <div class="qs-code">
+          <button class="copy-btn" data-copy="java --enable-native-access=javafx.graphics -jar autiva-desktop/target/autiva-desktop-1.0-SNAPSHOT.jar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</button>
+          <span class="cm"># 启动 Autiva 桌面端</span><br>
+          <span class="pr">java</span> <span class="ar">--enable-native-access</span>=javafx.graphics \<br>
+          &nbsp;&nbsp;-jar autiva-desktop/target/autiva-desktop-*.jar
+        </div>
+      </div>
+    </div>
+    <div class="reveal d4" style="margin-top:32px;padding:20px 24px;border-radius:14px;background:var(--teal-soft);border:1px solid rgba(45,212,191,0.25);display:flex;gap:14px;align-items:flex-start">
+      <svg style="width:20px;height:20px;color:var(--teal);flex-shrink:0;margin-top:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      <div style="font-size:13.5px;color:var(--text);line-height:1.6">
+        <strong style="color:var(--teal)">提示：</strong>需要 JDK 25 与 Maven。首次运行会从 <code class="mono" style="color:var(--amber)">classpath:evolve/genes.seed.json</code> 初始化 4 个种子基因到 <code class="mono" style="color:var(--amber)">~/.autiva/evolve/genes/</code>。在 <code class="mono" style="color:var(--amber)">~/.autiva/settings.properties</code> 中配置模型 API Key 后即可开始对话。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer>
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a href="#top" class="brand">
+          <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#04201c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12c0-4 3-7 8-7s8 3 8 7-3 7-8 7-8-3-8-7Z"/><path d="M4 12c2 0 4 1 6 1s4-1 6-1 4 1 6 1" opacity="0.5"/></svg></span>
+          <span class="brand-name">Autiva</span>
+        </a>
+        <p>会进化的桌面智能体运行时。基于 Spring Boot + JavaFX，融合 GeneOS 自进化引擎。</p>
+      </div>
+      <div class="foot-col">
+        <h4>产品</h4>
+        <a href="#capabilities">核心能力</a>
+        <a href="#architecture">架构</a>
+        <a href="#evolution">进化闭环</a>
+        <a href="#demo">界面演示</a>
+      </div>
+      <div class="foot-col">
+        <h4>开发者</h4>
+        <a href="#tools">工具矩阵</a>
+        <a href="#stack">技术栈</a>
+        <a href="#start">快速开始</a>
+        <a href="#">AGENTS.md</a>
+      </div>
+      <div class="foot-col">
+        <h4>资源</h4>
+        <a href="#">GitHub</a>
+        <a href="#">文档</a>
+        <a href="#">许可证</a>
+        <a href="#">更新日志</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 BITLOOM · Autiva Desktop</span>
+      <span>本地优先 · 自我进化 · 可版本回溯</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ---------- DNA particle background ---------- */
+(function(){
+  const cv = document.getElementById('dna');
+  const ctx = cv.getContext('2d');
+  let w, h, dpr, particles=[], t=0, raf;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    w = cv.width = window.innerWidth * dpr;
+    h = cv.height = window.innerHeight * dpr;
+    cv.style.width = window.innerWidth+'px';
+    cv.style.height = window.innerHeight+'px';
+  }
+  function build(){
+    particles = [];
+    const count = Math.min(70, Math.floor(window.innerWidth/22));
+    for(let i=0;i<count;i++){
+      particles.push({
+        x: Math.random()*w,
+        baseY: Math.random()*h,
+        amp: 30 + Math.random()*60,
+        speed: 0.0006 + Math.random()*0.0012,
+        phase: Math.random()*Math.PI*2,
+        size: (1.2 + Math.random()*1.8)*dpr,
+        hue: Math.random()<0.5 ? 'teal' : (Math.random()<0.5 ? 'amber' : 'green')
+      });
+    }
+  }
+  const colors = {teal:'45,212,191', amber:'246,185,90', green:'125,211,160'};
+  function draw(){
+    ctx.clearRect(0,0,w,h);
+    t += 1;
+    // two helix strands
+    for(let strand=0; strand<2; strand++){
+      const strandOffset = strand * Math.PI;
+      ctx.beginPath();
+      for(let i=0;i<particles.length;i++){
+        const p = particles[i];
+        const y = p.baseY + Math.sin(t*p.speed*40 + p.phase + strandOffset) * p.amp * dpr;
+        const x = (p.x + t*p.speed*60) % w;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.strokeStyle = 'rgba(45,212,191,0.12)';
+      ctx.lineWidth = 1*dpr;
+      ctx.stroke();
+    }
+    // dots
+    for(let i=0;i<particles.length;i++){
+      const p = particles[i];
+      const y = p.baseY + Math.sin(t*p.speed*40 + p.phase) * p.amp * dpr;
+      const x = (p.x + t*p.speed*60) % w;
+      const y2 = p.baseY + Math.sin(t*p.speed*40 + p.phase + Math.PI) * p.amp * dpr;
+      ctx.beginPath();
+      ctx.arc(x, y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(${colors[p.hue]},0.55)`;
+      ctx.fill();
+      // rung
+      if(i%4===0){
+        ctx.beginPath();
+        ctx.moveTo(x,y);
+        ctx.lineTo(x,y2);
+        ctx.strokeStyle = 'rgba(45,212,191,0.06)';
+        ctx.lineWidth = 1*dpr;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y2, p.size*0.7, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(${colors[p.hue]},0.3)`;
+        ctx.fill();
+      }
+    }
+    raf = requestAnimationFrame(draw);
+  }
+  function start(){ resize(); build(); if(!reduce) draw(); else { resize(); build(); ctx.clearRect(0,0,w,h);} }
+  window.addEventListener('resize', ()=>{ cancelAnimationFrame(raf); start(); });
+  start();
+})();
+
+/* ---------- nav scroll state ---------- */
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', ()=>{
+  if(window.scrollY > 30) nav.classList.add('scrolled');
+  else nav.classList.remove('scrolled');
+}, {passive:true});
+
+/* ---------- reveal on scroll ---------- */
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+}, {threshold:0.12, rootMargin:'0px 0px -60px 0px'});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+/* ---------- evolution loop pulse ---------- */
+const loopNodes = document.querySelectorAll('#loop .loop-node');
+let loopIdx = 0;
+setInterval(()=>{
+  loopNodes.forEach(n=>n.classList.remove('active'));
+  if(loopNodes[loopIdx]) loopNodes[loopIdx].classList.add('active');
+  loopIdx = (loopIdx+1) % loopNodes.length;
+}, 1400);
+
+/* ---------- demo tabs ---------- */
+document.querySelectorAll('.demo-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.demo-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.demo-panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    const id = tab.dataset.tab;
+    document.querySelector(`.demo-panel[data-panel="${id}"]`).classList.add('active');
+  });
+});
+
+/* ---------- copy buttons ---------- */
+document.querySelectorAll('.copy-btn').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(btn.dataset.copy);
+      btn.classList.add('copied');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已复制';
+      setTimeout(()=>{
+        btn.classList.remove('copied');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制';
+      }, 1600);
+    }catch(e){}
+  });
+});
+</script>
+</body>
+</html>
