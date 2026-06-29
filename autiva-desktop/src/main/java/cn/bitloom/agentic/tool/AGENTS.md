@@ -59,13 +59,14 @@ Spring @Component，统一管理工具注册和构建。
 **核心功能：**
 - **工具存在性校验**：当 LLM 幻觉出不存在的工具名（如 Bash）时，返回 `ToolResult.toolNotFound()` 友好错误提示（而非抛异常），让 LLM 有机会自我纠正
 - **工具权限校验**：基于已注册工具名集合（`registeredToolNames`），阻止未授权的工具调用
+- **工具参数解析容错**：当 LLM 生成的工具调用参数 JSON 格式不正确（如缺少逗号）导致 `IllegalStateException` 时，返回 `ToolResult.error()` 友好错误提示（含原始输入），让 LLM 有机会自我纠正
 
 **核心字段：**
 - `registeredToolNames`: `Set<String>` — 已注册工具名集合，从 `List<ToolCallback>` 提取
 
 **核心方法：**
 - `resolveToolDefinitions(ToolCallingChatOptions)`: 从 chatOptions 提取工具定义（与 DefaultToolCallingManager 逻辑一致）
-- `executeToolCalls(Prompt, ChatResponse)`: 逐个执行工具调用，找不到工具时返回 `ToolResult.toolNotFound()` 错误响应，而非抛 `IllegalStateException`
+- `executeToolCalls(Prompt, ChatResponse)`: 逐个执行工具调用，找不到工具时返回 `ToolResult.toolNotFound()` 错误响应；参数 JSON 解析失败时返回 `ToolResult.error()` 错误响应；而非抛 `IllegalStateException`
 
 **注入方式：**
 在 `Agent.Builder.build()` 中创建 `AutivaToolCallingManager` 实例，通过 `ToolCallingAdvisor.builder().toolCallingManager()` 注入。

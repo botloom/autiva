@@ -111,6 +111,13 @@ public class AutivaToolCallingManager implements ToolCallingManager {
                     toolResult = toolCallback.call(toolInput, toolContext);
                 } catch (ToolExecutionException ex) {
                     toolResult = DefaultToolExecutionExceptionProcessor.builder().build().process(ex);
+                } catch (IllegalStateException ex) {
+                    // JSON 解析失败等异常：LLM 生成了无效的工具参数，返回友好错误让 LLM 自我纠正
+                    String errorMsg = ToolResult.error(
+                            "工具调用参数格式错误，请确保参数为合法的 JSON 格式，字段之间用逗号分隔。错误: " + ex.getMessage(),
+                            Map.of("raw_input", toolInput)).toJson();
+                    log.warn("[ToolCall] 工具 {} 参数解析失败: {}", toolName, ex.getMessage());
+                    toolResult = errorMsg;
                 }
                 toolResponses.add(new ToolResponseMessage.ToolResponse(
                         toolCall.id(), toolName, toolResult));
