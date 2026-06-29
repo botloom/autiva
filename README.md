@@ -4,6 +4,14 @@
 
 Autiva 是一个可扩展的 AI 智能体桌面应用，提供多智能体架构、工具系统、技能系统、进化引擎和 IM 集成，旨在打造一个可自主进化的 AI 代理平台。
 
+## 界面展示
+
+![Homepage](images/homepage.png)
+
+![Homepage 2](images/homepage2.png)
+
+![Coder](images/coder.png)
+
 ## 技术栈
 
 | 技术 | 版本 | 用途 |
