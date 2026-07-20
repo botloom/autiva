@@ -269,7 +269,7 @@
 - `viewModel.formatCreateTime()` - 格式化创建时间
 
 ### GepPageController
-基因进化管理页控制器（窄列卡片列表风格，对齐 AgentPage 设计规范）。
+基因进化管理页控制器（窄列卡片列表风格，对齐 AgentPage 设计规范）。阶段4 改造为 L4 自优化统一入口。
 
 **Spring 注解：** `@Component`
 
@@ -277,14 +277,12 @@
 - `GepPageViewModel`: 视图模型（MVVM）
 
 **职责（仅 UI）：**
-- 渲染操作卡片（策略选择 + 执行周期 + 提取经验）
-- 渲染概览卡片（统计行：基因数/事件数/路由数/规则数）
-- 渲染可展开基因卡片（收起：标题+描述+标签+展开按钮；展开：策略步骤/约束/验证/反模式/代码/版本历史/父基因/时间/操作按钮）
-- 渲染路由卡片（行列表 + 添加/删除）
-- 渲染记忆卡片（行列表 + 添加/删除）
-- 渲染事件卡片（行列表）
-- 渲染胶囊卡片（行列表 + 删除）
-- 添加路由/规则对话框
+- 渲染概览卡片（基因数/启用数/各类型计数/事件数/事件成功率）
+- 渲染 L4 爬山自优化卡片（描述 + "分析优化"按钮 + 分析摘要 + 可展开的 L4 分析报告详情，阶段4 新增）
+- 渲染 L2 校验报告卡片（Trace 总数/通过/失败/通过率/工具调用/阻断，阶段4 新增）
+- 渲染最近 Trace 卡片（最近 10 条 Trace：状态标签/时间/工具调用数/阻断数/用户消息摘要，阶段4 新增）
+- 渲染可展开基因卡片（收起：标题+描述+标签+展开按钮；展开：配置内容/版本历史/父版本/时间/操作按钮）
+- 渲染进化事件卡片（行列表）
 - 基因启用/禁用/删除操作
 - 版本回滚确认
 
@@ -293,17 +291,16 @@
 - `contentContainer`: 内容容器（动态填充）
 
 **ViewModel 委托：**
-- `viewModel.loadData()` - 加载所有数据
+- `viewModel.loadData()` - 加载所有数据（Gene/Event/Trace/统计）
+- `viewModel.climbAsync(Runnable)` - 触发 L4 爬山分析（阶段4 新增）
 - `viewModel.toggleGene(id)` - 切换基因启用状态
 - `viewModel.deleteGene(id)` - 删除基因
-- `viewModel.runEvolutionCycle()` - 执行进化周期
-- `viewModel.extractAndEvolve()` - 提取经验并进化
-- `viewModel.addRoute(pattern, geneId, weight)` - 添加路由
-- `viewModel.removeRoute(pattern)` - 删除路由
-- `viewModel.addRule(pattern, action, confidence)` - 添加记忆规则
-- `viewModel.deleteRule(ruleId)` - 删除记忆规则
 - `viewModel.getGeneHistory(geneId)` - 获取基因版本历史
 - `viewModel.revertGene(geneId, commitHash)` - 回滚基因版本
+
+**L4 分析按钮交互：**
+- 点击"分析优化" → 按钮置灰显示"分析中..." → 异步调用 `viewModel.climbAsync()` → 完成后按钮恢复 + `refreshContent()` 重新渲染
+- 分析结果展示在按钮下方：摘要 Label + 可折叠 TitledPane（含完整 Markdown 报告 TextFlow）
 
 ### SideBarController
 侧边栏控制器。

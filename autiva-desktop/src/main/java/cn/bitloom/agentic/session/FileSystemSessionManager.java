@@ -5,13 +5,21 @@ import cn.bitloom.agentic.agent.AgentDefinition;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.EventConverter;
+import cn.bitloom.agentic.evolve.config.EvolveConfig;
+import cn.bitloom.agentic.evolve.gene.GeneStore;
+import cn.bitloom.agentic.evolve.inject.GeneInjector;
 import cn.bitloom.agentic.memory.CompactChatMemory;
 import cn.bitloom.agentic.memory.MemoryManager;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.Toolkit;
+import cn.bitloom.agentic.trace.TraceHook;
 import cn.bitloom.agentic.util.MessageUtil;
+import cn.bitloom.agentic.verify.VerificationHook;
+import cn.bitloom.agentic.verify.grader.LlmGrader;
+import cn.bitloom.agentic.verify.grader.OutputGrader;
+import cn.bitloom.agentic.verify.grader.ToolGrader;
 import cn.bitloom.constant.AppConstants;
 import cn.bitloom.exception.StorageException;
 import cn.bitloom.store.Store;
@@ -56,6 +64,13 @@ public class FileSystemSessionManager implements ISessionManager {
     private final CompactChatMemory chatMemory;
     private final MemoryManager memoryManager;
     private final SkillManager skillManager;
+    private final GeneStore geneStore;
+    private final LlmGrader llmGrader;
+    private final List<ToolGrader> toolGraders;
+    private final List<OutputGrader> outputGraders;
+    private final EvolveConfig evolveConfig;
+    private final TraceHook traceHook;
+    private final GeneInjector geneInjector;
     private static final int MAX_CACHED_SESSIONS = 5;
     private static final int RECENT_MESSAGES_COUNT = 50;
 
@@ -88,13 +103,27 @@ public class FileSystemSessionManager implements ISessionManager {
                                     Toolkit toolkit,
                                     @Lazy CompactChatMemory chatMemory,
                                     MemoryManager memoryManager,
-                                    SkillManager skillManager) {
+                                    SkillManager skillManager,
+                                    GeneStore geneStore,
+                                    LlmGrader llmGrader,
+                                    List<ToolGrader> toolGraders,
+                                    List<OutputGrader> outputGraders,
+                                    EvolveConfig evolveConfig,
+                                    TraceHook traceHook,
+                                    GeneInjector geneInjector) {
         this.definitionManager = definitionManager;
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
         this.chatMemory = chatMemory;
         this.memoryManager = memoryManager;
         this.skillManager = skillManager;
+        this.geneStore = geneStore;
+        this.llmGrader = llmGrader;
+        this.toolGraders = toolGraders;
+        this.outputGraders = outputGraders;
+        this.evolveConfig = evolveConfig;
+        this.traceHook = traceHook;
+        this.geneInjector = geneInjector;
     }
 
     /**
@@ -175,11 +204,8 @@ public class FileSystemSessionManager implements ISessionManager {
     public void activate(String sessionId) {
         Session session = sessions.get(sessionId);
 
-        // 注入 Agent
+        // 获取 Agent 实例
         Agent agent = this.getOrCreateAgent(session.getAgentId());
-        session.setAgent(agent);
-        // 注入 MemoryManager（供 SessionRunner 处理 MemoryEvent 时调用）
-        session.setMemoryManager(memoryManager);
 
         // 从磁盘加载最新状态
         Session diskState = loadMetadata(sessionId);
@@ -196,8 +222,8 @@ public class FileSystemSessionManager implements ISessionManager {
         List<Message> messages = loadRecentMessages(messagesFile, RECENT_MESSAGES_COUNT);
         session.setMessages(messages);
 
-        // 通过 SessionRunner 启动消息循环
-        SessionRunner runner = new SessionRunner(session);
+        // 通过 SessionRunner 启动消息循环（注入 Agent 和 MemoryManager）
+        SessionRunner runner = new SessionRunner(session, agent, memoryManager);
         runners.put(sessionId, runner);
         runner.start();
     }
@@ -479,6 +505,10 @@ public class FileSystemSessionManager implements ISessionManager {
             // 记忆文件路径
             java.nio.file.Path memoryPath = AppConstants.MainAgent.memoryFile(id);
 
+            // 构造 L2 校验 Hook（仅在 definition.verification().enabled() 时生效）
+            VerificationHook verificationHook = new VerificationHook(
+                    geneStore, toolGraders, outputGraders, llmGrader, evolveConfig, traceHook);
+
             Agent agent = Agent.builder()
                     .name(id)
                     .definition(definition)
@@ -486,13 +516,17 @@ public class FileSystemSessionManager implements ISessionManager {
                     .systemPrompt(definition.content())
                     .tools(toolkit.buildToolCallbacks(definition))
                     .hooks(List.of())
+                    .verificationHook(verificationHook)
+                    .traceHook(traceHook)
+                    .geneInjector(geneInjector)
                     .memory(chatMemory)
                     .compact(true)
                     .skillManager(skillManager)
                     .definitionManager(definitionManager)
                     .memoryFilePath(memoryPath)
                     .build();
-            log.info("创建主智能体: agentId={}", id);
+            log.info("创建主智能体: agentId={} verification={}", id,
+                    definition.verification() != null && definition.verification().enabled());
             return agent;
         });
     }

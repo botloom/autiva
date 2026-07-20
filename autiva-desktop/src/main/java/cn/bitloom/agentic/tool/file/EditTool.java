@@ -5,6 +5,7 @@ import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
 import cn.bitloom.agentic.tool.ToolUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -25,15 +26,7 @@ import java.util.Map;
 public class EditTool extends AbstractTool<EditTool.Input> {
 
 	private static final String DESCRIPTION = """
-			在文件中执行精确的字符串替换。
-
-			用法：
-			- 在编辑之前，你必须至少在对话中使用过一次`Read`工具。如果你尝试在没有读取文件的情况下编辑，此工具将报错。
-			- 编辑Read工具输出的文本时，确保保留行号前缀之后出现的精确缩进（制表符/空格）。行号前缀格式为：空格+行号+制表符。该制表符之后的所有内容是要匹配的实际文件内容。永远不要在old_string或new_string中包含行号前缀的任何部分。
-			- 始终优先编辑代码库中的现有文件。除非明确需要，否则不要创建新文件。
-			- 仅在用户明确请求时使用表情符号。除非被要求，否则避免向文件添加表情符号。
-			- 如果`old_string`在文件中不唯一，编辑将失败。请提供更大的字符串和更多周围上下文使其唯一，或使用`replace_all`更改所有`old_string`的实例。
-			- 使用`replace_all`在文件中替换和重命名字符串。如果你想要重命名变量，此参数很有用。
+			在文件中做精确字符串替换。必须先 Read 文件。old_string 必须精确匹配（包括缩进）。去除 Read 输出的行号前缀后再匹配。用 replace_all 替换全部出现。
 			""";
 
 	private final DiffService diffService;
@@ -51,7 +44,7 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 	) {}
 
 	@Override
-	public ToolResult execute(Input input, ToolContext context) {
+	public @NonNull ToolResult execute(Input input, ToolContext context) {
 		String filePath = input.filePath();
 		String old_string = input.old_string();
 		String new_string = input.new_string();

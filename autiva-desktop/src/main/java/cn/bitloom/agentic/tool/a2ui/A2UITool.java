@@ -60,42 +60,9 @@ public class A2UITool extends AbstractTool<A2UITool.Input> {
 
     private A2UITool(A2UIHandler handler) {
         super("A2UI", """
-                生成动态用户界面(A2UI v0.9.1 协议)。用于需要复杂交互的场景:
-                - 多字段表单(优于多次 AskUserQuestion)
-                - 数据展示(列表、卡片)
-                - 配置向导(分步骤引导)
-
-                工作流程:
-                1. create: 创建 Surface
-                2. update_components: 定义组件(扁平列表,ID 引用)
-                3. update_data: 填充数据(可选)
-                4. 等待用户交互(自动回流,无需轮询)
-                5. delete: 关闭 Surface
-
-                组件类型(Basic Catalog):
-                - 布局: Row(水平), Column(垂直), List(列表)
-                - 显示: Text, Image, Icon, Divider
-                - 交互: Button, TextField, CheckBox, Slider, ChoicePicker, DateTimeInput
-                - 容器: Tabs, Card
-
-                组件属性:
-                - Text: text(字符串), variant(h1/h2/h3/h4/h5/caption/body)
-                - TextField: label, value(可绑定 {path: "/xxx"}), textFieldType(shortText/longText/number/obscured)
-                - Button: child(子组件ID), variant(primary), action({event: {name: "xxx"}} 或 {functionCall: {call: "xxx"}})
-                - CheckBox: label, value(布尔,可绑定)
-                - Slider: value(数字,可绑定), minValue, maxValue
-                - ChoicePicker: options([{label, description}]), selections(可绑定), maxAllowedSelections
-                - Row/Column/List: children(子组件ID数组)
-
-                示例 - 用户信息表单:
-                operation: create, surfaceId: user_form
-                operation: update_components, surfaceId: user_form, components: [
-                  {"id":"root","component":"Column","properties":{"children":["name_label","name_field","submit_btn"]}},
-                  {"id":"name_label","component":"Text","properties":{"text":"姓名","variant":"h4"}},
-                  {"id":"name_field","component":"TextField","properties":{"label":"请输入姓名","value":{"path":"/name"}}},
-                  {"id":"submit_btn","component":"Button","properties":{"child":"submit_text"},"action":{"event":{"name":"submit_form"}}},
-                  {"id":"submit_text","component":"Text","properties":{"text":"提交"}}
-                ]
+                生成动态用户界面(A2UI v0.9.1)。用于复杂交互场景:多字段表单、数据展示、配置向导。
+                工作流:创建Surface → 定义组件 → 等待用户交互 → 删除。
+                组件:Row,Column,List,Text,Button,TextField,CheckBox,Slider,ChoicePicker,DateTimeInput,Tabs,Card。
                 """, Input.class);
         this.handler = handler;
     }

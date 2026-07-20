@@ -42,16 +42,7 @@ public class AskUserQuestionTool extends AbstractTool<AskUserQuestionTool.Input>
 	private static final Logger logger = LoggerFactory.getLogger(AskUserQuestionTool.class);
 
 	private static final String DESCRIPTION = """
-			当你在执行过程中需要向用户提问时使用此工具。此工具允许你：
-			1. 收集用户偏好或需求
-			2. 澄清模糊的指令
-			3. 在工作中获取关于实现选择的决策
-			4. 向用户提供关于方向的选择。
-
-			使用说明：
-			- 用户始终可以选择"其他"来提供自定义文本输入
-			- 使用multiSelect: true允许为问题选择多个答案
-			- 如果你推荐特定选项，请将其放在列表的第一个位置，并在标签末尾添加"（推荐）"
+			向用户提问。用于澄清需求或获取决策。multiSelect 允许多选。推荐选项标"(推荐)"。
 			""";
 
 	/**

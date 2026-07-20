@@ -1,318 +1,291 @@
 # Evolve 包
 
 ## 概述
-本包实现了基于 GeneOS 的 AI Agent 自进化操作系统。核心流水线为：**执行记录 → 经验提取 → 进化决策 → 基因突变/路由更新/规则沉淀 → JGit提交 → 下次执行改进**。
+本包实现了基于 **Loop Engineering** 的 L4 爬山自优化系统。Gene 不再是"可执行技能"，而是 **L4 可优化的配置单元**（Agent Prompt / 工具描述 / Grader Rubric / 技能配置）。版本通过 JGit 管理，表观遗传值（epigeneticBoost）基于 L2 校验通过率动态调整。
 
 ## 设计理念
 
-基于 GeneOS 三层架构：
-1. **Gene 执行层**：可执行基因（Shell/Java/Script/Strategy），通过 GeneRuntime 统一执行
-2. **经验引擎层**：从执行日志中提取失败模式，驱动进化决策
-3. **进化引擎层**：基因突变 + 路由更新 + 规则沉淀，JGit 版本控制
+四层循环架构中本包负责 **L4 Hill Climbing Loop**：
 
-核心愿景：**"基于文件系统 + Git 的可进化能力操作系统"**
+```
+L4 (本包)        TraceRecorder → HillClimbingEngine → GeneMutator → GeneStore
+                                              ↑                          ↓
+L2 (verify 包)   VerificationHook / LlmGrader ←── Rubric Gene 注入 ───┘
+                                              ↑                          ↓
+L1 (agent 包)    Agent / SessionRunner ←── PROMPT Gene 注入 ─────────┘
+```
+
+**核心原则**：
+1. **Gene = 配置单元**：PROMPT/TOOL_DESC/RUBRIC/SKILL_CONFIG 四种类型
+2. **配置驱动优化**：所有可调配置都是 Gene，L4 通过 LLM 分析 Trace 反向优化
+3. **复用基础设施**：JGit 版本控制、表观遗传值、安全检查、突变器全部保留
+4. **Maker/Verifier 分离**：L2 的 LlmGrader 是独立 Agent，与 L1 主 Agent 分离
 
 ## 目录结构
 
 ```
 cn.bitloom.agentic.evolve/
 ├── config/
-│   └── EvolveConfig.java              # 进化配置（策略、阈值、路径、安全参数）
-├── signal/
-│   ├── Signal.java                    # 信号 record
-│   ├── SignalType.java                # 信号类型枚举
-│   ├── SignalExtractor.java           # 信号提取器（正则+关键词）
-│   └── SignalHistory.java             # 信号历史分析
+│   └── EvolveConfig.java              # 配置（路径、表观遗传参数、安全参数、Trace参数）
 ├── gene/
-│   ├── Gene.java                      # Gene record（含可执行代码字段）
-│   ├── GeneCategory.java              # Gene 分类枚举
-│   ├── GeneRuntimeType.java           # Gene 运行时类型枚举
-│   ├── GeneSelector.java              # Gene 选择引擎
-│   ├── GeneStore.java                 # Gene/Capsule 持久化 + JGit集成
-│   └── Capsule.java                   # Capsule record
-├── execution/
-│   ├── ExecutionLog.java              # 执行日志 record
-│   └── ExecutionRecorder.java         # 执行记录器
-├── runtime/
-│   ├── GeneRuntime.java               # 基因运行时统一入口
-│   ├── GeneExecutor.java              # 执行器接口
-│   ├── GeneResult.java                # 执行结果 record
-│   ├── StrategyGeneExecutor.java      # 策略文本执行器
-│   ├── ShellGeneExecutor.java         # Shell脚本执行器
-│   └── JavaGeneExecutor.java          # Java代码执行器
-├── experience/
-│   ├── Experience.java                # 经验 record
-│   ├── ExperienceTarget.java          # 经验目标枚举（GENE/ROUTING/MEMORY）
-│   └── ExperienceEngine.java          # 经验引擎（LLM驱动模式挖掘）
+│   ├── Gene.java                      # Gene record（L4 配置单元）
+│   ├── GeneType.java                  # 配置类型枚举（PROMPT/TOOL_DESC/RUBRIC/SKILL_CONFIG）
+│   └── GeneStore.java                 # Gene 持久化 + JGit 集成 + 读写锁
 ├── mutation/
-│   └── GeneMutator.java               # 基因突变器（LLM改代码）
-├── routing/
-│   ├── RoutingEntry.java              # 路由条目 record
-│   └── RoutingEngine.java             # 动态路由引擎
-├── memory/
-│   ├── MemoryRule.java                # 记忆规则 record
-│   └── MemoryEngine.java              # 规则记忆引擎
-├── safety/
-│   └── EvolutionSafety.java           # 进化安全系统
+│   └── GeneMutator.java               # LLM 驱动的配置内容优化器
 ├── repository/
-│   └── GeneRepository.java            # JGit基因版本仓库
-├── migration/
-│   └── GeneMigration.java             # 数据迁移（genes.json → 目录结构）
-├── strategy/
-│   ├── StrategyPreset.java            # 策略预设枚举
-│   └── StrategyEngine.java            # 策略引擎
-├── prompt/
-│   └── EvolvePromptAssembler.java     # GEP 提示词组装器
+│   └── GeneRepository.java            # JGit 基因版本仓库
+├── safety/
+│   └── EvolutionSafety.java           # 进化安全系统（防改坏）
 ├── solidify/
-│   ├── EvolutionEvent.java            # 演化事件 record
-│   ├── Solidifier.java                # 固化器
-│   └── CanaryCheck.java              # 金丝雀检查
-├── EvolutionEngine.java               # 进化引擎主类
+│   ├── EvolutionEvent.java            # 进化事件 record（审计日志）
+│   └── Solidifier.java                # 表观遗传值更新器
+├── climb/                             # 阶段3新增
+│   ├── HillClimbingEngine.java        # L4 爬山分析引擎
+│   ├── OptimizationSuggestion.java    # 优化建议 record
+│   └── ClimbingResult.java            # 爬山结果 record
+├── inject/                            # 阶段3新增
+│   └── GeneInjector.java              # Gene 配置注入器
+├── EvolutionEngine.java               # 进化引擎主类（L4 编排器）
 └── AGENTS.md                          # 包文档
 ```
 
 ## 核心概念
 
-### Gene（基因）
-紧凑可复用的演化指令，自适应行为的最小单元。包含：
-- `signalsMatch`：匹配的信号类型列表
-- `strategy`：策略步骤
-- `constraints`：约束条件
-- `validation`：验证检查
-- `epigeneticBoost`：表观遗传值（基于历史成功率动态调整）
-- `antiPatterns`：反模式警告
-- `runtimeType`：运行时类型（STRATEGY/SHELL/JAVA/SCRIPT）
-- `code`：可执行代码
-- `version`：版本号
-- `parentId`：父基因ID（突变来源）
+### Gene（基因 / 配置单元）
+L4 可优化的配置片段，字段：
+- `id` — 基因ID（如 `prompt_heimy_error_handling`）
+- `type` — `GeneType` 枚举：PROMPT / TOOL_DESC / RUBRIC / SKILL_CONFIG
+- `targetId` — 目标对象ID（agent名 / 工具名 / grader名 / 技能名）
+- `name` — 配置项名称（如 `system_prompt` / `description` / `completeness_check`）
+- `content` — 配置内容（Prompt文本 / 工具描述 / Rubric规则 / 技能配置JSON）
+- `description` — 配置项作用说明（供 L4 理解上下文）
+- `epigeneticBoost` — 表观遗传值（L4 优化效果权重，1.0 为基准，上限 5.0，下限 0.1）
+- `version` — 版本号（每次突变 +1）
+- `parentId` — 父版本ID（突变来源）
+- `enabled` — 启用状态
+- `createdAt` / `updatedAt` — 时间戳
 
-### GeneRuntimeType（基因运行时类型）
-- `STRATEGY`：纯策略文本（向后兼容）
-- `SHELL`：Shell脚本执行
-- `JAVA`：Java代码执行
-- `SCRIPT`：通用脚本执行
+**不可变 record**，提供 `withEpigeneticBoost` / `withEnabled` / `withContent` / `withVersion` 派生方法。
 
-### ExecutionLog（执行日志）
-记录每次基因/工具执行的结构化日志，写入 `~/.autiva/logs/executions/YYYY-MM-DD.jsonl`。
-
-### Experience（经验）
-从执行日志中提取的结构化失败模式，包含：
-- `pattern`：识别的失败模式
-- `rootCause`：根本原因
-- `fix`：修复方案
-- `target`：影响目标（GENE/ROUTING/MEMORY）
-- `confidence`：置信度（<0.7不触发进化）
-
-### RoutingEntry（路由条目）
-动态路由映射，将意图模式映射到推荐基因。
-
-### MemoryRule（记忆规则）
-从经验沉淀的规则，触发模式 → 执行动作。
-
-### Capsule（胶囊）
-高阶演化资产，将相关基因与附加上下文打包。通常由连续成功的进化事件自动生成（≥3次成功）。
-
-### Signal（信号）
-从对话和日志中提取的结构化观察结果，类型包括：
-- 错误类：LOG_ERROR, ERRSIG, RECURRING_ERROR
-- 用户需求类：USER_FEATURE_REQUEST, USER_IMPROVEMENT_SUGGESTION
-- 性能类：PERF_BOTTLENECK, CAPABILITY_GAP
-- 状态类：STABLE_SUCCESS_PLATEAU, EVOLUTION_STAGNATION
-- 循环检测类：REPAIR_LOOP_DETECTED, FORCE_INNOVATION_AFTER_REPAIR_LOOP
-- 工具类：TOOL_BYPASS, HIGH_TOOL_USAGE
-- 缺失类：MEMORY_MISSING, SESSION_LOGS_MISSING
-- 探索类：EXPLORE_OPPORTUNITY, EVOLUTION_SATURATION
+### GeneType（配置类型）
+| 类型 | 注入位置 | L4 优化目标 |
+|------|---------|------------|
+| `PROMPT` | SystemMessage 末尾 | Agent 提示词片段 |
+| `TOOL_DESC` | 工具定义的 description | 工具描述文本 |
+| `RUBRIC` | LlmGrader 的评判标准 | L2 评分规则 |
+| `SKILL_CONFIG` | agent.md 的 skills 配置 | 技能列表/参数 |
 
 ### EvolutionEvent（进化事件）
-不可变审计记录，捕获信号、选定基因、生成提示词及结果。
+不可变审计记录，捕获单次进化决策的结果，写入 `events.jsonl`。
+
+### 表观遗传值（epigeneticBoost）
+- 初始值 `1.0`
+- L2 校验通过率提升 → `×1.2`（上限 5.0）
+- L2 校验通过率下降 → `×0.95`（下限 0.1）
+- 低 boost 的 Gene 在 L4 分析时优先被重新优化
 
 ## 核心类
 
 ### EvolutionEngine
-进化引擎主类，编排整个进化流水线。
+**Spring 注解**：`@Component`
 
-**Spring 注解：** `@Component`
+进化引擎主类，L4 爬山循环的编排器。委托 `HillClimbingEngine` 执行 L4 分析，委托 `Solidifier` 更新表观遗传值，暴露 `TraceRecorder` 的统计能力。
 
-**核心方法：**
-- `runCycle(List<String>)`: 执行一次完整的进化周期
-- `getEvolutionContext(List<String>)`: 获取当前进化上下文
-- `solidify(EvolutionEvent)`: 固化成功的演化
-- `evolve(Experience)`: 经验驱动进化（基因突变/路由更新/规则沉淀）
-- `extractAndEvolve()`: 批量提取经验并进化
-- `queryGenes(GeneCategory)`: 查询基因
-- `queryGeneDetail(String)`: 查看基因详情
-- `queryCapsules()`: 查询胶囊
-- `queryEvents(int)`: 查看进化事件
-- `recommendGenes(List<String>)`: 获取推荐基因
-- `applyGene(String, String)`: 应用基因
-- `applyCapsule(String, String)`: 应用胶囊
+**核心方法**：
+- `climb(agentId)` — 执行 L4 爬山分析，返回 ClimbingResult
+- `verificationStats(agentId, recentLimit)` — 获取指定 Agent 的 L2 校验通过率统计
+- `cleanupOldTraces()` — 清理旧 Trace 文件（按 `traceRetentionDays` 配置）
+- `solidify(EvolutionEvent)` — 固化进化事件，更新表观遗传值
+- `createEvent(geneId, intent, outcome)` — 创建进化事件
+- `queryGenes(GeneType)` — 按类型查询基因
+- `queryGeneDetail(String)` — 查看基因详情
+- `queryEvents(int)` — 查看最近 N 条进化事件
+- `applyGene(String)` — 应用基因（返回详情）
+- `toggleGene(String, boolean)` — 启用/禁用基因
+- `revertGene(String, String)` — 回滚基因到指定 commit
 
 ### EvolveConfig
-集中式配置类，所有阈值支持运行时修改。
+**Spring 注解**：`@Component` `@Getter`
 
-**配置项：**
-- `strategyPreset`: 策略预设（BALANCED/INNOVATE/HARDEN/REPAIR_ONLY/AUTO）
-- `signalDedupWindow`: 信号去重窗口（默认8）
-- `repairLoopThreshold`: 修复循环阈值（默认3）
-- `saturationThreshold`: 饱和阈值（默认5）
-- `maxPromptLength`: 最大提示词长度（默认24000）
-- `epigeneticBoostOnSuccess`: 成功时表观遗传增强（默认1.2）
-- `epigeneticDecay`: 失败时表观遗传衰减（默认0.95）
-- `experienceConfidenceThreshold`: 经验置信度阈值（默认0.7）
-- `mutationFrequencyLimitPerHour`: 每小时突变频率限制（默认10）
-- `maxComplexityIncrease`: 最大复杂度增长倍数（默认1.5）
+集中式配置类，所有参数支持运行时调整。
+
+**路径配置**：
+- `evolveDir` — `~/.autiva/evolve/`
+- `genesFile` — `~/.autiva/evolve/genes.json`（兼容）
+- `eventsFile` — `~/.autiva/evolve/events.jsonl`（仅追加）
+- `candidatesFile` — `~/.autiva/evolve/candidates.jsonl`
+- `genesDir` — `~/.autiva/genes/`（目录结构，新）
+- `executionsDir` — `~/.autiva/logs/executions/`
+
+**表观遗传参数**：
+- `epigeneticBoostOnSuccess` — 成功增强系数（默认 1.2）
+- `epigeneticDecay` — 失败衰减系数（默认 0.95）
+
+**安全参数**：
+- `experienceConfidenceThreshold` — 经验置信度阈值（默认 0.7）
+- `mutationFrequencyLimitPerHour` — 每小时突变频率上限（默认 10）
+- `maxComplexityIncrease` — 内容长度最大增长倍数（默认 1.5）
+
+**Trace/L2 参数**：
+- `recentEventsLimit` — 最近事件查询上限（默认 20）
+- `maxConversationRetries` — L2 对话级最大重试（默认 2）
+- `traceRetentionDays` — Trace 保留天数（默认 30）
 
 ### GeneStore
-Gene/Capsule 的持久化管理，支持 JSON + 目录结构双格式，JGit版本控制，使用 ReentrantReadWriteLock 保证并发安全。
+**Spring 注解**：`@Component`
 
-**方法：**
-- `loadGenes()`: 加载所有基因（优先从目录结构加载）
-- `loadEnabledGenes()`: 加载启用的基因
-- `loadCapsules()`: 加载所有胶囊
-- `upsertGene(Gene)`: 更新或插入基因（自动JGit提交）
-- `deleteGene(String)`: 删除基因
-- `toggleGene(String, boolean)`: 启用/禁用基因
-- `deleteCapsule(String)`: 删除胶囊
-- `appendEvent(EvolutionEvent)`: 追加进化事件
-- `readRecentEvents(int)`: 读取最近N条事件
-- `loadGeneCode(String)`: 加载基因可执行代码
-- `saveGeneCode(String, String)`: 保存基因可执行代码
-- `getGeneHistory(String)`: 获取基因JGit历史
-- `revertGene(String, String)`: 回滚基因到指定版本
-- `diffGene(String, String, String)`: 比较基因版本差异
+Gene 持久化管理，支持目录结构存储 + JGit 版本控制 + ReentrantReadWriteLock 保证并发安全。
 
-### GeneRuntime
-基因运行时统一入口，根据GeneRuntimeType分发到对应执行器。
+**查询方法**：
+- `loadGenes()` — 加载所有基因（优先从目录结构加载）
+- `loadEnabledGenes()` — 只加载启用的基因
+- `findByType(GeneType)` — 按类型查询
+- `findByTarget(String)` — 按目标对象查询
+- `findByTypeAndTarget(GeneType, String)` — 按类型+目标查询
+- `findById(String)` — 按 ID 查询
 
-### ExperienceEngine
-经验引擎，使用LLM从执行日志中提取结构化失败模式。
+**写入方法**：
+- `upsertGene(Gene)` — 更新或插入基因（自动 JGit 提交）
+- `deleteGene(String)` — 删除基因
+- `toggleGene(String, boolean)` — 启用/禁用
 
-**方法：**
-- `extract(List<ExecutionLog>)`: 从日志提取单个经验
-- `batchExtract(int)`: 批量提取经验
+**事件方法**：
+- `appendEvent(EvolutionEvent)` — 追加进化事件
+- `readRecentEvents(int)` — 读取最近 N 条事件
+
+**版本控制方法**：
+- `getGeneHistory(String)` — 获取 JGit 历史
+- `revertGene(String, String)` — 回滚到指定 commit
+- `diffGene(String, fromCommit, toCommit)` — 比较版本差异
 
 ### GeneMutator
-基因突变器，使用LLM修复/优化基因代码。
+**Spring 注解**：`@Component`
 
-### RoutingEngine
-动态路由引擎，将意图模式映射到推荐基因。
+LLM 驱动的配置内容优化器。使用独立的 `mutator` Agent（DEEPSEEK 模型），不复用主 Agent 上下文。
 
-**方法：**
-- `route(String)`: 根据意图匹配最佳基因
-- `updateFromExperience(Experience)`: 从经验更新路由
-- `addRoute(String, String, double)`: 手动添加路由
-- `removeRoute(String)`: 删除路由
-- `listRoutes()`: 列出所有路由
-
-### MemoryEngine
-规则记忆引擎，从经验沉淀可复用规则。
-
-**方法：**
-- `addRuleFromExperience(Experience)`: 从经验添加规则
-- `addManualRule(String, String, double)`: 手动添加规则
-- `queryRules(String)`: 查询匹配规则
-- `hitRule(String)`: 增加规则命中计数
-- `deleteRule(String)`: 删除规则
+**核心方法**：
+- `mutate(Gene original, String issue, String suggestion)` — 根据优化建议生成新版本
+  - 自动通过 `EvolutionSafety` 检查
+  - 自动 `upsertGene` 写入并 JGit 提交
+  - 版本号 +1，parentId 指向原版本
+  - 失败返回 `null`
 
 ### EvolutionSafety
-进化安全系统，防止"错误进化"。
+**Spring 注解**：`@Component`
 
-**检查项：**
-- 基因ID一致性
-- 突变后代码非空
-- 爆炸半径增长限制
-- 突变频率限制
-- 代码长度增长限制
+防"L4 改坏配置"的安全检查器。
 
-### GeneRepository
-JGit基因版本仓库，提供commit/history/diff/revert操作。
+**检查项**：
+- 基因 ID 一致性（原/突变后必须相同）
+- 突变后内容非空
+- 内容长度增长限制（不超过 `maxComplexityIncrease` 倍）
+- 突变频率限制（不超过 `mutationFrequencyLimitPerHour` 次/小时）
 
-### GeneMigration
-数据迁移工具，将genes.json迁移到目录结构，保留原文件备份。
-
-### SignalExtractor
-信号提取器，实现正则匹配 + 关键词加权评分的两层策略。
-
-### GeneSelector
-基因选择引擎，基于信号匹配度 + 表观遗传值 + 策略权重计算综合得分。
+**返回**：`SafetyCheckResult(passed, message)`
 
 ### Solidifier
-固化器，执行金丝雀检查后提交成功演化，更新表观遗传值，连续成功≥3次自动创建胶囊。
+**Spring 注解**：`@Component`
 
-### CanaryCheck
-金丝雀检查，验证核心模块可正常加载。
+表观遗传值更新器，根据 L2 校验结果（通过 `EvolutionEvent` 传入）调整 Gene 的 `epigeneticBoost`。
+
+**逻辑**：
+- 事件 success → `boost × 1.2`（上限 5.0）
+- 事件 failure → `boost × 0.95`（下限 0.1）
+
+### GeneRepository
+JGit 基因版本仓库，管理 `~/.autiva/genes/` 目录的 git 操作。
+
+**方法**：`commit(Gene, message)` / `history(geneId)` / `revert(geneId, commitHash)` / `diff(...)`
 
 ## 资源文件
 
 ```
-~/.autiva/evolve/
-├── genes.json                         # Gene 池（兼容）
-├── genes/                             # Gene 目录结构（新）
-│   └── {geneId}/
-│       ├── gene.json                  # Gene元数据
-│       ├── impl.java                  # 可执行代码
-│       └── versions/                  # 版本历史
-│           ├── v1.json
-│           └── v2.json
-├── capsules.json                      # Capsule 存储
-├── events.jsonl                       # 演化事件日志（仅追加）
-├── candidates.jsonl                   # 候选方案日志
-├── routing.json                       # 路由表
-└── memory/
-    └── rules.jsonl                    # 规则记忆
-
-~/.autiva/logs/executions/
-└── YYYY-MM-DD.jsonl                   # 执行日志
+~/.autiva/
+├── genes/                              ← Gene 配置库（新格式，目录结构）
+│   ├── prompt_heimy_error_handling/
+│   │   ├── gene.json                   ← 配置内容 + 元数据
+│   │   └── versions/
+│   │       ├── v1.json
+│   │       └── v2.json
+│   ├── rubric_heimy_code_quality/
+│   │   └── gene.json
+│   ├── tooldesc_read_file/
+│   │   └── gene.json
+│   └── rubric_read_file_path_validation/
+│       └── gene.json
+├── evolve/                             ← 进化运行时数据
+│   ├── genes.json                      ← Gene 池（兼容格式，迁移用）
+│   ├── events.jsonl                    ← 进化事件日志（仅追加）
+│   ├── candidates.jsonl                ← 候选优化方案
+│   └── .git/                           ← JGit 仓库（管理 genes/ 目录）
+└── traces/                             ← L4 结构化 Trace（阶段3新增）
+    └── YYYY-MM-DD/
+        └── session_xxx.jsonl
 ```
 
-## 完整闭环流程
+## 种子基因
+
+首次运行时从 `classpath:evolve/genes.seed.json` 初始化，包含 4 个示例 Gene：
+
+| ID | 类型 | 目标 | 作用 |
+|----|------|------|------|
+| `prompt_heimy_error_handling` | PROMPT | heimy | 控制错误处理行为（先分析根因再修复） |
+| `rubric_heimy_code_quality` | RUBRIC | heimy | heimy 产出的代码质量评分标准 |
+| `tooldesc_read_file` | TOOL_DESC | read_file | read_file 工具的描述文本 |
+| `rubric_read_file_path_validation` | RUBRIC | read_file | read_file 工具的路径校验规则 |
+
+## 完整闭环流程（规划中）
 
 ```
 用户任务
    ↓
-Agent Runtime
+L1 Agent Loop（agent 包）— 模型规划 → 工具执行 → 观测反馈 → 再推理
+   ↓ （Hook 机制介入）
+L2 Verification Loop（verify 包，阶段2实现）
+   ├─ 工具级校验（beforeToolCall / afterToolCall）→ LLM 自动修正重试
+   ├─ 模型级校验（afterModelCall）→ 记录 Trace
+   └─ 对话级校验（afterConversationRound）→ 确定性 + LLM Grader
    ↓
-Gene Execution (GeneRuntime)
+TraceRecorder → traces/{date}/{sessionId}.jsonl（阶段3实现）
    ↓
-ExecutionRecorder → logs/executions/*.jsonl
+L4 Hill Climbing Loop（本包，阶段3完整实现）
+   ├─ HillClimbingEngine 分析 Trace，发现高频缺陷
+   ├─ GeneMutator LLM 优化配置内容
+   ├─ EvolutionSafety 安全检查
+   ├─ GeneStore + GeneRepository JGit 提交版本
+   └─ Solidifier 根据 L2 通过率更新 epigeneticBoost
    ↓
-ExperienceEngine (LLM模式挖掘)
-   ↓
-EvolutionEngine.evolve(Experience)
-   ├── GeneMutator → 突变基因代码
-   ├── RoutingEngine → 更新路由表
-   └── MemoryEngine → 沉淀规则
-   ↓
-EvolutionSafety → 安全验证
-   ↓
-GeneRepository.commit() → JGit提交
-   ↓
-下次执行改进
+GeneInjector（阶段3实现）— 优化后的 Gene 注入回 L1/L2
 ```
 
-## 策略预设
-
-| 策略 | 创新 | 优化 | 修复 | 适用场景 |
-|------|------|------|------|----------|
-| BALANCED | 50% | 30% | 20% | 日常运行 |
-| INNOVATE | 80% | 15% | 5% | 系统稳定，快速迭代 |
-| HARDEN | 20% | 40% | 40% | 重大变更后，聚焦稳定 |
-| REPAIR_ONLY | 0% | 20% | 80% | 紧急修复模式 |
-| AUTO | 动态 | 动态 | 动态 | 根据历史自动调整 |
-
-## 种子基因
-
-首次运行时从 `classpath:evolve/genes.seed.json` 初始化，包含4个基础基因：
-1. `gene_repair_from_errors`：修复类，匹配错误信号
-2. `gene_optimize_prompt_and_assets`：优化类，匹配性能信号
-3. `gene_innovate_from_opportunity`：创新类，匹配需求信号
-4. `gene_tool_integrity`：修复类，匹配工具完整性信号
-
 ## 设计模式
-- 策略模式：StrategyPreset + StrategyEngine 动态调整进化策略
-- 观察者模式：信号提取 → 基因选择 → 提示词组装的流水线
-- 事件溯源模式：ExecutionRecorder → ExperienceEngine → EvolutionEngine 闭环
-- 读写锁模式：GeneStore 使用 ReentrantReadWriteLock 保证并发安全
-- 表观遗传模式：基于历史成功率动态调整基因权重
-- 版本控制模式：GeneRepository (JGit) 管理基因进化历史
-- 安全防护模式：EvolutionSafety 防止错误进化
+- **配置单元模式**：所有可调配置统一为 Gene，类型化的配置单元
+- **表观遗传模式**：基于 L2 校验通过率动态调整 Gene 权重
+- **版本控制模式**：GeneRepository (JGit) 管理 Gene 进化历史
+- **安全防护模式**：EvolutionSafety 防止错误进化
+- **读写锁模式**：GeneStore 使用 ReentrantReadWriteLock 保证并发安全
+- **Maker/Verifier 分离**：L2 LlmGrader 独立于 L1 主 Agent（阶段2实现）
+- **不可变 record**：Gene/EvolutionEvent 全部为不可变 record，变更通过 with* 方法派生
+
+## 与其他包的关系
+
+| 关联包 | 关系 |
+|--------|------|
+| `cn.bitloom.agentic.agent` | GeneInjector（阶段3）将 PROMPT Gene 注入到 Agent 的 SystemMessage |
+| `cn.bitloom.agentic.verify`（阶段2）| L2 LlmGrader 从 GeneStore 加载 RUBRIC Gene 作为评判标准 |
+| `cn.bitloom.agentic.trace`（阶段3）| TraceRecorder 提供 Trace 数据，供 L4 HillClimbingEngine 分析 |
+| `cn.bitloom.agentic.tool` | GeneMutator 工具（阶段4）暴露 L4 能力给 L1 Agent |
+| `cn.bitloom.vm` / `cn.bitloom.controller` | GEP 页面展示 Gene 列表/事件/版本历史 |
+
+## 后续阶段规划
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| 阶段1 | Gene 系统重构（本文档涉及） | ✅ 已完成 |
+| 阶段2 | L2 校验循环（verify 包，基于 Hook 机制） | ✅ 已完成 |
+| 阶段3 | L4 爬山循环（HillClimbingEngine + GeneInjector + TraceRecorder） | ✅ 已完成 |
+| 阶段4 | 工具注册 + GEP UI 改造 | ✅ 已完成 |
+| 阶段5 | 清理与文档完善 | 待实施 |
+
+详见方案文档：`d:\project\autiva\.trae\documents\Loop工程化L2L4自优化方案.md`

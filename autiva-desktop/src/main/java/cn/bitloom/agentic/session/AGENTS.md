@@ -47,10 +47,8 @@
 - `reviewDiff`: 是否启用 Diff 审核（coder 场景为 true，默认 false，持久化以便重启后保留）
 
 **瞬态字段（不序列化，@JsonIgnore）：**
-- `agent`: Agent 实例
 - `messages`: List\<Message\> 消息列表（Spring AI 聊天记忆，只保留 memoryBaseOffset 之后的消息）
 - `memoryBaseOffset`: 内存列表第一条消息对应磁盘 messages.jsonl 的行号（压缩后清理内存时推进，加载更多历史时回退）
-- `memoryManager`: MemoryManager 实例（由 FileSystemSessionManager.activate() 注入，子 Session 不注入）
 
 **方法：**
 - `isStop()`: 判断是否已停止
@@ -58,9 +56,15 @@
 ### SessionRunner
 Session 编排器，负责主会话的消息循环和记忆事件处理。从 Session 类中提取的编排逻辑，使 Session 成为纯实体。
 
+**核心字段：**
+- `session`: 绑定的 Session 实例
+- `agent`: Agent 实例（由 FileSystemSessionManager.activate() 注入）
+- `memoryManager`: MemoryManager 实例（由 FileSystemSessionManager.activate() 注入）
+
 **核心方法：**
 - `start()`: 订阅 EventBus.inBoxFlux()，过滤当前会话事件，按事件类型分类处理：
   - `MessageEvent.USER` → 串行调用 Agent 执行对话（concatMap），构造 RuntimeContext 时从 session 读取 reviewDiff/projectPath 传递到 params（供 WriteTool/EditTool/TaskTool 使用）
+  - `A2UIActionEvent` → 构造用户消息让 Agent 继续处理 A2UI 用户交互回流
   - `MemoryEvent` → 异步处理（`Schedulers.boundedElastic()`），不阻塞对话流
 - `stop()`: 设置会话状态为 STOPPED，取消订阅
 - `handleMemoryEvent(event)`: 处理 CONTEXT_COMPACT 事件，调用 handleContextCompact
@@ -114,7 +118,7 @@ Session 管理器统一接口。不同的实现提供不同的存储策略：
 - `init()`: @PostConstruct，从 workspace/{agentId}/sessions/ 加载所有会话，预加载 default 主智能体
 - `create(agentId, parentSessionId, type, respType, model)`: 创建新的桌面端 Session，走完整流程：创建 → 持久化 → 注册 → 激活（委托重载方法传 projectPath=null, reviewDiff=false）
 - `create(agentId, parentSessionId, type, respType, model, projectPath, reviewDiff)`: 创建带编码参数的 Session（coder 场景使用，projectPath 关联项目路径，reviewDiff=true 启用 Diff 审核）
-- `activate(sessionId)`: 激活会话（注入 Agent、注入 MemoryManager、设置 memoryBaseOffset、只加载最近 100 条消息（环形缓冲区）、通过 SessionRunner 启动消息循环）
+- `activate(sessionId)`: 激活会话（获取 Agent、设置 memoryBaseOffset、只加载最近 100 条消息（环形缓冲区）、创建 SessionRunner 时注入 Agent 和 MemoryManager、启动消息循环）
 - `loadRecentMessages(file, count)`: 高效加载文件最后 N 行并反序列化（环形缓冲区，避免全量加载）
 - `loadMessagesRange(sessionId, offset, count)`: 从磁盘 messages.jsonl 加载指定行号范围的消息（供"加载更多历史"使用）
 - `stopSession(sessionId)`: 通过 SessionRunner 停止会话的消息处理循环

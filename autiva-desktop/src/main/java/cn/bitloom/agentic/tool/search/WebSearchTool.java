@@ -28,31 +28,7 @@ public class WebSearchTool extends AbstractTool<WebSearchTool.Input> {
     private static final Logger logger = LoggerFactory.getLogger(WebSearchTool.class);
 
     private static final String DESCRIPTION = """
-            - 允许AI搜索网络并使用结果来指导回复
-            - 为当前事件和最新数据提供最新信息
-            - 返回格式化为搜索结果块的搜索结果信息，包括markdown超链接
-            - 使用此工具访问AI知识截止日期之外的信息
-            - 搜索在单个API调用中自动执行
-
-            关键要求 - 你必须遵循以下规则：
-            - 回答用户问题后，你必须在回复末尾包含"来源："部分
-            - 在来源部分，列出搜索结果中所有相关的URL作为markdown超链接：[标题](URL)
-            - 这是强制性的 —— 永远不要跳过在回复中包含来源
-            - 示例格式：
-
-                [你的回答]
-
-                来源：
-                - [来源标题1](https://example.com/1)
-                - [来源标题2](https://example.com/2)
-
-            使用说明：
-            - 支持域名过滤以包含或阻止特定网站（在获取结果后客户端应用）
-            - 为了更好地使用API配额，请考虑在查询中使用搜索运算符（例如，"Spring AI site:spring.io"）
-
-            重要 - 在搜索查询中使用正确的年份：
-            - 搜索最新信息、文档或当前事件时，始终在查询中包含当前年份
-            - 例如：搜索最新的React文档时，搜索"React文档2025"而不是更早的年份
+            网络搜索。返回包含标题和 URL 的结果块。支持域名过滤。回答后必须在末尾列出"来源："，将所有引用 URL 作为 markdown 链接。
             """;
 
     private final SearchProvider searchProvider;

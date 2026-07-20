@@ -1,6 +1,5 @@
 package cn.bitloom.agentic.evolve.config;
 
-import cn.bitloom.agentic.evolve.strategy.StrategyPreset;
 import cn.bitloom.constant.AppConstants;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +7,10 @@ import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 
+/**
+ * 进化系统配置。
+ * 包含路径配置、表观遗传参数、安全参数、Trace 配置。
+ */
 @Slf4j
 @Getter
 @Component
@@ -15,33 +18,22 @@ public class EvolveConfig {
 
     private final Path evolveDir = AppConstants.Evolve.EVOLVE_DIR;
     private final Path genesFile = evolveDir.resolve("genes.json");
-    private final Path capsulesFile = evolveDir.resolve("capsules.json");
     private final Path eventsFile = evolveDir.resolve("events.jsonl");
     private final Path candidatesFile = evolveDir.resolve("candidates.jsonl");
     private final Path genesDir = AppConstants.Evolve.GENES_DIR;
-    private final Path routingFile = AppConstants.Evolve.ROUTING_FILE;
-    private final Path memoryDir = AppConstants.Evolve.MEMORY_DIR;
-    private final Path memoryRulesFile = AppConstants.Evolve.MEMORY_RULES_FILE;
     private final Path executionsDir = AppConstants.Evolve.EXECUTIONS_DIR;
 
-    private StrategyPreset strategyPreset = StrategyPreset.BALANCED;
-    private int signalDedupWindow = 8;
-    private int signalDedupThreshold = 3;
-    private int repairLoopThreshold = 3;
-    private int emptyCycleThreshold = 4;
-    private int failureStreakThreshold = 5;
-    private int saturationThreshold = 5;
-    private int maxPromptLength = 24000;
-    private int recentEventsLimit = 20;
-    private double highFailureRate = 0.75;
+    // 表观遗传参数
     private double epigeneticDecay = 0.95;
     private double epigeneticBoostOnSuccess = 1.2;
+
+    // 安全参数
     private double experienceConfidenceThreshold = 0.7;
     private int mutationFrequencyLimitPerHour = 10;
     private double maxComplexityIncrease = 1.5;
 
-    public void setStrategyPreset(StrategyPreset preset) {
-        this.strategyPreset = preset;
-        log.info("[Evolve] 策略预设已更新: {}", preset);
-    }
+    // Trace 配置
+    private int recentEventsLimit = 20;
+    private int maxConversationRetries = 1;
+    private int traceRetentionDays = 30;
 }

@@ -18,39 +18,7 @@ import java.util.Map;
 public class CommandTool extends AbstractTool<CommandTool.Input> {
 
     private static final String DESCRIPTION = """
-            在持久化会话中执行命令。
-
-            工作机制：
-            - 持久化会话：cwd 和环境变量由 ShellSession 维护，每次执行时注入
-            - 跨平台：Windows 使用 cmd.exe /v:on /c，Unix 使用 bash -c
-
-            前台模式（默认）：
-            - 同步执行，返回完整输出 + 退出码
-            - 默认 timeout 120000ms（2 分钟），最大 600000ms（10 分钟）
-            - 截断到 30000 行
-
-            智能后台化（yield_ms > 0）：
-            - 先以前台模式运行，如果超过 yield_ms 毫秒还没完成，自动转为后台
-            - 返回 session_id，用 Process(action="poll") 拉取输出
-
-            立即后台模式（background=true）：
-            - 立即返回 session_id，命令在后台执行
-            - 用 Process(action="poll") 拉取输出
-            - 用 Process(action="write") 发送输入
-            - 用 Process(action="kill") 终止
-
-            Per-call 覆盖：
-            - workdir：覆盖当前工作目录（一次性，后续命令恢复原目录）
-            - env：覆盖环境变量（合并到会话 env 之上）
-
-            安全检测：
-            - 自动检测破坏性命令（rm -rf、dd、mkfs 等）
-            - 检测到危险命令时会发出警告但仍执行（由智能体自行判断）
-
-            提示：
-            - Windows 使用 cmd.exe，Unix 使用 Bash
-            - 支持 &&、||、管道等标准 Shell 语法
-            - 多行脚本建议先用 Write 工具写文件再执行
+            执行 Bash 命令，持久化会话维护 cwd 和环境变量。默认同步执行，2 分钟超时。长任务用 background=true 异步执行，配合 Process 工具轮询/终止。
             """;
 
     private final CommandExecutor executor;

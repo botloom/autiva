@@ -24,18 +24,7 @@ import java.util.stream.Stream;
 public class GrepTool extends AbstractTool<GrepTool.Input> {
 
     private static final String DESCRIPTION = """
-            基于纯Java构建的强大搜索工具（无需外部依赖）
-
-            用法：
-            - 始终使用Grep进行搜索任务。永远不要将`grep`或`rg`作为Bash命令调用。Grep工具已针对正确的权限和访问进行了优化。
-            - 支持完整的正则表达式语法（例如，"log.*Error"、"function\\s+\\w+"）
-            - 使用glob参数过滤文件（例如，"*.js"、"**/*.tsx"）或type参数（例如，"js"、"py"、"rust"）
-            - 输出模式："content"显示匹配行，"files_with_matches"仅显示文件路径（默认），"count"显示匹配计数
-            - 对于需要多轮的开放式搜索，请使用Task工具
-            - 模式语法：Java正则表达式 - 使用标准Java正则表达式转义
-            - 多行匹配：默认情况下模式仅在单行内匹配。对于跨行模式，使用`multiline: true`
-
-            注意：这是纯Java实现，不需要安装ripgrep，但提供类似的功能。
+            基于正则的内容搜索(纯 Java 实现)。优先使用此工具而非 bash grep。支持 glob 文件过滤、多行模式。输出模式:content(匹配行)、files_with_matches(文件路径)、count(计数)。
             """;
 
     private final int maxOutputLength;

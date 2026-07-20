@@ -17,24 +17,7 @@ import java.util.Map;
 public class ProcessTool extends AbstractTool<ProcessTool.Input> {
 
     private static final String DESCRIPTION = """
-            管理后台命令进程。灵感来源于 OpenClaw process 工具。
-
-            动作（action）：
-            - list：列出所有后台进程（运行中 + 已完成）
-            - poll：拉取后台进程的新输出（增量）
-            - log：读取进程的完整输出（支持 offset/limit 分页）
-            - write：向进程 stdin 发送输入（自动追加换行）
-            - kill：终止后台进程
-            - clear：清除已完成的进程记录
-
-            poll vs log：
-            - poll 返回自上次检查以来的新输出（增量消费）
-            - log 返回完整输出（支持分页），适合查看历史
-
-            waiting_for_input 提示：
-            - 当后台进程超过 15 秒无输出且 stdin 仍可写时，
-              poll 和 log 会标记 waiting_for_input=true
-            - 此时可用 Process(action="write") 发送输入
+            管理后台进程。操作：list(列表)、poll(增量输出)、log(完整输出)、write(写 stdin)、kill(终止)、clear(清除已完成)。配合 Command 后台模式使用。
             """;
 
     private final ProcessManager processManager;

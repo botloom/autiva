@@ -44,24 +44,7 @@ import java.util.regex.Pattern;
 public class WebFetchTool extends AbstractTool<WebFetchTool.Input> implements AutoCloseable {
 
     private static final String DESCRIPTION = """
-            从指定URL获取内容并转换为Markdown格式返回。
-
-            功能：
-            - 接受URL作为输入
-            - 使用HTTP GET方法获取URL内容
-            - 将HTML转换为Markdown格式
-            - 直接返回Markdown内容，不进行AI摘要
-            - 包含自清理的15分钟缓存以加快响应速度
-            - 网络错误和5xx服务器错误时自动重试
-
-            使用说明：
-            - 重要：如果有MCP提供的网页获取工具可用，优先使用该工具。
-            - URL必须是完整有效的URL（例如，https://example.com）
-            - HTTP URL将自动升级为HTTPS
-            - 仅支持HTTP GET请求（只读）
-            - 此工具是只读的，不会修改任何文件或发送任何数据
-            - 如果内容非常大，结果会被截断
-            - 在临时失败时最多重试2次（可配置），采用指数退避
+            获取 URL 内容并转为 Markdown。只读。HTTP 自动升级为 HTTPS。15 分钟缓存。5xx 错误自动重试(指数退避)。
             """;
 
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

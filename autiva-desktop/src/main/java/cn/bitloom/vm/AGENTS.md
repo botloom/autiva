@@ -192,47 +192,39 @@
 - `getToolByName(String)`: 按名称获取工具实例
 
 ### GepPageViewModel
-基因进化管理页视图模型，管理进化系统数据和统计。
+基因进化管理页视图模型，管理 L4 自优化系统的数据展示与触发。
 
 **Spring 注解：** `@Component`
 
 **依赖注入：**
 - `GeneStore`: 基因存储
-- `EvolutionEngine`: 进化引擎
+- `EvolutionEngine`: 进化引擎（L4 编排器）
 - `EvolveConfig`: 进化配置
-- `RoutingEngine`: 路由引擎
-- `MemoryEngine`: 记忆引擎
+- `TraceRecorder`: Trace 持久化管理（阶段4 新增，用于 L2 校验统计和最近 Trace 加载）
+
+**常量：**
+- `DEFAULT_AGENT_ID = "default"`: GEP 页面统一分析默认智能体
+- `RECENT_TRACE_LIMIT = 20`: 加载最近 Trace 的条数
 
 **属性：**
 - `genes`: 基因列表（ObservableList<Gene>）
-- `routes`: 路由列表（ObservableList<RoutingEntry>）
-- `rules`: 记忆规则列表（ObservableList<MemoryRule>）
-- `capsules`: 胶囊列表（ObservableList<Capsule>）
 - `events`: 进化事件列表（ObservableList<EvolutionEvent>）
-- `geneCount`: 基因总数（IntegerProperty）
-- `enabledGeneCount`: 启用基因数（IntegerProperty）
-- `eventCount`: 事件总数（IntegerProperty）
-- `successRate`: 成功率（DoubleProperty）
-- `routeCount`: 路由数（IntegerProperty）
-- `ruleCount`: 规则数（IntegerProperty）
-- `strategyPreset`: 当前策略（StringProperty）
+- `recentTraces`: 最近 Trace 列表（ObservableList<Trace>，阶段4 新增）
+- `geneCount`/`enabledGeneCount`/`eventCount`: 基础统计（IntegerProperty）
+- `successRate`: 事件成功率（DoubleProperty）
+- `promptGeneCount`/`rubricGeneCount`/`toolDescGeneCount`/`skillConfigGeneCount`: 按类型统计（IntegerProperty）
+- `totalTraces`/`passedTraces`/`failedTraces`/`l2PassRate`/`totalToolCalls`/`blockedToolCalls`: L2 校验统计（阶段4 新增）
+- `lastClimbSummary`/`lastClimbAnalysis`/`lastClimbSuggestions`/`lastClimbApplied`: L4 爬山分析结果（阶段4 新增）
 
 **核心方法：**
-- `loadData()`: 同步加载所有数据并更新统计
+- `loadData()`: 同步加载 Gene/Event/Trace 数据并更新所有统计
 - `loadDataAsync(Runnable)`: 异步加载数据
+- `climbAsync(Runnable)`: 异步触发 L4 爬山分析（阶段4 新增，回调在 FX 线程执行）
 - `toggleGene(String)`: 切换基因启用状态
 - `deleteGene(String)`: 删除基因
-- `setStrategyPreset(StrategyPreset)`: 设置进化策略
-- `runEvolutionCycle()`: 执行进化周期
-- `extractAndEvolve()`: 提取经验并进化
-- `addRoute(pattern, geneId, weight)`: 添加路由
-- `removeRoute(pattern)`: 删除路由
-- `addRule(pattern, action, confidence)`: 添加记忆规则
-- `deleteRule(ruleId)`: 删除记忆规则
-- `deleteCapsule(capsuleId)`: 删除胶囊
-- `getGeneHistory(geneId)`: 获取基因JGit版本历史
+- `getGeneHistory(geneId)`: 获取基因 JGit 版本历史
 - `revertGene(geneId, commitHash)`: 回滚基因版本
-- `getGeneCode(geneId)`: 获取基因可执行代码
+- `queryGeneDetail(geneId)`: 查询基因详情
 
 ## 与其他组件的关系
 

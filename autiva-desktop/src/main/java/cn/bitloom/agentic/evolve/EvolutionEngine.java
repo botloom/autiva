@@ -1,216 +1,106 @@
 package cn.bitloom.agentic.evolve;
 
+import cn.bitloom.agentic.evolve.climb.ClimbingResult;
+import cn.bitloom.agentic.evolve.climb.HillClimbingEngine;
 import cn.bitloom.agentic.evolve.config.EvolveConfig;
-import cn.bitloom.agentic.evolve.experience.Experience;
-import cn.bitloom.agentic.evolve.experience.ExperienceEngine;
-import cn.bitloom.agentic.evolve.experience.ExperienceTarget;
-import cn.bitloom.agentic.evolve.gene.*;
-import cn.bitloom.agentic.evolve.memory.MemoryEngine;
-import cn.bitloom.agentic.evolve.mutation.GeneMutator;
-import cn.bitloom.agentic.evolve.prompt.EvolvePromptAssembler;
-import cn.bitloom.agentic.evolve.routing.RoutingEngine;
-import cn.bitloom.agentic.evolve.signal.Signal;
-import cn.bitloom.agentic.evolve.signal.SignalExtractor;
-import cn.bitloom.agentic.evolve.signal.SignalHistory;
+import cn.bitloom.agentic.evolve.gene.Gene;
+import cn.bitloom.agentic.evolve.gene.GeneStore;
+import cn.bitloom.agentic.evolve.gene.GeneType;
 import cn.bitloom.agentic.evolve.solidify.EvolutionEvent;
 import cn.bitloom.agentic.evolve.solidify.Solidifier;
-import cn.bitloom.agentic.evolve.strategy.StrategyEngine;
-import cn.bitloom.agentic.evolve.strategy.StrategyPreset;
+import cn.bitloom.agentic.trace.TraceRecorder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * 进化引擎主类，L4 爬山循环的编排器。
+ * <p>
+ * 职责：
+ * 1. 提供基本的 Gene 查询和管理能力（query/toggle/revert）
+ * 2. 委托 {@link HillClimbingEngine} 执行 L4 爬山分析
+ * 3. 委托 {@link Solidifier} 根据 L2 校验结果更新表观遗传值
+ * 4. 暴露 {@link TraceRecorder} 的统计能力供 UI 使用
+ */
 @Slf4j
 @Component
 public class EvolutionEngine {
 
     private final EvolveConfig config;
     private final GeneStore geneStore;
-    private final SignalExtractor signalExtractor;
-    private final SignalHistory signalHistory;
-    private final GeneSelector geneSelector;
-    private final StrategyEngine strategyEngine;
-    private final EvolvePromptAssembler promptAssembler;
     private final Solidifier solidifier;
-    private final ExperienceEngine experienceEngine;
-    private final GeneMutator geneMutator;
-    private final RoutingEngine routingEngine;
-    private final MemoryEngine memoryEngine;
+    private final HillClimbingEngine hillClimbingEngine;
+    private final TraceRecorder traceRecorder;
 
-    public EvolutionEngine(EvolveConfig config, GeneStore geneStore, Solidifier solidifier,
-                           ExperienceEngine experienceEngine, GeneMutator geneMutator,
-                           RoutingEngine routingEngine, MemoryEngine memoryEngine) {
+    public EvolutionEngine(EvolveConfig config,
+                           GeneStore geneStore,
+                           Solidifier solidifier,
+                           HillClimbingEngine hillClimbingEngine,
+                           TraceRecorder traceRecorder) {
         this.config = config;
         this.geneStore = geneStore;
-        this.signalExtractor = new SignalExtractor();
-        this.signalHistory = new SignalHistory(config);
-        this.geneSelector = new GeneSelector(config);
-        this.strategyEngine = new StrategyEngine(config);
-        this.promptAssembler = new EvolvePromptAssembler(config);
         this.solidifier = solidifier;
-        this.experienceEngine = experienceEngine;
-        this.geneMutator = geneMutator;
-        this.routingEngine = routingEngine;
-        this.memoryEngine = memoryEngine;
+        this.hillClimbingEngine = hillClimbingEngine;
+        this.traceRecorder = traceRecorder;
     }
 
-    public EvolutionCycleResult runCycle(List<String> conversationTexts) {
-        log.info("[Evolve] 开始进化周期");
-
-        List<Signal> signals = signalExtractor.extract(conversationTexts);
-        if (signals.isEmpty()) {
-            log.info("[Evolve] 未检测到信号，跳过进化周期");
-            return EvolutionCycleResult.empty("未检测到信号");
-        }
-
-        log.info("[Evolve] 检测到 {} 个信号: {}", signals.size(),
-                signals.stream().map(s -> s.type().code()).collect(Collectors.joining(", ")));
-
-        List<EvolutionEvent> recentEvents = geneStore.readRecentEvents(config.getRecentEventsLimit());
-        SignalHistory.HistoryAnalysis analysis = signalHistory.analyze(recentEvents);
-
-        StrategyPreset preset = strategyEngine.resolve(analysis);
-
-        List<Gene> genes = geneStore.loadEnabledGenes();
-        GeneSelector.GeneSelectionResult selection = geneSelector.select(signals, genes, preset, analysis);
-
-        if (!selection.hasGene()) {
-            log.info("[Evolve] 未找到匹配的基因: {}", selection.reason());
-            return EvolutionCycleResult.empty(selection.reason());
-        }
-
-        Gene selectedGene = selection.gene();
-        String prompt = promptAssembler.assemble(signals, selectedGene, preset, selection.reason());
-
-        log.info("[Evolve] 进化周期完成: 选中基因={}, 策略={}, 理由={}",
-                selectedGene.id(), preset, selection.reason());
-
-        return new EvolutionCycleResult(
-                true,
-                signals,
-                selectedGene,
-                preset,
-                prompt,
-                selection.reason(),
-                selection.score()
-        );
+    /**
+     * 执行 L4 爬山分析。
+     */
+    public ClimbingResult climb(String agentId) {
+        log.info("[EvolutionEngine] 启动 L4 爬山分析 agentId={}", agentId);
+        ClimbingResult result = hillClimbingEngine.climb(agentId);
+        log.info("[EvolutionEngine] L4 爬山完成 agentId={} applied={} skipped={}",
+                agentId, result.appliedCount(), result.skippedCount());
+        return result;
     }
 
-    public String getEvolutionContext(List<String> conversationTexts) {
-        EvolutionCycleResult result = runCycle(conversationTexts);
-        if (!result.success()) {
-            return "";
-        }
-        return result.prompt();
+    /**
+     * 获取指定 Agent 的 L2 校验通过率统计。
+     */
+    public TraceRecorder.VerificationStats verificationStats(String agentId, int recentLimit) {
+        return traceRecorder.stats(agentId, recentLimit);
     }
 
     public Solidifier.SolidifyResult solidify(EvolutionEvent event) {
         return solidifier.solidify(event);
     }
 
-    public void evolve(Experience experience) {
-        if (experience == null || !experience.isActionable()) {
-            log.info("[Evolve] 经验不可操作，跳过进化");
-            return;
-        }
-
-        log.info("[Evolve] 开始经验驱动进化: target={}, confidence={}",
-                experience.target(), experience.confidence());
-
-        switch (experience.target()) {
-            case GENE -> evolveGene(experience);
-            case ROUTING -> updateRouting(experience);
-            case MEMORY -> updateMemory(experience);
-        }
-    }
-
-    public List<Experience> extractAndEvolve() {
-        List<Experience> experiences = experienceEngine.batchExtract(config.getRecentEventsLimit());
-        for (Experience exp : experiences) {
-            evolve(exp);
-        }
-        return experiences;
-    }
-
-    private void evolveGene(Experience experience) {
-        String geneId = experience.targetId();
-        if (geneId == null || geneId.isEmpty()) {
-            log.warn("[Evolve] 经验未指定目标基因ID");
-            return;
-        }
-
-        List<Gene> genes = geneStore.loadGenes();
-        Gene gene = genes.stream()
-                .filter(g -> g.id().equals(geneId))
-                .findFirst()
-                .orElse(null);
-
-        if (gene == null) {
-            log.warn("[Evolve] 目标基因不存在: {}", geneId);
-            return;
-        }
-
-        Gene mutated = geneMutator.mutate(gene, experience);
-        if (mutated != null) {
-            log.info("[Evolve] 基因进化成功: {} -> v{}", geneId, mutated.version());
-        }
-    }
-
-    private void updateRouting(Experience experience) {
-        routingEngine.updateFromExperience(experience);
-        log.info("[Evolve] 路由已更新: pattern={}", experience.pattern());
-    }
-
-    private void updateMemory(Experience experience) {
-        memoryEngine.addRuleFromExperience(experience);
-        log.info("[Evolve] 规则已沉淀: pattern={}", experience.pattern());
-    }
-
-    public EvolutionEvent createEvent(List<Signal> signals, Gene gene, String intent,
-                                       String prompt, EvolutionEvent.Outcome outcome) {
+    public EvolutionEvent createEvent(String geneId, String intent, EvolutionEvent.Outcome outcome) {
         return new EvolutionEvent(
                 "evt_" + UUID.randomUUID().toString().substring(0, 8),
                 System.currentTimeMillis(),
-                signals.stream().map(s -> s.type().code()).toList(),
-                gene.id(),
+                List.of(),
+                geneId,
                 intent,
-                prompt,
+                "",
                 outcome,
-                Map.of("strategy", config.getStrategyPreset().name())
+                java.util.Map.of()
         );
     }
 
-    public String queryGenes(GeneCategory category) {
+    public String queryGenes(GeneType type) {
         List<Gene> genes = geneStore.loadEnabledGenes();
-        if (category != null) {
-            genes = genes.stream().filter(g -> g.category() == category).toList();
+        if (type != null) {
+            genes = genes.stream().filter(g -> g.type() == type).toList();
         }
         if (genes.isEmpty()) {
-            return "没有找到" + (category != null ? category.code() + "类" : "") + "基因";
+            return "没有找到" + (type != null ? type.name() + "类" : "") + "基因";
         }
-        return promptAssembler.assembleGeneSummary(genes);
+        return genes.stream()
+                .map(this::formatGeneSummary)
+                .collect(Collectors.joining("\n"));
     }
 
     public String queryGeneDetail(String geneId) {
-        List<Gene> genes = geneStore.loadGenes();
-        return genes.stream()
-                .filter(g -> g.id().equals(geneId))
-                .findFirst()
-                .map(promptAssembler::assembleGeneDetail)
-                .orElse("基因不存在: " + geneId);
-    }
-
-    public String queryCapsules() {
-        List<Capsule> capsules = geneStore.loadCapsules();
-        if (capsules.isEmpty()) {
-            return "没有可用的胶囊";
+        Gene gene = geneStore.findById(geneId);
+        if (gene == null) {
+            return "基因不存在: " + geneId;
         }
-        return capsules.stream()
-                .map(c -> String.format("- [%s] 分数=%.2f, 基因=%s",
-                        c.id(), c.score(), String.join(",", c.geneIds())))
-                .collect(Collectors.joining("\n"));
+        return formatGeneDetail(gene);
     }
 
     public String queryEvents(int limit) {
@@ -228,76 +118,54 @@ public class EvolutionEngine {
                 .collect(Collectors.joining("\n"));
     }
 
-    public String recommendGenes(List<String> conversationTexts) {
-        EvolutionCycleResult result = runCycle(conversationTexts);
-        if (!result.success()) {
-            return "当前没有推荐的基因: " + result.reason();
-        }
-        return String.format("推荐基因: %s (%s)\n类别: %s\n理由: %s\n置信度: %.2f\n\n%s",
-                result.gene().id(),
-                result.gene().summary(),
-                result.gene().category().code(),
-                result.reason(),
-                result.score(),
-                promptAssembler.assembleGeneDetail(result.gene()));
-    }
-
-    public String applyGene(String geneId, String context) {
-        List<Gene> genes = geneStore.loadGenes();
-        Gene gene = genes.stream()
-                .filter(g -> g.id().equals(geneId))
-                .findFirst()
-                .orElse(null);
-
+    public String applyGene(String geneId) {
+        Gene gene = geneStore.findById(geneId);
         if (gene == null) {
             return "基因不存在: " + geneId;
         }
-
         if (!gene.enabled()) {
             return "基因已禁用: " + geneId;
         }
-
-        return promptAssembler.assembleGeneDetail(gene);
+        return formatGeneDetail(gene);
     }
 
-    public String applyCapsule(String capsuleId, String context) {
-        List<Capsule> capsules = geneStore.loadCapsules();
-        Capsule capsule = capsules.stream()
-                .filter(c -> c.id().equals(capsuleId))
-                .findFirst()
-                .orElse(null);
+    public String toggleGene(String geneId, boolean enabled) {
+        geneStore.toggleGene(geneId, enabled);
+        return "基因 " + geneId + " 已" + (enabled ? "启用" : "禁用");
+    }
 
-        if (capsule == null) {
-            return "胶囊不存在: " + capsuleId;
-        }
+    public String revertGene(String geneId, String commitHash) {
+        geneStore.revertGene(geneId, commitHash);
+        return "基因 " + geneId + " 已回滚到 " + commitHash;
+    }
 
+    /**
+     * 清理旧 Trace 文件。
+     */
+    public int cleanupOldTraces() {
+        return traceRecorder.cleanupOldTraces(config.getTraceRetentionDays());
+    }
+
+    private String formatGeneSummary(Gene gene) {
+        return String.format("- [%s] type=%s target=%s v%d boost=%.2f %s",
+                gene.id(), gene.type(), gene.targetId(),
+                gene.version(), gene.epigeneticBoost(),
+                gene.enabled() ? "启用" : "禁用");
+    }
+
+    private String formatGeneDetail(Gene gene) {
         StringBuilder sb = new StringBuilder();
-        sb.append("## 胶囊: ").append(capsuleId).append("\n");
-        sb.append("- 分数: ").append(String.format("%.2f", capsule.score())).append("\n");
-        sb.append("- 包含基因: ").append(String.join(", ", capsule.geneIds())).append("\n\n");
-
-        List<Gene> genes = geneStore.loadGenes();
-        for (String geneId : capsule.geneIds()) {
-            genes.stream()
-                    .filter(g -> g.id().equals(geneId))
-                    .findFirst()
-                    .ifPresent(g -> sb.append(promptAssembler.assembleGeneDetail(g)).append("\n"));
+        sb.append("## 基因: ").append(gene.id()).append("\n");
+        sb.append("- 类型: ").append(gene.type()).append("\n");
+        sb.append("- 目标: ").append(gene.targetId()).append("\n");
+        sb.append("- 名称: ").append(gene.name()).append("\n");
+        sb.append("- 版本: v").append(gene.version()).append("\n");
+        sb.append("- 表观遗传值: ").append(String.format("%.2f", gene.epigeneticBoost())).append("\n");
+        sb.append("- 状态: ").append(gene.enabled() ? "启用" : "禁用").append("\n");
+        if (gene.description() != null) {
+            sb.append("- 说明: ").append(gene.description()).append("\n");
         }
-
+        sb.append("\n### 配置内容\n").append(gene.content()).append("\n");
         return sb.toString();
-    }
-
-    public record EvolutionCycleResult(
-            boolean success,
-            List<Signal> signals,
-            Gene gene,
-            StrategyPreset preset,
-            String prompt,
-            String reason,
-            double score
-    ) {
-        public static EvolutionCycleResult empty(String reason) {
-            return new EvolutionCycleResult(false, Collections.emptyList(), null, null, "", reason, 0);
-        }
     }
 }

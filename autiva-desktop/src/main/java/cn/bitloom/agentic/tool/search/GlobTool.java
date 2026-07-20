@@ -22,12 +22,7 @@ import java.util.stream.Stream;
 public class GlobTool extends AbstractTool<GlobTool.Input> {
 
     private static final String DESCRIPTION = """
-            - 快速文件模式匹配工具，适用于任何大小的代码库
-            - 支持glob模式，如"**/*.js"或"src/**/*.ts"
-            - 返回按修改时间排序的匹配文件路径
-            - 当你需要按名称模式查找文件时使用此工具
-            - 当你进行可能需要多轮glob和grep的开放式搜索时，请使用Agent工具代替
-            - 你可以在一次响应中调用多个工具。如果多个搜索可能有用，推测性地并行执行多个搜索总是更好的做法。
+            快速文件模式匹配。支持 glob 模式如 "**/*.js"。返回按修改时间排序的文件路径。用于按文件名模式查找文件。
             """;
 
     private final int maxDepth;

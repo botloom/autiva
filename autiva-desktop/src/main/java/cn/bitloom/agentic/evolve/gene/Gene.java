@@ -2,24 +2,24 @@ package cn.bitloom.agentic.evolve.gene;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
-import java.util.List;
-import java.util.Map;
-
+/**
+ * Gene - L4 爬山循环可优化的配置单元。
+ * <p>
+ * 一个 Gene 对应一份可被 HillClimbingEngine 优化的配置片段。
+ * 不再是"可执行技能"，而是 Agent 配置的一部分（Prompt/工具描述/Rubric/技能配置）。
+ * <p>
+ * 版本通过 JGit 管理，epigeneticBoost 基于 L2 校验通过率动态调整。
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record Gene(
         String id,
-        GeneCategory category,
-        List<String> signalsMatch,
-        List<String> preconditions,
-        List<String> strategy,
-        Map<String, Object> constraints,
-        List<String> validation,
+        GeneType type,
+        String targetId,
+        String name,
+        String content,
+        String description,
         double epigeneticBoost,
-        String summary,
-        List<String> antiPatterns,
         boolean enabled,
-        GeneRuntimeType runtimeType,
-        String code,
         int version,
         String parentId,
         long createdAt,
@@ -28,9 +28,6 @@ public record Gene(
     public Gene {
         if (Double.isNaN(epigeneticBoost) || epigeneticBoost < 0) {
             epigeneticBoost = 1.0;
-        }
-        if (runtimeType == null) {
-            runtimeType = GeneRuntimeType.STRATEGY;
         }
         if (version <= 0) {
             version = 1;
@@ -44,32 +41,22 @@ public record Gene(
     }
 
     public Gene withEpigeneticBoost(double newBoost) {
-        return new Gene(id, category, signalsMatch, preconditions, strategy,
-                constraints, validation, newBoost, summary, antiPatterns, enabled,
-                runtimeType, code, version, parentId, createdAt, System.currentTimeMillis());
+        return new Gene(id, type, targetId, name, content, description,
+                newBoost, enabled, version, parentId, createdAt, System.currentTimeMillis());
     }
 
     public Gene withEnabled(boolean newEnabled) {
-        return new Gene(id, category, signalsMatch, preconditions, strategy,
-                constraints, validation, epigeneticBoost, summary, antiPatterns, newEnabled,
-                runtimeType, code, version, parentId, createdAt, System.currentTimeMillis());
+        return new Gene(id, type, targetId, name, content, description,
+                epigeneticBoost, newEnabled, version, parentId, createdAt, System.currentTimeMillis());
     }
 
-    public Gene withCode(String newCode) {
-        return new Gene(id, category, signalsMatch, preconditions, strategy,
-                constraints, validation, epigeneticBoost, summary, antiPatterns, enabled,
-                runtimeType, newCode, version, parentId, createdAt, System.currentTimeMillis());
+    public Gene withContent(String newContent) {
+        return new Gene(id, type, targetId, name, newContent, description,
+                epigeneticBoost, enabled, version, parentId, createdAt, System.currentTimeMillis());
     }
 
     public Gene withVersion(int newVersion) {
-        return new Gene(id, category, signalsMatch, preconditions, strategy,
-                constraints, validation, epigeneticBoost, summary, antiPatterns, enabled,
-                runtimeType, code, newVersion, parentId, createdAt, System.currentTimeMillis());
-    }
-
-    public Gene withRuntimeType(GeneRuntimeType newRuntimeType) {
-        return new Gene(id, category, signalsMatch, preconditions, strategy,
-                constraints, validation, epigeneticBoost, summary, antiPatterns, enabled,
-                newRuntimeType, code, version, parentId, createdAt, System.currentTimeMillis());
+        return new Gene(id, type, targetId, name, content, description,
+                epigeneticBoost, enabled, newVersion, parentId, createdAt, System.currentTimeMillis());
     }
 }

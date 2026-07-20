@@ -29,7 +29,8 @@ public record AgentDefinition(
         @NonNull List<String> skills,
         @NonNull List<String> subagents,
         @NonNull Map<String, Object> mcpServers,
-        @NonNull String content
+        @NonNull String content,
+        @NonNull VerificationConfig verification
 ) {
 
     private static final String FRONTMATTER_NAME_KEY = "name";
@@ -38,6 +39,9 @@ public record AgentDefinition(
     private static final String FRONTMATTER_TOOLS_KEY = "tools";
     private static final String FRONTMATTER_SKILLS_KEY = "skills";
     private static final String FRONTMATTER_SUBAGENTS_KEY = "subagents";
+    private static final String FRONTMATTER_VERIFICATION_KEY = "verification";
+    private static final String FRONTMATTER_MAX_RETRIES_KEY = "maxRetries";
+    private static final String FRONTMATTER_VERIFY_LEVELS_KEY = "verifyLevels";
 
     /**
      * 对应 config.json 的模型类，仅用于 MAIN 智能体。
@@ -49,6 +53,27 @@ public record AgentDefinition(
         private Map<String, Object> mcpServers = new LinkedHashMap<>();
         private List<String> skills = new ArrayList<>();
         private List<String> subagents = new ArrayList<>();
+    }
+
+    /**
+     * L2 校验配置。
+     */
+    public record VerificationConfig(
+            boolean enabled,
+            int maxRetries,
+            @NonNull List<String> levels
+    ) {
+        public static VerificationConfig disabled() {
+            return new VerificationConfig(false, 0, List.of());
+        }
+
+        public static VerificationConfig defaultEnabled() {
+            return new VerificationConfig(true, 2, List.of("tool", "output"));
+        }
+
+        public boolean hasLevel(String level) {
+            return levels.contains(level);
+        }
     }
 
     /**
@@ -77,8 +102,9 @@ public record AgentDefinition(
         List<String> tools = parseList(frontMatter, FRONTMATTER_TOOLS_KEY);
         List<String> skills = parseList(frontMatter, FRONTMATTER_SKILLS_KEY);
         List<String> subagents = parseList(frontMatter, FRONTMATTER_SUBAGENTS_KEY);
+        VerificationConfig verification = parseVerification(frontMatter);
 
-        return new AgentDefinition(name, description, kind, tools, skills, subagents, Map.of(), content);
+        return new AgentDefinition(name, description, kind, tools, skills, subagents, Map.of(), content, verification);
     }
 
     /**
@@ -97,7 +123,8 @@ public record AgentDefinition(
                 config.getSkills() != null && !config.getSkills().isEmpty() ? config.getSkills() : skills,
                 config.getSubagents() != null && !config.getSubagents().isEmpty() ? config.getSubagents() : subagents,
                 config.getMcpServers() != null && !config.getMcpServers().isEmpty() ? config.getMcpServers() : mcpServers,
-                content
+                content,
+                verification
         );
     }
 
@@ -122,5 +149,37 @@ public record AgentDefinition(
                 .map(String::trim)
                 .filter(StringUtils::hasText)
                 .toList();
+    }
+
+    private static VerificationConfig parseVerification(Map<String, Object> frontMatter) {
+        Object enabledObj = frontMatter.get(FRONTMATTER_VERIFICATION_KEY);
+        if (enabledObj == null) {
+            return VerificationConfig.disabled();
+        }
+        boolean enabled = parseBoolean(enabledObj);
+        if (!enabled) {
+            return VerificationConfig.disabled();
+        }
+
+        int maxRetries = 2;
+        Object retriesObj = frontMatter.get(FRONTMATTER_MAX_RETRIES_KEY);
+        if (retriesObj != null) {
+            try {
+                maxRetries = Integer.parseInt(retriesObj.toString().trim());
+            } catch (NumberFormatException ignored) {}
+        }
+
+        List<String> levels = parseList(frontMatter, FRONTMATTER_VERIFY_LEVELS_KEY);
+        if (levels.isEmpty()) {
+            levels = List.of("tool", "output");
+        }
+
+        return new VerificationConfig(true, maxRetries, levels);
+    }
+
+    private static boolean parseBoolean(Object value) {
+        if (value == null) return false;
+        String s = value.toString().trim().toLowerCase();
+        return "true".equals(s) || "yes".equals(s) || "1".equals(s);
     }
 }

@@ -1,5 +1,6 @@
 package cn.bitloom.agentic.session;
 
+import cn.bitloom.agentic.agent.Agent;
 import cn.bitloom.agentic.agent.RuntimeContext;
 import cn.bitloom.agentic.event.*;
 import cn.bitloom.agentic.memory.MemoryManager;
@@ -25,10 +26,14 @@ import java.util.List;
 public class SessionRunner {
 
     private final Session session;
+    private final Agent agent;
+    private final MemoryManager memoryManager;
     private Disposable subscription;
 
-    public SessionRunner(Session session) {
+    public SessionRunner(Session session, Agent agent, MemoryManager memoryManager) {
         this.session = session;
+        this.agent = agent;
+        this.memoryManager = memoryManager;
     }
 
     /**
@@ -47,12 +52,12 @@ public class SessionRunner {
                         ctx.param("sessionId", this.session.getId())
                            .param("model", this.session.getModel());
                         if (this.session.getRespType() == SessionRespTypeEnum.STREAM) {
-                            yield this.session.getAgent().runStream(ctx, userMessage)
+                            yield this.agent.runStream(ctx, userMessage)
                                     .map(msg -> EventConverter.fromMessage(this.session.getId(), msg))
                                     .doOnNext(EventBus::publishOut)
                                     .doOnComplete(() -> this.session.setSessionState(SessionState.IDLE));
                         } else {
-                            AssistantMessage assistantMessage = this.session.getAgent().runBlock(ctx, userMessage);
+                            AssistantMessage assistantMessage = this.agent.runBlock(ctx, userMessage);
                             EventBus.publishOut(EventConverter.fromMessage(this.session.getId(), assistantMessage));
                             this.session.setSessionState(SessionState.IDLE);
                             yield Flux.<AbstractEvent>empty();
@@ -74,7 +79,7 @@ public class SessionRunner {
                         RuntimeContext ctx = new RuntimeContext(this.session);
                         ctx.param("sessionId", this.session.getId())
                            .param("model", this.session.getModel());
-                        yield this.session.getAgent().runStream(ctx, userMessage)
+                        yield this.agent.runStream(ctx, userMessage)
                                 .map(msg -> EventConverter.fromMessage(this.session.getId(), msg))
                                 .doOnNext(EventBus::publishOut)
                                 .doOnComplete(() -> this.session.setSessionState(SessionState.IDLE));
@@ -100,13 +105,12 @@ public class SessionRunner {
      */
     private void handleMemoryEvent(MemoryEvent event) {
         try {
-            MemoryManager memoryManager = this.session.getMemoryManager();
-            if (memoryManager == null) {
+            if (this.memoryManager == null) {
                 log.warn("[SessionRunner] MemoryManager 未注入，跳过记忆事件: {}", event.getType());
                 return;
             }
             if (event.getType() == MemoryEvent.Type.CONTEXT_COMPACT) {
-                handleContextCompact(memoryManager);
+                handleContextCompact(this.memoryManager);
             }
         } catch (Exception e) {
             log.warn("[SessionRunner] 处理记忆事件失败: {}", event.getType(), e);

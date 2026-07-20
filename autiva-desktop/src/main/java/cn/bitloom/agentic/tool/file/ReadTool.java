@@ -3,6 +3,7 @@ package cn.bitloom.agentic.tool.file;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
 import cn.bitloom.agentic.util.TokenEstimator;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -142,22 +143,7 @@ public class ReadTool extends AbstractTool<ReadTool.Input> {
 	);
 
 	private static final String DESCRIPTION = """
-			从本地文件系统读取文件。你可以使用此工具直接访问任何文件。
-			假设此工具能够读取机器上的所有文件。如果用户提供了文件路径，假设该路径有效。读取不存在的文件是可以的；将返回错误。
-
-			用法：
-			- file_path参数必须是绝对路径，而不是相对路径
-			- 默认情况下，从文件开头读取最多2000行
-			- 你可以选择指定行偏移量和限制（对于长文件特别有用），但建议不提供这些参数来读取整个文件
-			- 超过2000个字符的行将被截断
-			- 结果使用cat -n格式返回，行号从1开始
-			- 此工具允许读取图像（如PNG、JPG等）。读取图像文件时，内容将以视觉方式呈现。
-			- 此工具可以读取PDF文件（.pdf）。PDF逐页处理，提取文本和视觉内容进行分析。
-			- 此工具可以读取Jupyter笔记本（.ipynb文件），返回所有单元格及其输出，结合代码、文本和可视化内容。
-			- 此工具只能读取文件，不能读取目录。要读取目录，请通过Bash工具使用ls命令。
-			- 你可以在一次响应中调用多个工具。推测性地并行读取多个可能有用的文件总是更好的做法。
-			- 你会经常被要求读取截图。如果用户提供了截图路径，请始终使用此工具查看该路径的文件。此工具适用于所有临时文件路径。
-			- 如果你读取的文件存在但内容为空，你将收到系统提醒警告代替文件内容。
+			读取文件内容，返回带行号的 cat -n 格式输出。支持文本、图片(PNG/JPG)、PDF 和 Jupyter(.ipynb)。file_path 必须是绝对路径。长文件用 offset/limit 分段读取。
 			""";
 
 	private ReadTool() {
@@ -171,7 +157,7 @@ public class ReadTool extends AbstractTool<ReadTool.Input> {
 	) {}
 
 	@Override
-	public ToolResult execute(Input input, ToolContext context) {
+	public @NonNull ToolResult execute(Input input, ToolContext context) {
 		String filePath = input.filePath();
 		Integer offset = input.offset();
 		Integer limit = input.limit();

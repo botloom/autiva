@@ -18,12 +18,7 @@ import java.util.Map;
 public class TaskOutputTool extends AbstractTool<TaskOutputTool.Input> {
 
     private static final String DESCRIPTION = """
-            - 从正在运行或已完成的任务（后台代理）获取输出
-            - 接受一个标识任务的task_id参数
-            - 返回任务输出及状态信息
-            - 使用block=true（默认）等待任务完成
-            - 使用block=false进行非阻塞的当前状态检查
-            - 任务ID可以通过/tasks命令找到
+            获取后台任务的输出。block=true(默认)等待完成，block=false 非阻塞检查。
             """;
 
     /**

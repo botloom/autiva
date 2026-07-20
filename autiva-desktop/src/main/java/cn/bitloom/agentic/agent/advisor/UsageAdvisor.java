@@ -88,6 +88,7 @@ public class UsageAdvisor implements StreamAdvisor, CallAdvisor {
     }
 
     private int getMaxContextTokens(ModelTypeEnum model) {
-        return 64000;
+        // DeepSeek chat model supports 128k context window
+        return 128000;
     }
 }

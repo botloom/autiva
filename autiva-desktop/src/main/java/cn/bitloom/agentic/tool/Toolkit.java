@@ -16,6 +16,11 @@ import cn.bitloom.agentic.tool.cron.CronCreateTool;
 import cn.bitloom.agentic.tool.cron.CronDeleteTool;
 import cn.bitloom.agentic.tool.cron.CronListTool;
 import cn.bitloom.agentic.tool.cron.CronTriggerTool;
+import cn.bitloom.agentic.evolve.EvolutionEngine;
+import cn.bitloom.agentic.tool.manage.evolve.ClimbAnalyzeTool;
+import cn.bitloom.agentic.tool.manage.evolve.GeneQueryTool;
+import cn.bitloom.agentic.tool.manage.evolve.GeneRollbackTool;
+import cn.bitloom.agentic.tool.manage.evolve.GeneToggleTool;
 import cn.bitloom.agentic.tool.file.EditTool;
 import cn.bitloom.agentic.tool.file.ReadTool;
 import cn.bitloom.agentic.tool.file.WriteTool;
@@ -82,6 +87,7 @@ public class Toolkit {
     private final ProcessManager processManager;
     private final InMemorySessionManager inMemorySessionManager;
     private final DiffService diffService;
+    private final EvolutionEngine evolutionEngine;
 
     @PostConstruct
     public void init() {
@@ -188,6 +194,11 @@ public class Toolkit {
         tools.add(AppConfigPathTool.builder().configManager(configManager).build());
         tools.add(AppConfigReadTool.builder().configManager(configManager).build());
         tools.add(AppConfigSetIsolationTool.builder().configManager(configManager).build());
+        // L4 自优化（Gene 管理 + 爬山分析）
+        tools.add(new ClimbAnalyzeTool(evolutionEngine));
+        tools.add(new GeneQueryTool(evolutionEngine));
+        tools.add(new GeneToggleTool(evolutionEngine));
+        tools.add(new GeneRollbackTool(evolutionEngine));
 
         return tools;
     }

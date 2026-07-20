@@ -48,10 +48,11 @@ Spring @Component，统一管理工具注册和构建。
 - `taskRepository`: TaskRepository（@Component 单例，解决状态共享）
 - `processManager`: ProcessManager（@Component 单例，解决状态共享）
 - `diffService`: DiffService（编码智能体 Diff 生成服务，注入到 WriteTool/EditTool 用于写文件后生成 diff 并发布 DiffEvent）
+- `evolutionEngine`: EvolutionEngine（阶段4 新增，L4 自优化引擎，注入到 4 个 Gene 工具）
 
 **核心方法：**
 - `buildToolCallbacks(AgentDefinition)`: 根据 AgentDefinition 构建工具回调列表，按 kind 分流
-- `buildAllTools()`: 构建工具集（文件、搜索、命令、交互、定时、Task、记忆、技能、管理、MCP），支持 config.json 白名单过滤。构建 WriteTool/EditTool 时注入 `diffService` 字段（编码智能体 Diff 生成支持）
+- `buildAllTools()`: 构建工具集（文件、搜索、命令、交互、定时、Task、记忆、技能、管理、MCP、L4 自优化），支持 config.json 白名单过滤。构建 WriteTool/EditTool 时注入 `diffService` 字段（编码智能体 Diff 生成支持）
 
 ### AutivaToolCallingManager
 自定义 `ToolCallingManager` 实现，注入到 `ToolCallingAdvisor` 中，替代 Spring AI 默认的 `DefaultToolCallingManager`。
@@ -175,15 +176,11 @@ tool/
     │   ├── MemoryUpdateTool.java
     │   ├── MemoryDeleteTool.java
     │   └── MemorySearchTool.java
-    ├── evolve/                # 进化引擎管理（工具类存在但未在 Toolkit 注册）
-    │   ├── EvolveQueryTool.java
-    │   ├── EvolveApplyTool.java
-    │   ├── EvolveCycleTool.java
-    │   ├── EvolveConfigStatusTool.java
-    │   ├── EvolveConfigSetStrategyTool.java
-    │   ├── EvolveGeneToggleTool.java
-    │   ├── EvolveGeneDeleteTool.java
-    │   └── EvolveCapsuleDeleteTool.java
+    ├── evolve/                # L4 自优化管理（阶段4 新增，4 个工具均已在 Toolkit 注册）
+    │   ├── ClimbAnalyzeTool.java
+    │   ├── GeneQueryTool.java
+    │   ├── GeneToggleTool.java
+    │   └── GeneRollbackTool.java
     └── app/                   # 应用配置管理
         ├── AppConfigReadTool.java
         ├── AppConfigGetTool.java
@@ -306,6 +303,14 @@ MCP服务器配置管理工具，每个工具独立继承 AbstractTool。
 - **AppConfigGetTool**: 获取指定配置项的值工具。Builder 接受 ConfigManager。name="app_config_get"
 - **AppConfigSetIsolationTool**: 设置会话隔离策略工具。Builder 接受 ConfigManager。name="app_config_set_isolation"
 - **AppConfigPathTool**: 获取应用配置文件路径工具。Builder 接受 ConfigManager。name="app_config_path"
+
+### manage/evolve 包 (`cn.bitloom.agentic.tool.manage.evolve`)
+L4 自优化管理工具（阶段4 新增），每个工具独立继承 AbstractTool，通过构造函数注入 `EvolutionEngine`。所有工具均已在 Toolkit.buildAllTools() 中注册。
+
+- **ClimbAnalyzeTool**: 主动触发 L4 爬山自优化分析工具（继承 AbstractTool\<ClimbAnalyzeTool.Input\>）。委托 `EvolutionEngine.climb(agentId)` 执行完整分析流程：加载 Trace → LLM 分析 → 高置信度建议突变 → 安全检查 → 落盘。Input record 包含可选 agent_id（缺省时从 sessionId 解析）。返回 ToolResult 含分析摘要、统计 data、Markdown 报告 rawOutput。name="climb_analyze"
+- **GeneQueryTool**: 查询 Gene 列表/详情工具（继承 AbstractTool\<GeneQueryTool.Input\>）。传 gene_id 返回详情；传 type 返回该类型列表；都缺省返回全部启用基因。委托 `EvolutionEngine.queryGeneDetail / queryGenes`。name="gene_query"
+- **GeneToggleTool**: 启用/禁用 Gene 工具（继承 AbstractTool\<GeneToggleTool.Input\>）。Input record 包含 gene_id/enabled。委托 `EvolutionEngine.toggleGene`。name="gene_toggle"
+- **GeneRollbackTool**: 回滚 Gene 到历史 JGit 提交工具（继承 AbstractTool\<GeneRollbackTool.Input\>）。Input record 包含 gene_id/commit_hash。委托 `EvolutionEngine.revertGene`。name="gene_rollback"
 
 ### deploy 包 (`cn.bitloom.agentic.deploy`)
 项目部署工具，详见 [deploy/AGENTS.md](../deploy/AGENTS.md)

@@ -1,23 +1,21 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.evolve.EvolutionEngine;
-import cn.bitloom.agentic.evolve.experience.Experience;
-import cn.bitloom.agentic.evolve.gene.Capsule;
 import cn.bitloom.agentic.evolve.gene.Gene;
-import cn.bitloom.agentic.evolve.memory.MemoryRule;
+import cn.bitloom.agentic.evolve.gene.GeneType;
 import cn.bitloom.agentic.evolve.repository.GeneRepository;
-import cn.bitloom.agentic.evolve.routing.RoutingEntry;
 import cn.bitloom.agentic.evolve.solidify.EvolutionEvent;
-import cn.bitloom.agentic.evolve.strategy.StrategyPreset;
+import cn.bitloom.agentic.trace.ToolCallRecord;
+import cn.bitloom.agentic.trace.Trace;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.vm.GepPageViewModel;
-import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -55,10 +53,12 @@ public class GepPageController implements Initializable, PageHolder {
     private void refreshContent() {
         viewModel.loadData();
         contentContainer.getChildren().clear();
-        contentContainer.getChildren().add(renderActionCard());
         contentContainer.getChildren().add(renderOverviewCard());
+        contentContainer.getChildren().add(renderClimbActionCard());
+        contentContainer.getChildren().add(renderL2ReportCard());
+        contentContainer.getChildren().add(renderRecentTracesCard());
 
-        Label genesLabel = new Label("基因库");
+        Label genesLabel = new Label("配置基因库");
         genesLabel.getStyleClass().add("gep-page__section-label");
         contentContainer.getChildren().add(genesLabel);
 
@@ -71,77 +71,7 @@ public class GepPageController implements Initializable, PageHolder {
             }
         }
 
-        contentContainer.getChildren().add(renderRoutingCard());
-        contentContainer.getChildren().add(renderMemoryCard());
         contentContainer.getChildren().add(renderEventsCard());
-
-        List<Capsule> capsules = viewModel.getCapsules();
-        if (!capsules.isEmpty()) {
-            contentContainer.getChildren().add(renderCapsulesCard(capsules));
-        }
-    }
-
-    // ========== Action Card ==========
-
-    private VBox renderActionCard() {
-        VBox card = new VBox(12);
-        card.getStyleClass().add("gep-page__card");
-
-        HBox row = new HBox(8);
-        row.getStyleClass().add("gep-page__row");
-        row.setAlignment(Pos.CENTER_LEFT);
-
-        Label strategyLabel = new Label("策略");
-        strategyLabel.getStyleClass().add("gep-page__row-title");
-
-        ComboBox<StrategyPreset> strategyCombo = new ComboBox<>(
-                FXCollections.observableArrayList(StrategyPreset.values()));
-        strategyCombo.setValue(viewModel.getStrategyPreset());
-        strategyCombo.getStyleClass().add("gep-page__strategy-select");
-        strategyCombo.setOnAction(e -> viewModel.setStrategyPreset(strategyCombo.getValue()));
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Button cycleBtn = new Button("执行周期");
-        cycleBtn.getStyleClass().add("gep-page__btn");
-        cycleBtn.setOnAction(e -> {
-            try {
-                EvolutionEngine.EvolutionCycleResult result = viewModel.runEvolutionCycle();
-                if (result.success()) {
-                    showInfo("进化周期完成", "选中基因: " + result.gene().id());
-                } else {
-                    showInfo("进化周期", "未产生结果: " + result.reason());
-                }
-            } catch (Exception ex) {
-                showError("进化周期失败", ex.getMessage());
-            }
-        });
-
-        Button extractBtn = new Button("提取经验");
-        extractBtn.getStyleClass().add("gep-page__btn");
-        extractBtn.setOnAction(e -> {
-            try {
-                List<Experience> experiences = viewModel.extractAndEvolve();
-                if (experiences.isEmpty()) {
-                    showInfo("经验提取", "未提取到可操作的经验");
-                } else {
-                    StringBuilder sb = new StringBuilder("提取到 " + experiences.size() + " 条经验:\n\n");
-                    for (Experience exp : experiences) {
-                        sb.append("- ").append(exp.pattern())
-                          .append(" (").append(exp.target()).append(", ")
-                          .append(String.format("%.0f%%", exp.confidence() * 100)).append(")\n");
-                    }
-                    showInfo("经验提取完成", sb.toString());
-                }
-            } catch (Exception ex) {
-                showError("经验提取失败", ex.getMessage());
-            }
-        });
-
-        row.getChildren().addAll(strategyLabel, strategyCombo, spacer, cycleBtn, extractBtn);
-        card.getChildren().add(row);
-        return card;
     }
 
     // ========== Overview Card ==========
@@ -150,12 +80,14 @@ public class GepPageController implements Initializable, PageHolder {
         VBox card = new VBox(8);
         card.getStyleClass().add("gep-page__card");
 
-        card.getChildren().add(createOverviewRow("基因", String.valueOf(viewModel.getGeneCount().get()),
+        card.getChildren().add(createOverviewRow("基因总数", String.valueOf(viewModel.getGeneCount().get()),
                 "启用 " + viewModel.getEnabledGeneCount().get()));
+        card.getChildren().add(createOverviewRow("Prompt", String.valueOf(viewModel.getPromptGeneCount().get()), ""));
+        card.getChildren().add(createOverviewRow("Rubric", String.valueOf(viewModel.getRubricGeneCount().get()), ""));
+        card.getChildren().add(createOverviewRow("ToolDesc", String.valueOf(viewModel.getToolDescGeneCount().get()), ""));
+        card.getChildren().add(createOverviewRow("SkillConfig", String.valueOf(viewModel.getSkillConfigGeneCount().get()), ""));
         card.getChildren().add(createOverviewRow("事件", String.valueOf(viewModel.getEventCount().get()),
                 String.format("成功率 %.0f%%", viewModel.getSuccessRate().get() * 100)));
-        card.getChildren().add(createOverviewRow("路由", String.valueOf(viewModel.getRouteCount().get()), ""));
-        card.getChildren().add(createOverviewRow("规则", String.valueOf(viewModel.getRuleCount().get()), ""));
 
         return card;
     }
@@ -167,7 +99,7 @@ public class GepPageController implements Initializable, PageHolder {
 
         Label titleLabel = new Label(title);
         titleLabel.getStyleClass().add("gep-page__row-title");
-        titleLabel.setPrefWidth(60);
+        titleLabel.setPrefWidth(80);
 
         Label valueLabel = new Label(value);
         valueLabel.getStyleClass().add("gep-page__row-title");
@@ -180,6 +112,151 @@ public class GepPageController implements Initializable, PageHolder {
             row.getChildren().addAll(titleLabel, valueLabel);
         }
 
+        return row;
+    }
+
+    // ========== Climb Action Card ==========
+
+    private VBox renderClimbActionCard() {
+        VBox card = new VBox(8);
+        card.getStyleClass().add("gep-page__card");
+
+        Label sectionLabel = new Label("L4 爬山自优化");
+        sectionLabel.getStyleClass().add("gep-page__card-title");
+
+        Label descLabel = new Label("基于最近对话 Trace，由独立 analyzer Agent 分析高频缺陷，"
+                + "对低效的 Prompt / Rubric / 工具描述 / 技能配置自动突变。高置信度建议自动应用，低置信度仅记录。");
+        descLabel.getStyleClass().add("gep-page__card-description");
+        descLabel.setWrapText(true);
+
+        Button climbBtn = new Button("分析优化");
+        climbBtn.getStyleClass().addAll("gep-page__btn", "gep-page__btn--primary");
+        climbBtn.setOnAction(e -> {
+            climbBtn.setDisable(true);
+            climbBtn.setText("分析中...");
+            viewModel.climbAsync(() -> {
+                climbBtn.setDisable(false);
+                climbBtn.setText("分析优化");
+                refreshContent();
+            });
+        });
+
+        String summary = viewModel.getLastClimbSummary().get();
+        if (summary != null && !summary.isEmpty()) {
+            Label summaryLabel = new Label(summary);
+            summaryLabel.getStyleClass().add("gep-page__row-subtitle");
+            summaryLabel.setWrapText(true);
+            card.getChildren().addAll(sectionLabel, descLabel, climbBtn, summaryLabel);
+
+            String analysis = viewModel.getLastClimbAnalysis().get();
+            if (analysis != null && !analysis.isEmpty()) {
+                card.getChildren().add(renderClimbAnalysisDetail(analysis));
+            }
+        } else {
+            card.getChildren().addAll(sectionLabel, descLabel, climbBtn);
+        }
+
+        return card;
+    }
+
+    private TitledPane renderClimbAnalysisDetail(String analysis) {
+        TitledPane pane = new TitledPane();
+        pane.setText("L4 分析报告详情");
+        pane.setExpanded(false);
+
+        TextFlow flow = new TextFlow(new Text(analysis));
+        flow.setPadding(new Insets(8, 4, 8, 4));
+        pane.setContent(flow);
+        return pane;
+    }
+
+    // ========== L2 Verification Report Card ==========
+
+    private VBox renderL2ReportCard() {
+        Label sectionLabel = new Label("L2 校验报告");
+        sectionLabel.getStyleClass().add("gep-page__section-label");
+
+        VBox card = new VBox(8);
+        card.getStyleClass().add("gep-page__card");
+
+        card.getChildren().add(createOverviewRow("Trace 总数",
+                String.valueOf(viewModel.getTotalTraces().get()), ""));
+        card.getChildren().add(createOverviewRow("通过",
+                String.valueOf(viewModel.getPassedTraces().get()),
+                String.format("通过率 %.1f%%", viewModel.getL2PassRate().get() * 100)));
+        card.getChildren().add(createOverviewRow("失败",
+                String.valueOf(viewModel.getFailedTraces().get()), ""));
+        card.getChildren().add(createOverviewRow("工具调用",
+                String.valueOf(viewModel.getTotalToolCalls().get()),
+                "阻断 " + viewModel.getBlockedToolCalls().get()));
+
+        VBox wrapper = new VBox(12);
+        wrapper.getChildren().addAll(sectionLabel, card);
+        return wrapper;
+    }
+
+    // ========== Recent Traces Card ==========
+
+    private VBox renderRecentTracesCard() {
+        Label sectionLabel = new Label("最近 Trace");
+        sectionLabel.getStyleClass().add("gep-page__section-label");
+
+        VBox card = new VBox(6);
+        card.getStyleClass().add("gep-page__card");
+
+        List<Trace> traces = viewModel.getRecentTraces();
+        if (traces.isEmpty()) {
+            Label empty = new Label("暂无 Trace 记录");
+            empty.getStyleClass().add("gep-page__card-description");
+            card.getChildren().add(empty);
+        } else {
+            List<Trace> reversed = new ArrayList<>(traces);
+            Collections.reverse(reversed);
+            int limit = Math.min(reversed.size(), 10);
+            for (int i = 0; i < limit; i++) {
+                card.getChildren().add(createTraceRow(reversed.get(i)));
+            }
+        }
+
+        VBox wrapper = new VBox(12);
+        wrapper.getChildren().addAll(sectionLabel, card);
+        return wrapper;
+    }
+
+    private HBox createTraceRow(Trace trace) {
+        HBox row = new HBox(8);
+        row.getStyleClass().add("gep-page__row");
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        String statusText = trace.verified() ? "通过" : "失败";
+        Label statusTag = new Label(statusText);
+        statusTag.getStyleClass().addAll("gep-page__tag",
+                trace.verified() ? "gep-page__tag--success" : "gep-page__tag--failed");
+
+        String time = formatTimestamp(trace.timestamp());
+        Label timeLabel = new Label(time);
+        timeLabel.getStyleClass().add("gep-page__row-subtitle");
+        timeLabel.setPrefWidth(95);
+
+        int toolCount = trace.toolCalls() != null ? trace.toolCalls().size() : 0;
+        long blockedCount = trace.toolCalls() != null
+                ? trace.toolCalls().stream().filter(ToolCallRecord::blocked).count() : 0;
+        Label toolLabel = new Label("工具 " + toolCount + (blockedCount > 0 ? " (阻断 " + blockedCount + ")" : ""));
+        toolLabel.getStyleClass().add("gep-page__row-subtitle");
+        toolLabel.setPrefWidth(120);
+
+        String userMsg = trace.userMessage() != null
+                ? trace.userMessage().replace("\n", " ").trim() : "";
+        if (userMsg.length() > 40) userMsg = userMsg.substring(0, 40) + "...";
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Label msgLabel = new Label(userMsg);
+        msgLabel.getStyleClass().add("gep-page__row-title");
+        msgLabel.setWrapText(true);
+
+        row.getChildren().addAll(statusTag, timeLabel, toolLabel, spacer, msgLabel);
         return row;
     }
 
@@ -202,7 +279,7 @@ public class GepPageController implements Initializable, PageHolder {
         Label titleLabel = new Label(gene.id());
         titleLabel.getStyleClass().add("gep-page__card-title");
 
-        Label descLabel = new Label(gene.summary());
+        Label descLabel = new Label(gene.description() != null ? gene.description() : gene.name());
         descLabel.getStyleClass().add("gep-page__card-description");
 
         titleBox.getChildren().addAll(titleLabel, descLabel);
@@ -212,16 +289,16 @@ public class GepPageController implements Initializable, PageHolder {
         HBox tags = new HBox(6);
         tags.setAlignment(Pos.CENTER_LEFT);
 
-        Label categoryTag = new Label(gene.category().code());
-        categoryTag.getStyleClass().addAll("gep-page__tag", "gep-page__tag--" + gene.category().name());
+        Label typeTag = new Label(gene.type().name());
+        typeTag.getStyleClass().addAll("gep-page__tag", "gep-page__tag--" + gene.type().name());
 
-        Label runtimeTag = new Label(gene.runtimeType().code());
-        runtimeTag.getStyleClass().addAll("gep-page__tag", "gep-page__tag--runtime");
+        Label targetTag = new Label(gene.targetId());
+        targetTag.getStyleClass().addAll("gep-page__tag", "gep-page__tag--runtime");
 
         Label versionTag = new Label("v" + gene.version());
         versionTag.getStyleClass().addAll("gep-page__tag", "gep-page__tag--runtime");
 
-        tags.getChildren().addAll(categoryTag, runtimeTag, versionTag);
+        tags.getChildren().addAll(typeTag, targetTag, versionTag);
 
         if (!gene.enabled()) {
             Label disabledTag = new Label("禁用");
@@ -262,40 +339,18 @@ public class GepPageController implements Initializable, PageHolder {
         VBox detail = new VBox(12);
         detail.getStyleClass().add("gep-page__gene-detail");
 
-        // Strategy steps
-        if (gene.strategy() != null && !gene.strategy().isEmpty()) {
-            detail.getChildren().add(createGeneSection("策略步骤", gene.strategy(), false));
-        }
-
-        // Constraints
-        if (gene.constraints() != null && !gene.constraints().isEmpty()) {
-            List<String> constraintLines = gene.constraints().entrySet().stream()
-                    .map(e -> e.getKey() + "=" + e.getValue())
-                    .toList();
-            detail.getChildren().add(createGeneSection("约束条件", constraintLines, false));
-        }
-
-        // Validation
-        if (gene.validation() != null && !gene.validation().isEmpty()) {
-            detail.getChildren().add(createGeneSection("验证检查", gene.validation(), true));
-        }
-
-        // Anti-patterns
-        if (gene.antiPatterns() != null && !gene.antiPatterns().isEmpty()) {
-            detail.getChildren().add(createGeneSection("反模式", gene.antiPatterns(), false));
-        }
-
-        // Code
-        String code = gene.code();
-        if (code != null && !code.isEmpty()) {
-            VBox codeSection = new VBox(4);
-            Label codeTitle = new Label("代码");
-            codeTitle.getStyleClass().add("gep-page__gene-section-title");
-            Label codeContent = new Label(code.length() > 500 ? code.substring(0, 500) + "..." : code);
-            codeContent.getStyleClass().add("gep-page__gene-code");
-            codeContent.setWrapText(true);
-            codeSection.getChildren().addAll(codeTitle, codeContent);
-            detail.getChildren().add(codeSection);
+        // Config content
+        if (gene.content() != null && !gene.content().isEmpty()) {
+            VBox contentSection = new VBox(4);
+            Label contentTitle = new Label("配置内容");
+            contentTitle.getStyleClass().add("gep-page__gene-section-title");
+            String contentText = gene.content().length() > 800
+                    ? gene.content().substring(0, 800) + "..." : gene.content();
+            Label contentLabel = new Label(contentText);
+            contentLabel.getStyleClass().add("gep-page__gene-code");
+            contentLabel.setWrapText(true);
+            contentSection.getChildren().addAll(contentTitle, contentLabel);
+            detail.getChildren().add(contentSection);
         }
 
         // Version history
@@ -348,7 +403,7 @@ public class GepPageController implements Initializable, PageHolder {
 
         // Parent gene
         if (gene.parentId() != null && !gene.parentId().isEmpty()) {
-            Label parentLabel = new Label("父基因: " + gene.parentId());
+            Label parentLabel = new Label("父版本: " + gene.parentId());
             parentLabel.getStyleClass().add("gep-page__gene-meta");
             detail.getChildren().add(parentLabel);
         }
@@ -390,143 +445,6 @@ public class GepPageController implements Initializable, PageHolder {
         detail.getChildren().add(actions);
 
         return detail;
-    }
-
-    private VBox createGeneSection(String title, List<String> items, boolean checkmark) {
-        VBox section = new VBox(2);
-        Label titleLabel = new Label(title);
-        titleLabel.getStyleClass().add("gep-page__gene-section-title");
-        section.getChildren().add(titleLabel);
-
-        for (String item : items) {
-            Label itemLabel = new Label((checkmark ? "✓ " : "") + item);
-            itemLabel.getStyleClass().add("gep-page__gene-section-item");
-            itemLabel.setWrapText(true);
-            section.getChildren().add(itemLabel);
-        }
-        return section;
-    }
-
-    // ========== Routing Card ==========
-
-    private VBox renderRoutingCard() {
-        Label sectionLabel = new Label("路由");
-        sectionLabel.getStyleClass().add("gep-page__section-label");
-
-        VBox card = new VBox(8);
-        card.getStyleClass().add("gep-page__card");
-
-        List<RoutingEntry> routes = viewModel.getRoutes();
-        if (routes.isEmpty()) {
-            Label empty = new Label("暂无路由规则");
-            empty.getStyleClass().add("gep-page__card-description");
-            card.getChildren().add(empty);
-        } else {
-            for (RoutingEntry entry : routes) {
-                card.getChildren().add(createRoutingRow(entry));
-            }
-        }
-
-        Button addBtn = new Button("+ 添加路由");
-        addBtn.getStyleClass().add("gep-page__btn");
-        addBtn.setOnAction(e -> showAddRouteDialog());
-        card.getChildren().add(addBtn);
-
-        VBox wrapper = new VBox(12);
-        wrapper.getChildren().addAll(sectionLabel, card);
-        return wrapper;
-    }
-
-    private HBox createRoutingRow(RoutingEntry entry) {
-        HBox row = new HBox(8);
-        row.getStyleClass().add("gep-page__row");
-        row.setAlignment(Pos.CENTER_LEFT);
-
-        Label patternLabel = new Label(entry.pattern());
-        patternLabel.getStyleClass().add("gep-page__row-title");
-
-        Label arrowLabel = new Label("→");
-        arrowLabel.getStyleClass().add("gep-page__row-subtitle");
-
-        Label geneLabel = new Label(entry.geneId());
-        geneLabel.getStyleClass().add("gep-page__row-subtitle");
-
-        Label weightLabel = new Label(String.format("(%.2f)", entry.weight()));
-        weightLabel.getStyleClass().add("gep-page__row-subtitle");
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Button deleteBtn = new Button("删除");
-        deleteBtn.getStyleClass().addAll("gep-page__btn", "gep-page__btn--danger");
-        deleteBtn.setOnAction(e -> {
-            viewModel.removeRoute(entry.pattern());
-            refreshContent();
-        });
-
-        row.getChildren().addAll(patternLabel, arrowLabel, geneLabel, weightLabel, spacer, deleteBtn);
-        return row;
-    }
-
-    // ========== Memory Card ==========
-
-    private VBox renderMemoryCard() {
-        Label sectionLabel = new Label("记忆");
-        sectionLabel.getStyleClass().add("gep-page__section-label");
-
-        VBox card = new VBox(8);
-        card.getStyleClass().add("gep-page__card");
-
-        List<MemoryRule> rules = viewModel.getRules();
-        if (rules.isEmpty()) {
-            Label empty = new Label("暂无记忆规则");
-            empty.getStyleClass().add("gep-page__card-description");
-            card.getChildren().add(empty);
-        } else {
-            for (MemoryRule rule : rules) {
-                card.getChildren().add(createMemoryRow(rule));
-            }
-        }
-
-        Button addBtn = new Button("+ 添加规则");
-        addBtn.getStyleClass().add("gep-page__btn");
-        addBtn.setOnAction(e -> showAddRuleDialog());
-        card.getChildren().add(addBtn);
-
-        VBox wrapper = new VBox(12);
-        wrapper.getChildren().addAll(sectionLabel, card);
-        return wrapper;
-    }
-
-    private HBox createMemoryRow(MemoryRule rule) {
-        HBox row = new HBox(8);
-        row.getStyleClass().add("gep-page__row");
-        row.setAlignment(Pos.CENTER_LEFT);
-
-        Label patternLabel = new Label(rule.pattern());
-        patternLabel.getStyleClass().add("gep-page__row-title");
-
-        Label arrowLabel = new Label("→");
-        arrowLabel.getStyleClass().add("gep-page__row-subtitle");
-
-        Label actionLabel = new Label(rule.action());
-        actionLabel.getStyleClass().add("gep-page__row-subtitle");
-
-        Label confLabel = new Label(String.format("(%.0f%%)", rule.confidence() * 100));
-        confLabel.getStyleClass().add("gep-page__row-subtitle");
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Button deleteBtn = new Button("删除");
-        deleteBtn.getStyleClass().addAll("gep-page__btn", "gep-page__btn--danger");
-        deleteBtn.setOnAction(e -> {
-            viewModel.deleteRule(rule.id());
-            refreshContent();
-        });
-
-        row.getChildren().addAll(patternLabel, arrowLabel, actionLabel, confLabel, spacer, deleteBtn);
-        return row;
     }
 
     // ========== Events Card ==========
@@ -586,48 +504,6 @@ public class GepPageController implements Initializable, PageHolder {
         return row;
     }
 
-    // ========== Capsules Card ==========
-
-    private VBox renderCapsulesCard(List<Capsule> capsules) {
-        Label sectionLabel = new Label("胶囊");
-        sectionLabel.getStyleClass().add("gep-page__section-label");
-
-        VBox card = new VBox(8);
-        card.getStyleClass().add("gep-page__card");
-
-        for (Capsule capsule : capsules) {
-            HBox row = new HBox(8);
-            row.getStyleClass().add("gep-page__row");
-            row.setAlignment(Pos.CENTER_LEFT);
-
-            Label idLabel = new Label(capsule.id());
-            idLabel.getStyleClass().add("gep-page__row-title");
-
-            Label scoreLabel = new Label(String.format("分数 %.2f", capsule.score()));
-            scoreLabel.getStyleClass().add("gep-page__row-subtitle");
-
-            Label genesLabel = new Label(String.join(", ", capsule.geneIds()));
-            genesLabel.getStyleClass().add("gep-page__row-subtitle");
-
-            Region spacer = new Region();
-            HBox.setHgrow(spacer, Priority.ALWAYS);
-
-            Button deleteBtn = new Button("删除");
-            deleteBtn.getStyleClass().addAll("gep-page__btn", "gep-page__btn--danger");
-            deleteBtn.setOnAction(e -> {
-                viewModel.deleteCapsule(capsule.id());
-                refreshContent();
-            });
-
-            row.getChildren().addAll(idLabel, scoreLabel, genesLabel, spacer, deleteBtn);
-            card.getChildren().add(row);
-        }
-
-        VBox wrapper = new VBox(12);
-        wrapper.getChildren().addAll(sectionLabel, card);
-        return wrapper;
-    }
-
     // ========== Empty Card ==========
 
     private VBox createEmptyCard(String text) {
@@ -637,88 +513,6 @@ public class GepPageController implements Initializable, PageHolder {
         empty.getStyleClass().add("gep-page__empty");
         card.getChildren().add(empty);
         return card;
-    }
-
-    // ========== Dialogs ==========
-
-    private void showAddRouteDialog() {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("添加路由");
-        dialog.setHeaderText(null);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20, 10, 10, 10));
-
-        TextField patternField = new TextField();
-        patternField.setPromptText("匹配模式（正则）");
-        TextField geneIdField = new TextField();
-        geneIdField.setPromptText("目标基因ID");
-        TextField weightField = new TextField("1.0");
-        weightField.setPromptText("权重");
-
-        grid.add(new Label("模式:"), 0, 0);
-        grid.add(patternField, 1, 0);
-        grid.add(new Label("基因ID:"), 0, 1);
-        grid.add(geneIdField, 1, 1);
-        grid.add(new Label("权重:"), 0, 2);
-        grid.add(weightField, 1, 2);
-
-        dialog.getDialogPane().setContent(grid);
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        dialog.showAndWait().ifPresent(response -> {
-            if (response == ButtonType.OK) {
-                try {
-                    double weight = Double.parseDouble(weightField.getText().trim());
-                    viewModel.addRoute(patternField.getText().trim(), geneIdField.getText().trim(), weight);
-                    refreshContent();
-                } catch (NumberFormatException ex) {
-                    showError("输入错误", "权重必须是数字");
-                }
-            }
-        });
-    }
-
-    private void showAddRuleDialog() {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("添加规则");
-        dialog.setHeaderText(null);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20, 10, 10, 10));
-
-        TextField patternField = new TextField();
-        patternField.setPromptText("触发模式");
-        TextField actionField = new TextField();
-        actionField.setPromptText("执行动作");
-        TextField confidenceField = new TextField("0.8");
-        confidenceField.setPromptText("置信度 (0-1)");
-
-        grid.add(new Label("模式:"), 0, 0);
-        grid.add(patternField, 1, 0);
-        grid.add(new Label("动作:"), 0, 1);
-        grid.add(actionField, 1, 1);
-        grid.add(new Label("置信度:"), 0, 2);
-        grid.add(confidenceField, 1, 2);
-
-        dialog.getDialogPane().setContent(grid);
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        dialog.showAndWait().ifPresent(response -> {
-            if (response == ButtonType.OK) {
-                try {
-                    double confidence = Double.parseDouble(confidenceField.getText().trim());
-                    viewModel.addRule(patternField.getText().trim(), actionField.getText().trim(), confidence);
-                    refreshContent();
-                } catch (NumberFormatException ex) {
-                    showError("输入错误", "置信度必须是数字");
-                }
-            }
-        });
     }
 
     // ========== Helpers ==========
@@ -737,22 +531,6 @@ public class GepPageController implements Initializable, PageHolder {
             case "failed" -> "gep-page__tag--failed";
             default -> "gep-page__tag--unknown";
         };
-    }
-
-    private void showInfo(String title, String content) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(content);
-        alert.showAndWait();
-    }
-
-    private void showError(String title, String content) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(content);
-        alert.showAndWait();
     }
 
     @Override

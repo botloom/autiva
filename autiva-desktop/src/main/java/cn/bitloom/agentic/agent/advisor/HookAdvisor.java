@@ -1,6 +1,8 @@
 package cn.bitloom.agentic.agent.advisor;
 
-import cn.bitloom.agentic.hook.AgentHook;
+import cn.bitloom.agentic.agent.RuntimeContext;
+import cn.bitloom.agentic.hook.IAgentHook;
+import cn.bitloom.agentic.hook.ToolCallDecision;
 import lombok.Builder;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -9,9 +11,12 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.model.ToolContext;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * HookAdvisor 是唯一的 Advisor 桥接层，将 AgentHook 高级 API 桥接到 Spring AI Advisor 机制。
@@ -22,11 +27,11 @@ import java.util.List;
 @Builder
 public class HookAdvisor implements CallAdvisor, StreamAdvisor {
 
-    private final List<AgentHook> hooks;
+    private final List<IAgentHook> hooks;
 
-    public HookAdvisor(List<AgentHook> hooks) {
+    public HookAdvisor(List<IAgentHook> hooks) {
         this.hooks = hooks.stream()
-                .sorted(java.util.Comparator.comparingInt(AgentHook::order))
+                .sorted(java.util.Comparator.comparingInt(IAgentHook::order))
                 .toList();
     }
 
@@ -42,10 +47,13 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public @NonNull ChatClientResponse adviseCall(@NonNull ChatClientRequest request,
-                                                   @NonNull CallAdvisorChain chain) {
+                                                  @NonNull CallAdvisorChain chain) {
+        // 轮次开始
+        beforeConversationRound(request);
+
         // beforeModelCall: 按 order 顺序执行
         ChatClientRequest current = request;
-        for (AgentHook hook : hooks) {
+        for (IAgentHook hook : hooks) {
             ChatClientRequest modified = hook.beforeModelCall(current);
             if (modified != null) {
                 current = modified;
@@ -55,8 +63,12 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
         ChatClientResponse response = chain.nextCall(current);
 
         // afterModelCall: 按 order 顺序执行
-        for (AgentHook hook : hooks) {
+        for (IAgentHook hook : hooks) {
             hook.afterModelCall(current, response);
+        }
+
+        if (response.chatResponse() != null && response.chatResponse().hasFinishReasons(Set.of("STOP"))) {
+            afterConversationRound();
         }
 
         return response;
@@ -64,10 +76,13 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public @NonNull Flux<ChatClientResponse> adviseStream(@NonNull ChatClientRequest request,
-                                                           @NonNull StreamAdvisorChain chain) {
+                                                          @NonNull StreamAdvisorChain chain) {
+        // 轮次开始
+        beforeConversationRound(request);
+
         // beforeModelCall: 按 order 顺序执行
         ChatClientRequest current = request;
-        for (AgentHook hook : hooks) {
+        for (IAgentHook hook : hooks) {
             ChatClientRequest modified = hook.beforeModelCall(current);
             if (modified != null) {
                 current = modified;
@@ -77,29 +92,83 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
         final ChatClientRequest finalRequest = current;
         Flux<ChatClientResponse> responses = chain.nextStream(finalRequest);
 
-        // afterModelCall: 在每个 response 上按 order 顺序执行
-        return responses.doOnNext(resp -> {
-            for (AgentHook hook : hooks) {
-                hook.afterModelCall(finalRequest, resp);
+        // 跟踪是否遇到 STOP
+        AtomicBoolean isStopped = new AtomicBoolean(false);
+        return responses
+                .doOnNext(resp -> {
+                    // afterModelCall: 在每个 response 上按 order 顺序执行
+                    for (IAgentHook hook : hooks) {
+                        hook.afterModelCall(finalRequest, resp);
+                    }
+                    if (resp.chatResponse() != null && resp.chatResponse().hasFinishReasons(Set.of("STOP"))) {
+                        isStopped.set(true);
+                    }
+                })
+                .doOnComplete(() -> {
+                    // 此时内层 Advisor（含 MessageChatMemoryAdvisor）的 doOnComplete 已执行完毕
+                    if (isStopped.get()) {
+                        afterConversationRound();
+                    }
+                });
+    }
+
+    private void beforeConversationRound(ChatClientRequest request) {
+        RuntimeContext ctx = (RuntimeContext) request.context().get("runtimeContext");
+        if (ctx == null) return;
+        for (IAgentHook hook : hooks) {
+            hook.beforeConversationRound(ctx);
+        }
+    }
+
+    private void afterConversationRound() {
+        for (IAgentHook hook : hooks) {
+            hook.afterConversationRound();
+        }
+    }
+
+    /**
+     * 委托所有 Hook 的 beforeToolCall，链式执行。
+     * <p>
+     * 任一 hook 返回 block 则立即停止，返回该 block 决策。
+     * hook 返回 proceed 时，其 input（非 null）会覆盖当前 input 传递给下一个 hook。
+     *
+     * @param toolName 工具名称
+     * @param input    原始输入参数（JSON 字符串）
+     * @param context  工具上下文
+     * @return 工具调用决策
+     */
+    public ToolCallDecision beforeToolCall(String toolName, String input, ToolContext context) {
+        String current = input;
+        for (IAgentHook hook : hooks) {
+            ToolCallDecision decision = hook.beforeToolCall(toolName, current, context);
+            if (!decision.proceed()) {
+                return decision;
             }
-        });
+            if (decision.input() != null) {
+                current = decision.input();
+            }
+        }
+        return ToolCallDecision.proceed(current);
     }
 
     /**
-     * 委托所有 Hook 的 beforeToolCall
+     * 委托所有 Hook 的 afterToolCall，链式执行。
+     * <p>
+     * hook 返回非 null 的 result 会覆盖当前 result 传递给下一个 hook。
+     *
+     * @param toolName 工具名称
+     * @param result   原始结果（JSON 字符串）
+     * @param context  工具上下文
+     * @return 修改后的结果
      */
-    public void beforeToolCall(String toolName, String input) {
-        for (AgentHook hook : hooks) {
-            hook.beforeToolCall(toolName, input);
+    public String afterToolCall(String toolName, String result, ToolContext context) {
+        String current = result;
+        for (IAgentHook hook : hooks) {
+            String modified = hook.afterToolCall(toolName, current, context);
+            if (modified != null) {
+                current = modified;
+            }
         }
-    }
-
-    /**
-     * 委托所有 Hook 的 afterToolCall
-     */
-    public void afterToolCall(String toolName, String result) {
-        for (AgentHook hook : hooks) {
-            hook.afterToolCall(toolName, result);
-        }
+        return current;
     }
 }

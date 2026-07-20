@@ -61,6 +61,27 @@ public class SkillManager {
         return sb.toString();
     }
 
+    /**
+     * 返回紧凑的技能列表（每个 skill 一行，描述截断到 40 字）。
+     * 用于上下文注入，减少 token 消耗。对标 Claude Code 的 1% 上下文预算策略。
+     */
+    public String getCompactListing() {
+        if (skills.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        skills.forEach((name, skill) -> {
+            sb.append("- ").append(name);
+            String desc = skill.description();
+            if (desc != null && !desc.isEmpty()) {
+                sb.append(": ");
+                sb.append(desc.length() > 40 ? desc.substring(0, 40) + "..." : desc);
+            }
+            sb.append("\n");
+        });
+        return sb.toString();
+    }
+
     public String getContent(String name) {
         Skill skill = skills.get(name);
         return skill != null ? skill.content() : null;

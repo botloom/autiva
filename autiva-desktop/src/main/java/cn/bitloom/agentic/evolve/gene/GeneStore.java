@@ -22,6 +22,12 @@ import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
+/**
+ * Gene 持久化管理。
+ * <p>
+ * 支持目录结构存储（每个 Gene 一个目录，含 gene.json），
+ * JGit 版本控制，ReentrantReadWriteLock 保证并发安全。
+ */
 @Slf4j
 @Component
 public class GeneStore {
@@ -43,8 +49,6 @@ public class GeneStore {
         try {
             Files.createDirectories(config.getEvolveDir());
             Files.createDirectories(config.getGenesDir());
-            Files.createDirectories(config.getMemoryDir());
-            Files.createDirectories(config.getExecutionsDir());
 
             if (!Files.exists(config.getGenesFile())) {
                 String seed = readClasspathResource("evolve/genes.seed.json");
@@ -56,20 +60,11 @@ public class GeneStore {
                 }
             }
 
-            if (!Files.exists(config.getCapsulesFile())) {
-                Files.writeString(config.getCapsulesFile(), "[]", StandardCharsets.UTF_8);
-            }
             if (!Files.exists(config.getEventsFile())) {
                 Files.writeString(config.getEventsFile(), "", StandardCharsets.UTF_8);
             }
             if (!Files.exists(config.getCandidatesFile())) {
                 Files.writeString(config.getCandidatesFile(), "", StandardCharsets.UTF_8);
-            }
-            if (!Files.exists(config.getRoutingFile())) {
-                Files.writeString(config.getRoutingFile(), "[]", StandardCharsets.UTF_8);
-            }
-            if (!Files.exists(config.getMemoryRulesFile())) {
-                Files.writeString(config.getMemoryRulesFile(), "", StandardCharsets.UTF_8);
             }
         } catch (IOException e) {
             log.error("[Evolve] 初始化存储失败", e);
@@ -98,18 +93,38 @@ public class GeneStore {
         return loadGenes().stream().filter(Gene::enabled).toList();
     }
 
-    public List<Capsule> loadCapsules() {
-        lock.readLock().lock();
-        try {
-            String json = Files.readString(config.getCapsulesFile(), StandardCharsets.UTF_8);
-            List<Capsule> capsules = mapper.readValue(json, new TypeReference<>() {});
-            return capsules != null ? capsules : Collections.emptyList();
-        } catch (IOException e) {
-            log.error("[Evolve] 加载胶囊失败", e);
-            return Collections.emptyList();
-        } finally {
-            lock.readLock().unlock();
-        }
+    /**
+     * 按类型查询 Gene（如所有 PROMPT 类型、所有 RUBRIC 类型）。
+     */
+    public List<Gene> findByType(GeneType type) {
+        return loadGenes().stream()
+                .filter(g -> g.type() == type)
+                .toList();
+    }
+
+    /**
+     * 按目标对象查询 Gene（如某 Agent 的所有 Gene、某工具的所有 Gene）。
+     */
+    public List<Gene> findByTarget(String targetId) {
+        return loadGenes().stream()
+                .filter(g -> targetId.equals(g.targetId()))
+                .toList();
+    }
+
+    /**
+     * 按类型 + 目标查询 Gene。
+     */
+    public List<Gene> findByTypeAndTarget(GeneType type, String targetId) {
+        return loadGenes().stream()
+                .filter(g -> g.type() == type && targetId.equals(g.targetId()))
+                .toList();
+    }
+
+    public Gene findById(String geneId) {
+        return loadGenes().stream()
+                .filter(g -> geneId.equals(g.id()))
+                .findFirst()
+                .orElse(null);
     }
 
     public void upsertGene(Gene gene) {
@@ -149,18 +164,6 @@ public class GeneStore {
                     .toList();
             writeGenes(updated);
             log.info("[Evolve] 基因 {} 已{}", geneId, enabled ? "启用" : "禁用");
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    public void deleteCapsule(String capsuleId) {
-        lock.writeLock().lock();
-        try {
-            List<Capsule> capsules = new ArrayList<>(loadCapsulesInternal());
-            capsules.removeIf(c -> c.id().equals(capsuleId));
-            writeCapsules(capsules);
-            log.info("[Evolve] 胶囊已删除: {}", capsuleId);
         } finally {
             lock.writeLock().unlock();
         }
@@ -206,28 +209,6 @@ public class GeneStore {
         }
     }
 
-    public String loadGeneCode(String geneId) {
-        Path codeFile = config.getGenesDir().resolve(geneId).resolve("impl.java");
-        try {
-            if (Files.exists(codeFile)) {
-                return Files.readString(codeFile, StandardCharsets.UTF_8);
-            }
-        } catch (IOException e) {
-            log.warn("[Evolve] 加载基因代码失败: {}", geneId, e);
-        }
-        return null;
-    }
-
-    public void saveGeneCode(String geneId, String code) {
-        try {
-            Path geneDir = config.getGenesDir().resolve(geneId);
-            Files.createDirectories(geneDir);
-            Files.writeString(geneDir.resolve("impl.java"), code, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("[Evolve] 保存基因代码失败: {}", geneId, e);
-        }
-    }
-
     public List<GeneRepository.CommitInfo> getGeneHistory(String geneId) {
         return geneRepository.history(geneId);
     }
@@ -248,6 +229,7 @@ public class GeneStore {
         try (Stream<Path> dirs = Files.list(config.getGenesDir())) {
             return dirs
                     .filter(Files::isDirectory)
+                    .filter(p -> !p.getFileName().toString().equals(".git"))
                     .map(this::loadGeneFromDir)
                     .filter(Objects::nonNull)
                     .toList();
@@ -264,12 +246,7 @@ public class GeneStore {
         }
         try {
             String json = Files.readString(metaFile, StandardCharsets.UTF_8);
-            Gene gene = mapper.readValue(json, Gene.class);
-            String code = loadGeneCode(gene.id());
-            if (code != null && gene.code() == null) {
-                return gene.withCode(code);
-            }
-            return gene;
+            return mapper.readValue(json, Gene.class);
         } catch (IOException e) {
             log.warn("[Evolve] 加载基因目录失败: {}", geneDir, e);
             return null;
@@ -284,10 +261,6 @@ public class GeneStore {
 
             String metaJson = mapper.writeValueAsString(gene);
             Files.writeString(geneDir.resolve("gene.json"), metaJson, StandardCharsets.UTF_8);
-
-            if (gene.code() != null && !gene.code().isEmpty()) {
-                Files.writeString(geneDir.resolve("impl.java"), gene.code(), StandardCharsets.UTF_8);
-            }
 
             Path versionFile = geneDir.resolve("versions").resolve("v" + gene.version() + ".json");
             if (!Files.exists(versionFile)) {
@@ -323,16 +296,6 @@ public class GeneStore {
         }
     }
 
-    private List<Capsule> loadCapsulesInternal() {
-        try {
-            String json = Files.readString(config.getCapsulesFile(), StandardCharsets.UTF_8);
-            List<Capsule> capsules = mapper.readValue(json, new TypeReference<>() {});
-            return capsules != null ? capsules : Collections.emptyList();
-        } catch (IOException e) {
-            return Collections.emptyList();
-        }
-    }
-
     private void writeGenes(List<Gene> genes) {
         try {
             String json = mapper.writeValueAsString(genes);
@@ -340,16 +303,6 @@ public class GeneStore {
         } catch (IOException e) {
             log.error("[Evolve] 写入基因失败", e);
             throw EvolveException.storageError("写入基因失败", e);
-        }
-    }
-
-    private void writeCapsules(List<Capsule> capsules) {
-        try {
-            String json = mapper.writeValueAsString(capsules);
-            Files.writeString(config.getCapsulesFile(), json, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("[Evolve] 写入胶囊失败", e);
-            throw EvolveException.storageError("写入胶囊失败", e);
         }
     }
 

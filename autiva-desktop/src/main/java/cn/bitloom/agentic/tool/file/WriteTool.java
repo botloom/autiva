@@ -25,14 +25,7 @@ import java.util.Map;
 public class WriteTool extends AbstractTool<WriteTool.Input> {
 
 	private static final String DESCRIPTION = """
-			将文件写入本地文件系统。
-
-			用法：
-			- 如果提供的路径已有文件，此工具将覆盖现有文件。
-			- 如果是现有文件，你必须先使用Read工具读取文件内容。如果你没有先读取文件，此工具将失败。
-			- 始终优先编辑代码库中的现有文件。除非明确需要，否则不要创建新文件。
-			- 不要主动创建文档文件（*.md）或README文件。仅在用户明确请求时才创建文档文件。
-			- 仅在用户明确请求时使用表情符号。除非被要求，否则避免向文件写入表情符号。
+			将文件写入磁盘，覆盖已有文件。编辑现有文件前必须先 Read。优先编辑现有文件。不要主动创建文档文件(*.md/README)。
 			""";
 
 	private final DiffService diffService;

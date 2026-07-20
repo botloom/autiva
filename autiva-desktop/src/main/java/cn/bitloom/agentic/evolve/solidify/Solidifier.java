@@ -1,98 +1,64 @@
 package cn.bitloom.agentic.evolve.solidify;
 
 import cn.bitloom.agentic.evolve.config.EvolveConfig;
-import cn.bitloom.agentic.evolve.gene.Capsule;
 import cn.bitloom.agentic.evolve.gene.Gene;
 import cn.bitloom.agentic.evolve.gene.GeneStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
+/**
+ * 固化器。
+ * <p>
+ * 根据 L2 校验结果更新 Gene 的表观遗传值：
+ * - 校验通过率提升 → epigeneticBoost 增强
+ * - 校验通过率下降 → epigeneticBoost 衰减
+ */
 @Slf4j
 @Component
 public class Solidifier {
 
     private final GeneStore geneStore;
     private final EvolveConfig config;
-    private final CanaryCheck canaryCheck;
 
     public Solidifier(GeneStore geneStore, EvolveConfig config) {
         this.geneStore = geneStore;
         this.config = config;
-        this.canaryCheck = new CanaryCheck();
     }
 
     public SolidifyResult solidify(EvolutionEvent event) {
-        CanaryCheck.CanaryResult canary = canaryCheck.check();
-        if (!canary.passed()) {
-            log.warn("[Evolve] 固化失败: 金丝雀检查未通过 - {}", canary.message());
-            return new SolidifyResult(false, "金丝雀检查未通过: " + canary.message());
-        }
-
-        if (!event.isSuccess()) {
-            geneStore.appendEvent(event);
-            updateEpigeneticScore(event.geneId(), false);
-            return new SolidifyResult(false, "事件未成功，不进行固化");
-        }
-
         geneStore.appendEvent(event);
-        updateEpigeneticScore(event.geneId(), true);
 
-        List<EvolutionEvent> recentEvents = geneStore.readRecentEvents(5);
-        long recentSuccesses = recentEvents.stream()
-                .filter(EvolutionEvent::isSuccess)
-                .filter(e -> e.geneId() != null && e.geneId().equals(event.geneId()))
-                .count();
-
-        if (recentSuccesses >= 3) {
-            createCapsule(event);
+        if (event.geneId() == null) {
+            return new SolidifyResult(false, "事件无关联基因");
         }
 
-        log.info("[Evolve] 固化成功: 事件={}, 基因={}", event.id(), event.geneId());
-        return new SolidifyResult(true, "固化成功");
+        if (event.isSuccess()) {
+            updateEpigeneticScore(event.geneId(), true);
+            log.info("[Evolve] 固化成功: 事件={}, 基因={}", event.id(), event.geneId());
+            return new SolidifyResult(true, "固化成功");
+        } else {
+            updateEpigeneticScore(event.geneId(), false);
+            return new SolidifyResult(false, "事件未成功，已衰减表观遗传值");
+        }
     }
 
     private void updateEpigeneticScore(String geneId, boolean success) {
-        if (geneId == null) return;
-
-        List<Gene> genes = geneStore.loadGenes();
-        for (Gene gene : genes) {
-            if (gene.id().equals(geneId)) {
-                double newBoost;
-                if (success) {
-                    newBoost = gene.epigeneticBoost() * config.getEpigeneticBoostOnSuccess();
-                    newBoost = Math.min(newBoost, 5.0);
-                } else {
-                    newBoost = gene.epigeneticBoost() * config.getEpigeneticDecay();
-                    newBoost = Math.max(newBoost, 0.1);
-                }
-                geneStore.upsertGene(gene.withEpigeneticBoost(newBoost));
-                break;
-            }
+        Gene gene = geneStore.findById(geneId);
+        if (gene == null) {
+            return;
         }
-    }
 
-    private void createCapsule(EvolutionEvent event) {
-        String capsuleId = "caps_" + UUID.randomUUID().toString().substring(0, 8);
-        Capsule capsule = new Capsule(
-                capsuleId,
-                List.of(event.geneId()),
-                Map.of(
-                        "intent", event.intent() != null ? event.intent() : "",
-                        "source", "auto_solidify"
-                ),
-                event.outcome() != null ? event.outcome().score() : 0.5,
-                System.currentTimeMillis()
-        );
+        double newBoost;
+        if (success) {
+            newBoost = gene.epigeneticBoost() * config.getEpigeneticBoostOnSuccess();
+            newBoost = Math.min(newBoost, 5.0);
+        } else {
+            newBoost = gene.epigeneticBoost() * config.getEpigeneticDecay();
+            newBoost = Math.max(newBoost, 0.1);
+        }
 
-        List<Capsule> existing = geneStore.loadCapsules();
-        List<Capsule> updated = new ArrayList<>(existing);
-        updated.add(capsule);
-        log.info("[Evolve] 自动创建胶囊: {}", capsuleId);
+        geneStore.upsertGene(gene.withEpigeneticBoost(newBoost));
+        log.info("[Evolve] 表观遗传值更新: {} -> {} ({})", geneId, String.format("%.2f", newBoost), success ? "增强" : "衰减");
     }
 
     public record SolidifyResult(boolean success, String message) {

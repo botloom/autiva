@@ -1,16 +1,20 @@
 package cn.bitloom.agentic.agent;
 
+import cn.bitloom.agentic.agent.advisor.GeneInjectAdvisor;
 import cn.bitloom.agentic.agent.advisor.HookAdvisor;
 import cn.bitloom.agentic.agent.advisor.LoggingAdvisor;
 import cn.bitloom.agentic.agent.advisor.ProactiveContextAdvisor;
 import cn.bitloom.agentic.agent.advisor.UsageAdvisor;
-import cn.bitloom.agentic.hook.AgentHook;
+import cn.bitloom.agentic.evolve.inject.GeneInjector;
+import cn.bitloom.agentic.hook.IAgentHook;
+import cn.bitloom.agentic.trace.TraceHook;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.AutivaToolCallingManager;
 import cn.bitloom.agentic.util.MessageUtil;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
@@ -21,7 +25,6 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.ToolCallback;
-import org.jspecify.annotations.NonNull;
 import reactor.core.publisher.Flux;
 
 import java.nio.file.Path;
@@ -50,10 +53,10 @@ public class Agent {
     @Getter
     private final @NonNull List<ToolCallback> tools;
     @Getter
-    private final @NonNull List<AgentHook> hooks;
+    private final @NonNull List<IAgentHook> hooks;
 
     private Agent(@NonNull String name, @NonNull AgentDefinition definition, @NonNull ChatClient chatClient,
-                  @NonNull List<ToolCallback> tools, @NonNull List<AgentHook> hooks) {
+                  @NonNull List<ToolCallback> tools, @NonNull List<IAgentHook> hooks) {
         this.name = name;
         this.definition = definition;
         this.chatClient = chatClient;
@@ -128,7 +131,10 @@ public class Agent {
         private String systemPrompt;
         private ChatModel model;
         private List<ToolCallback> tools = new ArrayList<>();
-        private List<AgentHook> hooks = new ArrayList<>();
+        private List<IAgentHook> hooks = new ArrayList<>();
+        private IAgentHook verificationHook;
+        private TraceHook traceHook;
+        private GeneInjector geneInjector;
         private boolean enableLogging = true;
         private boolean enableMemory = false;
         private ChatMemory chatMemory;
@@ -162,8 +168,32 @@ public class Agent {
             return this;
         }
 
-        public Builder hooks(List<AgentHook> hooks) {
+        public Builder hooks(List<IAgentHook> hooks) {
             this.hooks = hooks;
+            return this;
+        }
+
+        /**
+         * 设置 L2 校验 Hook。仅在 AgentDefinition.verification().enabled() 时生效。
+         */
+        public Builder verificationHook(IAgentHook verificationHook) {
+            this.verificationHook = verificationHook;
+            return this;
+        }
+
+        /**
+         * 设置 Trace 记录 Hook。非 null 时自动注册到 hooks 列表。
+         */
+        public Builder traceHook(TraceHook traceHook) {
+            this.traceHook = traceHook;
+            return this;
+        }
+
+        /**
+         * 设置 Gene 注入器。非 null 且 enableCompact=true 时，自动注册 GeneInjectAdvisor。
+         */
+        public Builder geneInjector(GeneInjector geneInjector) {
+            this.geneInjector = geneInjector;
             return this;
         }
 
@@ -240,11 +270,24 @@ public class Agent {
                                 .memoryFilePath(this.memoryFilePath)
                                 .build()
                 );
+                // Gene 注入 Advisor（L4 优化结果注入到 SystemMessage）
+                if (this.geneInjector != null) {
+                    builder.defaultAdvisors(new GeneInjectAdvisor(this.geneInjector));
+                }
             }
-            if (!this.hooks.isEmpty()) {
-                builder.defaultAdvisors(HookAdvisor.builder().hooks(this.hooks).build());
+
+            // 合并 hooks：用户自定义 hooks + TraceHook + VerificationHook
+            List<IAgentHook> allHooks = new ArrayList<>(this.hooks);
+            if (this.traceHook != null) {
+                allHooks.add(this.traceHook);
             }
-            return new Agent(name, definition, builder.build(), tools, hooks);
+            if (this.verificationHook != null && this.definition != null && this.definition.verification().enabled()) {
+                allHooks.add(this.verificationHook);
+            }
+            if (!allHooks.isEmpty()) {
+                builder.defaultAdvisors(HookAdvisor.builder().hooks(allHooks).build());
+            }
+            return new Agent(name, definition, builder.build(), tools, allHooks);
         }
     }
 }

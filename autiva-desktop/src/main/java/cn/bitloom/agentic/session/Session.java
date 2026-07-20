@@ -1,7 +1,5 @@
 package cn.bitloom.agentic.session;
 
-import cn.bitloom.agentic.agent.Agent;
-import cn.bitloom.agentic.memory.MemoryManager;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
@@ -61,13 +59,24 @@ public class Session {
     // ===== 压缩上下文 =====
 
     @Builder.Default
-    private int contextCapacity = 64000;
+    private int contextCapacity = 128000;
 
     @Builder.Default
     private double compactionThreshold = 0.8;
 
     @Builder.Default
     private int currentContextLength = 0;
+
+    // ===== 上下文注入控制 =====
+
+    /** 标记动态上下文是否已注入到当前对话 */
+    @JsonIgnore
+    @Builder.Default
+    private boolean contextInjected = false;
+
+    /** memory.md 内容的哈希值，用于检测变化 */
+    @JsonIgnore
+    private String lastMemoryHash;
 
     // ===== 元数据 =====
 
@@ -77,11 +86,6 @@ public class Session {
     private boolean shutdownInterrupted = false;
 
     // ===== 瞬态字段（不序列化） =====
-
-    @Getter
-    @Setter
-    @JsonIgnore
-    private Agent agent;
 
     @Getter
     @Setter
@@ -99,11 +103,6 @@ public class Session {
     @JsonIgnore
     @Builder.Default
     private int memoryBaseOffset = 0;
-
-    @Getter
-    @Setter
-    @JsonIgnore
-    private MemoryManager memoryManager;
 
     public Boolean isStop() {
         return this.getSessionState() == SessionState.STOPPED;
