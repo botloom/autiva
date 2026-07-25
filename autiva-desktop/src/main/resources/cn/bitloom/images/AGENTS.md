@@ -47,6 +47,30 @@
 
 ### UI 图标
 
+#### work.svg
+对话/工作模式图标（聊天气泡，currentColor 描边）。
+
+**用途：**
+- 侧边栏智能体分段切换按钮 "Work" 段图标
+- 表示 default 智能体的对话/工作模式
+
+**设计：**
+- 聊天气泡轮廓（圆角矩形 + 底部尖角）
+- stroke-width 1.8，stroke-linecap round，stroke-linejoin round
+- 颜色通过 CSS `.sidebar__mode-icon` / `.sidebar__mode-btn:selected .sidebar__mode-icon` 控制
+
+#### code.svg
+代码模式图标（尖括号 `</>`，currentColor 描边）。
+
+**用途：**
+- 侧边栏智能体分段切换按钮 "Code" 段图标
+- 表示 coder 智能体的编码模式
+
+**设计：**
+- 左尖括号 `<` + 右尖括号 `>`（polyline）
+- stroke-width 1.8，stroke-linecap round，stroke-linejoin round
+- 颜色通过 CSS `.sidebar__mode-icon` / `.sidebar__mode-btn:selected .sidebar__mode-icon` 控制
+
 #### arrow-up.svg
 向上箭头图标。
 

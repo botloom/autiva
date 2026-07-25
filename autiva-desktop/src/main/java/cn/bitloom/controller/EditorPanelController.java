@@ -419,57 +419,150 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 渲染 diff 到指定面板（单栏行内高亮，类似 IDEA in-editor diff）
-     * - 显示新版本内容，ADD 行绿色背景，REMOVE 行以红色背景+删除线标记插入
-     * - 单列新版本行号（删除标记段落无行号）
-     * - 顶部悬浮横幅（文件名 + 撤销/保留）
+     * 渲染 diff 到指定面板（左右双栏对比视图，类似 IDEA）
+     * - 左侧 CodeArea 显示旧版本内容，REMOVE 行红色背景
+     * - 右侧 CodeArea 显示新版本内容，ADD 行绿色背景
+     * - 两侧段落按 hunk 对齐（ADD 行在左侧留空行，REMOVE 行在右侧留空行）
+     * - 双列行号：左侧旧版本行号，右侧新版本行号
+     * - 两侧分别应用语法高亮，同步滚动
+     * 直接使用 DiffEvent 中的原始 FileDiff，不重新计算（diff 显示工具调用时的快照）
      */
     private void renderDiffIntoPanel(FileDiff diff, VBox targetPanel) {
-        // 用 JGit 重新计算 diff，因为可能打开的是历史对话，文件已被进一步修改
-        FileDiff freshDiff = diffService.recomputeDiff(diff);
+        FileDiff freshDiff = diff;
 
+        // 构建左右两侧的内容、行号、段落样式
+        StringBuilder leftText = new StringBuilder();
+        StringBuilder rightText = new StringBuilder();
+        List<Integer> leftLineNumbers = new ArrayList<>();
+        List<Integer> rightLineNumbers = new ArrayList<>();
+        List<String> leftParagraphStyles = new ArrayList<>();
+        List<String> rightParagraphStyles = new ArrayList<>();
+
+        if (freshDiff.hunks() != null) {
+            for (FileDiff.Hunk hunk : freshDiff.hunks()) {
+                int currentOldLine = hunk.oldStart() - 1; // oldStart 是 1-based
+                int currentNewLine = hunk.newStart() - 1; // newStart 是 1-based
+                if (hunk.lines() != null) {
+                    for (FileDiff.DiffLine line : hunk.lines()) {
+                        switch (line.type()) {
+                            case REMOVE -> {
+                                currentOldLine++;
+                                leftText.append(line.content()).append("\n");
+                                leftLineNumbers.add(currentOldLine);
+                                leftParagraphStyles.add("diff-line-remove-left");
+                                rightText.append("\n");
+                                rightLineNumbers.add(0);
+                                rightParagraphStyles.add("diff-line-empty");
+                            }
+                            case ADD -> {
+                                currentNewLine++;
+                                leftText.append("\n");
+                                leftLineNumbers.add(0);
+                                leftParagraphStyles.add("diff-line-empty");
+                                rightText.append(line.content()).append("\n");
+                                rightLineNumbers.add(currentNewLine);
+                                rightParagraphStyles.add("diff-line-add-right");
+                            }
+                            case CONTEXT -> {
+                                currentOldLine++;
+                                currentNewLine++;
+                                leftText.append(line.content()).append("\n");
+                                leftLineNumbers.add(currentOldLine);
+                                leftParagraphStyles.add(null);
+                                rightText.append(line.content()).append("\n");
+                                rightLineNumbers.add(currentNewLine);
+                                rightParagraphStyles.add(null);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        CodeArea leftArea = buildDiffCodeArea(leftText.toString(), leftLineNumbers, leftParagraphStyles, freshDiff.filePath());
+        CodeArea rightArea = buildDiffCodeArea(rightText.toString(), rightLineNumbers, rightParagraphStyles, freshDiff.filePath());
+
+        // 同步滚动：用标志位防止循环触发
+        final boolean[] syncing = {false};
+        leftArea.estimatedScrollYProperty().addListener((obs, old, val) -> {
+            if (syncing[0]) return;
+            syncing[0] = true;
+            rightArea.estimatedScrollYProperty().setValue(val.doubleValue());
+            syncing[0] = false;
+        });
+        rightArea.estimatedScrollYProperty().addListener((obs, old, val) -> {
+            if (syncing[0]) return;
+            syncing[0] = true;
+            leftArea.estimatedScrollYProperty().setValue(val.doubleValue());
+            syncing[0] = false;
+        });
+
+        VirtualizedScrollPane<CodeArea> leftScroll = new VirtualizedScrollPane<>(leftArea);
+        leftScroll.getStyleClass().add("editor-panel__code-scroll");
+        VirtualizedScrollPane<CodeArea> rightScroll = new VirtualizedScrollPane<>(rightArea);
+        rightScroll.getStyleClass().add("editor-panel__code-scroll");
+
+        VBox leftBox = new VBox(leftScroll);
+        leftBox.getStyleClass().add("editor-panel__diff-left");
+        VBox.setVgrow(leftScroll, Priority.ALWAYS);
+        VBox rightBox = new VBox(rightScroll);
+        rightBox.getStyleClass().add("editor-panel__diff-right");
+        VBox.setVgrow(rightScroll, Priority.ALWAYS);
+
+        SplitPane splitPane = new SplitPane(leftBox, rightBox);
+        splitPane.getStyleClass().add("editor-panel__diff-split");
+        splitPane.setDividerPositions(0.5);
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
+
+        // 悬浮横幅（文件名 + 撤销/保留）叠加在右侧 CodeArea 上
+        HBox banner = createDiffBanner(freshDiff);
+        banner.setMaxWidth(Region.USE_PREF_SIZE);
+        banner.setMaxHeight(Region.USE_PREF_SIZE);
+
+        StackPane stack = new StackPane(splitPane, banner);
+        StackPane.setAlignment(banner, Pos.TOP_CENTER);
+        StackPane.setMargin(banner, new javafx.geometry.Insets(8, 12, 0, 12));
+        VBox.setVgrow(stack, Priority.ALWAYS);
+
+        targetPanel.getChildren().setAll(stack);
+        VBox.setVgrow(stack, Priority.ALWAYS);
+
+        // 右键菜单复用 CodeArea 版本
+        setupCodeAreaContextMenu(leftArea);
+        setupCodeAreaContextMenu(rightArea);
+    }
+
+    /**
+     * 构建 diff 用的 CodeArea：应用行号工厂、段落样式、语法高亮
+     */
+    private CodeArea buildDiffCodeArea(String text, List<Integer> lineNumbers, List<String> paragraphStyles, String filePath) {
         CodeArea codeArea = new CodeArea();
         codeArea.setEditable(false);
         codeArea.setShowCaret(Caret.CaretVisibility.ON);
         codeArea.getStyleClass().add("editor-panel__diff-area");
 
-        // 每个段落对应的新版本行号（0 表示无行号，如删除标记段落）
-        List<Integer> newLineNumbers = new ArrayList<>();
-        int paragraph = 0;
+        // 一次性设置所有文本，避免逐行追加导致的段落索引对齐问题
+        if (text.endsWith("\n")) {
+            text = text.substring(0, text.length() - 1);
+        }
+        codeArea.replaceText(text);
 
-        if (freshDiff.hunks() != null) {
-            for (FileDiff.Hunk hunk : freshDiff.hunks()) {
-                int currentNewLine = hunk.newStart() - 1; // newStart 是 1-based
-                if (hunk.lines() != null) {
-                    for (FileDiff.DiffLine line : hunk.lines()) {
-                        codeArea.appendText(line.content() + "\n");
-                        switch (line.type()) {
-                            case ADD -> {
-                                currentNewLine++;
-                                codeArea.setParagraphStyle(paragraph, List.of("diff-line-add"));
-                                newLineNumbers.add(currentNewLine);
-                            }
-                            case REMOVE -> {
-                                codeArea.setParagraphStyle(paragraph, List.of("diff-line-remove-marker"));
-                                newLineNumbers.add(0);
-                            }
-                            case CONTEXT -> {
-                                currentNewLine++;
-                                newLineNumbers.add(currentNewLine);
-                            }
-                        }
-                        paragraph++;
-                    }
-                }
+        // 设置段落样式（背景高亮）
+        int paragraphCount = codeArea.getParagraphs().size();
+        for (int i = 0; i < paragraphCount && i < paragraphStyles.size(); i++) {
+            String style = paragraphStyles.get(i);
+            if (style != null) {
+                codeArea.setParagraphStyle(i, List.of(style));
             }
         }
+
         codeArea.moveTo(0);
 
-        // 单列新版本行号工厂（删除标记段落显示空）
+        // 行号工厂
         codeArea.setParagraphGraphicFactory(idx -> {
             Label label = new Label();
-            if (idx >= 0 && idx < newLineNumbers.size()) {
-                int lineNo = newLineNumbers.get(idx);
+            if (idx >= 0 && idx < lineNumbers.size()) {
+                int lineNo = lineNumbers.get(idx);
                 if (lineNo > 0) {
                     label.setText(String.valueOf(lineNo));
                 }
@@ -481,33 +574,15 @@ public class EditorPanelController implements Initializable {
             return label;
         });
 
-        // 应用语法高亮（字符级样式，与段落级背景样式叠加）
+        // 语法高亮
         try {
-            Path filePath = Paths.get(freshDiff.filePath());
-            SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(filePath);
+            SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(Paths.get(filePath));
             highlighter.apply(codeArea, codeArea.getText());
         } catch (Exception e) {
-            log.warn("diff 语法高亮失败: {}", freshDiff.filePath(), e);
+            log.warn("diff 语法高亮失败: {}", filePath, e);
         }
 
-        VirtualizedScrollPane<CodeArea> scrollPane = new VirtualizedScrollPane<>(codeArea);
-        scrollPane.getStyleClass().add("editor-panel__code-scroll");
-
-        // 悬浮横幅（文件名 + 撤销/保留）
-        HBox banner = createDiffBanner(freshDiff);
-        banner.setMaxWidth(Region.USE_PREF_SIZE);
-        banner.setMaxHeight(Region.USE_PREF_SIZE);
-
-        StackPane stack = new StackPane(scrollPane, banner);
-        StackPane.setAlignment(banner, Pos.TOP_CENTER);
-        StackPane.setMargin(banner, new javafx.geometry.Insets(8, 12, 0, 12));
-        VBox.setVgrow(stack, Priority.ALWAYS);
-
-        targetPanel.getChildren().setAll(stack);
-        VBox.setVgrow(stack, Priority.ALWAYS);
-
-        // 右键菜单复用 CodeArea 版本
-        setupCodeAreaContextMenu(codeArea);
+        return codeArea;
     }
 
     /**

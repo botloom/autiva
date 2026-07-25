@@ -19,8 +19,9 @@
     </VBox>
 
     <ScrollPane fx:id="chatScrollPane"
-                visible="false" managed="false" VBox.vgrow="ALWAYS"
+                visible="false" managed="false"
                 maxWidth="1000" prefWidth="600" minWidth="300"
+                VBox.vgrow="ALWAYS"
                 fitToWidth="true"
                 styleClass="chat-scroll-pane"
                 hbarPolicy="NEVER"
@@ -28,13 +29,23 @@
         <VBox fx:id="chatContainer" styleClass="chat-container"/>
     </ScrollPane>
 
-    <ScrollPane fx:id="diffFilesScroll" styleClass="home-page__diff-files-scroll"
-                visible="false" managed="false"
-                prefWidth="600" maxWidth="1000" minWidth="300"
-                maxHeight="200"
-                fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
-        <VBox fx:id="diffFilesBar" styleClass="home-page__diff-files-bar"/>
-    </ScrollPane>
+    <VBox fx:id="diffReviewBar" styleClass="home-page__diff-review-bar"
+          visible="false" managed="false"
+          maxWidth="1000" prefWidth="600" minWidth="300"
+          VBox.vgrow="NEVER">
+        <ScrollPane fx:id="diffReviewListScroll" styleClass="home-page__diff-review-list-scroll"
+                    visible="false" managed="false"
+                    fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED"
+                    maxHeight="244">
+            <VBox fx:id="diffReviewList" styleClass="home-page__diff-review-list"/>
+        </ScrollPane>
+        <HBox fx:id="diffReviewHeader" styleClass="home-page__diff-review-header">
+            <Label fx:id="diffReviewCount" styleClass="home-page__diff-review-count" text="0 个文件待审查"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button fx:id="diffReviewRejectAllBtn" styleClass="home-page__diff-review-btn,home-page__diff-review-btn--reject" text="全部撤销"/>
+            <Button fx:id="diffReviewApproveAllBtn" styleClass="home-page__diff-review-btn,home-page__diff-review-btn--approve" text="全部保留"/>
+        </HBox>
+    </VBox>
 
     <VBox fx:id="sendBox"
           styleClass="home-page__send-box"
@@ -67,14 +78,6 @@
                     <Insets bottom="8"/>
                 </HBox.margin>
             </Button>
-            <MenuButton fx:id="agentSelector" styleClass="home-page__agent-menu-btn" prefHeight="37">
-                <graphic>
-                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/robot.svg"/>
-                </graphic>
-                <HBox.margin>
-                    <Insets bottom="8"/>
-                </HBox.margin>
-            </MenuButton>
             <Button fx:id="canvasButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">
                 <graphic>
                     <SvgImageView fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/canvas.svg"/>

@@ -120,7 +120,7 @@ Diff 事件（从 Agent → UI），当 DiffService 生成新的 Diff 时发布�
 **静态工厂方法：**
 - `of(sessionId, diff)`: 创建 Diff 事件（sessionId 可为 null，因为 diff 由工具调用产生，不绑定特定 session）
 
-**流转路径：** DiffService.generateDiff() → EventBus.publishOut() → RightPanelController.subscribeDiffEvents() → 更新 diff 列表
+**流转路径：** DiffService.generateDiff() → EventBus.publishOut() → HomePageController.subscribeDiffEvents() → 直接使用事件中的 FileDiff 数据追加卡片到 diff 文件卡片条
 
 ### UICardEvent
 UI 卡片事件（TaskCard / QuestionCard），支持事件化驱动和历史回放。

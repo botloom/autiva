@@ -2,8 +2,8 @@ package cn.bitloom.controller;
 
 import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.session.Session;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
+import cn.bitloom.agentic.session.Session;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.router.RouteConfig;
@@ -13,9 +13,7 @@ import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
+import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -47,6 +45,12 @@ public class SideBarController implements Initializable, PageHolder {
     @FXML
     private VBox sideBar;
     @FXML
+    private HBox modeSwitcher;
+    @FXML
+    private ToggleButton defaultModeBtn;
+    @FXML
+    private ToggleButton coderModeBtn;
+    @FXML
     private HBox homeOption;
     @FXML
     private HBox agentOption;
@@ -74,6 +78,43 @@ public class SideBarController implements Initializable, PageHolder {
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         this.hide();
+
+        // ===== 智能体模式分段切换按钮 =====
+        ToggleGroup modeGroup = new ToggleGroup();
+        this.defaultModeBtn.setToggleGroup(modeGroup);
+        this.coderModeBtn.setToggleGroup(modeGroup);
+        // 初始选中态：根据 Store.currentAgent 决定
+        if ("coder".equals(Store.currentAgent.get())) {
+            this.coderModeBtn.setSelected(true);
+        } else {
+            this.defaultModeBtn.setSelected(true);
+        }
+        // 点击切换：default 段 → switchAgent("default")；coder 段 → switchAgent("coder")
+        // 同时重置 UI 并导航到首页（与"新聊天"按钮行为一致）
+        this.defaultModeBtn.setOnAction(e -> {
+            homePageViewModel.switchAgent("default");
+            resetChatUI();
+            if (this.indexController != null) {
+                this.indexController.navigate(RouteConfig.Path.HOME);
+            }
+        });
+        this.coderModeBtn.setOnAction(e -> {
+            homePageViewModel.switchAgent("coder");
+            resetChatUI();
+            if (this.indexController != null) {
+                this.indexController.navigate(RouteConfig.Path.HOME);
+            }
+        });
+        // 监听 Store.currentAgent 变化，同步选中态（切换历史会话时触发）
+        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
+            Platform.runLater(() -> {
+                if ("coder".equals(newVal)) {
+                    if (!coderModeBtn.isSelected()) coderModeBtn.setSelected(true);
+                } else {
+                    if (!defaultModeBtn.isSelected()) defaultModeBtn.setSelected(true);
+                }
+            });
+        });
 
         this.routeOptionMap = new LinkedHashMap<>();
         this.routeOptionMap.put(RouteConfig.Path.HOME, this.homeOption);
@@ -107,6 +148,11 @@ public class SideBarController implements Initializable, PageHolder {
             Platform.runLater(this::refreshHistoryList);
         });
 
+        // 监听智能体切换，刷新历史列表（按 agentId 过滤）
+        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
+            Platform.runLater(this::refreshHistoryList);
+        });
+
         // 监听刷新信号（聊天过程中触发标题更新）
         Store.refreshHistory.addListener((obs, oldVal, newVal) -> {
             Platform.runLater(this::refreshHistoryList);
@@ -124,7 +170,10 @@ public class SideBarController implements Initializable, PageHolder {
     }
 
     public void refreshHistoryList() {
-        List<Session> sessions = fileSystemSessionManager.getDesktopSessions();
+        String currentAgent = Store.currentAgent.get();
+        List<Session> sessions = fileSystemSessionManager.getDesktopSessions().stream()
+                .filter(s -> currentAgent == null || currentAgent.equals(s.getAgentId()))
+                .toList();
         String currentSessionId = Store.currentSessionId.get();
 
         // 移除已删除的 session 对应的项

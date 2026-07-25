@@ -1,6 +1,5 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.diff.DiffService;
 import cn.bitloom.agentic.diff.FileDiff;
 import cn.bitloom.agentic.event.DiffEvent;
@@ -41,6 +40,7 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
 import javafx.scene.text.Text;
@@ -55,11 +55,9 @@ import reactor.core.Disposable;
 
 import java.io.File;
 import java.net.URL;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
-import java.util.Set;
 
 @Slf4j
 @Component
@@ -91,11 +89,19 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private VBox chatContainer;
     @FXML
-    private ScrollPane diffFilesScroll;
+    private VBox diffReviewBar;
     @FXML
-    private VBox diffFilesBar;
+    private HBox diffReviewHeader;
     @FXML
-    private MenuButton agentSelector;
+    private Label diffReviewCount;
+    @FXML
+    private Button diffReviewRejectAllBtn;
+    @FXML
+    private Button diffReviewApproveAllBtn;
+    @FXML
+    private ScrollPane diffReviewListScroll;
+    @FXML
+    private VBox diffReviewList;
     @FXML
     private MenuButton projectSelectButton;
     @FXML
@@ -104,6 +110,8 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private final List<File> attachedFiles = new ArrayList<>();
     private final BooleanProperty shouldScrollToBottom = new SimpleBooleanProperty(false);
     private Disposable diffEventSubscription;
+    private boolean diffReviewExpanded = false;
+    private final DiffService diffService;
 
     @Getter
     private final HomePageViewModel viewModel;
@@ -111,9 +119,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private final ToolUIBridge toolUIBridge;
     @Getter
     private final WindowManager windowManager;
-    @Getter
-    private final AgentDefinitionManager agentDefinitionManager;
-    private final DiffService diffService;
 
     @Getter
     @Setter
@@ -182,8 +187,22 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             }
         });
 
-        // 智能体选择按钮
-        this.setupAgentSelector();
+        // 智能体切换联动：控制 HomePage sendBox 的项目/分支按钮可见性
+        // 智能体切换入口在侧边栏分段按钮（SideBarController），这里仅监听变化并响应
+        updateProjectButtonBarVisibility(Store.currentAgent.get());
+        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
+            Platform.runLater(() -> updateProjectButtonBarVisibility(newVal));
+        });
+        this.setupProjectMenu();
+        this.branchDisplayButton.setText("");
+        this.viewModel.currentProjectProperty()
+                .addListener((obs, oldVal, newVal) -> {
+                    refreshBranchDisplay(newVal);
+                    refreshProjectMenuText(newVal);
+                    if (indexController != null) {
+                        indexController.updateCurrentProject(newVal);
+                    }
+                });
 
         this.toolUIBridge.setOnNodeAdded(this::addChatNode);
 
@@ -209,50 +228,146 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
         // 订阅 DiffEvent：每次发生 diff 时刷新对话框上方的文件卡片条
         this.subscribeDiffEvents();
+
+        // 绑定 diff 审查卡片条按钮事件
+        this.diffReviewHeader.setOnMouseClicked(e -> {
+            // 点击 header 切换展开/折叠，但排除按钮区域的点击
+            if (e.getTarget() instanceof Button || e.getTarget() instanceof Label parentLabel
+                    && parentLabel.getParent() instanceof Button) return;
+            toggleDiffReviewExpand();
+        });
+        this.diffReviewHeader.setStyle("-fx-cursor: hand;");
+        this.diffReviewRejectAllBtn.setOnAction(e -> handleRejectAllDiff());
+        this.diffReviewApproveAllBtn.setOnAction(e -> handleApproveAllDiff());
+
+        // 监听会话切换：切换会话/新建会话时清空 diff 文件卡片条（仅当前会话的 diff 显示）
+        Store.currentSessionId.addListener((obs, oldVal, newVal) -> {
+            if (oldVal != null && !oldVal.equals(newVal)) {
+                diffReviewList.getChildren().clear();
+                diffReviewExpanded = false;
+                diffReviewListScroll.setVisible(false);
+                diffReviewListScroll.setManaged(false);
+                diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
+                updateDiffReviewBar();
+            }
+        });
     }
 
+
+
     /**
-     * 订阅 DiffEvent，收到事件后异步刷新 diff 文件卡片条。
+     * 订阅 DiffEvent，收到事件后直接使用 DiffEvent 中的 FileDiff 追加卡片。
+     * diff 数据源为工具（WriteTool/EditTool）调用 generateDiff 发布的事件，
+     * 不再扫描 git 工作区（scanWorkingTreeDiffs 仅用于进化功能）。
      */
     private void subscribeDiffEvents() {
         this.diffEventSubscription = EventBus.outBoxFlux()
                 .filter(event -> event instanceof DiffEvent)
-                .subscribe(event -> Platform.runLater(this::refreshDiffFilesBar));
+                .subscribe(event -> Platform.runLater(() -> {
+                    DiffEvent diffEvent = (DiffEvent) event;
+                    log.info("[DiffUI] 收到 DiffEvent: filePath={}, hunks={}",
+                            diffEvent.getDiff().filePath(),
+                            diffEvent.getDiff().hunks() != null ? diffEvent.getDiff().hunks().size() : 0);
+                    addDiffFileCard(diffEvent.getDiff());
+                }));
     }
 
     /**
-     * 刷新对话框上方的 diff 文件卡片条：
-     * 扫描当前项目工作区未提交变更，为每个 FileDiff 创建一个文件卡片。
+     * 追加单个 diff 文件卡片到展开列表，并更新计数。
+     * 同一文件被多次修改时，每次 DiffEvent 都生成独立卡片，保留完整修改历史。
      */
-    private void refreshDiffFilesBar() {
-        ProjectInfo project = viewModel.getCurrentProject();
-        if (project == null) {
-            diffFilesBar.getChildren().clear();
-            diffFilesScroll.setVisible(false);
-            diffFilesScroll.setManaged(false);
-            return;
-        }
-        new Thread(() -> {
-            List<FileDiff> diffs = diffService.scanWorkingTreeDiffs(Paths.get(project.path()));
-            Platform.runLater(() -> {
-                diffFilesBar.getChildren().clear();
-                for (FileDiff diff : diffs) {
-                    diffFilesBar.getChildren().add(createDiffFileCard(diff));
-                }
-                boolean hasDiffs = !diffs.isEmpty();
-                diffFilesScroll.setVisible(hasDiffs);
-                diffFilesScroll.setManaged(hasDiffs);
-            });
-        }).start();
+    private void addDiffFileCard(FileDiff diff) {
+        log.info("[DiffUI] addDiffFileCard: filePath={}, diffReviewList当前子节点数={}",
+                diff.filePath(), diffReviewList.getChildren().size());
+        diffReviewList.getChildren().add(createDiffFileCard(diff));
+        updateDiffReviewBar();
     }
 
     /**
-     * 创建单个 diff 文件卡片：文件名 + "+N -M" 变更统计，点击后在项目视图中打开 diff。
+     * 更新 diff 审查卡片条的计数和可见性。
+     * 折叠状态下高度仅显示 header（约36px），不占用聊天区域。
+     */
+    private void updateDiffReviewBar() {
+        int count = diffReviewList.getChildren().size();
+        diffReviewCount.setText(count + " 个文件待审查");
+        boolean hasDiffs = count > 0;
+        diffReviewBar.setVisible(hasDiffs);
+        diffReviewBar.setManaged(hasDiffs);
+        if (hasDiffs && !diffReviewExpanded) {
+            // 折叠状态：仅 header 高度
+            diffReviewBar.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
+        }
+        log.info("[DiffUI] updateDiffReviewBar: count={}, diffReviewBar.visible={}",
+                count, diffReviewBar.isVisible());
+    }
+
+    /**
+     * 切换 diff 审查列表的展开/折叠状态。
+     * 展开时最大高度限制为280px（与sendBox一致），折叠时仅显示header。
+     */
+    @FXML
+    private void toggleDiffReviewExpand() {
+        diffReviewExpanded = !diffReviewExpanded;
+        diffReviewListScroll.setVisible(diffReviewExpanded);
+        diffReviewListScroll.setManaged(diffReviewExpanded);
+        if (diffReviewExpanded) {
+            // 展开状态：限制最大高度为280（与sendBox一致）
+            diffReviewBar.setMaxHeight(280);
+            diffReviewBar.setPrefHeight(Region.USE_COMPUTED_SIZE);
+        } else {
+            // 折叠状态：仅 header 高度
+            diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
+            diffReviewBar.setPrefHeight(Region.USE_COMPUTED_SIZE);
+        }
+    }
+
+    /**
+     * 全部撤销：遍历 diffReviewList 中所有 FileDiff，调用 diffService.rejectFileDiff 回滚文件。
+     */
+    @FXML
+    private void handleRejectAllDiff() {
+        for (var node : diffReviewList.getChildren()) {
+            if (node.getUserData() instanceof FileDiff diff) {
+                diffService.rejectFileDiff(diff);
+            }
+        }
+        diffReviewList.getChildren().clear();
+        diffReviewExpanded = false;
+        diffReviewListScroll.setVisible(false);
+        diffReviewListScroll.setManaged(false);
+        diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
+        updateDiffReviewBar();
+    }
+
+    /**
+     * 全部保留：遍历 diffReviewList 中所有 FileDiff，调用 diffService.approveFileDiff 保留文件。
+     */
+    @FXML
+    private void handleApproveAllDiff() {
+        for (var node : diffReviewList.getChildren()) {
+            if (node.getUserData() instanceof FileDiff diff) {
+                diffService.approveFileDiff(diff);
+            }
+        }
+        diffReviewList.getChildren().clear();
+        diffReviewExpanded = false;
+        diffReviewListScroll.setVisible(false);
+        diffReviewListScroll.setManaged(false);
+        diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
+        updateDiffReviewBar();
+    }
+
+    /**
+     * 创建单个 diff 文件卡片：文件名 + "+N -M" 变更统计 + 单个文件撤销/保留按钮。
+     * 点击卡片行（非按钮区域）在项目视图中打开 diff。
+     * UserData 存储 FileDiff 以便全部撤销/全部保留时遍历获取。
      */
     private Node createDiffFileCard(FileDiff diff) {
         HBox card = new HBox(6);
-        card.getStyleClass().add("home-page__diff-file-card");
+        card.getStyleClass().add("home-page__diff-review-file-row");
         card.setAlignment(Pos.CENTER_LEFT);
+        card.setUserData(diff);
 
         // 文件名（仅显示文件名，不带完整路径）
         String filePath = diff.filePath();
@@ -262,24 +377,49 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             fileName = filePath.substring(lastSep + 1);
         }
         Label nameLabel = new Label(fileName);
-        nameLabel.getStyleClass().add("home-page__diff-file-card__name");
+        nameLabel.getStyleClass().add("home-page__diff-review-file-name");
         nameLabel.setTooltip(new Tooltip(filePath));
         card.getChildren().add(nameLabel);
 
         // 变更统计 "+N -M"
         int[] stats = computeDiffStats(diff);
         Label statsLabel = new Label("+" + stats[0] + " -" + stats[1]);
-        statsLabel.getStyleClass().add("home-page__diff-file-card__stats");
+        statsLabel.getStyleClass().add("home-page__diff-review-file-stats");
         if (stats[0] > 0) {
-            statsLabel.getStyleClass().add("home-page__diff-file-card__stats--add");
+            statsLabel.getStyleClass().add("home-page__diff-review-file-stats--add");
         }
         if (stats[1] > 0) {
-            statsLabel.getStyleClass().add("home-page__diff-file-card__stats--remove");
+            statsLabel.getStyleClass().add("home-page__diff-review-file-stats--remove");
         }
         card.getChildren().add(statsLabel);
 
-        // 点击：在项目视图中打开 diff
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        card.getChildren().add(spacer);
+
+        // 单个文件撤销按钮
+        Button rejectBtn = new Button("撤销");
+        rejectBtn.getStyleClass().addAll("home-page__diff-review-file-btn", "home-page__diff-review-file-btn--reject");
+        rejectBtn.setOnAction(e -> {
+            diffService.rejectFileDiff(diff);
+            diffReviewList.getChildren().remove(card);
+            updateDiffReviewBar();
+        });
+        card.getChildren().add(rejectBtn);
+
+        // 单个文件保留按钮
+        Button approveBtn = new Button("保留");
+        approveBtn.getStyleClass().addAll("home-page__diff-review-file-btn", "home-page__diff-review-file-btn--approve");
+        approveBtn.setOnAction(e -> {
+            diffService.approveFileDiff(diff);
+            diffReviewList.getChildren().remove(card);
+            updateDiffReviewBar();
+        });
+        card.getChildren().add(approveBtn);
+
+        // 点击卡片行（非按钮区域）在项目视图中打开 diff
         card.setOnMouseClicked(e -> {
+            if (e.getTarget() instanceof Button) return;
             if (indexController != null) {
                 indexController.showDiffInProjectView(diff);
             }
@@ -641,65 +781,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         timeline.play();
     }
 
-    private void setupAgentSelector() {
-        // 从 AgentDefinitionManager 获取主智能体列表并填充到 MenuButton
-        Set<String> mainAgentIds = agentDefinitionManager.getMainAgentIds();
-        refreshAgentMenu(mainAgentIds);
-
-        // 设置默认值（MenuButton 文字）
-        String currentAgent = Store.currentAgent.get();
-        if (currentAgent != null && mainAgentIds.contains(currentAgent)) {
-            agentSelector.setText(currentAgent);
-        } else if (mainAgentIds.contains("default")) {
-            agentSelector.setText("default");
-        } else if (!mainAgentIds.isEmpty()) {
-            agentSelector.setText(mainAgentIds.iterator().next());
-        }
-
-        // 监听全局 currentAgent 变化，同步 MenuButton 文字（切换历史会话时触发）
-        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
-            if (newVal != null && !newVal.equals(agentSelector.getText())) {
-                agentSelector.setText(newVal);
-                updateProjectButtonBarVisibility(newVal);
-            }
-        });
-
-        // 初始化项目按钮可见性
-        updateProjectButtonBarVisibility(Store.currentAgent.get());
-
-        // 设置项目选择下拉菜单
-        setupProjectMenu();
-
-        // 初始化分支按钮（默认只显示图标，无文字）
-        this.branchDisplayButton.setText("");
-
-        // 监听当前项目变化，更新分支显示
-        this.viewModel.currentProjectProperty()
-                .addListener((obs, oldVal, newVal) -> {
-                    refreshBranchDisplay(newVal);
-                    refreshProjectMenuText(newVal);
-                    if (indexController != null) {
-                        indexController.updateCurrentProject(newVal);
-                    }
-                });
-    }
-
-    /**
-     * 刷新智能体下拉菜单项
-     */
-    private void refreshAgentMenu(Set<String> mainAgentIds) {
-        agentSelector.getItems().clear();
-        for (String agentId : mainAgentIds) {
-            MenuItem item = new MenuItem(agentId);
-            item.setOnAction(e -> {
-                agentSelector.setText(agentId);
-                viewModel.switchAgent(agentId);
-                updateProjectButtonBarVisibility(agentId);
-            });
-            agentSelector.getItems().add(item);
-        }
-    }
-
     /**
      * 根据智能体类型控制项目按钮显示/隐藏
      */
@@ -712,12 +793,12 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     }
 
     /**
-     * 根据是否已有对话消息锁定/解锁智能体选择器和项目选择按钮。
+     * 根据是否已有对话消息锁定/解锁项目选择按钮。
      * 一个 session 只能绑定一个智能体和一个项目：有了对话后不可修改，
      * 新建会话或清除对话后自动解锁。
+     * 智能体切换入口已移至侧边栏分段按钮（不受此锁定影响，切换会创建新会话）。
      */
     private void updateSelectorLockState(boolean locked) {
-        agentSelector.setDisable(locked);
         projectSelectButton.setDisable(locked);
     }
 
@@ -814,60 +895,65 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
     @Override
     public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
-        return List.of(
-                new ButtonBarHolder.ButtonConfig(
-                        "newChatButton",
-                        "新对话",
-                        "dynamic-btn",
-                        _ -> {
-                            this.viewModel.createNewSession();
-                            resetForNewSession();
-                        }),
-                new ButtonBarHolder.ButtonConfig(
-                        "terminalButton",
-                        "终端",
-                        "button-bar__icon-btn",
-                        "/cn/bitloom/images/terminal.svg",
-                        ButtonBarHolder.Alignment.RIGHT,
-                        _ -> {
-                            if (indexController != null) {
-                                indexController.toggleTerminalPanel();
-                            }
-                        }),
-                new ButtonBarHolder.ButtonConfig(
-                        "projectButton",
-                        "项目",
-                        "button-bar__icon-btn",
-                        "/cn/bitloom/images/folder.svg",
-                        ButtonBarHolder.Alignment.RIGHT,
-                        _ -> {
-                            if (indexController != null) {
-                                indexController.toggleProjectPanel();
-                            }
-                        }),
-                new ButtonBarHolder.ButtonConfig(
-                        "toolCallsButton",
-                        "工具",
-                        "button-bar__icon-btn",
-                        "/cn/bitloom/images/plug.svg",
-                        ButtonBarHolder.Alignment.RIGHT,
-                        _ -> {
-                            if (indexController != null) {
-                                indexController.toggleToolCallsPanel();
-                            }
-                        }),
-                new ButtonBarHolder.ButtonConfig(
-                        "todoButton",
-                        "待办",
-                        "button-bar__icon-btn",
-                        "/cn/bitloom/images/list.svg",
-                        ButtonBarHolder.Alignment.RIGHT,
-                        _ -> {
-                            if (indexController != null) {
-                                indexController.toggleTodoPanel();
-                            }
-                        })
-        );
+        // coder 模式才显示终端/项目按钮；default 模式只显示新对话+工具+待办
+        boolean isCoder = "coder".equals(Store.currentAgent.get());
+        List<ButtonBarHolder.ButtonConfig> configs = new ArrayList<>();
+        configs.add(new ButtonBarHolder.ButtonConfig(
+                "newChatButton",
+                "",
+                "button-bar__icon-btn",
+                "/cn/bitloom/images/chat-new.svg",
+                _ -> {
+                    this.viewModel.createNewSession();
+                    resetForNewSession();
+                }));
+        if (isCoder) {
+            configs.add(new ButtonBarHolder.ButtonConfig(
+                    "terminalButton",
+                    "终端",
+                    "button-bar__icon-btn",
+                    "/cn/bitloom/images/terminal.svg",
+                    ButtonBarHolder.Alignment.RIGHT,
+                    _ -> {
+                        if (indexController != null) {
+                            indexController.toggleTerminalPanel();
+                        }
+                    }));
+            configs.add(new ButtonBarHolder.ButtonConfig(
+                    "projectButton",
+                    "项目",
+                    "button-bar__icon-btn",
+                    "/cn/bitloom/images/folder.svg",
+                    ButtonBarHolder.Alignment.RIGHT,
+                    _ -> {
+                        if (indexController != null) {
+                            indexController.toggleProjectPanel();
+                        }
+                    }));
+        }
+        configs.add(new ButtonBarHolder.ButtonConfig(
+                "toolCallsButton",
+                "工具",
+                "button-bar__icon-btn",
+                "/cn/bitloom/images/plug.svg",
+                ButtonBarHolder.Alignment.RIGHT,
+                _ -> {
+                    if (indexController != null) {
+                        indexController.toggleToolCallsPanel();
+                    }
+                }));
+        configs.add(new ButtonBarHolder.ButtonConfig(
+                "todoButton",
+                "待办",
+                "button-bar__icon-btn",
+                "/cn/bitloom/images/list.svg",
+                ButtonBarHolder.Alignment.RIGHT,
+                _ -> {
+                    if (indexController != null) {
+                        indexController.toggleTodoPanel();
+                    }
+                }));
+        return configs;
     }
 
     public void resetForNewSession() {
@@ -880,10 +966,13 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             indexController.getEditorPanelController().clearToolCalls();
             indexController.getEditorPanelController().clearTodos();
         }
-        // 清空对话框上方的 diff 文件卡片条
-        this.diffFilesBar.getChildren().clear();
-        this.diffFilesScroll.setVisible(false);
-        this.diffFilesScroll.setManaged(false);
+        // 清空对话框上方的 diff 审查卡片条
+        this.diffReviewList.getChildren().clear();
+        this.diffReviewExpanded = false;
+        this.diffReviewListScroll.setVisible(false);
+        this.diffReviewListScroll.setManaged(false);
+        this.diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
+        this.updateDiffReviewBar();
 
         this.homePage.setAlignment(Pos.CENTER);
         VBox.setMargin(this.sendBox, new Insets(0, 0, 0, 0));

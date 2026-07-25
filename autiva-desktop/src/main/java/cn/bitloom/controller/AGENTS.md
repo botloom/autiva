@@ -47,6 +47,7 @@
 - 管理路由导航
 - 控制侧边栏显示/隐藏
 - 协调编辑器面板操作
+- 监听 `Store.currentAgent` 变化触发联动：1) 重建 ButtonBar 按钮（按智能体类型过滤 terminal/project 按钮）；2) 切换到非 coder 时若 EditorPanel 正显示 TERMINAL/PROJECT 视图则自动关闭（SideBar 历史列表刷新由 SideBarController 自行监听触发）
 
 **子控制器：**
 - `buttonBarController`: 底部按钮栏
@@ -83,7 +84,6 @@
 - `HomePageViewModel`: 视图模型（消息流处理、历史消息）
 - `ToolUIBridge`: 工具UI桥接（直接操作JavaFX组件）
 - `WindowManager`: 窗口管理器（打开画布弹窗）
-- `AgentDefinitionManager`: 智能体定义管理器（智能体选择器）
 
 **职责（仅 UI）：**
 - 管理 ScrollPane + VBox 聊天容器
@@ -94,10 +94,11 @@
 - 处理发送输入框和发送按钮事件
 - sendField 使用 AutoResizeTextArea 自定义组件（重写 computePrefHeight 按实际渲染高度计算），无需手动调整高度；原 adjustTextAreaHeight() 方法已置空保留
 - 文件标签容器（fileTagsPane）包装在 ScrollPane（fileTagsScroll）中，限制最大高度 96px 并支持垂直滚动，防止数十个文件标签挤出按钮区；updateFileTagsPaneVisibility() 控制 fileTagsScroll 的 visible/managed
-- **diff 文件卡片条（diffFilesScroll）**：位于 `chatScrollPane` 与 `sendBox` 之间的独立 ScrollPane（maxHeight=200，纵向布局），订阅 DiffEvent 后异步扫描工作区未提交变更并为每个 FileDiff 生成卡片（文件名 + "+N -M" 统计），点击卡片调用 `indexController.showDiffInProjectView(diff)` 在项目视图右侧渲染 diff。无项目或无变更时自动隐藏（visible/managed=false）
+- **diff 审查卡片条（diffReviewBar）**：位于 `chatScrollPane` 与 `sendBox` 之间的 StackPane 叠加层（StackPane.alignment=BOTTOM_CENTER），订阅 DiffEvent 后**直接使用事件中的 FileDiff 数据**追加卡片。可折叠卡片，左侧显示"N 个文件待审查"，右侧有"展开"/"全部撤销"/"全部保留"按钮。展开时向上覆盖聊天区显示文件列表（每个文件行：文件名 + "+N -M" 统计 + 单个文件撤销/保留按钮），点击文件行调用 `indexController.showDiffInProjectView(diff)` 在项目视图右侧渲染左右对比 diff。数据源为 WriteTool/EditTool 调用 `generateDiff` 发布的 DiffEvent，不再扫描 git 工作区（`scanWorkingTreeDiffs` 仅用于进化功能）。同一文件多次修改追加独立卡片，保留完整修改历史。监听 `Store.currentSessionId` 变化，切换会话/新建会话时清空 diff 列表（仅当前会话的 diff 显示）
 - 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 默认使用 DeepSeek 模型，无需手动选择
-- 管理智能体选择按钮（agentSelector）：MenuButton 类型（与 projectSelectButton 风格一致），通过 `setupAgentSelector()` 方法初始化，从 `AgentDefinitionManager.getMainAgentIds()` 获取主智能体列表填充到 MenuItem 项，点击 MenuItem 设置 MenuButton 文字并调用 viewModel.switchAgent()，监听 Store.currentAgent 变化同步文字（切换历史会话时触发）
+- 智能体切换入口已移至侧边栏分段按钮（SideBar 顶部 modeSwitcher），HomePage 不再持有 agentSelector；HomePageController 仅监听 `Store.currentAgent` 变化以同步 `projectSelectButton`/`branchDisplayButton` 的可见性（coder 模式才显示）
+- `getButtonConfigs()` 根据当前智能体类型过滤 ButtonBar 按钮：default 模式只返回"新对话+工具+待办"3 个按钮；coder 模式返回全部 5 个按钮（含终端/项目按钮）
 - 处理语音输入按钮
 - 画布按钮：打开 CanvasDialog 弹窗
 - 动画效果（图标淡出、聊天区域展开）
@@ -127,7 +128,7 @@
 - `setupDragDrop()`: 将 sendBox 注册为拖拽目标，接收来自文件树/Diff 列表的文件拖拽
 - `handleDragOver(DragEvent)`: 拖拽悬停时接受 COPY 传输模式
 - `handleDragDropped(DragEvent)`: 拖拽释放时将文件添加为附件（仅添加附件，不触发界面状态切换动画）
-- `updateSelectorLockState(boolean locked)`: 根据是否已有对话消息锁定/解锁智能体选择器（agentSelector）和项目选择按钮（projectSelectButton）。一个 session 只能绑定一个智能体和一个项目，有了对话后不可修改；消息列表清空（新建会话/清除对话）后自动解锁。在消息列表 ListChangeListener 中根据 `!messages.isEmpty()` 调用
+- `updateSelectorLockState(boolean locked)`: 根据是否已有对话消息锁定/解锁项目选择按钮（projectSelectButton）。一个 session 只能绑定一个智能体和一个项目，有了对话后不可修改；消息列表清空（新建会话/清除对话）后自动解锁。智能体切换入口已移至侧边栏分段按钮（不受此锁定影响，切换会创建新会话）。在消息列表 ListChangeListener 中根据 `!messages.isEmpty()` 调用
 
 ### AgentPageController
 智能体配置页控制器，实现 Initializable、ButtonBarHolder、PageHolder。
@@ -316,17 +317,22 @@
 - 更新当前选中状态
 - 显示/隐藏侧边栏
 - "新聊天"按钮：创建新 session 并导航到首页
-- 历史对话列表：加载和渲染桌面端 session 列表，点击切换 session
+- 历史对话列表：加载和渲染桌面端 session 列表，**按当前智能体 `Store.currentAgent` 过滤**（只显示该智能体的 session），点击切换 session
 - 当前活跃对话高亮显示
 - 监听 currentSessionId 变化自动刷新历史列表
+- 监听 `Store.currentAgent` 变化自动刷新历史列表（按新智能体过滤）
 - 监听 Store.refreshHistory 信号刷新历史列表（聊天过程中更新会话标题）
+- **智能体模式分段切换按钮（栏首 modeSwitcher）**：iOS SegmentedControl 风格，两个 ToggleButton（Work/Code）放入同一 ToggleGroup 互斥，点击调用 `homePageViewModel.switchAgent(agentId)`；监听 `Store.currentAgent` 变化同步选中态（切换历史会话时触发）
 
 **FXML 字段：**
+- `modeSwitcher`: 智能体分段切换容器（HBox，栏首）
+- `defaultModeBtn`: "Work" 段 ToggleButton（work.svg 图标）
+- `coderModeBtn`: "Code" 段 ToggleButton（code.svg 图标）
 - `historyScrollPane`: 历史对话滚动面板
 - `historyList`: 历史对话列表容器（VBox）
 
 **核心方法：**
-- `refreshHistoryList()`: 增量刷新历史对话列表（使用 historyItemMap 缓存，仅更新变化的项，避免全量重建）
+- `refreshHistoryList()`: 增量刷新历史对话列表（使用 historyItemMap 缓存，仅更新变化的项，避免全量重建）；按 `Store.currentAgent.get()` 过滤 session（`s.getAgentId().equals(currentAgent)`）
 - `createHistoryItem(Session)`: 创建历史对话项 UI
 - `updateHistoryItemTitle(HBox, Session)`: 更新历史对话项标题（仅当标题为默认值"新对话"时，取第一条用户消息截断前20字符作为标题，并通过 updateSession 持久化到 Session）
 - `updateHistoryActiveState(HBox)`: 更新历史对话选中状态
@@ -356,7 +362,7 @@
 - `rightButtonContainer`: 右侧动态按钮容器（右对齐按钮）
 
 **按钮配置来源：**
-各页面控制器通过实现 `ButtonBarHolder.getButtonConfigs()` 提供动态按钮配置，由 ButtonBarController 注入到 `dynamicButtonContainer`（Alignment.LEFT）或 `rightButtonContainer`（Alignment.RIGHT）。HomePageController 提供 5 个按钮："新对话"（左）+"终端/项目/工具/待办"（右，toggle 切换编辑器面板）。
+各页面控制器通过实现 `ButtonBarHolder.getButtonConfigs()` 提供动态按钮配置，由 ButtonBarController 注入到 `dynamicButtonContainer`（Alignment.LEFT）或 `rightButtonContainer`（Alignment.RIGHT）。HomePageController 根据当前智能体类型返回不同按钮集合：default 模式 3 个按钮（"新对话"+工具+待办），coder 模式 5 个按钮（"新对话"+终端/项目/工具/待办）。切换智能体时由 IndexController 监听 `Store.currentAgent` 触发 `router.updateButtonBarForRoute()` 重建按钮。
 
 **核心方法：**
 - `setupProjectBinding()`: 设置项目绑定（由 IndexController 在初始化完成后调用），监听 currentProject 变化更新分支显示和通知 IndexController
@@ -423,7 +429,7 @@
 - `showFileContent(Path)`: 在项目视图右侧显示文件内容（CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 应用语法高亮）。**支持编辑**（`setEditable(true)` + `setShowCaret(ON)` 显示光标），Ctrl+S 保存文件内容到磁盘（调用 `saveFileContent`），显示后 `requestFocus()` 聚焦以显示光标
 - `saveFileContent(Path, String)`: 保存文件内容到磁盘（`Files.writeString`），Ctrl+S 时由 `showFileContent` 的按键监听器调用
 - `showDiffInProjectView(FileDiff)`: 切换到项目视图，调用 `renderDiffIntoPanel(diff, fileContentPanel)` 在右侧内容区渲染 diff
-- `renderDiffIntoPanel(FileDiff, VBox)`: 用 `diffService.recomputeDiff` 重新计算 diff 后渲染单栏行内高亮：CodeArea 显示新版本内容，ADD 行 `.diff-line-add` 绿色背景，REMOVE 行 `.diff-line-remove-marker` 红色背景+删除线；单列新版本行号（删除标记段落无行号）；应用 `SyntaxHighlighterFactory.forPath` 语法高亮（字符级样式与段落级背景样式叠加）；StackPane 叠加 VirtualizedScrollPane + 顶部悬浮横幅
+- `renderDiffIntoPanel(FileDiff, VBox)`: 直接使用 DiffEvent 中的原始 FileDiff 渲染**左右双栏对比视图**（不调用 `recomputeDiff`，diff 显示工具调用时的快照）：SplitPane 左侧 CodeArea 显示旧版本内容（REMOVE 行 `.diff-line-remove-left` 红色背景 + 旧行号），右侧 CodeArea 显示新版本内容（ADD 行 `.diff-line-add-right` 绿色背景 + 新行号）；两侧段落按 hunk 对齐（ADD 行在左侧留空行，REMOVE 行在右侧留空行）；两侧分别应用 `SyntaxHighlighterFactory.forPath` 语法高亮（字符级样式与段落级背景样式叠加）；左右 CodeArea `estimatedScrollYProperty` 双向监听 + 标志位防止循环，实现同步滚动；StackPane 叠加 SplitPane + 顶部悬浮横幅（文件名 + 撤销/保留）
 - `createDiffBanner(FileDiff)`: 创建顶部悬浮横幅（文件名 + spacer + 撤销/保留按钮），点击按钮调用 `diffService.rejectFileDiff/approveFileDiff` 并恢复项目视图占位符
 - `computeDiffStats(FileDiff)`: 静态方法，遍历 hunks/lines 统计 ADD/REMOVE 行数，返回 int[2]
 - `createLoadingContent(String)`: 创建加载状态内容（ProgressIndicator + 文本）

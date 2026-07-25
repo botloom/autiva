@@ -4,6 +4,7 @@ import cn.bitloom.agentic.diff.FileDiff;
 import cn.bitloom.agentic.project.ProjectInfo;
 import cn.bitloom.controller.EditorPanelController.ViewType;
 import cn.bitloom.router.Router;
+import cn.bitloom.store.Store;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -85,6 +86,25 @@ public class IndexController implements Initializable {
         }
 
         this.initializeButtonBar();
+
+        // 智能体切换联动：重建 ButtonBar 按钮 + 关闭 coder 专有 EditorPanel 视图（终端/项目）
+        // SideBar 历史列表刷新由 SideBarController 自己监听触发，这里不重复
+        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
+            Platform.runLater(() -> {
+                // 1. 重建 ButtonBar（按当前智能体类型决定按钮集合）
+                if (router != null) {
+                    router.updateButtonBarForRoute(Store.currentRoute.get());
+                }
+                // 2. 切换到非 coder 时若 EditorPanel 正显示 TERMINAL/PROJECT 视图，自动关闭
+                if (editorPanelController != null && editorPanelController.isVisible()
+                        && !"coder".equals(newVal)) {
+                    ViewType vt = editorPanelController.getCurrentViewType();
+                    if (vt == ViewType.TERMINAL || vt == ViewType.PROJECT) {
+                        closeEditorPanel();
+                    }
+                }
+            });
+        });
     }
 
     private void initializeButtonBar() {

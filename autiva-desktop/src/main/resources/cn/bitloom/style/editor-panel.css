@@ -505,6 +505,58 @@
     -fx-strikethrough: true;
 }
 
+/* ===== Diff 左右对比视图（双栏对比，类似 IDEA） ===== */
+
+.editor-panel__diff-split {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.editor-panel__diff-split .split-pane-divider {
+    -fx-background-color: -autiva-separator;
+    -fx-padding: 0 1 0 0;
+    -fx-cursor: h-resize;
+}
+
+.editor-panel__diff-split .split-pane-divider:hover {
+    -fx-background-color: -autiva-blue;
+}
+
+.editor-panel__diff-left,
+.editor-panel__diff-right {
+    -fx-background-color: -autiva-bg;
+    -fx-padding: 0;
+    -fx-spacing: 0;
+}
+
+/* 右侧 ADD 行高亮（绿色背景） - RichTextFX paragraph-box 选择器 */
+.paragraph-box.diff-line-add-right {
+    -fx-background-color: rgba(48, 209, 88, 0.22);
+}
+
+/* 左侧 REMOVE 行高亮（红色背景） - RichTextFX paragraph-box 选择器 */
+.paragraph-box.diff-line-remove-left {
+    -fx-background-color: rgba(255, 69, 58, 0.22);
+}
+
+/* 空行占位（对齐用，无背景色） */
+.paragraph-box.diff-line-empty {
+    -fx-background-color: transparent;
+}
+
+/* 兼容旧选择器（无 .paragraph-box 前缀） */
+.diff-line-add-right {
+    -fx-background-color: rgba(48, 209, 88, 0.22);
+}
+
+.diff-line-remove-left {
+    -fx-background-color: rgba(255, 69, 58, 0.22);
+}
+
+.diff-line-empty {
+    -fx-background-color: transparent;
+}
+
 /* ===== Diff 单列行号 ===== */
 
 .diff-lineno {

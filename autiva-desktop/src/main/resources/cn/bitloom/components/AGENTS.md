@@ -44,7 +44,8 @@ HBox (button-bar)
 - 显示/隐藏切换
 - 当前页面高亮
 - "新聊天"按钮：创建新 session
-- 历史对话列表：显示桌面端所有 session，点击切换
+- 历史对话列表：显示桌面端 session，按当前智能体（`Store.currentAgent`）过滤，点击切换
+- 智能体模式分段切换按钮（栏首）：iOS SegmentedControl 风格，切换 default/coder 模式，调用 `HomePageViewModel.switchAgent(agentId)`
 
 **控制器：** SideBarController
 
@@ -52,6 +53,9 @@ HBox (button-bar)
 ```
 VBox (sideBar)
 └── VBox (sidebar__content)
+    ├── HBox (modeSwitcher) - 智能体模式分段切换（栏首）
+    │   ├── ToggleButton (defaultModeBtn) - "Work" 段（work.svg 图标）
+    │   └── ToggleButton (coderModeBtn) - "Code" 段（code.svg 图标）
     ├── HBox (homeOption) - 新聊天
     ├── HBox (agentOption) - 智能体
     ├── HBox (skillOption) - 技能
@@ -67,6 +71,11 @@ VBox (sideBar)
 **样式类：**
 - `.sidebar`: 容器样式
 - `.sidebar__content`: 内容区域
+- `.sidebar__mode-switcher`: 智能体分段切换容器（iOS SegmentedControl 风格，灰底胶囊 #f5f5f7 + 8px 圆角）
+- `.sidebar__mode-btn`: 分段按钮（透明背景，12px 字体，图标+文字，graphic-text-gap 4px）
+- `.sidebar__mode-btn:selected`: 选中段（白底 + 蓝色文字 #0071e3 + 微阴影 dropshadow）
+- `.sidebar__mode-icon`: 分段按钮图标（默认 #1d1d1f，选中时 #0071e3）
+- `.sidebar__mode-btn:selected .sidebar__mode-icon`: 选中状态图标颜色
 - `.sidebar__option`: 菜单项样式（固定高度 40px，不会被压缩）
 - `.sidebar__option--active`: 激活状态样式
 - `.sidebar__icon`: 图标样式

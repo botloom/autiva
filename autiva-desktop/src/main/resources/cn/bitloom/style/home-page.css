@@ -247,72 +247,6 @@
     -fx-padding: 4 0 4 0;
 }
 
-/* 智能体选择下拉菜单按钮（MenuButton，类似 project-menu-btn） */
-.home-page__agent-menu-btn {
-    -fx-font-size: 13px;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    -fx-background-color: #ffffff;
-    -fx-background-radius: 18px;
-    -fx-background-insets: 0;
-    -fx-border-color: rgba(0, 0, 0, 0.1);
-    -fx-border-width: 1px;
-    -fx-border-radius: 18px;
-    -fx-border-insets: 0;
-    -fx-padding: 0 12 0 0;
-    -fx-pref-height: 37;
-    -fx-content-display: LEFT;
-    -fx-graphic-text-gap: 4;
-    -fx-cursor: hand;
-}
-
-.home-page__agent-menu-btn:hover {
-    -fx-background-color: #f5f5f7;
-    -fx-border-color: rgba(0, 0, 0, 0.15);
-}
-
-.home-page__agent-menu-btn:disabled {
-    -fx-opacity: 0.5;
-    -fx-cursor: default;
-}
-
-.home-page__agent-menu-btn .arrow-button {
-    -fx-background-color: transparent;
-    -fx-padding: 0;
-    -fx-pref-width: 0;
-    -fx-opacity: 0;
-}
-
-.home-page__agent-menu-btn .arrow {
-    -fx-background-color: transparent;
-    -fx-shape: none;
-    -fx-padding: 0;
-}
-
-.home-page__agent-menu-btn .context-menu {
-    -fx-background-color: #ffffff;
-    -fx-background-radius: 12px;
-    -fx-border-color: rgba(0, 0, 0, 0.1);
-    -fx-border-width: 1px;
-    -fx-border-radius: 12px;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 12, 0, 0, 2);
-    -fx-padding: 4;
-}
-
-.home-page__agent-menu-btn .menu-item {
-    -fx-padding: 8 12 8 12;
-    -fx-background-radius: 8px;
-    -fx-cursor: hand;
-}
-
-.home-page__agent-menu-btn .menu-item:hover {
-    -fx-background-color: #f5f5f7;
-}
-
-.home-page__agent-menu-btn .menu-item .label {
-    -fx-text-fill: #1d1d1f;
-    -fx-font-size: 13px;
-}
-
 /* 智能体选择器容器（图标+ComboBox 组合） */
 .home-page__agent-selector-box {
     -fx-background-color: #ffffff;
@@ -1093,89 +1027,196 @@
     -fx-text-fill: #1d1d1f;
 }
 
-/* ===== Diff 文件卡片条（聊天输入框上方，纵向） ===== */
-.home-page__diff-files-scroll {
-    -fx-background-color: transparent;
-    -fx-padding: 0 16 0 16;
-    -fx-pref-height: 120;
-    -fx-max-height: 200;
-    -fx-min-height: 0;
-    -fx-fit-to-width: true;
-    -fx-background-insets: 0;
+/* ===== Diff 审查卡片条（聊天输入框上方，可折叠） ===== */
+.home-page__diff-review-bar {
+    -fx-background-color: #f5f5f7;
+    -fx-background-radius: 12;
+    -fx-border-color: rgba(0, 0, 0, 0.08);
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.06), 8, 0, 0, 2);
+    -fx-padding: 0;
+    -fx-spacing: 0;
+    -fx-max-width: 1000;
+    -fx-pref-width: 600;
+    -fx-min-width: 300;
 }
 
-.home-page__diff-files-scroll > .viewport {
+.home-page__diff-review-list-scroll {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-max-height: 244;
+}
+
+.home-page__diff-review-list-scroll > .viewport {
     -fx-background-color: transparent;
 }
 
-.home-page__diff-files-scroll > .scroll-bar:vertical {
+.home-page__diff-review-list-scroll > .scroll-bar:vertical {
     -fx-background-color: transparent;
-    -fx-pref-width: 6;
+    -fx-pref-width: 4;
 }
-.home-page__diff-files-scroll > .scroll-bar:vertical .thumb {
-    -fx-background-color: rgba(0, 0, 0, 0.2);
-    -fx-background-radius: 3;
+
+.home-page__diff-review-list-scroll > .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+    -fx-background-radius: 2;
 }
-.home-page__diff-files-scroll > .scroll-bar:vertical .thumb:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.35);
-}
-.home-page__diff-files-scroll > .scroll-bar:vertical .track {
+
+.home-page__diff-review-list-scroll > .scroll-bar:vertical .track {
     -fx-background-color: transparent;
 }
-.home-page__diff-files-scroll > .scroll-bar:vertical .increment-button,
-.home-page__diff-files-scroll > .scroll-bar:vertical .decrement-button {
+
+.home-page__diff-review-list-scroll > .scroll-bar:vertical .increment-button,
+.home-page__diff-review-list-scroll > .scroll-bar:vertical .decrement-button {
     -fx-background-color: transparent;
     -fx-padding: 0;
 }
-.home-page__diff-files-scroll > .scroll-bar:vertical .increment-arrow,
-.home-page__diff-files-scroll > .scroll-bar:vertical .decrement-arrow {
+
+.home-page__diff-review-list-scroll > .scroll-bar:vertical .increment-arrow,
+.home-page__diff-review-list-scroll > .scroll-bar:vertical .decrement-arrow {
     -fx-background-color: transparent;
     -fx-shape: "";
     -fx-padding: 0;
 }
 
-.home-page__diff-files-bar {
+.home-page__diff-review-header {
     -fx-background-color: transparent;
-    -fx-spacing: 4;
-    -fx-alignment: top-center;
-    -fx-padding: 2 0;
+    -fx-padding: 8 12;
+    -fx-spacing: 8;
+    -fx-alignment: CENTER_LEFT;
 }
 
-.home-page__diff-file-card {
-    -fx-background-color: #f0f7ff;
-    -fx-background-radius: 8;
-    -fx-border-color: #d1e3ff;
+.home-page__diff-review-count {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1d1d1f;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.home-page__diff-review-btn {
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 6;
+    -fx-background-insets: 0;
+    -fx-border-color: rgba(0, 0, 0, 0.1);
     -fx-border-width: 1;
-    -fx-border-radius: 8;
+    -fx-border-radius: 6;
+    -fx-border-insets: 0;
+    -fx-padding: 4 10;
+    -fx-cursor: hand;
+    -fx-text-fill: #1d1d1f;
+}
+
+.home-page__diff-review-btn:hover {
+    -fx-background-color: #e8e8ed;
+    -fx-border-color: rgba(0, 0, 0, 0.15);
+}
+
+.home-page__diff-review-btn:pressed {
+    -fx-background-color: #dcdce3;
+}
+
+.home-page__diff-review-btn--reject {
+    -fx-text-fill: #ff3b30;
+    -fx-border-color: rgba(255, 59, 48, 0.3);
+}
+
+.home-page__diff-review-btn--reject:hover {
+    -fx-background-color: rgba(255, 59, 48, 0.08);
+    -fx-border-color: rgba(255, 59, 48, 0.5);
+}
+
+.home-page__diff-review-btn--approve {
+    -fx-text-fill: #34c759;
+    -fx-border-color: rgba(52, 199, 89, 0.3);
+}
+
+.home-page__diff-review-btn--approve:hover {
+    -fx-background-color: rgba(52, 199, 89, 0.08);
+    -fx-border-color: rgba(52, 199, 89, 0.5);
+}
+
+.home-page__diff-review-list {
+    -fx-background-color: transparent;
+    -fx-spacing: 2;
+    -fx-padding: 2 4 4 4;
+}
+
+.home-page__diff-review-file-row {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 6;
+    -fx-border-color: rgba(0, 0, 0, 0.06);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
     -fx-padding: 6 10;
-    -fx-spacing: 6;
+    -fx-spacing: 8;
     -fx-alignment: CENTER_LEFT;
     -fx-cursor: hand;
     -fx-max-width: Infinity;
 }
 
-.home-page__diff-file-card:hover {
-    -fx-background-color: #e0efff;
+.home-page__diff-review-file-row:hover {
+    -fx-background-color: #f0f7ff;
+    -fx-border-color: rgba(0, 122, 255, 0.2);
 }
 
-.home-page__diff-file-card__name {
-    -fx-font-size: 12px;
+.home-page__diff-review-file-name {
+    -fx-font-size: 13px;
     -fx-text-fill: #1d1d1f;
     -fx-font-family: "SF Pro Text", -apple-system, sans-serif;
 }
 
-.home-page__diff-file-card__stats {
+.home-page__diff-review-file-stats {
     -fx-font-size: 11px;
-    -fx-font-family: "SF Mono", monospace;
+    -fx-font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
     -fx-font-weight: bold;
 }
 
-.home-page__diff-file-card__stats--add {
+.home-page__diff-review-file-stats--add {
     -fx-text-fill: #22c55e;
 }
 
-.home-page__diff-file-card__stats--remove {
+.home-page__diff-review-file-stats--remove {
     -fx-text-fill: #ef4444;
+}
+
+.home-page__diff-review-file-btn {
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-radius: 4;
+    -fx-border-insets: 0;
+    -fx-padding: 2 8;
+    -fx-cursor: hand;
+}
+
+.home-page__diff-review-file-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.06);
+}
+
+.home-page__diff-review-file-btn--reject {
+    -fx-text-fill: #ff3b30;
+}
+
+.home-page__diff-review-file-btn--reject:hover {
+    -fx-background-color: rgba(255, 59, 48, 0.1);
+}
+
+.home-page__diff-review-file-btn--approve {
+    -fx-text-fill: #34c759;
+}
+
+.home-page__diff-review-file-btn--approve:hover {
+    -fx-background-color: rgba(52, 199, 89, 0.1);
 }
 
 .chat-message--task {

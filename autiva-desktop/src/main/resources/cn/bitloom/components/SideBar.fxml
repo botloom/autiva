@@ -10,6 +10,21 @@
 >
 
     <VBox styleClass="sidebar__content" VBox.vgrow="ALWAYS">
+        <HBox fx:id="modeSwitcher" styleClass="sidebar__mode-switcher" alignment="CENTER">
+            <ToggleButton fx:id="defaultModeBtn" styleClass="sidebar__mode-btn" text="Work" selected="true">
+                <graphic>
+                    <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14"
+                                  svgPath="/cn/bitloom/images/work.svg"/>
+                </graphic>
+            </ToggleButton>
+            <ToggleButton fx:id="coderModeBtn" styleClass="sidebar__mode-btn" text="Code">
+                <graphic>
+                    <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14"
+                                  svgPath="/cn/bitloom/images/code.svg"/>
+                </graphic>
+            </ToggleButton>
+        </HBox>
+
         <HBox fx:id="homeOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
             <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
                           svgPath="/cn/bitloom/images/chat-new.svg"/>

@@ -24,7 +24,6 @@ VBox (homePage)
     └── HBox - 按钮组（VBox.vgrow=NEVER，确保不被压缩）
         ├── MenuButton (projectSelectButton) - 项目选择下拉菜单（coder智能体时显示，folder-black.svg图标）
         ├── Button (branchDisplayButton) - 分支显示按钮（coder智能体时显示，git-branch.svg图标）
-        ├── MenuButton (agentSelector) - 智能体选择下拉菜单（robot.svg图标，文字显示当前智能体名称）
         ├── Button (canvasButton) - 画布按钮
         ├── Button (addFileButton) - 添加文件按钮
         ├── Button (sendButton) - 发送按钮
@@ -46,7 +45,7 @@ VBox (homePage)
 - Enter 键发送消息，Shift+Enter 换行
 - 添加文件按钮打开 FileChooser，选中的文件以标签形式显示在输入区域上方
 - 文件标签显示文件图标、文件名和关闭按钮，支持逐个移除
-- 智能体选择器使用 MenuButton（与项目选择按钮风格一致），左侧显示 robot.svg 图标，文字显示当前智能体名称
+- 智能体切换入口已移至侧边栏分段按钮（SideBar 顶部 modeSwitcher），HomePage 不再持有 agentSelector
 - 模型默认使用 DeepSeek，无需手动选择
 - 项目选择按钮（coder智能体时显示）使用黑色 folder-black.svg 图标，与 ButtonBar 的蓝色 folder.svg 区分
 - 终止按钮：流式生成时自动切换显示（替代发送按钮），红色圆形按钮，点击暂停当前生成并保留部分响应，暂停后发送按钮重新显示

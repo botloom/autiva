@@ -78,6 +78,12 @@
 **样式类：**
 - `.sidebar`: 侧边栏容器
 - `.sidebar__content`: 内容区域
+- `.sidebar__mode-switcher`: 智能体分段切换容器（iOS SegmentedControl 风格，灰底胶囊 #f5f5f7，8px 圆角，32px 高）
+- `.sidebar__mode-btn`: 分段按钮（透明背景，12px 字体，90px 宽，图标+文字，graphic-text-gap 4px）
+- `.sidebar__mode-btn:hover`: 未选中段悬停（浅灰背景 rgba(0,0,0,0.04)）
+- `.sidebar__mode-btn:selected`: 选中段（白底 + 蓝色文字 #0071e3 + 微阴影 dropshadow）
+- `.sidebar__mode-icon`: 分段按钮图标（默认 #1d1d1f）
+- `.sidebar__mode-btn:selected .sidebar__mode-icon`: 选中状态图标颜色（#0071e3）
 - `.sidebar__option`: 菜单项
 - `.sidebar__option--active`: 激活状态
 - `.sidebar__icon`: 图标
@@ -178,7 +184,6 @@
 - `.home-page__model-selector`: 模型选择器
 - `.home-page__project-menu-btn`: 项目选择下拉菜单按钮（胶囊形，与 model-selector 风格一致，宽度自适应文本内容，移除固定最小宽度，移除 FXML 左侧 margin，左侧 padding 0，图标文本间距 2px）
 - `.home-page__branch-btn`: 分支显示按钮（图标+文字，默认只显示图标）
-- `.home-page__agent-menu-btn`: 智能体选择下拉菜单按钮（MenuButton，与 project-menu-btn 风格一致，胶囊形，左侧 robot.svg 图标 + 智能体名称，hover 浅灰，disabled 半透明）
 - `.home-page__file-tags-scroll`: 文件标签滚动容器（max-height 96，透明背景，vbarPolicy=NEVER 隐藏滚动条，padding 6 16 0 16）
 - `.home-page__file-tags`: 文件标签 FlowPane（pref-width 568，hgap 6，vgap 4）
 - `.home-page__file-tag`: 文件标签项（浅灰背景 #e8e8ed，12px 圆角，padding 3 4 3 8）

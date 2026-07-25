@@ -25,12 +25,12 @@
 Diff 服务（Spring `@Component`），生成和管理文件 Diff，使用 JGit HistogramDiff 算法生成真正的行级 diff。
 
 **核心方法：**
-- `FileDiff generateDiff(Path filePath, String oldContent, String newContent)`: 生成 Diff（oldContent=null 表示新建文件；newContent=null 表示删除文件），将 oldContent 存入 FileDiff 用于撤销，并通过 `EventBus.publishOut` 发布 `DiffEvent` 通知 UI 刷新"修改文件"列表
+- `FileDiff generateDiff(Path filePath, String oldContent, String newContent)`: 生成 Diff（oldContent=null 表示新建文件；newContent=null 表示删除文件），将 oldContent 存入 FileDiff 用于撤销，并通过 `EventBus.publishOut` 发布 `DiffEvent` 通知 UI 直接使用事件中的 FileDiff 数据追加卡片
 - `List<FileDiff> getPendingDiffs()`: 获取待审核 Diff 列表
 - `void approveDiff(String diffId)`: 批准 Diff（仅从待审核列表移除，不修改文件）
 - `void rejectDiff(String diffId)`: 拒绝 Diff 并回滚文件内容（新建文件 → 删除；修改文件 → 用 oldContent 覆盖恢复）
-- `FileDiff recomputeDiff(FileDiff original)`: 重新计算 Diff（基于当前文件内容与 original.oldContent 用 JGit 重新生成 hunks）。用于历史对话场景，文件可能已被进一步修改。不存储/发布事件，读取失败时返回原始 diff
-- `List<FileDiff> scanWorkingTreeDiffs(Path projectPath)`: 扫描 Git 工作区未提交变更。用 JGit status 获取 modified/untracked/missing 文件，对比 HEAD 版本生成 FileDiff 列表。不存入 pendingDiffs，仅返回供 UI 显示。非 Git 仓库返回空列表
+- `FileDiff recomputeDiff(FileDiff original)`: 重新计算 Diff（基于当前文件内容与 original.oldContent 用 JGit 重新生成 hunks）。**当前 diff 显示不再调用此方法**（直接使用 DiffEvent 原始 diff），方法保留供进化功能或其他场景使用。不存储/发布事件，读取失败时返回原始 diff
+- `List<FileDiff> scanWorkingTreeDiffs(Path projectPath)`: 扫描 Git 工作区未提交变更。用 JGit status 获取 modified/untracked/missing 文件，对比 HEAD 版本生成 FileDiff 列表。不存入 pendingDiffs。**当前 diff 显示不再调用此方法**（改用 DiffEvent 数据源），方法保留仅供进化功能（L4 自优化）使用。非 Git 仓库返回空列表
 - `void approveFileDiff(FileDiff diff)`: 批准文件 Diff（直接基于 FileDiff 对象，从 pendingDiffs 移除，不修改文件）
 - `void rejectFileDiff(FileDiff diff)`: 拒绝文件 Diff 并回滚文件内容（直接基于 FileDiff 对象，新建文件删除，修改文件用 oldContent 覆盖）
 - `readHeadContent(Repository, ObjectId, String)`: 私有方法，读取 HEAD 版本中指定文件的内容
@@ -38,7 +38,7 @@ Diff 服务（Spring `@Component`），生成和管理文件 Diff，使用 JGit 
 **设计：**
 - 使用 `ConcurrentHashMap` 存储待审核 Diff
 - `generateHunks` 使用 JGit `HistogramDiff` 算法（项目已依赖 org.eclipse.jgit:7.1.0），对代码重构场景输出比 MyersDiff 更可读，无需引入额外 diff 库
-- DiffEvent 通过 EventBus 发布，由 `RightSidebarController.subscribeDiffEvents` 订阅更新 UI
+- DiffEvent 通过 EventBus 发布，由 `HomePageController.subscribeDiffEvents` 订阅，UI 直接使用事件中的 FileDiff 数据追加卡片（不再扫描 git 工作区）
 
 ## 设计模式
 - 服务模式：DiffService 封装 Diff 生成逻辑

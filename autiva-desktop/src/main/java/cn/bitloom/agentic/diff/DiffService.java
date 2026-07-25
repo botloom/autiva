@@ -60,8 +60,9 @@ public class DiffService {
 
         FileDiff diff = new FileDiff(id, filePath.toString(), hunks, isCreate, isDelete, oldSafe);
         pendingDiffs.put(id, diff);
-        log.info("生成 Diff: {} ({})", filePath, id);
+        log.info("[DiffService] 生成 Diff: {} ({}), hunks={}", filePath, id, hunks.size());
         EventBus.publishOut(DiffEvent.of(null, diff));
+        log.info("[DiffService] 已发布 DiffEvent: {}", filePath);
         return diff;
     }
 
