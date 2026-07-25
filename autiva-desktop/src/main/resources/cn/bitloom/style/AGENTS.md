@@ -185,6 +185,13 @@
 - `.home-page__file-tag-icon`: 文件标签图标（12x12）
 - `.home-page__file-tag-name`: 文件标签文件名（12px，max-width 180）
 - `.home-page__file-tag-close`: 文件标签关闭按钮（18x18 圆形，透明背景）
+- `.home-page__diff-files-scroll`: diff 文件卡片条滚动容器（位于 chatScrollPane 与 sendBox 之间，maxHeight 200，纵向布局，透明背景，自定义细滚动条与 chat-scroll-pane 一致）
+- `.home-page__diff-files-bar`: diff 文件卡片条 VBox 容器（spacing 4，padding 0 16 0 16）
+- `.home-page__diff-file-card`: diff 文件卡片项（HBox，浅色背景 #f0f0f5，8px 圆角，padding 6 10，spacing 6，hover 背景变深，cursor hand）
+- `.home-page__diff-file-card__name`: 卡片文件名（12px 深色）
+- `.home-page__diff-file-card__stats`: 卡片变更统计（11px 等宽）
+- `.home-page__diff-file-card__stats--add`: 加行统计（绿色 #30d158）
+- `.home-page__diff-file-card__stats--remove`: 减行统计（红色 #ff453a）
 - `.chat-scroll-pane`: 聊天滚动面板
 - `.chat-container`: 聊天消息容器
 - `.chat-message`: 消息卡片基础样式
