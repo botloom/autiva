@@ -161,6 +161,20 @@
 **用途：**
 - ButtonBar 的"终端"按钮图标（蓝色，与项目/变更按钮风格一致）
 
+#### plug.svg
+工具图标（扳手图形，Apple Blue #0071e3 描边，stroke-width 3）。
+
+**用途：**
+- ButtonBar 的"工具"按钮图标（蓝色，与终端/项目/变更按钮风格一致）
+- 点击切换 EditorPanel 的工具调用视图（ToolGroupCard 分组展示）
+
+#### list.svg
+清单图标（三个圆点 + 三条横线，Apple Blue #0071e3 描边，stroke-width 3）。
+
+**用途：**
+- ButtonBar 的"待办"按钮图标（蓝色，与终端/项目/变更/工具按钮风格一致）
+- 点击切换 EditorPanel 的待办视图（TodoCard 展示）
+
 #### git-branch.svg
 Git 分支图标（currentColor 描边，可主题化）。
 
@@ -172,6 +186,19 @@ Git 分支图标（currentColor 描边，可主题化）。
 
 **用途：**
 - 侧边栏画布导航项图标
+
+#### task.svg
+任务图标（时钟样式，Apple Blue #0071e3 描边）。
+
+**用途：**
+- 侧边栏任务导航项图标
+- 区别于 ButtonBar 的 list.svg 待办图标
+
+**设计：**
+- 圆形外框（表盘）
+- 时针和分针
+- 中心圆点
+- 右上角铃铛装饰（暗示定时/提醒）
 
 ### 画布工具图标
 

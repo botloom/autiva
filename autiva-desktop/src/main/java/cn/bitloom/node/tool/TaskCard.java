@@ -41,7 +41,6 @@ public class TaskCard extends VBox {
     private final VBox messageContainer;
     private final StringBuilder streamBuffer = new StringBuilder();
     private VBox currentStreamBox = null;
-    private ToolGroupCard currentToolGroup = null;
 
     private boolean userCollapsed = false;
 
@@ -105,7 +104,6 @@ public class TaskCard extends VBox {
 
     public void addTodoCard(TodoCard card) {
         Platform.runLater(() -> {
-            closeCurrentToolGroup();
             messageContainer.getChildren().add(card);
             ensureBodyVisible();
             notifyContentChanged();
@@ -114,7 +112,6 @@ public class TaskCard extends VBox {
 
     public void addQuestionCard(QuestionCard card) {
         Platform.runLater(() -> {
-            closeCurrentToolGroup();
             messageContainer.getChildren().add(card);
             ensureBodyVisible();
             notifyContentChanged();
@@ -147,7 +144,6 @@ public class TaskCard extends VBox {
                 return;
             }
             if (currentStreamBox == null) {
-                closeCurrentToolGroup();
                 currentStreamBox = new VBox(4);
                 currentStreamBox.getStyleClass().add("chat-message__task-assistant");
                 messageContainer.getChildren().add(currentStreamBox);
@@ -235,7 +231,6 @@ public class TaskCard extends VBox {
     }
 
     private void appendMarkdownNode(String content) {
-        closeCurrentToolGroup();
         VBox mdBox = new VBox(4);
         mdBox.getStyleClass().add("chat-message__task-assistant");
         renderStreamContent(mdBox, content);
@@ -246,28 +241,14 @@ public class TaskCard extends VBox {
         ToolMessageCard card = new ToolMessageCard(toolName, arguments, true);
         HBox wrapper = new HBox(card);
         wrapper.setAlignment(Pos.CENTER_LEFT);
-        addToToolGroup(wrapper, toolName);
+        messageContainer.getChildren().add(wrapper);
     }
 
     private void appendToolResponseCard(String toolName, String responseData) {
         ToolMessageCard card = new ToolMessageCard(toolName, responseData, false);
         HBox wrapper = new HBox(card);
         wrapper.setAlignment(Pos.CENTER_LEFT);
-        addToToolGroup(wrapper, toolName);
-    }
-
-    private void addToToolGroup(Node toolCard, String toolName) {
-        if (currentToolGroup != null) {
-            currentToolGroup.addToolCard(toolCard, toolName);
-        } else {
-            currentToolGroup = new ToolGroupCard();
-            currentToolGroup.addToolCard(toolCard, toolName);
-            messageContainer.getChildren().add(currentToolGroup);
-        }
-    }
-
-    private void closeCurrentToolGroup() {
-        currentToolGroup = null;
+        messageContainer.getChildren().add(wrapper);
     }
 
     private void ensureBodyVisible() {
@@ -326,7 +307,6 @@ public class TaskCard extends VBox {
 
     public void complete(String result) {
         Platform.runLater(() -> {
-            closeCurrentToolGroup();
             if (result != null && !result.isBlank()) {
                 streamBuffer.append("\n").append(result);
             }

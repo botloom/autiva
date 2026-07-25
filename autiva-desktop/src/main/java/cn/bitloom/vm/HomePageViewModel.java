@@ -1,7 +1,7 @@
 package cn.bitloom.vm;
 
+import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.EventBus;
-import cn.bitloom.agentic.event.EventConverter;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.project.ProjectInfo;
 import cn.bitloom.agentic.project.ProjectRegistry;
@@ -23,7 +23,6 @@ import reactor.core.Disposable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 @Slf4j
 @Component
@@ -47,6 +46,10 @@ public class HomePageViewModel {
     private Session session;
     private AssistantMessageCard currentAssistantCard = null;
     private Disposable outBoxSubscription;
+    /**
+     * 历史消息加载标志：prepareHistoricalMessages 期间为 true，用于跳过工具消息（历史工具不显示）
+     */
+    private boolean isLoadingHistory = false;
 
     public HomePageViewModel(FileSystemSessionManager fileSystemSessionManager, ProjectRegistry projectRegistry) {
         this.fileSystemSessionManager = fileSystemSessionManager;
@@ -154,84 +157,61 @@ public class HomePageViewModel {
     /**
      * 注册本地文件夹并设为当前
      */
-    public ProjectInfo registerLocalProject(String path, String name) throws java.io.IOException {
+    public void registerLocalProject(String path, String name) throws java.io.IOException {
         ProjectInfo project = projectRegistry.registerLocal(path, name);
         currentProject.set(project);
-        return project;
     }
 
     public void prepareHistoricalMessages() {
-        List<org.springframework.ai.chat.messages.Message> historicalMessages = this.session.getMessages();
-        if (historicalMessages.isEmpty()) {
+        // 从 events.jsonl 加载所有未压缩的历史事件（memoryCursor 到末尾）
+        int memoryCursor = this.session.getMemoryCursor();
+        List<AbstractEvent> events = fileSystemSessionManager.loadEvents(
+                this.session.getId(), memoryCursor, Integer.MAX_VALUE);
+        if (events.isEmpty()) {
             return;
         }
 
-        List<MessageEvent> events = EventConverter.fromMessages(this.session.getId(), historicalMessages);
-
-        int batchSize = 20;
-        for (int i = 0; i < events.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, events.size());
-            List<MessageEvent> batch = events.subList(i, end);
-            if (i == 0) {
-                for (MessageEvent event : batch) {
-                    processEvent(event);
-                }
-            } else {
-                List<MessageEvent> batchCopy = new ArrayList<>(batch);
-                Platform.runLater(() -> {
-                    for (MessageEvent event : batchCopy) {
-                        processEvent(event);
+        // 历史加载期间跳过工具消息（历史工具不显示）
+        isLoadingHistory = true;
+        try {
+            // 分批渲染避免阻塞 FX 线程
+            int batchSize = 20;
+            for (int i = 0; i < events.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, events.size());
+                List<AbstractEvent> batch = new ArrayList<>(events.subList(i, end));
+                boolean isLastBatch = end == events.size();
+                if (i == 0) {
+                    // 首批同步处理
+                    for (AbstractEvent event : batch) {
+                        if (event instanceof MessageEvent me) {
+                            processEvent(me);
+                        }
                     }
-                });
+                    if (isLastBatch) {
+                        isLoadingHistory = false;
+                    }
+                } else {
+                    Platform.runLater(() -> {
+                        for (AbstractEvent event : batch) {
+                            if (event instanceof MessageEvent me) {
+                                processEvent(me);
+                            }
+                        }
+                        if (isLastBatch) {
+                            isLoadingHistory = false;
+                        }
+                    });
+                }
             }
+        } catch (Exception e) {
+            isLoadingHistory = false;
+            throw e;
         }
-    }
-
-    public List<MessageCard> loadMoreMessages(int count) {
-        if (this.session == null) {
-            return List.of();
-        }
-
-        int currentBaseOffset = this.session.getMemoryBaseOffset();
-        int memoryCursor = this.session.getMemoryCursor();
-
-        // 没有更多历史消息（已到游标位置）
-        if (currentBaseOffset <= memoryCursor) {
-            return List.of();
-        }
-
-        int newOffset = Math.max(memoryCursor, currentBaseOffset - count);
-        int toLoad = currentBaseOffset - newOffset;
-
-        // 从磁盘按需加载
-        List<org.springframework.ai.chat.messages.Message> olderMessages =
-                fileSystemSessionManager.loadMessagesRange(this.session.getId(), newOffset, toLoad);
-
-        if (olderMessages.isEmpty()) {
-            return List.of();
-        }
-
-        // 更新内存状态
-        this.session.setMemoryBaseOffset(newOffset);
-        this.session.getMessages().addAll(0, olderMessages);
-
-        return EventConverter.fromMessages(this.session.getId(), olderMessages).stream()
-                .flatMap(e -> convertEventToCards(e).stream())
-                .filter(Objects::nonNull)
-                .toList();
-    }
-
-    public void prependHistoricalMessages(List<MessageCard> olderCards) {
-        this.messages.addAll(0, olderCards);
-    }
-
-    public boolean hasMoreMessages() {
-        return this.session != null
-                && this.session.getMemoryBaseOffset() > this.session.getMemoryCursor();
     }
 
     public boolean hasHistoricalMessages() {
-        return this.session != null && !this.session.getMessages().isEmpty();
+        return this.session != null
+                && fileSystemSessionManager.countEvents(this.session.getId()) > this.session.getMemoryCursor();
     }
 
     // ===== 事件处理 =====
@@ -271,7 +251,6 @@ public class HomePageViewModel {
             // 结束流式
             Store.isStreaming.set(false);
             Store.isPaused.set(false);
-            fileSystemSessionManager.updateState(this.session.getId(), SessionState.IDLE);
 
             if (currentAssistantCard != null) {
                 currentAssistantCard.complete("STOP");
@@ -293,8 +272,8 @@ public class HomePageViewModel {
                 currentAssistantCard = null;
             }
 
-            // 创建工具调用卡片
-            if (e.getToolCalls() != null) {
+            // 创建工具调用卡片（历史加载期间跳过：历史工具不显示）
+            if (e.getToolCalls() != null && !isLoadingHistory) {
                 for (MessageEvent.ToolCallInfo tc : e.getToolCalls()) {
                     messages.add(new ToolMessageCard(tc.name(), tc.arguments(), true));
                 }
@@ -303,40 +282,15 @@ public class HomePageViewModel {
     }
 
     private void processToolEvent(MessageEvent e) {
+        // 历史加载期间跳过工具响应消息（历史工具不显示）
+        if (isLoadingHistory) {
+            return;
+        }
         if (e.getResponses() != null && !e.getResponses().isEmpty()) {
             for (MessageEvent.ToolResponseInfo resp : e.getResponses()) {
                 messages.add(new ToolMessageCard(resp.name(), resp.responseData(), false));
             }
         }
-    }
-
-    /**
-     * 将 MessageEvent 转换为卡片列表（用于历史消息加载）
-     */
-    private List<MessageCard> convertEventToCards(MessageEvent event) {
-        List<MessageCard> cards = new ArrayList<>();
-        if (event.isUserMessage()) {
-            cards.add(new UserMessageCard(event.getText()));
-        } else if (event.isAssistantMessage()) {
-            String finishReason = event.getFinishReason();
-            String text = event.getText();
-            if (text != null && !text.isBlank()) {
-                cards.add(new AssistantMessageCard(text, finishReason));
-            }
-            // TOOL_CALLS 时也创建工具调用卡片
-            if ("TOOL_CALLS".equals(finishReason) && event.getToolCalls() != null) {
-                for (MessageEvent.ToolCallInfo tc : event.getToolCalls()) {
-                    cards.add(new ToolMessageCard(tc.name(), tc.arguments(), true));
-                }
-            }
-        } else if (event.isToolResponse()) {
-            if (event.getResponses() != null) {
-                for (MessageEvent.ToolResponseInfo resp : event.getResponses()) {
-                    cards.add(new ToolMessageCard(resp.name(), resp.responseData(), false));
-                }
-            }
-        }
-        return cards;
     }
 
     public void addUserMessage(String text) {
@@ -350,14 +304,12 @@ public class HomePageViewModel {
                     SessionRespTypeEnum.STREAM, Store.selectedModel.get());
             Store.currentSessionId.set(this.session.getId());
             subscribeOutBox();
-        } else if (this.session.isStop()) {
+        } else {
             fileSystemSessionManager.activate(this.session.getId());
             subscribeOutBox();
         }
-        Store.statusText.set("正在处理...");
         Store.isStreaming.set(true);
         Store.isPaused.set(false);
-        fileSystemSessionManager.updateState(this.session.getId(), SessionState.GENERATING);
         // coder 智能体且有当前项目时，将项目信息附加到消息中
         String messageText = buildMessageWithContext(text);
         EventBus.publishIn(MessageEvent.userMessage(this.session.getId(), messageText));
@@ -384,10 +336,8 @@ public class HomePageViewModel {
         Store.isStreaming.set(false);
         Store.isPaused.set(false);
         if (this.session != null) {
-            fileSystemSessionManager.updateState(this.session.getId(), SessionState.IDLE);
             fileSystemSessionManager.clear(this.session.getId());
         }
-        Store.statusText.set("就绪");
     }
 
     public void pauseGeneration() {
@@ -395,7 +345,6 @@ public class HomePageViewModel {
             Store.isPaused.set(true);
             if (this.session != null) {
                 fileSystemSessionManager.stopSession(this.session.getId());
-                fileSystemSessionManager.updateState(this.session.getId(), SessionState.PAUSED);
             }
 
             if (currentAssistantCard != null) {
@@ -403,7 +352,6 @@ public class HomePageViewModel {
                 currentAssistantCard = null;
             }
 
-            Store.statusText.set("已暂停");
         }
     }
 

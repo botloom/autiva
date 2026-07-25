@@ -33,6 +33,7 @@ public class ToolUIBridge {
     private final Map<String, TaskCard> sessionTaskCards = new ConcurrentHashMap<>();
     private final Map<String, A2UICard> activeSurfaces = new ConcurrentHashMap<>();
     private Disposable outBoxSubscription;
+    private TodoCard currentTodoCard = null;
 
     @Setter
     private Consumer<Node> onNodeAdded;
@@ -100,17 +101,33 @@ public class ToolUIBridge {
     public void showTodos(String todosJson, String sessionId) {
         Platform.runLater(() -> {
             try {
-                TodoCard card = new TodoCard(todosJson);
                 TaskCard taskCard = sessionId != null ? this.sessionTaskCards.get(sessionId) : null;
                 if (taskCard != null) {
+                    // 子智能体场景：仍新建（TaskCard 内部管理）
+                    TodoCard card = new TodoCard(todosJson);
                     taskCard.addTodoCard(card);
-                } else if (this.onNodeAdded != null) {
-                    this.onNodeAdded.accept(card);
+                } else {
+                    // 主对话场景：复用 currentTodoCard，避免每次更新都新建卡片
+                    if (currentTodoCard == null) {
+                        currentTodoCard = new TodoCard(todosJson);
+                        if (this.onNodeAdded != null) {
+                            this.onNodeAdded.accept(currentTodoCard);
+                        }
+                    } else {
+                        currentTodoCard.update(todosJson);
+                    }
                 }
             } catch (Exception e) {
                 log.error("Error showing todos", e);
             }
         });
+    }
+
+    /**
+     * 重置当前 TodoCard 引用（新会话时调用，使下次 showTodos 创建新卡片）
+     */
+    public void resetTodoCard() {
+        this.currentTodoCard = null;
     }
 
     public void createTaskCard(String taskId, String taskJson) {

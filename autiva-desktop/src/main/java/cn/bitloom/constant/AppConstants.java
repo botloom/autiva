@@ -84,6 +84,10 @@ public class AppConstants {
             return MainAgent.sessionsDir(agentId).resolve(sessionId).resolve("messages.jsonl");
         }
 
+        public static Path eventsFile(String agentId, String sessionId) {
+            return MainAgent.sessionsDir(agentId).resolve(sessionId).resolve("events.jsonl");
+        }
+
     }
 
     public static class Context {

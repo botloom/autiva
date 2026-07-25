@@ -1,7 +1,6 @@
 package cn.bitloom.vm;
 
 import cn.bitloom.config.ConfigManager;
-import cn.bitloom.store.Store;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import lombok.Getter;
@@ -43,7 +42,6 @@ public class SettingsPageViewModel {
         configManager.setDeepseekApiKey(deepseekApiKey.get());
         configManager.setDeepseekChatModel(deepseekChatModel.get());
         configManager.save();
-        Store.statusText.set("配置已保存");
     }
 
     public void reset() {
@@ -54,6 +52,5 @@ public class SettingsPageViewModel {
         configManager.setDeepseekChatModel(null);
         configManager.save();
         loadFromStore();
-        Store.statusText.set("重置成功");
     }
 }

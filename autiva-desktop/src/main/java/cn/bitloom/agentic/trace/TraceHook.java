@@ -216,17 +216,8 @@ public class TraceHook implements IAgentHook {
     // ========== 辅助方法 ==========
 
     private String extractLastUserMessage(RuntimeContext ctx) {
-        if (ctx.getSession() == null || ctx.getSession().getMessages() == null) {
-            return null;
-        }
-        var messages = ctx.getSession().getMessages();
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            var msg = messages.get(i);
-            if (msg instanceof UserMessage um) {
-                return um.getText();
-            }
-        }
-        return null;
+        Object msg = ctx.getParam("lastUserMessage");
+        return msg != null ? msg.toString() : null;
     }
 
     private String generateTraceId() {

@@ -1,8 +1,11 @@
 package cn.bitloom.agentic.event;
 
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import lombok.extern.jackson.Jacksonized;
 
 import java.util.Map;
 
@@ -14,7 +17,12 @@ import java.util.Map;
 @Getter
 @Setter
 @SuperBuilder
+@Jacksonized
+@NoArgsConstructor
 public final class A2UIActionEvent extends AbstractEvent {
+
+    @Builder.Default
+    private EventTypeEnum eventType = EventTypeEnum.A2UI_ACTION;
 
     /** Surface ID */
     private String surfaceId;
@@ -27,6 +35,9 @@ public final class A2UIActionEvent extends AbstractEvent {
 
     /** 上下文数据(已解析的值) */
     private Map<String, Object> context;
+
+    @Override
+    public EventTypeEnum getEventType() { return eventType; }
 
     /** 静态工厂方法 */
     public static A2UIActionEvent of(String sessionId, String surfaceId,

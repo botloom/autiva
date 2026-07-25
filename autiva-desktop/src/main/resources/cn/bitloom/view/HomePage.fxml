@@ -28,6 +28,14 @@
         <VBox fx:id="chatContainer" styleClass="chat-container"/>
     </ScrollPane>
 
+    <ScrollPane fx:id="diffFilesScroll" styleClass="home-page__diff-files-scroll"
+                visible="false" managed="false"
+                prefWidth="600" maxWidth="1000" minWidth="300"
+                maxHeight="200"
+                fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
+        <VBox fx:id="diffFilesBar" styleClass="home-page__diff-files-bar"/>
+    </ScrollPane>
+
     <VBox fx:id="sendBox"
           styleClass="home-page__send-box"
           alignment="TOP_CENTER"

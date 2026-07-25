@@ -1,5 +1,7 @@
 package cn.bitloom.controller;
 
+import cn.bitloom.agentic.event.AbstractEvent;
+import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.session.Session;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.holder.PageHolder;
@@ -20,7 +22,6 @@ import javafx.scene.layout.VBox;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
-import org.springframework.ai.chat.messages.Message;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
@@ -182,12 +183,13 @@ public class SideBarController implements Initializable, PageHolder {
         if (!item.getChildren().isEmpty() && item.getChildren().get(0) instanceof VBox textContainer) {
             if (!textContainer.getChildren().isEmpty() && textContainer.getChildren().get(0) instanceof Label titleLabel) {
                 String title = session.getTitle();
-                // 仅当标题仍为默认值时，取第一条用户消息作为标题
+                // 仅当标题仍为默认值时，从 events.jsonl 取第一条 USER 事件作为标题
                 if ("新对话".equals(title)) {
-                    List<Message> messages = session.getMessages();
-                    for (Message msg : messages) {
-                        if ("USER".equals(msg.getMessageType().name()) && msg.getText() != null && !msg.getText().isBlank()) {
-                            String text = msg.getText().replace("\n", " ").trim();
+                    List<AbstractEvent> events = fileSystemSessionManager.loadEvents(session.getId(), 0, 10);
+                    for (AbstractEvent event : events) {
+                        if (event instanceof MessageEvent me && me.isUserMessage()
+                                && me.getText() != null && !me.getText().isBlank()) {
+                            String text = me.getText().replace("\n", " ").trim();
                             String newTitle = text.length() > 20 ? text.substring(0, 20) + "..." : text;
                             // 持久化到 Session
                             fileSystemSessionManager.updateSession(session.getId(), s -> s.setTitle(newTitle));

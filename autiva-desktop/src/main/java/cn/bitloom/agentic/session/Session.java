@@ -1,13 +1,11 @@
 package cn.bitloom.agentic.session;
 
 import cn.bitloom.agentic.model.ModelTypeEnum;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.Message;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 会话实体类，唯一的状态源。
@@ -43,9 +41,6 @@ public class Session {
     @Builder.Default
     private Long updateAt = System.currentTimeMillis();
 
-    @Builder.Default
-    private SessionState sessionState = SessionState.IDLE;
-
     // ===== 对话上下文 =====
 
     @Builder.Default
@@ -66,46 +61,5 @@ public class Session {
 
     @Builder.Default
     private int currentContextLength = 0;
-
-    // ===== 上下文注入控制 =====
-
-    /** 标记动态上下文是否已注入到当前对话 */
-    @JsonIgnore
-    @Builder.Default
-    private boolean contextInjected = false;
-
-    /** memory.md 内容的哈希值，用于检测变化 */
-    @JsonIgnore
-    private String lastMemoryHash;
-
-    // ===== 元数据 =====
-
-    private Long savedAt;
-
-    @Builder.Default
-    private boolean shutdownInterrupted = false;
-
-    // ===== 瞬态字段（不序列化） =====
-
-    @Getter
-    @Setter
-    @JsonIgnore
-    @Builder.Default
-    private List<Message> messages = new ArrayList<>();
-
-    /**
-     * 内存列表第一条消息对应磁盘 messages.jsonl 的行号。
-     * 压缩后清理内存时推进此值；加载更多历史消息时回退此值。
-     * 初始值 = memoryCursor（内存从游标后开始加载）。
-     */
-    @Getter
-    @Setter
-    @JsonIgnore
-    @Builder.Default
-    private int memoryBaseOffset = 0;
-
-    public Boolean isStop() {
-        return this.getSessionState() == SessionState.STOPPED;
-    }
 
 }

@@ -806,57 +806,7 @@
     -fx-background-color: #f0fff4;
 }
 
-/* 工具分组卡片 */
-.chat-message--tool-group {
-    -fx-background-color: #f8f9fa;
-    -fx-border-color: #e0e0e0;
-    -fx-border-width: 1;
-    -fx-border-radius: 12;
-    -fx-background-radius: 12;
-    -fx-padding: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.05), 3, 0, 0, 1);
-}
-
-.chat-message__tool-group-header {
-    -fx-spacing: 8;
-    -fx-padding: 10 14;
-    -fx-alignment: CENTER_LEFT;
-    -fx-cursor: hand;
-    -fx-background-radius: 12;
-}
-
-.chat-message__tool-group-header:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.03);
-}
-
-.chat-message__tool-group-chevron {
-    -fx-font-size: 11px;
-    -fx-text-fill: #86868b;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-.chat-message__tool-group-count {
-    -fx-font-size: 13px;
-    -fx-font-weight: 600;
-    -fx-text-fill: #1d1d1f;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-.chat-message__tool-group-separator {
-    -fx-font-size: 13px;
-    -fx-text-fill: #c7c7cc;
-}
-
-.chat-message__tool-group-names {
-    -fx-font-size: 12px;
-    -fx-text-fill: #86868b;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-.chat-message__tool-group-body {
-    -fx-padding: 0 8 8 8;
-    -fx-spacing: 6;
-}
+/* 工具分组卡片已废弃（ToolGroupCard 删除） */
 
 .chat-message--question {
     -fx-background-color: linear-gradient(to bottom right, #faf5ff, #f3e8ff);
@@ -1116,6 +1066,116 @@
 .chat-message__todo-summary {
     -fx-font-size: 11px;
     -fx-text-fill: #92400e;
+}
+
+/* ===== TodoCard 进度环 + 紧凑清单 ===== */
+.chat-message__todo-progress-ring {
+    -fx-min-width: 30;
+    -fx-min-height: 30;
+    -fx-pref-width: 30;
+    -fx-pref-height: 30;
+}
+
+.chat-message__todo-progress-ring-bg {
+    -fx-stroke: #e5e7eb;
+    -fx-fill: transparent;
+}
+
+.chat-message__todo-progress-ring-fg {
+    -fx-stroke: #22c55e;
+    -fx-fill: transparent;
+    -fx-stroke-line-cap: round;
+}
+
+.chat-message__todo-summary-text {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1d1d1f;
+}
+
+/* ===== Diff 文件卡片条（聊天输入框上方，纵向） ===== */
+.home-page__diff-files-scroll {
+    -fx-background-color: transparent;
+    -fx-padding: 0 16 0 16;
+    -fx-pref-height: 120;
+    -fx-max-height: 200;
+    -fx-min-height: 0;
+    -fx-fit-to-width: true;
+    -fx-background-insets: 0;
+}
+
+.home-page__diff-files-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.home-page__diff-files-scroll > .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6;
+}
+.home-page__diff-files-scroll > .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.2);
+    -fx-background-radius: 3;
+}
+.home-page__diff-files-scroll > .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+.home-page__diff-files-scroll > .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+.home-page__diff-files-scroll > .scroll-bar:vertical .increment-button,
+.home-page__diff-files-scroll > .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+.home-page__diff-files-scroll > .scroll-bar:vertical .increment-arrow,
+.home-page__diff-files-scroll > .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.home-page__diff-files-bar {
+    -fx-background-color: transparent;
+    -fx-spacing: 4;
+    -fx-alignment: top-center;
+    -fx-padding: 2 0;
+}
+
+.home-page__diff-file-card {
+    -fx-background-color: #f0f7ff;
+    -fx-background-radius: 8;
+    -fx-border-color: #d1e3ff;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-padding: 6 10;
+    -fx-spacing: 6;
+    -fx-alignment: CENTER_LEFT;
+    -fx-cursor: hand;
+    -fx-max-width: Infinity;
+}
+
+.home-page__diff-file-card:hover {
+    -fx-background-color: #e0efff;
+}
+
+.home-page__diff-file-card__name {
+    -fx-font-size: 12px;
+    -fx-text-fill: #1d1d1f;
+    -fx-font-family: "SF Pro Text", -apple-system, sans-serif;
+}
+
+.home-page__diff-file-card__stats {
+    -fx-font-size: 11px;
+    -fx-font-family: "SF Mono", monospace;
+    -fx-font-weight: bold;
+}
+
+.home-page__diff-file-card__stats--add {
+    -fx-text-fill: #22c55e;
+}
+
+.home-page__diff-file-card__stats--remove {
+    -fx-text-fill: #ef4444;
 }
 
 .chat-message--task {

@@ -88,10 +88,7 @@ public class LlmGrader {
                 return List.of(Feedback.pass());
             }
 
-            String userMessage = ctx.getSession() != null && ctx.getSession().getMessages() != null
-                    && !ctx.getSession().getMessages().isEmpty()
-                    ? getLastUserMessage(ctx)
-                    : "(用户消息不可用)";
+            String userMessage = getLastUserMessage(ctx);
 
             String prompt = buildPrompt(rubricText, output.getText(), userMessage);
 
@@ -127,18 +124,8 @@ public class LlmGrader {
     }
 
     private String getLastUserMessage(RuntimeContext ctx) {
-        if (ctx.getSession() == null || ctx.getSession().getMessages() == null) {
-            return "(无会话消息)";
-        }
-        // 反向遍历找到最后一条 UserMessage
-        var messages = ctx.getSession().getMessages();
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            var msg = messages.get(i);
-            if (msg instanceof org.springframework.ai.chat.messages.UserMessage um) {
-                return um.getText() != null ? um.getText() : "(空用户消息)";
-            }
-        }
-        return "(未找到用户消息)";
+        Object msg = ctx.getParam("lastUserMessage");
+        return msg != null ? msg.toString() : "(未找到用户消息)";
     }
 
     private List<Feedback> parseFeedback(String response) {

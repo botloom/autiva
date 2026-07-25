@@ -494,47 +494,18 @@
     -fx-text-fill: -autiva-text-secondary;
 }
 
-/* Hunk 头：默认半透明蓝色背景 + 青色文字；
-   --hidden 修饰类将其完全压缩隐藏（不展示 @@ 行号信息）。 */
-.diff-hunk-header {
-    -fx-background-color: rgba(10, 132, 255, 0.20);
-    -fx-text-fill: #5ac8fa;
-}
-
-.diff-hunk-header--hidden {
-    -fx-background-color: transparent;
-    -fx-text-fill: transparent;
-    -fx-font-size: 1px;
-    -fx-padding: 0;
-    -fx-cell-size: 0;
-    -fx-min-height: 0;
-    -fx-pref-height: 0;
-    -fx-max-height: 0;
-}
+/* ===== Diff 行级高亮（单栏行内高亮，类似 IDEA in-editor diff） ===== */
 
 .diff-line-add {
-    -fx-background-color: rgba(48, 209, 88, 0.22);
-    -fx-text-fill: #8de8a4;
+    -fx-background-color: rgba(48, 209, 88, 0.18);
 }
 
-.diff-line-remove {
-    -fx-background-color: rgba(255, 69, 58, 0.22);
-    -fx-text-fill: #ff9a92;
+.diff-line-remove-marker {
+    -fx-background-color: rgba(255, 69, 58, 0.18);
+    -fx-strikethrough: true;
 }
 
-.diff-line-context {
-    -fx-background-color: transparent;
-    -fx-text-fill: -autiva-text-primary;
-}
-
-/* ===== Diff 双列行号区域 ===== */
-
-.diff-lineno-box {
-    -fx-background-color: -autiva-bg;
-    -fx-padding: 0 8 0 0;
-    -fx-border-width: 0 1 0 0;
-    -fx-border-color: transparent -autiva-separator transparent transparent;
-}
+/* ===== Diff 单列行号 ===== */
 
 .diff-lineno {
     -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
@@ -543,34 +514,8 @@
     -fx-alignment: center-right;
 }
 
-.diff-lineno--add {
-    -fx-text-fill: rgba(48, 209, 88, 0.8);
-}
-
-.diff-lineno--remove {
-    -fx-text-fill: rgba(255, 69, 58, 0.8);
-}
-
-.diff-lineno-hunk {
-    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
-    -fx-font-size: 11px;
-    -fx-text-fill: -autiva-cyan;
-}
-
-/* ===== Diff Gutter 指示条 ===== */
-
-.diff-gutter-indicator {
-    -fx-background-color: transparent;
-}
-
-.diff-gutter-indicator--add {
-    -fx-background-color: -autiva-green;
-    -fx-background-radius: 1;
-}
-
-.diff-gutter-indicator--remove {
-    -fx-background-color: -autiva-red;
-    -fx-background-radius: 1;
+.diff-lineno--single {
+    -fx-text-fill: -autiva-text-tertiary;
 }
 
 /* ===== Diff 审核按钮栏 ===== */
@@ -642,6 +587,26 @@
 
 .jedi-terminal-view {
     -fx-background-color: -autiva-bg;
+}
+
+/* ===== 工具调用 / 待办 卡片容器 ===== */
+
+.editor-panel__card-scroll {
+    -fx-background-color: -autiva-bg;
+    -fx-padding: 8;
+}
+
+.editor-panel__card-scroll .viewport {
+    -fx-background-color: -autiva-bg;
+}
+
+.editor-panel__card-scroll .content {
+    -fx-background-color: -autiva-bg;
+}
+
+.editor-panel__card-container {
+    -fx-background-color: transparent;
+    -fx-spacing: 8;
 }
 
 .jedi-terminal-view .terminal-wrapper {

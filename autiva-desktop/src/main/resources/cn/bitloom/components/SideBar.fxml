@@ -36,7 +36,7 @@
 
         <HBox fx:id="taskOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
             <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/list.svg"/>
+                          svgPath="/cn/bitloom/images/task.svg"/>
             <Label text="任务" styleClass="sidebar__label"/>
         </HBox>
 

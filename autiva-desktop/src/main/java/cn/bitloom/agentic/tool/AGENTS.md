@@ -101,10 +101,10 @@ Spring @Component，统一管理工具注册和构建。
 
 ## 工具注册方式
 
-所有工具在 Toolkit.buildToolCallbacks() 中统一注册，Toolkit 是 Spring @Component，由 FileSystemSessionManager.getOrCreateAgent() 和 TaskTool.createSubagent() 调用：
+所有工具在 Toolkit.buildToolCallbacks() 中统一注册，Toolkit 是 Spring @Component，由 FileSystemSessionManager.buildAgent() 和 TaskTool.createSubagent() 调用：
 
 ```java
-// FileSystemSessionManager.getOrCreateAgent() 中：
+// FileSystemSessionManager.buildAgent() 中：
 List<ToolCallback> tools = toolkit.buildToolCallbacks(definition);
 ```
 
@@ -239,25 +239,24 @@ tool/
 ### task 包 (`cn.bitloom.agentic.tool.task`)
 子代理任务工具，统一继承 AbstractTool。
 
-- **TaskTool**: 启动子代理执行任务（继承 AbstractTool\<TaskTool.Input\>）。子 Session 机制：每个子智能体任务创建一个子 Session（InMemorySessionManager 管理），子 Session 拥有 ChatMemory 支持对话历史，resume 时通过子 Session 恢复上下文。使用 Agent.Builder 构建子智能体并注册 InMemoryChatMemory（`.memory(inMemorySessionManager.getChatMemory())`）。Input record 包含 description/prompt/subagent_type/model/resume/run_in_background。内部 public record TaskCall 包含 description/prompt/subagentName/resume/runInBackground。Builder 接受 Toolkit/ModelFactory/TaskRepository/ToolUIBridge/AgentDefinitionManager/InMemorySessionManager。name="Task"。**编码智能体透传**：构造子智能体 RuntimeContext 后，从父 ToolContext 传递 reviewDiff 和 projectPath 标志到子智能体 params，使 code 子智能体的 WriteTool/EditTool 能启用 Diff 审核
-  - `createSubagent(name)`: 创建子智能体 Agent 实例（从 definitionManager 获取定义 → 构建 ChatModel → Agent.Builder 创建，注册 InMemoryChatMemory）
-  - `executeSubagent(agent, ctx, taskCall, taskId)`: 子智能体执行逻辑，构造 `RuntimeContext(subSession)` 调用 `agent.runStream(ctx, userMessage)`，通过 onChunk 回调推送 TaskCard
+- **TaskTool**: 启动子代理执行任务（继承 AbstractTool\<TaskTool.Input\>）。子 Session 机制：每个子智能体任务创建一个子 Session（InMemorySessionManager 管理），子智能体 Agent 由 InMemorySessionManager.activate() 内部 per-session 构建（不在 TaskTool 中创建）。子智能体执行走 SessionRunner + EventBus 模式（与主会话对齐）。Input record 包含 description/prompt/subagent_type/model/resume/run_in_background。内部 public record TaskCall 包含 description/prompt/subagentName/resume/runInBackground。Builder 接受 TaskRepository/ToolUIBridge/InMemorySessionManager。name="Task"
+  - `executeSubagent(taskCall, taskId)`: 子智能体执行逻辑（走 SessionRunner + EventBus 模式）：① `inMemorySessionManager.activate(taskId)` 激活子会话（幂等，内部 per-session 创建 InMemoryChatMemory + Agent + SessionRunner）② `inMemorySessionManager.getRunner(taskId).getResultFuture()` 拿到结果 future ③ `EventBus.publishIn(MessageEvent.userMessage(taskId, prompt))` 投递任务 ④ `resultFuture.get(5, TimeUnit.MINUTES)` 阻塞等待结果（超时/中断/异常时调用 runner.stop()）
   - `resolveParentSessionId(context)`: 从 ToolContext 解析父会话ID
 - **TaskOutputTool**: 获取子代理任务输出（继承 AbstractTool\<TaskOutputTool.Input\>）。支持阻塞/非阻塞模式，可配置超时。Input record 包含 task_id/block/timeout。name="TaskOutput"
 
-**子智能体调用机制（子 Session 模式）：**
-1. TaskTool.execute() 创建子智能体 Agent（带 InMemoryChatMemory，支持对话历史）
-2. 通过 InMemorySessionManager 创建子 Session（sessionType=SUB，parentId=父会话ID）
-3. resume 时从 InMemorySessionManager 获取已有子 Session，ChatMemory 自动恢复历史对话
-4. 构造包含子 Session 的 `RuntimeContext(subSession)`
-5. 调用 `agent.runStream(ctx, userMessage)`，通过 onChunk 回调推送 TaskCard
+**子智能体调用机制（SessionRunner + EventBus 模式）：**
+1. TaskTool.execute() 创建子 Session（sessionType=SUB，parentId=父会话ID）
+2. resume 时从 InMemorySessionManager 获取已有子 Session
+3. 调用 `inMemorySessionManager.activate(taskId)` 激活子会话（幂等：已激活跳过；按 sessionId 加锁 per-session 创建 InMemoryChatMemory + buildAgent + SessionRunner，启动消息循环订阅 inBox）
+4. 通过 `EventBus.publishIn(MessageEvent.userMessage(taskId, prompt))` 投递任务，SessionRunner 过滤当前 sessionId 事件并驱动 Agent 执行
+5. TaskTool 通过 `SessionRunner.getResultFuture().get(5, TimeUnit.MINUTES)` 同步等待结果，超时则 stop runner
 6. 完成后返回最终文本给主对话，子 Session 保留在内存中供后续 resume
 
 **TaskCard 流式输出机制：**
-子智能体执行时通过 ToolUIBridge 实时推送输出到 TaskCard：
+子智能体执行时通过 EventBus.outBox 实时推送输出（SessionRunner 内部 doOnNext 调用 `EventBus.publishOut`，前端按 sessionId 过滤显示到对应 TaskCard）：
 1. TaskTool.execute() 调用 `toolUIBridge.createTaskCard(taskId, taskJson)` 创建 UI 卡片
-2. executeSubagent() 通过 onChunk 回调实时输出文本
-3. 通过 `toolUIBridge.appendTaskOutput(taskId, chunk)` 推送到 UI
+2. SessionRunner 在 Agent 流式响应时通过 `EventBus.publishOut` 广播 MessageEvent（含子 sessionId）
+3. 前端订阅 outBox，按 sessionId 路由到对应 TaskCard 显示
 4. 执行完成后调用 `toolUIBridge.completeTaskCard(taskId, null)` 更新状态
 
 ### cron 包 (`cn.bitloom.agentic.tool.cron`)
@@ -342,7 +341,7 @@ L4 自优化管理工具（阶段4 新增），每个工具独立继承 Abstract
 
 ## 注意事项
 1. 工具类不使用 @Component 注解，不由 Spring 管理
-2. Toolkit 是 Spring @Component，由 FileSystemSessionManager.getOrCreateAgent() 调用 buildToolCallbacks() 构建工具集
+2. Toolkit 是 Spring @Component，由 FileSystemSessionManager.buildAgent() 调用 buildToolCallbacks() 构建工具集
 3. 主智能体注册所有工具（文件/搜索/命令/交互/任务/定时/技能/管理/MCP）
 4. 子智能体注册精简工具集（文件/搜索/命令/交互/技能）
 5. 工具名称必须唯一

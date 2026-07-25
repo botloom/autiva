@@ -32,7 +32,7 @@
 │   │   └── sessions/              ← 会话数据
 │   │       └── <session-id>/
 │   │           ├── metadata.json  ← Session 序列化（唯一状态源）
-│   │           └── messages.jsonl ← 消息持久化
+│   │           └── events.jsonl   ← 事件持久化
 │   └── <agent-id>/
 │       └── sessions/
 ├── skills/                        ← 技能目录
@@ -205,4 +205,4 @@ Hook 桥接 Advisor，将 AgentHook 列表桥接到 Spring AI Advisor 机制。
 - **白名单模式**：AgentDefinition.tools 字段控制工具注册（MAIN 智能体已合并 config.json）
 - **定义管理集中化**：AgentDefinitionManager 统一管理所有定义，FileSystemSessionManager 和 TaskTool 共享
 - **config.json 合并**：MAIN 智能体加载时自动合并 config.json（default + agentId），非空字段覆盖 frontmatter 值
-- **Agent 构建下沉**：主智能体由 FileSystemSessionManager.getOrCreateAgent() 构建，子智能体由 TaskTool.createSubagent() 构建
+- **Agent 构建下沉**：主智能体由 FileSystemSessionManager.buildAgent() 构建（per-session），子智能体由 TaskTool.createSubagent() 构建

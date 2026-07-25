@@ -113,7 +113,7 @@
 - `.editor-panel`: 容器样式（透明背景，padding 8 8 8 0 上右下留白/左贴边，留白区域透出 SplitPane 背景色）
 - `.editor-panel__views`: 视图容器 StackPane（#1c1c1e 深色背景，12px 四角圆角，承载所有子视图）
 - `.editor-panel__view`: 终端视图容器（深色背景 #1c1c1e）
-- `.editor-panel__project-split` / `.editor-panel__changes-split`: 内部 SplitPane（透明背景，分隔条透明 hover 蓝色，h-resize 光标）
+- `.editor-panel__project-split`: 内部 SplitPane（透明背景，分隔条透明 hover 蓝色，h-resize 光标）
 - `.editor-panel__tree-panel`: 文件树面板 VBox（#2c2c2e 次级背景，右边框 1px #38383a，padding 6 0 6 0）
 - `.editor-panel__tree`: TreeView（透明背景，固定行高 28px，padding 2 4 2 4）
 - `.editor-panel__tree .tree-cell`: Apple 风格微圆角选中（background-radius 4 + insets 1 0 1 0：上下1px间隙显圆角，左右填满对齐；hover rgba(255,255,255,0.06)；selected 蓝色 #0a84ff 填充 + 白字）
@@ -122,22 +122,11 @@
 - `.file-tree__file`: 文件常规样式
 - `.file-tree__file--code/--data/--md/--text/--image`: 文件类型修饰类（图标本身已带色，字色微调）
 - `.tree-cell:selected .file-tree__file--*`: 选中态时字色统一为白色
-- `.editor-panel__content-panel` / `.editor-panel__diff-view-panel`: 右侧内容面板（#1c1c1e 主背景）
+- `.editor-panel__content-panel`: 右侧内容面板（#1c1c1e 主背景，同时承载文件内容和 diff 渲染）
 - `.editor-panel__placeholder`: 占位符（次要文字色 #8e8e93，13px，居中）
-- `.editor-panel__diff-list`: 变更列表 ListView（#2c2c2e 次级背景，固定行高 56px 富单元格）
-- `.editor-panel__diff-list .list-cell`: Apple 风格圆角选中（同 tree-cell，hover 浅白透明，selected 蓝色填充）
-- `.diff-list-cell`: DiffListCell 根 HBox（center-left，spacing 8px）
-- `.diff-list-cell__icon`: 文件图标（16x16）
-- `.diff-list-cell__text`: VBox 文本框（spacing 1px）
-- `.diff-list-cell__name`: 文件名（13px，白色）
-- `.diff-list-cell__path`: 相对路径（11px，次要文字色）
-- `.diff-list-cell__stats`: 统计区 HBox（center-right，spacing 6px），仅含 +N -M 统计（不再含 A/M/D 徽章）
-- `.diff-list-cell__stat`: 行数统计（11px 等宽）
-- `.diff-list-cell__stat--add/--remove`: 加/减行数颜色（绿/红）
-- `.list-cell:selected .diff-list-cell__*`: 选中态字色调整（路径变白，统计颜色调亮以保证可读性）
 - `.editor-panel__code-scroll`: RichTextFX VirtualizedScrollPane 容器（透明背景，自定义滚动条）
 - `.editor-panel__code-area`: 文件内容 CodeArea（等宽字体 12px，白色文字，padding 8 0 8 0）
-- `.editor-panel__diff-area`: diff 视图 StyleClassedTextArea（等宽字体 12px，白色文字）
+- `.editor-panel__diff-area`: diff 渲染 CodeArea（等宽字体 12px，白色文字，与文件内容 CodeArea 共用样式）
 - `.editor-panel__code-area .lineno` / `.editor-panel__diff-area .lineno`: 行号列（不透明背景 #1c1c1e，避免水平滚动时内容透出；三级文字色 #48484a，11px，右侧 1px 分隔线）
 - **语法高亮 Token（参考 Xcode 深色主题）：**
   - `.syntax-keyword` `#ff5e8a` 粉红：关键字（如 `class`/`if`/`public`）
@@ -149,46 +138,28 @@
   - `.syntax-type` `#5ac8fa` 青色：类型名（大写开头标识符）
   - `.syntax-key` `#bf5af2` 紫色：JSON/YAML 键名
   - `.syntax-operator` `#ff375f` 粉红：操作符
-- **Diff 列表项整体底色区分（不加文字徽章）：**
-  - `.diff-list-cell--add/--modify/--delete`：cell 级修饰类（加在 ListCell 上），整体背景色区分新建（绿 10%）/修改（橙 10%）/删除（红 10%），hover 提升到 20%，selected 统一为蓝色填充
-- **Diff 元信息条（已弃用，由悬浮横幅 .diff-banner 替代）：**
-  - `.editor-panel__meta-bar` / `.editor-panel__meta-path` / `.editor-panel__meta-badge` + `--add/--delete/--modify` / `.editor-panel__meta-stat` + `--add/--remove`：保留但未使用
 - **Diff 悬浮横幅（顶部叠加层）：**
   - `.diff-banner`：HBox（rgba(44,44,46,0.92) 半透明深色背景，10px 圆角，1px 边框，阴影，padding 6 10 6 12，spacing 6）
   - `.diff-banner__path`：文件名（13px 等宽粗体白色）
   - `.diff-banner__btn`：横幅按钮基础样式（rgba(255,255,255,0.08) 背景，6px 圆角，hover 提升到 0.16）
-  - `.diff-banner__btn--nav`：导航按钮（↑/↓，padding 4 8）
   - `.diff-banner__btn--reject`：撤销按钮（红字 #ff453a）
   - `.diff-banner__btn--approve`：保留按钮（绿字 #30d158）
-- **Diff Hunk 局部操作按钮（滚动时贴附到当前可见 hunk 右上角）：**
-  - `.diff-hunk-action`：HBox 容器（rgba(58,58,60,0.95) 背景，8px 圆角，阴影，默认隐藏，仅当可见段落落在 hunk 范围内时显示）
-  - `.diff-hunk-action__btn`：按钮基础样式（透明背景，5px 圆角，hover rgba(255,255,255,0.10)）
-  - `.diff-hunk-action__btn--approve/--reject`：保留/撤销按钮（绿/红文字）
-- **Diff 行级着色：**
-  - `.diff-meta`: diff 元信息行（透明背景，次要文字色）
-  - `.diff-hunk-header`: Hunk 头默认样式（蓝色半透明背景 rgba(10,132,255,0.20)，青色文字 #5ac8fa）
-  - `.diff-hunk-header--hidden`: **Hunk 头隐藏修饰类**，将背景/文字设为透明，高度压缩到 0（不展示 @@ 行号信息）
-  - `.diff-line-add`: 新增行（绿色半透明背景 rgba(48,209,88,0.22)，浅绿文字 #8de8a4）
-  - `.diff-line-remove`: 删除行（红色半透明背景 rgba(255,69,58,0.22)，浅红文字 #ff9a92）
-  - `.diff-line-context`: 上下文行（透明背景，白色文字）
-- **Diff 双列行号区域：**
-  - `.diff-lineno-box`: 行号 HBox 容器（#1c1c1e 背景，右侧分隔线）
-  - `.diff-lineno`: 行号基础样式（11px 等宽，三级文字色）
-  - `.diff-lineno--add`: ADD 行新行号（绿色 rgba(48,209,88,0.8)）
-  - `.diff-lineno--remove`: REMOVE 行旧行号（红色 rgba(255,69,58,0.8)）
-  - `.diff-lineno-hunk`: Hunk 头行号（保留，当前未使用）
-- **Diff Gutter 指示条：**
-  - `.diff-gutter-indicator`: 基础样式（透明）
-  - `.diff-gutter-indicator--add`: ADD 行指示条（绿色 #30d158，1px 圆角）
-  - `.diff-gutter-indicator--remove`: REMOVE 行指示条（红色 #ff453a，1px 圆角）
-- `.editor-panel__diff-actions`: （已弃用，审核按钮已移至 meta bar 右侧）
-- `.editor-panel__diff-btn--approve` / `--reject`: Diff 审核按钮（与首页 .dynamic-btn 风格统一：rgba(255,255,255,0.06) 半透明背景 + 8px 圆角 + 12px 600 字重，hover rgba(255,255,255,0.1)）
-- `.editor-panel__diff-btn--approve`: 确定按钮（蓝字 #0a84ff）
-- `.editor-panel__diff-btn--reject`: 撤销按钮（红字 #ff453a）
+- **Diff 行级着色（单栏行内高亮，类似 IDEA in-editor diff）：**
+  - `.diff-line-add`: 新增行（绿色半透明背景 rgba(48,209,88,0.18)）
+  - `.diff-line-remove-marker`: 删除标记行（红色半透明背景 rgba(255,69,58,0.18) + 删除线）
+  - `.diff-lineno`: 行号基础样式（11px 等宽，三级文字色，右对齐）
+  - `.diff-lineno--single`: 单列行号修饰（仅显示新版本行号，删除标记段落无行号）
 - `.editor-panel__loading-text`: 加载状态文字（次要文字色）
 - `.editor-panel__error-text`: 错误状态文字（红色 #ff453a）
 - `.editor-panel__retry-btn`: 重试按钮（蓝色 #0a84ff，hover #0070ee）
 - `.jedi-terminal-view`: 终端视图（深色背景 #1c1c1e）
+- **工具调用 / 待办卡片容器：**
+  - `.editor-panel__card-scroll`: 卡片滚动容器（#1c1c1e 背景，padding 8）
+  - `.editor-panel__card-scroll .viewport` / `.content`: ScrollPane 视口与内容背景（#1c1c1e，覆盖默认白色）
+  - `.editor-panel__card-container`: 卡片容器（透明背景，spacing 8）
+  - 工具卡片/TodoCard 的浅色样式复用 home-page.css（EditorPanel 已加载 home-page.css），与聊天区域显示完全一致，不再单独定义深色适配
+- **已弃用样式（变更视图删除后保留但未使用，待清理）：**
+  - `.editor-panel__changes-split` / `.editor-panel__diff-view-panel` / `.editor-panel__diff-list` / `.diff-list-cell*` / `.editor-panel__meta-bar` / `.editor-panel__meta-badge*` / `.editor-panel__meta-stat*` / `.diff-hunk-action*` / `.diff-meta` / `.diff-hunk-header*` / `.diff-line-remove` / `.diff-line-context` / `.diff-lineno-box` / `.diff-lineno--add` / `.diff-lineno--remove` / `.diff-lineno-hunk` / `.diff-gutter-indicator*` / `.editor-panel__diff-actions` / `.editor-panel__diff-btn--approve` / `.editor-panel__diff-btn--reject` / `.diff-banner__btn--nav`
 - `.editor-panel .scroll-bar`: Apple 风格细滚动条（8px 宽/高，thumb rgba(255,255,255,0.18) + 4px 圆角，hover 0.28，pressed 0.38，覆盖所有视图 TreeView/ListView/Terminal/CodeArea/DiffArea，垂直+水平一致；thumb 上下/左右各留 2px 边距）
 - `.editor-panel .virtual-flow > .corner`: ListView 水平/垂直滚动条交汇处角块（透明背景，避免深色主题下出现白色方块）
 
@@ -430,7 +401,7 @@ A2UI 动态界面样式，与系统聊天消息风格统一。
 - 正文15px，标题28/22/18/16/14px，与系统 md-heading 规范一致
 - 按钮圆角16px，与 `.chat-message__question-option` 风格一致
 - 输入框浅灰背景、8px圆角，与 `.chat-message__question-other-input` 风格一致
-- 内嵌卡片背景 `#f8f9fa`，与 `.chat-message--tool-group` 风格一致
+- 内嵌卡片背景 `#f8f9fa`，与 `.chat-message--tool` 风格一致
 
 **样式类：**
 - `.a2ui-card`: Surface 容器（白色，18px圆角，边框 #e0e0e0，阴影）

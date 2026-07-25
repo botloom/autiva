@@ -40,4 +40,24 @@ public interface ISessionManager {
      * 存储消息到 Session
      */
     void store(String sessionId, List<Message> messages);
+
+    /**
+     * 激活会话：per-session 创建 ChatMemory + Agent + SessionRunner，启动消息循环。
+     * <p>
+     * 幂等设计：已激活（runner 存在且未停止）则直接返回，不重复创建。
+     * 按 sessionId 加锁，防止并发调用创建多个 SessionRunner。
+     * - FileSystemSessionManager：从磁盘加载状态 + buildAgent（主智能体，含 verification/gene/compact）
+     * - InMemorySessionManager：纯内存 + buildAgent（子智能体，不含 verification/gene/compact）
+     *
+     * @param sessionId 会话ID
+     */
+    void activate(String sessionId);
+
+    /**
+     * 持久化 Session 元数据。
+     * FileSystemSessionManager 写入 metadata.json，InMemorySessionManager 为 no-op。
+     *
+     * @param session 要持久化的 Session
+     */
+    void persistSession(Session session);
 }

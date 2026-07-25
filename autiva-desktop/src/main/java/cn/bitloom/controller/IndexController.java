@@ -144,19 +144,35 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 切换变更面板（toggle）：相同视图再次点击则关闭
+     * 切换工具调用面板（toggle）：相同视图再次点击则关闭
      */
-    public void toggleChangesPanel() {
+    public void toggleToolCallsPanel() {
         if (editorPanelController == null) {
             return;
         }
         if (editorPanelController.isVisible()
-                && editorPanelController.getCurrentViewType() == ViewType.CHANGES) {
+                && editorPanelController.getCurrentViewType() == ViewType.TOOL_CALLS) {
             closeEditorPanel();
             return;
         }
         ensureEditorVisible();
-        editorPanelController.showChangesView();
+        editorPanelController.showToolCallsView();
+    }
+
+    /**
+     * 切换待办面板（toggle）：相同视图再次点击则关闭
+     */
+    public void toggleTodoPanel() {
+        if (editorPanelController == null) {
+            return;
+        }
+        if (editorPanelController.isVisible()
+                && editorPanelController.getCurrentViewType() == ViewType.TODO) {
+            closeEditorPanel();
+            return;
+        }
+        ensureEditorVisible();
+        editorPanelController.showTodoView();
     }
 
     /**
@@ -209,14 +225,14 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 打开 diff 对比视图
+     * 在项目视图中显示指定文件的 diff（点击对话框上方的 diff 文件卡片时调用）
      */
-    public void showDiffView(FileDiff diff) {
+    public void showDiffInProjectView(FileDiff diff) {
         if (editorPanelController == null) {
             return;
         }
         ensureEditorVisible();
-        editorPanelController.showDiffView(diff);
+        editorPanelController.showDiffInProjectView(diff);
     }
 
     /**

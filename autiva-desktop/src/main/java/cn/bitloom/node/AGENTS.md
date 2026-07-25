@@ -240,39 +240,8 @@ ToolMessageCard (VBox)
 - rawOutput 使用等宽字体展示
 - 禁用焦点遍历（`setFocusTraversable(false)`）
 
-### ToolGroupCard
-工具分组卡片，将连续的工具调用自动分组到一个可折叠容器中，减少纵向空间占用。
-
-**样式类：** `chat-message`, `chat-message--tool-group`
-
-**特性：**
-- 默认折叠，仅显示摘要行（工具数量 + 工具名称列表）
-- 折叠态示例：`▶ 3 个工具调用 · SearchCodebase · Grep · Read`
-- 展开态示例：`▼ 3 个工具调用` + 各 ToolMessageCard 列表
-- 点击 header 切换展开/折叠（与项目中 ToolMessageCard、TaskCard 的折叠模式一致，使用 visible/managed 切换）
-- 支持动态添加 ToolMessageCard（流式场景下工具逐个到达时自动追加到当前分组）
-- 工具名称去重（使用 LinkedHashSet 保持插入顺序）
-- 单个工具调用也使用 ToolGroupCard 包裹，保持一致性
-
-**组件结构：**
-```
-ToolGroupCard (VBox)
-├── header (HBox, clickable)
-│   ├── chevronLabel (Label: "▶" / "▼")
-│   ├── countLabel (Label: "N 个工具调用")
-│   ├── separatorLabel (Label: "·")
-│   └── namesLabel (Label: "工具名称列表")
-└── body (VBox, collapsible)
-    ├── ToolMessageCard
-    ├── ToolMessageCard
-    └── ...
-```
-
-**分组逻辑（在 HomePageController 中）：**
-- 连续的 TOOL 类型消息自动归入同一个 ToolGroupCard
-- 非 TOOL 类型消息（USER/ASSISTANT）中断当前分组，下次 TOOL 消息创建新分组
-- 通过 `currentToolGroup` 字段追踪当前活跃的工具分组
-- 清除对话时重置 `currentToolGroup = null`
+### ToolGroupCard（已删除）
+工具分组卡片已废弃并删除。工具卡片（ToolMessageCard）现在直接添加到工具调用视图（`toolCallsContainer`）或子智能体 TaskCard 的 `messageContainer`，不再分组包裹。ToolMessageCard 自身的内容折叠能力（点击 header 切换 content）仍保留。
 
 ### QuestionCard
 问题交互卡片，用于 AskUserQuestionTool 的用户交互。
@@ -294,16 +263,18 @@ ToolGroupCard (VBox)
 - 通过 BiConsumer 回调通知 ToolUIBridge
 
 ### TodoCard
-待办事项卡片，用于 TodoWriteTool 的进度展示。
+待办事项卡片，用于 TodoWriteTool 的进度展示。支持原地更新（`update` 方法刷新内容，不重建卡片）。
 
 **样式类：** `chat-message`, `chat-message--tool`, `chat-message--todo`
 
 **特性：**
-- 显示待办事项列表，每项有状态指示器
+- 顶部进度环（环形进度指示器）+ "N / M 已完成" 摘要 + 工具名
+- 紧凑清单：每项一行，状态圆点 + 内容 + activeForm + 状态标签
 - 支持 pending/in_progress/completed 三种状态
-- 已完成项显示删除线
+- 已完成项内容显示删除线样式
 - 进行中项显示 activeForm
-- 进度条和完成统计
+- `update(String todosJson)`: 原地刷新卡片内容（ToolUIBridge 复用 currentTodoCard，避免每次更新新建卡片）
+- `resetTodoCard()`: ToolUIBridge 提供的重置方法，新会话时清空 currentTodoCard 引用
 
 ### FileTreeCell
 文件树单元格，用于 EditorPanelController 的项目目录树展示。位于 `node/project` 子包。
@@ -431,7 +402,7 @@ lineRow (HBox)
 - **线程安全设计**：`appendOutput()`、`setStatus()`、`complete()` 公开方法内部包裹 `Platform.runLater()`，确保从任意线程调用安全；内部实现方法 `doAppendOutput()`、`doSetStatus()` 不包含 `Platform.runLater()`，供 `complete()` 在 FX 线程内直接调用，避免嵌套 `Platform.runLater()`
 - `onContentChanged` 回调：内容变化时通知外层 HomePageController 触发 ScrollPane 自动滚动，与 AssistantMessageCard 的回调模式一致
 - 脉冲动画：运行中时脉冲点闪烁，完成/失败时停止
-- 内嵌工具卡片宽度约束：工具卡片用 HBox 包裹后添加到 messageContainer，HBox 的 `fillHeight=true` 但不拉伸卡片宽度，使工具卡片按内容自然宽度显示（折叠时仅为工具名标签宽度，展开后按内容撑开），与主智能体中独立工具卡片的布局方式一致
+- 内嵌工具卡片：工具卡片（ToolMessageCard）用 HBox 包裹后直接添加到 messageContainer，不再通过 ToolGroupCard 分组。HBox 的 `fillHeight=true` 但不拉伸卡片宽度，使工具卡片按内容自然宽度显示
 
 **回调：**
 - `onContentChanged(Consumer<String>)`: 内容变化时触发，由 HomePageController 在 `addChatNode()` 中设置为 `scrollToBottom()`，确保流式输出时 ScrollPane 自动向下滚动

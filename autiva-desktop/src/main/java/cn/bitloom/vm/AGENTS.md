@@ -46,16 +46,12 @@
 - `sendMessage(String)`: 发送消息给智能体系统（接收纯文本，内部构建 MessageEvent），懒创建 session（首次发送时才创建），coder 智能体且有 currentProject 时通过 buildMessageWithContext() 在消息前附加项目信息（格式：`[项目: {name} @ {path}]\n`），暂停后恢复时重新激活会话，发送后翻转 Store.refreshHistory 触发侧边栏标题刷新
 - `buildMessageWithContext(String)`: 构建带项目上下文的消息，coder 智能体且有 currentProject 时在消息前添加项目信息前缀
 - `processMessage(MessageEvent)`: 处理消息流，根据 MessageEvent.Type 分发（USER/ASSISTANT/TOOL），直接访问结构化字段
-- `processAssistantEvent(MessageEvent)`: 处理助手消息（根据 MessageEvent 的 finishReason 判断流式/完成/工具调用，直接调用 AssistantMessageCard.appendContent() 和 complete()）
-- `processToolEvent(MessageEvent)`: 处理工具消息（直接创建 ToolMessageCard）
-- `prependHistoricalMessages(List<MessageCard>)`: 在消息列表头部批量插入历史卡片（供 Controller 加载更多历史消息时调用）
-- `convertEventToCards(MessageEvent)`: 将 MessageEvent 转换为卡片列表（用于历史消息加载，一个事件可能产生多个卡片）
-- `prepareHistoricalMessages()`: 准备历史消息，渲染 session.getMessages() 中的全部消息（activate 已只加载最近 100 条），分批处理避免阻塞 FX 线程
-- `loadMoreMessages(int count)`: 加载更多历史消息（从磁盘 messages.jsonl 按需读取，根据 memoryBaseOffset 和 memoryCursor 计算偏移，返回 List<MessageCard>）
-- `hasMoreMessages()`: 是否还有更多历史消息可加载（基于 memoryBaseOffset > memoryCursor 判断）
+- `processAssistantEvent(MessageEvent)`: 处理助手消息（根据 MessageEvent 的 finishReason 判断流式/完成/工具调用，直接调用 AssistantMessageCard.appendContent() 和 complete()）。TOOL_CALLS 分支创建工具调用卡片时检查 `isLoadingHistory`，历史加载期间跳过（历史工具不显示）
+- `processToolEvent(MessageEvent)`: 处理工具消息（直接创建 ToolMessageCard）。历史加载期间（`isLoadingHistory=true`）直接返回，不创建工具响应卡片
+- `prepareHistoricalMessages()`: 从 events.jsonl 加载所有未压缩的历史事件（memoryCursor 到末尾），分批渲染避免阻塞 FX 线程。加载期间设置 `isLoadingHistory=true`，最后一批完成时重置为 false，用于跳过工具消息（历史工具不显示）
+- `hasHistoricalMessages()`: 是否有历史消息（基于 countEvents > memoryCursor 判断）
 - `addUserMessage(String)`: 添加用户消息卡片到列表
 - `pauseGeneration()`: 暂停当前流式生成，调用 session.stop() 通知后端停止（同时停止所有子智能体会话），保留部分响应，设置 SessionState 为 PAUSED
-- `hasHistoricalMessages()`: 是否有历史消息
 - `clear()`: 清除所有状态，清空主 session 消息记录，删除所有子 session（从内存和磁盘）
 
 **编码项目管理方法：**

@@ -3,19 +3,20 @@ package cn.bitloom.agentic.session;
 import cn.bitloom.agentic.agent.Agent;
 import cn.bitloom.agentic.agent.AgentDefinition;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
-import cn.bitloom.agentic.event.EventBus;
+import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.EventConverter;
+import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.evolve.config.EvolveConfig;
 import cn.bitloom.agentic.evolve.gene.GeneStore;
 import cn.bitloom.agentic.evolve.inject.GeneInjector;
-import cn.bitloom.agentic.memory.CompactChatMemory;
+import cn.bitloom.agentic.memory.FileSystemChatMemory;
 import cn.bitloom.agentic.memory.MemoryManager;
+import cn.bitloom.agentic.memory.TurnBufferedChatMemory;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.agentic.trace.TraceHook;
-import cn.bitloom.agentic.util.MessageUtil;
 import cn.bitloom.agentic.verify.VerificationHook;
 import cn.bitloom.agentic.verify.grader.LlmGrader;
 import cn.bitloom.agentic.verify.grader.OutputGrader;
@@ -26,11 +27,8 @@ import cn.bitloom.store.Store;
 import cn.bitloom.util.JsonUtils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -38,21 +36,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
- * 会话管理器，支持持久化和消息存储。
+ * 会话管理器，支持持久化和事件存储。
  * <p>
  * Session 是唯一的状态源，包含所有会话元数据和运行时状态。
- * 持久化格式为 sessions/{sessionId}/metadata.json + messages.jsonl。
+ * 持久化格式为 sessions/{sessionId}/metadata.json + events.jsonl。
  */
 @Slf4j
 @Component
@@ -61,7 +54,6 @@ public class FileSystemSessionManager implements ISessionManager {
     private final AgentDefinitionManager definitionManager;
     private final ModelFactory modelFactory;
     private final Toolkit toolkit;
-    private final CompactChatMemory chatMemory;
     private final MemoryManager memoryManager;
     private final SkillManager skillManager;
     private final GeneStore geneStore;
@@ -72,11 +64,10 @@ public class FileSystemSessionManager implements ISessionManager {
     private final TraceHook traceHook;
     private final GeneInjector geneInjector;
     private static final int MAX_CACHED_SESSIONS = 5;
-    private static final int RECENT_MESSAGES_COUNT = 50;
 
     /**
      * Session 内存缓存，使用 LRU 策略（保留最近 MAX_CACHED_SESSIONS 个）。
-     * 超出上限时淘汰最久未访问的 Session：停止 SessionRunner + 清理内存消息（磁盘保留）。
+     * 超出上限时淘汰最久未访问的 Session：停止 SessionRunner（磁盘事件保留）。
      */
     private final Map<String, Session> sessions = Collections.synchronizedMap(
             new LinkedHashMap<>(16, 0.75f, true) {
@@ -87,21 +78,17 @@ public class FileSystemSessionManager implements ISessionManager {
                         if (runner != null) {
                             runner.stop();
                         }
-                        eldest.getValue().setMessages(new ArrayList<>());
-                        eldest.getValue().setMemoryBaseOffset(eldest.getValue().getMemoryCursor());
                         log.info("[LRU] 淘汰 Session: {}", eldest.getKey());
                         return true;
                     }
                     return false;
                 }
             });
-    private final Map<String, Agent> agentCache = new ConcurrentHashMap<>();
     private final Map<String, SessionRunner> runners = new ConcurrentHashMap<>();
 
     public FileSystemSessionManager(AgentDefinitionManager definitionManager,
                                     ModelFactory modelFactory,
                                     Toolkit toolkit,
-                                    @Lazy CompactChatMemory chatMemory,
                                     MemoryManager memoryManager,
                                     SkillManager skillManager,
                                     GeneStore geneStore,
@@ -114,7 +101,6 @@ public class FileSystemSessionManager implements ISessionManager {
         this.definitionManager = definitionManager;
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
-        this.chatMemory = chatMemory;
         this.memoryManager = memoryManager;
         this.skillManager = skillManager;
         this.geneStore = geneStore;
@@ -132,8 +118,6 @@ public class FileSystemSessionManager implements ISessionManager {
     @PostConstruct
     public void init() {
         this.loadAllSessions();
-        // 预加载 default 主智能体
-        this.getOrCreateAgent(AppConstants.Agents.DEFAULT_AGENT_NAME);
     }
 
     /**
@@ -197,105 +181,170 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
-     * 激活会话：注入 Agent、加载历史消息、通过 SessionRunner 启动消息循环
-     * 仅在用户点击切换到某个 session 时调用。
-     * 只加载最近 RECENT_MESSAGES_COUNT 条消息到内存（环形缓冲区），避免全量加载导致内存膨胀。
+     * 激活会话：per-session 构建 Agent + FileChatMemory，通过 SessionRunner 启动消息循环。
+     * 幂等设计：已激活（runner 存在且未停止）则直接返回，不重复创建。
+     * 按 sessionId 加锁，防止并发调用创建多个 SessionRunner。
      */
+    @Override
     public void activate(String sessionId) {
-        Session session = sessions.get(sessionId);
+        synchronized (sessionId.intern()) {
+            // 已激活则跳过，不重复创建 SessionRunner
+            SessionRunner existing = runners.get(sessionId);
+            if (existing != null && !existing.isStopped()) {
+                log.debug("[activate] session 已激活，跳过: {}", sessionId);
+                return;
+            }
+            // 移除已停止的旧 runner
+            runners.remove(sessionId);
 
-        // 获取 Agent 实例
-        Agent agent = this.getOrCreateAgent(session.getAgentId());
+            Session session = sessions.get(sessionId);
 
-        // 从磁盘加载最新状态
-        Session diskState = loadMetadata(sessionId);
-        if (diskState != null) {
-            // 将磁盘上的持久化字段同步到内存 Session（保留瞬态字段）
-            syncPersistentFields(diskState, session);
+            // 从磁盘加载最新状态
+            Session diskState = loadMetadata(sessionId);
+            if (diskState != null) {
+                syncPersistentFields(diskState, session);
+            }
+
+            // 创建 per-session FileChatMemory（本轮缓冲 + 批量 flush）
+            FileSystemChatMemory chatMemory = new FileSystemChatMemory(this, session);
+
+            // per-session 构建 Agent（对齐 netInsight，不再缓存 Agent 实例）
+            Agent agent = this.buildAgent(session.getAgentId(), chatMemory);
+
+            // 通过 SessionRunner 启动消息循环
+            SessionRunner runner = new SessionRunner(session, agent, memoryManager, chatMemory, this);
+            runners.put(sessionId, runner);
+            runner.start();
         }
-
-        // 设置内存偏移量：内存从游标后开始加载
-        session.setMemoryBaseOffset(session.getMemoryCursor());
-
-        // 只加载最近 N 条消息（环形缓冲区，不全量加载）
-        Path messagesFile = AppConstants.Session.messagesFile(session.getAgentId(), sessionId);
-        List<Message> messages = loadRecentMessages(messagesFile, RECENT_MESSAGES_COUNT);
-        session.setMessages(messages);
-
-        // 通过 SessionRunner 启动消息循环（注入 Agent 和 MemoryManager）
-        SessionRunner runner = new SessionRunner(session, agent, memoryManager);
-        runners.put(sessionId, runner);
-        runner.start();
     }
 
+    // ===== 事件化存储方法 =====
+
     /**
-     * 高效加载文件最后 N 行并反序列化为 Message 列表。
-     * 使用环形缓冲区（ArrayDeque），内存只保留最后 N 行，避免全量加载。
+     * 持久化事件到 events.jsonl（只写入 persist=true 的事件）。
+     * 每行格式：{"eventType":"MESSAGE", ...事件字段...}（由 @JsonTypeInfo 自动写入）
      */
-    private List<Message> loadRecentMessages(Path file, int count) {
-        if (!Files.exists(file)) {
-            return new ArrayList<>();
-        }
-        try (BufferedReader reader = Files.newBufferedReader(file)) {
-            ArrayDeque<String> lastLines = new ArrayDeque<>(count + 1);
-            String line;
-            while ((line = reader.readLine()) != null) {
-                lastLines.addLast(line);
-                if (lastLines.size() > count) {
-                    lastLines.removeFirst();
-                }
+    public void storeEvents(String sessionId, List<? extends AbstractEvent> events) {
+        Session session = this.sessions.get(sessionId);
+        if (session == null) return;
+        try {
+            Path eventsFile = AppConstants.Session.eventsFile(session.getAgentId(), sessionId);
+            StringBuilder sb = new StringBuilder();
+            for (AbstractEvent event : events) {
+                if (!event.isPersist()) continue;
+                // @JsonTypeInfo 自动写入 eventType 字段，无需手动添加 @type
+                sb.append(JsonUtils.toJson(event)).append("\n");
             }
-            List<Message> messages = new ArrayList<>(lastLines.size());
-            for (String l : lastLines) {
-                Message msg = MessageUtil.deserializeMessage(l);
-                if (msg != null) {
-                    messages.add(msg);
-                }
+            if (!sb.isEmpty()) {
+                Files.writeString(eventsFile, sb.toString(), StandardOpenOption.APPEND);
             }
-            return messages;
         } catch (IOException e) {
-            log.error("加载最近消息失败: {}", file, e);
-            return new ArrayList<>();
+            throw StorageException.writeError("events-append", e);
         }
     }
 
     /**
-     * 从磁盘 messages.jsonl 加载指定行号范围的消息（供"加载更多历史"使用）。
+     * 从 events.jsonl 加载指定行号范围的事件。
      *
      * @param sessionId 会话ID
-     * @param offset    起始行号（含）
-     * @param count     加载条数
-     * @return 反序列化后的消息列表
+     * @param offset    起始行号（含，0-based）
+     * @param count     加载条数（Integer.MAX_VALUE 表示全部）
+     * @return 反序列化后的事件列表
      */
-    public List<Message> loadMessagesRange(String sessionId, int offset, int count) {
+    public List<AbstractEvent> loadEvents(String sessionId, int offset, int count) {
         Session session = sessions.get(sessionId);
         if (session == null || count <= 0 || offset < 0) {
             return List.of();
         }
-        Path messagesFile = AppConstants.Session.messagesFile(session.getAgentId(), sessionId);
-        if (!Files.exists(messagesFile)) {
+        Path eventsFile = AppConstants.Session.eventsFile(session.getAgentId(), sessionId);
+        if (!Files.exists(eventsFile)) {
             return List.of();
         }
-        try (BufferedReader reader = Files.newBufferedReader(messagesFile)) {
-            List<Message> messages = new ArrayList<>(count);
+        try (BufferedReader reader = Files.newBufferedReader(eventsFile)) {
+            List<AbstractEvent> events = new ArrayList<>();
             int index = 0;
             String line;
             while ((line = reader.readLine()) != null) {
                 if (index >= offset) {
-                    Message msg = MessageUtil.deserializeMessage(line);
-                    if (msg != null) {
-                        messages.add(msg);
+                    AbstractEvent event = deserializeEvent(line);
+                    if (event != null) {
+                        events.add(event);
                     }
-                    if (messages.size() >= count) {
+                    if (events.size() >= count) {
                         break;
                     }
                 }
                 index++;
             }
-            return messages;
+            return events;
         } catch (IOException e) {
-            log.error("加载消息范围失败: sessionId={}, offset={}, count={}", sessionId, offset, count, e);
+            log.error("加载事件失败: sessionId={}, offset={}, count={}", sessionId, offset, count, e);
             return List.of();
+        }
+    }
+
+    /**
+     * 从 events.jsonl 加载 MessageEvent 并转为 Spring AI Message（供 LLM 上下文加载）。
+     */
+    public List<Message> loadEventsAsMessages(String sessionId, int offset, int count) {
+        List<AbstractEvent> events = loadEvents(sessionId, offset, count);
+        List<Message> messages = new ArrayList<>();
+        for (AbstractEvent event : events) {
+            if (event instanceof MessageEvent me) {
+                messages.add(EventConverter.toMessage(me));
+            }
+        }
+        return messages;
+    }
+
+    /**
+     * 统计 events.jsonl 总行数。
+     */
+    public int countEvents(String sessionId) {
+        Session session = sessions.get(sessionId);
+        if (session == null) return 0;
+        Path eventsFile = AppConstants.Session.eventsFile(session.getAgentId(), sessionId);
+        if (!Files.exists(eventsFile)) return 0;
+        try (BufferedReader reader = Files.newBufferedReader(eventsFile)) {
+            int count = 0;
+            while (reader.readLine() != null) count++;
+            return count;
+        } catch (IOException e) {
+            log.error("统计事件数失败: sessionId={}", sessionId, e);
+            return 0;
+        }
+    }
+
+    /**
+     * 删除 events.jsonl 最后一行（孤儿工具调用清理用）。
+     */
+    public void removeLastEventLine(String sessionId) {
+        Session session = sessions.get(sessionId);
+        if (session == null) return;
+        Path eventsFile = AppConstants.Session.eventsFile(session.getAgentId(), sessionId);
+        if (!Files.exists(eventsFile)) return;
+        try {
+            List<String> lines = Files.readAllLines(eventsFile);
+            if (!lines.isEmpty()) {
+                lines.removeLast();
+                Files.writeString(eventsFile, lines.isEmpty() ? "" :
+                        String.join("\n", lines) + "\n");
+            }
+        } catch (IOException e) {
+            log.error("删除最后一行事件失败: sessionId={}", sessionId, e);
+        }
+    }
+
+    /**
+     * 反序列化单行事件 JSON，通过 eventType 字段自动还原子类类型（Jackson 多态）。
+     */
+    private AbstractEvent deserializeEvent(String line) {
+        try {
+            // Jackson 多态反序列化：根据 eventType 字段自动还原子类类型
+            return JsonUtils.mapper().readValue(line, AbstractEvent.class);
+        } catch (Exception e) {
+            log.warn("反序列化事件失败: {}", line, e);
+            return null;
         }
     }
 
@@ -342,49 +391,34 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
-     * Append message.
+     * 存储消息：转为事件持久化到 events.jsonl，发布 ToolResponseMessage 到 outBox。
+     * TOOL_CALLS 事件由 SessionRunner 发布，此处不重复发布。
      */
     @Override
     public void store(String sessionId, List<Message> messages) {
-        Session session = this.sessions.get(sessionId);
-        try {
-            Path messagesFile = AppConstants.Session.messagesFile(session.getAgentId(), sessionId);
-            StringBuilder sb = new StringBuilder();
-            for (Message message : messages) {
-                if (message instanceof AssistantMessage assistantMessage) {
-                    if (assistantMessage.getMetadata().get("finishReason").toString().equals("TOOL_CALLS")) {
-                        EventBus.publishOut(EventConverter.fromMessage(sessionId, assistantMessage));
-                    }
-                }
-                // 发布 ToolResponseMessage 到 box（Spring AI 流式模式不自动发布）
-                if (message instanceof ToolResponseMessage toolResponseMessage) {
-                    EventBus.publishOut(EventConverter.fromMessage(sessionId, toolResponseMessage));
-                }
-                session.getMessages().add(message);
-                sb.append(JsonUtils.toJson(message)).append("\n");
-            }
-            Files.writeString(messagesFile, sb.toString(), StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            throw StorageException.writeError("messages-append", e);
-        }
+        // 转为事件（persist=true），持久化到 events.jsonl
+        List<MessageEvent> events = messages.stream()
+                .map(m -> EventConverter.fromMessage(sessionId, m))
+                .peek(e -> e.setPersist(true))
+                .toList();
+        storeEvents(sessionId, events);
     }
 
     /**
-     * Clear session messages.
+     * Clear session events.
      */
     public void clear(String sessionId) {
         try {
             Session session = this.getById(sessionId);
             if (session != null) {
-                session.getMessages().clear();
-                Path messagesFile = AppConstants.Session.messagesFile(session.getAgentId(), sessionId);
-                if (Files.exists(messagesFile)) {
-                    Files.writeString(messagesFile, "");
+                Path eventsFile = AppConstants.Session.eventsFile(session.getAgentId(), sessionId);
+                if (Files.exists(eventsFile)) {
+                    Files.writeString(eventsFile, "");
                 }
-                log.info("清空会话消息记录: {}", sessionId);
+                log.info("清空会话事件记录: {}", sessionId);
             }
         } catch (IOException e) {
-            log.error("清空会话消息记录失败: {}", sessionId, e);
+            log.error("清空会话事件记录失败: {}", sessionId, e);
             throw StorageException.writeError("session-clear-" + sessionId, e);
         }
     }
@@ -435,17 +469,6 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
-     * Update state.
-     */
-    public void updateState(String sessionId, SessionState sessionState) {
-        Session session = this.getById(sessionId);
-        if (session == null) return;
-
-        session.setSessionState(sessionState);
-        persistSession(session);
-    }
-
-    /**
      * 局部更新 Session
      *
      * @param sessionId 会话标识
@@ -480,55 +503,55 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
-     * 初始化 Session 目录和消息文件
+     * 初始化 Session 目录和事件文件
      */
     private void initSessionDir(Session session) {
         try {
             Path sessionDir = getSessionDir(session);
             Files.createDirectories(sessionDir);
-            Files.createFile(AppConstants.Session.messagesFile(session.getAgentId(), session.getId()));
+            Files.createFile(AppConstants.Session.eventsFile(session.getAgentId(), session.getId()));
         } catch (IOException e) {
             throw StorageException.writeError("session-create", e);
         }
     }
 
     /**
-     * 获取或懒加载创建 Agent 实例（主智能体）。
-     * Agent 实例按 agentId 缓存，首次访问时构建。
+     * per-session 构建 Agent 实例（对齐 netInsight，不再缓存 Agent）。
+     * 每个 Session 拥有独立的 Agent + TurnBufferedChatMemory，避免共享状态。
      * 主智能体默认开启 memory 和 compact。
+     *
+     * @param agentId    智能体ID
+     * @param chatMemory per-session TurnBufferedChatMemory（本轮缓冲 + flush 批量持久化）
      */
-    private Agent getOrCreateAgent(String agentId) {
-        return agentCache.computeIfAbsent(agentId, id -> {
-            AgentDefinition definition = definitionManager.getOrLoadMainDefinition(id);
-            ChatModel chatModel = modelFactory.model(ModelTypeEnum.DEEPSEEK);
+    private Agent buildAgent(String agentId, TurnBufferedChatMemory chatMemory) {
+        AgentDefinition definition = definitionManager.getOrLoadMainDefinition(agentId);
+        ChatModel chatModel = modelFactory.model(ModelTypeEnum.DEEPSEEK);
 
-            // 记忆文件路径
-            java.nio.file.Path memoryPath = AppConstants.MainAgent.memoryFile(id);
+        // 记忆文件路径
+        java.nio.file.Path memoryPath = AppConstants.MainAgent.memoryFile(agentId);
 
-            // 构造 L2 校验 Hook（仅在 definition.verification().enabled() 时生效）
-            VerificationHook verificationHook = new VerificationHook(
-                    geneStore, toolGraders, outputGraders, llmGrader, evolveConfig, traceHook);
+        // 构造 L2 校验 Hook（仅在 definition.verification().enabled() 时生效）
+        VerificationHook verificationHook = new VerificationHook(
+                geneStore, toolGraders, outputGraders, llmGrader, evolveConfig, traceHook);
 
-            Agent agent = Agent.builder()
-                    .name(id)
-                    .definition(definition)
-                    .model(chatModel)
-                    .systemPrompt(definition.content())
-                    .tools(toolkit.buildToolCallbacks(definition))
-                    .hooks(List.of())
-                    .verificationHook(verificationHook)
-                    .traceHook(traceHook)
-                    .geneInjector(geneInjector)
-                    .memory(chatMemory)
-                    .compact(true)
-                    .skillManager(skillManager)
-                    .definitionManager(definitionManager)
-                    .memoryFilePath(memoryPath)
-                    .build();
-            log.info("创建主智能体: agentId={} verification={}", id,
-                    definition.verification() != null && definition.verification().enabled());
-            return agent;
-        });
+        Agent agent = Agent.builder()
+                .name(agentId)
+                .definition(definition)
+                .model(chatModel)
+                .systemPrompt(definition.content())
+                .tools(toolkit.buildToolCallbacks(definition))
+                .hooks(List.of())
+                .verificationHook(verificationHook)
+                .traceHook(traceHook)
+                .geneInjector(geneInjector)
+                .memory(chatMemory)
+                .compact(true)
+                .skillManager(skillManager)
+                .definitionManager(definitionManager)
+                .memoryFilePath(memoryPath)
+                .build();
+        log.info("创建主智能体: agentId={} verification={}", agentId, definition.verification().enabled());
+        return agent;
     }
 
     /**
@@ -542,7 +565,6 @@ public class FileSystemSessionManager implements ISessionManager {
         Path metadataFile = AppConstants.Session.metadataFile(agentId, session.getId());
         try {
             Files.createDirectories(metadataFile.getParent());
-            session.setSavedAt(System.currentTimeMillis());
             Files.writeString(metadataFile, JsonUtils.toJson(session));
             log.debug("持久化 Session: sessionId={}", session.getId());
         } catch (IOException e) {
@@ -570,15 +592,12 @@ public class FileSystemSessionManager implements ISessionManager {
         target.setTitle(source.getTitle());
         target.setCreatedAt(source.getCreatedAt());
         target.setUpdateAt(source.getUpdateAt());
-        target.setSessionState(source.getSessionState());
         target.setMessageCount(source.getMessageCount());
         target.setMemoryCursor(source.getMemoryCursor());
         target.setSummary(source.getSummary());
         target.setContextCapacity(source.getContextCapacity());
         target.setCompactionThreshold(source.getCompactionThreshold());
         target.setCurrentContextLength(source.getCurrentContextLength());
-        target.setSavedAt(source.getSavedAt());
-        target.setShutdownInterrupted(source.isShutdownInterrupted());
         target.setSessionType(source.getSessionType());
         target.setRespType(source.getRespType());
         target.setSource(source.getSource());

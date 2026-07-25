@@ -1,8 +1,11 @@
 package cn.bitloom.agentic.event;
 
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import lombok.extern.jackson.Jacksonized;
 
 /**
  * 记忆事件，统一发布到 EventBus.inBox，由 Session 分类处理。
@@ -13,11 +16,16 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @Setter
 @SuperBuilder
+@Jacksonized
+@NoArgsConstructor
 public final class MemoryEvent extends AbstractEvent {
 
     public enum Type {
         CONTEXT_COMPACT
     }
+
+    @Builder.Default
+    private EventTypeEnum eventType = EventTypeEnum.MEMORY;
 
     private Type type;
     private String agentId;
@@ -25,6 +33,9 @@ public final class MemoryEvent extends AbstractEvent {
     private int currentTokens;
     /** 模型上下文上限（CONTEXT_COMPACT 用） */
     private int maxTokens;
+
+    @Override
+    public EventTypeEnum getEventType() { return eventType; }
 
     public static MemoryEvent contextCompact(String sessionId, String agentId,
                                               int currentTokens, int maxTokens) {

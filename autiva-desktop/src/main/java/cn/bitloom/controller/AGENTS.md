@@ -56,16 +56,17 @@
 - `settingsPageController`: 设置页
 - `skillPageController`: 技能页
 - `taskPageController`: 任务页
-- `editorPanelController`: 编辑器面板（文件树、终端、变更列表、文件内容、diff 视图）
+- `editorPanelController`: 编辑器面板（文件树、终端、文件内容、diff 渲染、工具调用、待办）
 
 **编辑器面板协调方法：**
 - `toggleTerminalPanel()`: 切换终端面板（toggle 行为：相同视图再次点击则关闭，否则打开/切换到终端视图）
 - `toggleProjectPanel()`: 切换项目面板（toggle 行为：相同视图再次点击则关闭，否则打开/切换到项目视图）
-- `toggleChangesPanel()`: 切换变更面板（toggle 行为：相同视图再次点击则关闭，否则打开/切换到变更视图）
+- `toggleToolCallsPanel()`: 切换工具调用面板（toggle 行为：相同视图再次点击则关闭，否则打开/切换到工具调用视图）
+- `toggleTodoPanel()`: 切换待办面板（toggle 行为：相同视图再次点击则关闭，否则打开/切换到待办视图）
 - `closeEditorPanel()`: 关闭编辑器面板（保存 divider 位置并从 SplitPane 移除）
 - `closeTerminal()`: 关闭终端会话
 - `showFileInPanel(Path)`: 在编辑器面板显示文件内容
-- `showDiffView(FileDiff)`: 打开 diff 对比视图
+- `showDiffInProjectView(FileDiff)`: 在项目视图右侧内容区渲染 diff（单栏行内高亮，类似 IDEA in-editor diff）
 - `updateCurrentProject(ProjectInfo)`: 通知编辑器面板更新当前项目（构建目录树）
 - `addTextToChat(String)`: 将选中文本追加到对话框输入框（编辑器面板选择联动）
 - `addFileToChat(File)`: 将文件添加到对话框附件（编辑器面板拖拽联动）
@@ -87,18 +88,20 @@
 **职责（仅 UI）：**
 - 管理 ScrollPane + VBox 聊天容器
 - 监听 ViewModel 的 ObservableList 变化，创建消息卡片组件
-- 工具调用分组折叠：连续的 TOOL 类型消息自动归入 `ToolGroupCard`，非 TOOL 消息中断分组。通过 `currentToolGroup` 字段追踪当前活跃的工具分组，清除对话时重置
-- 滚动到顶部加载更多历史消息：监听 ScrollPane vvalue 变化，当滚动到顶部时调用 `viewModel.loadMoreMessages(30)` 获取更早的消息，再调用 `viewModel.prependHistoricalMessages()` 在头部插入，ListChangeListener 自动创建卡片并保持滚动位置不变
+- 工具调用重定向：ToolMessageCard 不在聊天消息区域展示，而是通过 `addChatCard` 拦截后重定向到 EditorPanel 的工具调用视图（`addToolCallCard`），直接添加到 `toolCallsContainer`（不再通过 ToolGroupCard 分组），减少聊天区域卡片渲染压力
+- TodoCard 重定向：TodoCard 不在聊天消息区域展示，而是通过 `addChatNode` 拦截后重定向到 EditorPanel 的待办视图（`addTodoCard`）
+- TaskCard 和 QuestionCard 仍在消息区域展示
 - 处理发送输入框和发送按钮事件
 - sendField 使用 AutoResizeTextArea 自定义组件（重写 computePrefHeight 按实际渲染高度计算），无需手动调整高度；原 adjustTextAreaHeight() 方法已置空保留
 - 文件标签容器（fileTagsPane）包装在 ScrollPane（fileTagsScroll）中，限制最大高度 96px 并支持垂直滚动，防止数十个文件标签挤出按钮区；updateFileTagsPaneVisibility() 控制 fileTagsScroll 的 visible/managed
+- **diff 文件卡片条（diffFilesScroll）**：位于 `chatScrollPane` 与 `sendBox` 之间的独立 ScrollPane（maxHeight=200，纵向布局），订阅 DiffEvent 后异步扫描工作区未提交变更并为每个 FileDiff 生成卡片（文件名 + "+N -M" 统计），点击卡片调用 `indexController.showDiffInProjectView(diff)` 在项目视图右侧渲染 diff。无项目或无变更时自动隐藏（visible/managed=false）
 - 管理停止按钮（流式生成时切换显示，点击暂停生成并保留部分响应，替代发送按钮）
 - 默认使用 DeepSeek 模型，无需手动选择
 - 管理智能体选择按钮（agentSelector）：MenuButton 类型（与 projectSelectButton 风格一致），通过 `setupAgentSelector()` 方法初始化，从 `AgentDefinitionManager.getMainAgentIds()` 获取主智能体列表填充到 MenuItem 项，点击 MenuItem 设置 MenuButton 文字并调用 viewModel.switchAgent()，监听 Store.currentAgent 变化同步文字（切换历史会话时触发）
 - 处理语音输入按钮
 - 画布按钮：打开 CanvasDialog 弹窗
 - 动画效果（图标淡出、聊天区域展开）
-- 清除对话时的 UI 重置
+- 清除对话时的 UI 重置（同时清空 diff 文件卡片条）
 - 自动滚动到底部：通过 `shouldScrollToBottom` 标志 + `PostLayoutPulseListener` 实现延迟滚动。AssistantMessageCard 和 TaskCard 均通过 `onContentChanged` 回调在内容变化时通知 `scrollToBottom()`，确保流式输出期间 ScrollPane 自动向下滚动
 - 防止 ScrollPane 焦点导致布局偏移：`chatScrollPane.setFocusTraversable(false)`，阻止 ScrollPane 获得焦点
 - 防止 TextFlow 重新换行导致布局偏移：`fitToWidth="false"` + `chatContainer.prefWidthProperty().bind(chatScrollPane.widthProperty())`。根因：`fitToWidth=true` 使内容宽度跟随 viewport 宽度，而 viewport 宽度在垂直滚动条出现/消失时会变化（vbarPolicy=AS_NEEDED），导致 TextFlow 重新换行产生"缩进"效果。改为手动绑定 ScrollPane 整体宽度（稳定不变），彻底切断 viewport 宽度变化对内容的影响
@@ -108,10 +111,7 @@
 - `viewModel.pauseGeneration()` - 暂停生成（终止按钮触发）
 - `viewModel.clear()` - 清除对话
 - `viewModel.addUserMessage(String)` - 添加用户消息卡片到列表
-- `viewModel.prepareHistoricalMessages()` - 准备历史消息
-- `viewModel.loadMoreMessages(int)` - 加载更多历史消息（滚动到顶部时触发）
-- `viewModel.prependHistoricalMessages(List<MessageCard>)` - 在头部插入历史卡片
-- `viewModel.hasMoreMessages()` - 是否还有更多历史消息
+- `viewModel.prepareHistoricalMessages()` - 准备历史消息（从 events.jsonl 加载所有未压缩事件）
 - `viewModel.getMessages()` - 监听消息列表变化
 - `viewModel.createNewSession()` - 创建新会话（SideBarController 调用）
 - `viewModel.switchToSession()` - 切换会话（SideBarController 调用）
@@ -356,7 +356,7 @@
 - `rightButtonContainer`: 右侧动态按钮容器（右对齐按钮）
 
 **按钮配置来源：**
-各页面控制器通过实现 `ButtonBarHolder.getButtonConfigs()` 提供动态按钮配置，由 ButtonBarController 注入到 `dynamicButtonContainer`（Alignment.LEFT）或 `rightButtonContainer`（Alignment.RIGHT）。HomePageController 提供 4 个按钮："新对话"（左）+"终端/变更/项目"（右，toggle 切换编辑器面板）。
+各页面控制器通过实现 `ButtonBarHolder.getButtonConfigs()` 提供动态按钮配置，由 ButtonBarController 注入到 `dynamicButtonContainer`（Alignment.LEFT）或 `rightButtonContainer`（Alignment.RIGHT）。HomePageController 提供 5 个按钮："新对话"（左）+"终端/项目/工具/待办"（右，toggle 切换编辑器面板）。
 
 **核心方法：**
 - `setupProjectBinding()`: 设置项目绑定（由 IndexController 在初始化完成后调用），监听 currentProject 变化更新分支显示和通知 IndexController
@@ -368,7 +368,7 @@
 - `refreshBranchDisplay(ProjectInfo)`: 更新分支按钮文本（默认空，选择项目后显示分支名）
 
 ### EditorPanelController
-统一编辑器面板控制器，通过 StackPane 管理三个视图：终端、项目（文件树+文件内容）、变更（diff列表+diff视图）。实现 Initializable。面板无关闭按钮栏，由 ButtonBar 的"终端/变更/项目"按钮 toggle 切换。
+统一编辑器面板控制器，通过 StackPane 管理四个视图：终端、项目（文件树+文件内容/diff 渲染）、工具调用、待办。实现 Initializable。Diff 不再独立成视图，而是注入到项目视图右侧内容区（单栏行内高亮，类似 IDEA in-editor diff）。面板无关闭按钮栏，由 ButtonBar 的"终端/项目/工具/待办"按钮 toggle 切换。
 
 **Spring 注解：** `@Component`
 
@@ -378,41 +378,43 @@
 - `DiffService`: Diff 管理服务
 
 **职责：**
-- 管理三视图切换（终端/项目/变更），通过 StackPane + visible/managed 控制
+- 管理四视图切换（终端/项目/工具调用/待办），通过 StackPane + visible/managed 控制
 - 追踪当前视图类型（`currentViewType`），供 IndexController 的 toggle 判断使用
 - 管理项目目录树展示（双击文件在项目视图右侧显示文件内容，文件树用 `FileTreeCell` 渲染图标和样式）
-- 管理变更列表（订阅 DiffEvent 自动刷新，点击列表项在变更视图右侧显示 diff，列表用 `DiffListCell` 富单元格渲染图标/路径/徽章/统计）
 - 管理终端（使用 JediTerminalView，异步启动，加载状态，错误重试）
 - 管理文件内容显示与编辑（RichTextFX CodeArea 可编辑 + 行号 + `SyntaxHighlighterFactory.forPath` 注入语法高亮 + Ctrl+S 保存）
-- 管理 diff 视图（顶部元信息条 + RichTextFX StyleClassedTextArea + 底部审核按钮栏）
+- 管理 diff 渲染（注入到项目视图右侧 fileContentPanel，CodeArea 单栏行内高亮 + 顶部悬浮横幅 + 撤销/保留按钮）
 
 **内部枚举：**
-- `ViewType.TERMINAL` / `ViewType.PROJECT` / `ViewType.CHANGES`: 三种视图类型，由 `currentViewType` 字段追踪
+- `ViewType.TERMINAL` / `ViewType.PROJECT` / `ViewType.TOOL_CALLS` / `ViewType.TODO`: 四种视图类型，由 `currentViewType` 字段追踪
 
 **FXML 字段：**
 - `editorPanel`: 编辑器面板根容器（VBox，透明背景 + padding 8 8 8 0 留白），默认 visible=false managed=false
 - `viewContainer`: 视图容器（StackPane）
 - `terminalView`: 终端视图容器（VBox）
-- `projectSplit`: 项目视图（SplitPane，左侧文件树 + 右侧文件内容）
+- `projectSplit`: 项目视图（SplitPane，左侧文件树 + 右侧文件内容/diff 渲染区）
 - `fileTree`: 项目文件树（TreeView<Path>）
-- `fileContentPanel`: 文件内容面板（VBox）
+- `fileContentPanel`: 文件内容面板（VBox，同时承载 diff 渲染）
 - `fileContentPlaceholder`: 文件内容占位符（Label）
-- `changesSplit`: 变更视图（SplitPane，左侧diff列表 + 右侧diff视图）
-- `diffList`: 变更文件列表（ListView<FileDiff>）
-- `diffViewPanel`: diff 视图面板（VBox）
-- `diffPlaceholder`: diff 视图占位符（Label）
+- `toolCallsView`: 工具调用视图容器（VBox + ScrollPane）
+- `toolCallsContainer`: 工具调用卡片容器（VBox）
+- `todoView`: 待办视图容器（VBox + ScrollPane）
+- `todoContainer`: 待办卡片容器（VBox）
 
 **核心方法：**
 - `show()/hide()/isVisible()`: 控制面板显隐
-- `setupRoundedClip()`: 给 viewContainer 设置 Rectangle clip（arcWidth/arcHeight=24），裁剪终端/项目/变更三视图的方角到 12px 圆角形状
+- `setupRoundedClip()`: 给 viewContainer 设置 Rectangle clip（arcWidth/arcHeight=24），裁剪终端/项目/工具调用/待办四视图的方角到 12px 圆角形状
 - `setupFileTree()`: 设置文件树，注入 `FileTreeCell` 工厂，绑定双击事件
-- `setupDiffList()`: 设置变更列表，注入 `DiffListCell` 工厂，绑定点击事件
 - `setupTerminalContextMenu(JediTerminalView)`: 为终端设置右键菜单（"添加到对话框"），使用 `setOnContextMenuRequested` + `ContextMenu.show()` 实现（JediTerminalView 不是 Control，无法使用 setContextMenu）
-- `setupCodeAreaContextMenu(CodeArea)`: 为文件内容 CodeArea 设置右键菜单（"添加到对话框"），使用 `setContextMenu`
-- `setupDiffAreaContextMenu(StyleClassedTextArea)`: 为 diff StyleClassedTextArea 设置右键菜单（"添加到对话框"），使用 `setContextMenu`
+- `setupCodeAreaContextMenu(CodeArea)`: 为文件内容/diff CodeArea 设置右键菜单（"添加到对话框"），使用 `setContextMenu`
 - `showTerminalView()`: 切换到终端视图，设置 currentViewType=TERMINAL
 - `showProjectView()`: 切换到项目视图，设置 currentViewType=PROJECT
-- `showChangesView()`: 切换到变更视图，设置 currentViewType=CHANGES
+- `showToolCallsView()`: 切换到工具调用视图，设置 currentViewType=TOOL_CALLS
+- `showTodoView()`: 切换到待办视图，设置 currentViewType=TODO
+- `addToolCallCard(Node)`: 添加工具调用卡片到工具调用视图（直接添加到 `toolCallsContainer`，不再通过 ToolGroupCard 分组）
+- `addTodoCard(Node)`: 添加待办卡片到待办视图
+- `clearToolCalls()`: 清空工具调用卡片
+- `clearTodos()`: 清空待办卡片
 - `getCurrentViewType()`: 获取当前视图类型（供 IndexController toggle 判断）
 - `setCurrentProject(ProjectInfo)`: 设置当前项目，构建目录树
 - `openTerminal(Path)`: 打开终端，异步启动 JediTerminalView
@@ -420,27 +422,19 @@
 - `closeTerminal()`: 关闭终端会话
 - `showFileContent(Path)`: 在项目视图右侧显示文件内容（CodeArea + 行号 + `SyntaxHighlighterFactory.forPath` 应用语法高亮）。**支持编辑**（`setEditable(true)` + `setShowCaret(ON)` 显示光标），Ctrl+S 保存文件内容到磁盘（调用 `saveFileContent`），显示后 `requestFocus()` 聚焦以显示光标
 - `saveFileContent(Path, String)`: 保存文件内容到磁盘（`Files.writeString`），Ctrl+S 时由 `showFileContent` 的按键监听器调用
-- `showDiffView(FileDiff)`: 在变更视图右侧显示 diff。已在 CHANGES 视图时不调用 showChangesView（避免 refreshDiffList 清空列表导致选中闪烁）。先用 `diffService.recomputeDiff` 重新计算（历史对话场景文件可能已修改），再渲染：StackPane 叠加（VirtualizedScrollPane + 顶部悬浮横幅 + hunk 局部按钮）。**隐藏 @@ hunk 头和 +/- 前缀，纯色覆盖**。Hunk 头占位段落用 `.diff-hunk-header--hidden` 压缩高度到 0
-- `createDiffBanner(FileDiff, StyleClassedTextArea, List<int[]>)`: 创建顶部悬浮横幅（文件名 + spacer + ↑/↓ 导航 + 撤销/保留按钮），半透明深色背景 + 圆角 + 阴影。导航按钮循环跳转 hunk
-- `createHunkActions()`: 创建 hunk 局部撤销/保留按钮组（HBox，默认隐藏），贴附到当前顶部可见 hunk
-- `setupHunkActions(HBox, FileDiff, StyleClassedTextArea, List<int[]>)`: 监听 `estimatedScrollYProperty` 变化，估算当前可见段落，按 hunkRanges 范围判断是否在某个 hunk 内，控制局部按钮可见性。按钮点击调用 DiffService 整文件操作（DiffService 当前仅支持文件级撤销/保留）
-- `updateHunkActionsVisibility(HBox, StyleClassedTextArea, List<int[]>)`: 通过 `estimatedScrollYProperty.getValue()` / `getTotalHeightEstimate()` / 段落总数估算 firstVisible 段落，匹配 hunkRanges 范围控制按钮显示
-- `navigateHunk(StyleClassedTextArea, List<int[]>, int)`: 循环导航到上一个/下一个 hunk（跳过隐藏的 hunk 头行），调用 `showParagraphAtTop`
-- `createDiffLineNumberFactory(List<DiffLineInfo>)`: 创建自定义 diff 行号工厂，显示 old/new 双列行号和 3px gutter 指示条（ADD=绿/REMOVE=红）。Hunk 头行返回高度为 0 的空节点（视觉上隐藏）
+- `showDiffInProjectView(FileDiff)`: 切换到项目视图，调用 `renderDiffIntoPanel(diff, fileContentPanel)` 在右侧内容区渲染 diff
+- `renderDiffIntoPanel(FileDiff, VBox)`: 用 `diffService.recomputeDiff` 重新计算 diff 后渲染单栏行内高亮：CodeArea 显示新版本内容，ADD 行 `.diff-line-add` 绿色背景，REMOVE 行 `.diff-line-remove-marker` 红色背景+删除线；单列新版本行号（删除标记段落无行号）；应用 `SyntaxHighlighterFactory.forPath` 语法高亮（字符级样式与段落级背景样式叠加）；StackPane 叠加 VirtualizedScrollPane + 顶部悬浮横幅
+- `createDiffBanner(FileDiff)`: 创建顶部悬浮横幅（文件名 + spacer + 撤销/保留按钮），点击按钮调用 `diffService.rejectFileDiff/approveFileDiff` 并恢复项目视图占位符
 - `computeDiffStats(FileDiff)`: 静态方法，遍历 hunks/lines 统计 ADD/REMOVE 行数，返回 int[2]
-- `currentNavHunkIndex`: 当前导航到的 hunk 索引字段（-1 表示未定位）
-- `refreshDiffList()`: 异步用 JGit 扫描工作区未提交变更（`diffService.scanWorkingTreeDiffs`），刷新变更列表。无项目时清空列表
-- `subscribeDiffEvents()`: 订阅 EventBus 的 DiffEvent，收到事件后触发 `refreshDiffList`（基于 git 工作区扫描而非 pendingDiffs）
 - `createLoadingContent(String)`: 创建加载状态内容（ProgressIndicator + 文本）
 - `createErrorContent(String, Runnable)`: 创建错误状态内容（带重试按钮）
 
 **交互逻辑：**
-- 三视图通过 StackPane 的 visible/managed 切换，单一视图模式
-- 面板无 header 栏，通过 ButtonBar 的三个按钮 toggle 切换（相同视图再次点击则关闭面板）
+- 四视图通过 StackPane 的 visible/managed 切换，单一视图模式
+- 面板无 header 栏，通过 ButtonBar 的四个按钮 toggle 切换（相同视图再次点击则关闭面板）
 - 终端会话持久化：切换视图或关闭面板时终端会话保持（JediTerminalView 节点不销毁）
-- 文件内容注入到 fileContentPanel，替换占位符
-- diff 视图注入到 diffViewPanel，替换占位符
-- diff 审核按钮点击后重置 diff 视图为占位符并刷新变更列表
+- 文件内容/diff 渲染均注入到 fileContentPanel，替换占位符
+- diff 审核按钮点击后恢复项目视图占位符
 - 终端启动使用独立线程，避免阻塞 UI
 
 ### ProjectPickerDialogController

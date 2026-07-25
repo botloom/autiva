@@ -1,10 +1,8 @@
 package cn.bitloom.agentic.tool;
 
 import cn.bitloom.agentic.agent.AgentDefinition;
-import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.diff.DiffService;
 import cn.bitloom.agentic.memory.MemoryManager;
-import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.session.InMemorySessionManager;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.task.repository.TaskRepository;
@@ -76,13 +74,11 @@ import java.util.Set;
 public class Toolkit {
 
     private final SkillManager skillManager;
-    private final ModelFactory modelFactory;
     private final ConfigManager configManager;
     private final CronManager cronManager;
     private final ToolUIBridge toolUIBridge;
     private final AsyncMcpToolCallbackProvider mcpToolCallbackProvider;
     private final MemoryManager memoryManager;
-    private final AgentDefinitionManager agentDefinitionManager;
     private final TaskRepository taskRepository;
     private final ProcessManager processManager;
     private final InMemorySessionManager inMemorySessionManager;
@@ -112,11 +108,8 @@ public class Toolkit {
         // 4. 按 agent 配置创建 TaskTool（如果该 agent 允许使用 Task 工具）
         if (isTaskToolAllowed(definition)) {
             TaskTool taskTool = TaskTool.builder()
-                    .toolkit(this)
-                    .modelFactory(modelFactory)
                     .taskRepository(taskRepository)
                     .toolUIBridge(toolUIBridge)
-                    .agentDefinitionManager(agentDefinitionManager)
                     .inMemorySessionManager(inMemorySessionManager)
                     .build();
             filtered = new ArrayList<>(filtered);

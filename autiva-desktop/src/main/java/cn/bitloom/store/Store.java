@@ -8,8 +8,6 @@ public class Store {
 
     public static final StringProperty userId = new SimpleStringProperty("default");
 
-    public static final StringProperty statusText = new SimpleStringProperty();
-
     public static final ObjectProperty<ModelTypeEnum> selectedModel = new SimpleObjectProperty<>(ModelTypeEnum.DEEPSEEK);
 
     public static final StringProperty currentSessionId = new SimpleStringProperty();

@@ -1,6 +1,10 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
+import cn.bitloom.agentic.diff.DiffService;
+import cn.bitloom.agentic.diff.FileDiff;
+import cn.bitloom.agentic.event.DiffEvent;
+import cn.bitloom.agentic.event.EventBus;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.project.ProjectInfo;
@@ -13,7 +17,7 @@ import cn.bitloom.node.message.ToolMessageCard;
 import cn.bitloom.node.AutoResizeTextArea;
 import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.node.tool.TaskCard;
-import cn.bitloom.node.tool.ToolGroupCard;
+import cn.bitloom.node.tool.TodoCard;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.HomePageViewModel;
 import cn.bitloom.window.WindowManager;
@@ -47,9 +51,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.Disposable;
 
 import java.io.File;
 import java.net.URL;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
@@ -85,6 +91,10 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     @FXML
     private VBox chatContainer;
     @FXML
+    private ScrollPane diffFilesScroll;
+    @FXML
+    private VBox diffFilesBar;
+    @FXML
     private MenuButton agentSelector;
     @FXML
     private MenuButton projectSelectButton;
@@ -93,8 +103,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
     private final List<File> attachedFiles = new ArrayList<>();
     private final BooleanProperty shouldScrollToBottom = new SimpleBooleanProperty(false);
-    private ToolGroupCard currentToolGroup = null;
-    private boolean isLoadingMore = false;
+    private Disposable diffEventSubscription;
 
     @Getter
     private final HomePageViewModel viewModel;
@@ -104,6 +113,7 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
     private final WindowManager windowManager;
     @Getter
     private final AgentDefinitionManager agentDefinitionManager;
+    private final DiffService diffService;
 
     @Getter
     @Setter
@@ -172,13 +182,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
             }
         });
 
-        // 滚动到顶部时加载更多历史消息
-        chatScrollPane.vvalueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal.doubleValue() <= 0.01 && !isLoadingMore && viewModel.hasMoreMessages()) {
-                loadMoreMessages();
-            }
-        });
-
         // 智能体选择按钮
         this.setupAgentSelector();
 
@@ -203,6 +206,102 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
         // 注册对话框为拖拽目标（接收来自文件树/Diff 列表的文件拖拽）
         this.setupDragDrop();
+
+        // 订阅 DiffEvent：每次发生 diff 时刷新对话框上方的文件卡片条
+        this.subscribeDiffEvents();
+    }
+
+    /**
+     * 订阅 DiffEvent，收到事件后异步刷新 diff 文件卡片条。
+     */
+    private void subscribeDiffEvents() {
+        this.diffEventSubscription = EventBus.outBoxFlux()
+                .filter(event -> event instanceof DiffEvent)
+                .subscribe(event -> Platform.runLater(this::refreshDiffFilesBar));
+    }
+
+    /**
+     * 刷新对话框上方的 diff 文件卡片条：
+     * 扫描当前项目工作区未提交变更，为每个 FileDiff 创建一个文件卡片。
+     */
+    private void refreshDiffFilesBar() {
+        ProjectInfo project = viewModel.getCurrentProject();
+        if (project == null) {
+            diffFilesBar.getChildren().clear();
+            diffFilesScroll.setVisible(false);
+            diffFilesScroll.setManaged(false);
+            return;
+        }
+        new Thread(() -> {
+            List<FileDiff> diffs = diffService.scanWorkingTreeDiffs(Paths.get(project.path()));
+            Platform.runLater(() -> {
+                diffFilesBar.getChildren().clear();
+                for (FileDiff diff : diffs) {
+                    diffFilesBar.getChildren().add(createDiffFileCard(diff));
+                }
+                boolean hasDiffs = !diffs.isEmpty();
+                diffFilesScroll.setVisible(hasDiffs);
+                diffFilesScroll.setManaged(hasDiffs);
+            });
+        }).start();
+    }
+
+    /**
+     * 创建单个 diff 文件卡片：文件名 + "+N -M" 变更统计，点击后在项目视图中打开 diff。
+     */
+    private Node createDiffFileCard(FileDiff diff) {
+        HBox card = new HBox(6);
+        card.getStyleClass().add("home-page__diff-file-card");
+        card.setAlignment(Pos.CENTER_LEFT);
+
+        // 文件名（仅显示文件名，不带完整路径）
+        String filePath = diff.filePath();
+        String fileName = filePath;
+        int lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+        if (lastSep >= 0 && lastSep < filePath.length() - 1) {
+            fileName = filePath.substring(lastSep + 1);
+        }
+        Label nameLabel = new Label(fileName);
+        nameLabel.getStyleClass().add("home-page__diff-file-card__name");
+        nameLabel.setTooltip(new Tooltip(filePath));
+        card.getChildren().add(nameLabel);
+
+        // 变更统计 "+N -M"
+        int[] stats = computeDiffStats(diff);
+        Label statsLabel = new Label("+" + stats[0] + " -" + stats[1]);
+        statsLabel.getStyleClass().add("home-page__diff-file-card__stats");
+        if (stats[0] > 0) {
+            statsLabel.getStyleClass().add("home-page__diff-file-card__stats--add");
+        }
+        if (stats[1] > 0) {
+            statsLabel.getStyleClass().add("home-page__diff-file-card__stats--remove");
+        }
+        card.getChildren().add(statsLabel);
+
+        // 点击：在项目视图中打开 diff
+        card.setOnMouseClicked(e -> {
+            if (indexController != null) {
+                indexController.showDiffInProjectView(diff);
+            }
+        });
+
+        return card;
+    }
+
+    /**
+     * 统计 diff 的 ADD/REMOVE 行数
+     */
+    private static int[] computeDiffStats(FileDiff diff) {
+        int added = 0, removed = 0;
+        if (diff.hunks() == null) return new int[]{0, 0};
+        for (FileDiff.Hunk hunk : diff.hunks()) {
+            if (hunk.lines() == null) continue;
+            for (FileDiff.DiffLine line : hunk.lines()) {
+                if (line.type() == FileDiff.Type.ADD) added++;
+                else if (line.type() == FileDiff.Type.REMOVE) removed++;
+            }
+        }
+        return new int[]{added, removed};
     }
 
     /**
@@ -236,14 +335,10 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
 
     private void addChatCard(MessageCard card) {
         if (card.getMessageType() == MessageEvent.Type.TOOL && card instanceof ToolMessageCard toolCard) {
-            String toolName = toolCard.getToolName();
-            addToolToGroup(toolCard, toolName);
-            scrollToBottom();
+            // 工具调用卡片重定向到 EditorPanel 的工具调用视图（复用 ToolGroupCard 分组逻辑）
+            addToolToEditorPanel(toolCard, toolCard.getToolName());
             return;
         }
-
-        // 非 TOOL 消息中断当前工具分组
-        currentToolGroup = null;
 
         // MessageCard 继承 VBox，可以直接绑定宽度
         card.maxWidthProperty().bind(
@@ -270,26 +365,22 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         scrollToBottom();
     }
 
-    private void addToolToGroup(Node toolCard, String toolName) {
-        if (currentToolGroup != null) {
-            currentToolGroup.addToolCard(toolCard, toolName);
-        } else {
-            currentToolGroup = new ToolGroupCard();
-            currentToolGroup.maxWidthProperty().bind(
-                    Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.85))
-            );
-            currentToolGroup.addToolCard(toolCard, toolName);
-
-            HBox row = new HBox();
-            row.getStyleClass().add("chat-row");
-            row.setMaxWidth(Double.MAX_VALUE);
-            row.setAlignment(Pos.CENTER_LEFT);
-            row.getChildren().add(currentToolGroup);
-            chatContainer.getChildren().add(row);
-        }
+    /**
+     * 添加工具卡片到 EditorPanel 的工具调用视图（直接添加，不再分组包裹）
+     */
+    private void addToolToEditorPanel(Node toolCard, String toolName) {
+        if (indexController == null || indexController.getEditorPanelController() == null) return;
+        indexController.getEditorPanelController().addToolCallCard(toolCard);
     }
 
     private void addChatNode(Node node) {
+        // TodoCard 重定向到 EditorPanel 的待办视图
+        if (node instanceof TodoCard todoCard) {
+            if (indexController != null && indexController.getEditorPanelController() != null) {
+                indexController.getEditorPanelController().addTodoCard(todoCard);
+            }
+            return;
+        }
         if (node instanceof Region region) {
             region.maxWidthProperty().bind(
                     Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.85))
@@ -529,30 +620,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         shouldScrollToBottom.set(true);
     }
 
-    private void loadMoreMessages() {
-        isLoadingMore = true;
-        List<MessageCard> olderCards = viewModel.loadMoreMessages(30);
-        if (olderCards.isEmpty()) {
-            isLoadingMore = false;
-            return;
-        }
-
-        double oldVvalue = chatScrollPane.getVvalue();
-        double oldContentHeight = chatContainer.getHeight();
-
-        viewModel.prependHistoricalMessages(olderCards);
-
-        Platform.runLater(() -> {
-            double newContentHeight = chatContainer.getHeight();
-            double heightDiff = newContentHeight - oldContentHeight;
-            if (heightDiff > 0 && oldContentHeight > 0) {
-                double newVvalue = (oldVvalue * oldContentHeight + heightDiff) / newContentHeight;
-                chatScrollPane.setVvalue(Math.min(1.0, newVvalue));
-            }
-            isLoadingMore = false;
-        });
-    }
-
     private void animateToChatState() {
         Timeline timeline = new Timeline();
         KeyFrame keyFrame = new KeyFrame(Duration.millis(600),
@@ -768,17 +835,6 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                             }
                         }),
                 new ButtonBarHolder.ButtonConfig(
-                        "changesButton",
-                        "变更",
-                        "button-bar__icon-btn",
-                        "/cn/bitloom/images/diff.svg",
-                        ButtonBarHolder.Alignment.RIGHT,
-                        _ -> {
-                            if (indexController != null) {
-                                indexController.toggleChangesPanel();
-                            }
-                        }),
-                new ButtonBarHolder.ButtonConfig(
                         "projectButton",
                         "项目",
                         "button-bar__icon-btn",
@@ -788,6 +844,28 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
                             if (indexController != null) {
                                 indexController.toggleProjectPanel();
                             }
+                        }),
+                new ButtonBarHolder.ButtonConfig(
+                        "toolCallsButton",
+                        "工具",
+                        "button-bar__icon-btn",
+                        "/cn/bitloom/images/plug.svg",
+                        ButtonBarHolder.Alignment.RIGHT,
+                        _ -> {
+                            if (indexController != null) {
+                                indexController.toggleToolCallsPanel();
+                            }
+                        }),
+                new ButtonBarHolder.ButtonConfig(
+                        "todoButton",
+                        "待办",
+                        "button-bar__icon-btn",
+                        "/cn/bitloom/images/list.svg",
+                        ButtonBarHolder.Alignment.RIGHT,
+                        _ -> {
+                            if (indexController != null) {
+                                indexController.toggleTodoPanel();
+                            }
                         })
         );
     }
@@ -796,7 +874,16 @@ public class HomePageController implements Initializable, ButtonBarHolder, PageH
         this.sendField.setText("");
         this.clearAttachedFiles();
         this.chatContainer.getChildren().clear();
-        currentToolGroup = null;
+        // 清空 EditorPanel 中的工具调用和待办卡片，并重置 ToolUIBridge 的 currentTodoCard 引用
+        toolUIBridge.resetTodoCard();
+        if (indexController != null && indexController.getEditorPanelController() != null) {
+            indexController.getEditorPanelController().clearToolCalls();
+            indexController.getEditorPanelController().clearTodos();
+        }
+        // 清空对话框上方的 diff 文件卡片条
+        this.diffFilesBar.getChildren().clear();
+        this.diffFilesScroll.setVisible(false);
+        this.diffFilesScroll.setManaged(false);
 
         this.homePage.setAlignment(Pos.CENTER);
         VBox.setMargin(this.sendBox, new Insets(0, 0, 0, 0));

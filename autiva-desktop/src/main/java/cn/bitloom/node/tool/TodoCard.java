@@ -2,9 +2,11 @@ package cn.bitloom.node.tool;
 
 import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.databind.JsonNode;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Circle;
 
@@ -13,57 +15,86 @@ import java.util.List;
 
 public class TodoCard extends VBox {
 
+    private static final double RING_RADIUS = 12;
+    private static final double RING_STROKE = 3;
+    private static final double RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
     public TodoCard(String todosJson) {
-        this.getStyleClass().add("chat-message");
-        this.getStyleClass().add("chat-message--tool");
-        this.getStyleClass().add("chat-message--todo");
+        getStyleClass().add("chat-message");
+        getStyleClass().add("chat-message--tool");
+        getStyleClass().add("chat-message--todo");
+        rebuild(todosJson);
+    }
 
-        HBox header = new HBox(8);
-        header.getStyleClass().add("chat-message__tool-header");
+    /**
+     * 原地更新卡片内容（不新建卡片）
+     */
+    public void update(String todosJson) {
+        getChildren().clear();
+        rebuild(todosJson);
+    }
 
-        Label iconLabel = new Label("☑");
-        iconLabel.getStyleClass().add("chat-message__todo-icon");
-        Label nameLabel = new Label("TodoWrite");
-        nameLabel.getStyleClass().add("chat-message__tool-name");
-        nameLabel.setStyle("-fx-text-fill: #b45309;");
-        header.getChildren().addAll(iconLabel, nameLabel);
-        this.getChildren().add(header);
-
-        VBox body = new VBox(8);
-        body.getStyleClass().add("chat-message__todo-body");
-
+    private void rebuild(String todosJson) {
         List<JsonNode> todoItems = parseTodos(todosJson);
         int completedCount = 0;
         int totalCount = todoItems.size();
+        for (JsonNode item : todoItems) {
+            if ("completed".equals(getString(item, "status"))) {
+                completedCount++;
+            }
+        }
+
+        // 顶部：进度环 + 摘要 + 工具名
+        HBox header = new HBox(10);
+        header.getStyleClass().add("chat-message__tool-header");
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        StackPane progressRing = createProgressRing(completedCount, totalCount);
+        header.getChildren().add(progressRing);
+
+        VBox titleBox = new VBox(1);
+        Label nameLabel = new Label("TodoWrite");
+        nameLabel.getStyleClass().add("chat-message__tool-name");
+        nameLabel.setStyle("-fx-text-fill: #b45309;");
+        Label summaryText = new Label(completedCount + " / " + totalCount + " 已完成");
+        summaryText.getStyleClass().add("chat-message__todo-summary-text");
+        titleBox.getChildren().addAll(nameLabel, summaryText);
+        header.getChildren().add(titleBox);
+        getChildren().add(header);
+
+        // 紧凑清单
+        VBox body = new VBox(4);
+        body.getStyleClass().add("chat-message__todo-body");
+        body.setPadding(new Insets(6, 0, 0, 0));
 
         for (JsonNode item : todoItems) {
             String content = getString(item, "content");
             String status = getString(item, "status");
             String activeForm = getString(item, "activeForm");
 
-            HBox itemRow = new HBox(10);
+            HBox itemRow = new HBox(8);
             itemRow.getStyleClass().add("chat-message__todo-item");
+            itemRow.setAlignment(Pos.CENTER_LEFT);
 
-            Circle statusIndicator = new Circle(9);
-            statusIndicator.getStyleClass().add("chat-message__todo-status");
-            statusIndicator.getStyleClass().add("chat-message__todo-status--" + status);
-            itemRow.getChildren().add(statusIndicator);
+            Circle statusDot = new Circle(4);
+            statusDot.getStyleClass().add("chat-message__todo-status");
+            statusDot.getStyleClass().add("chat-message__todo-status--" + status);
+            itemRow.getChildren().add(statusDot);
 
-            VBox contentArea = new VBox(2);
             Label contentLabel = new Label(content);
             contentLabel.setWrapText(true);
             contentLabel.getStyleClass().add("chat-message__todo-text");
             if ("completed".equals(status)) {
                 contentLabel.getStyleClass().add("chat-message__todo-text--completed");
             }
-            contentArea.getChildren().add(contentLabel);
+            HBox.setHgrow(contentLabel, javafx.scene.layout.Priority.ALWAYS);
+            itemRow.getChildren().add(contentLabel);
 
             if (activeForm != null && !"completed".equals(status)) {
                 Label activeFormLabel = new Label(activeForm);
                 activeFormLabel.getStyleClass().add("chat-message__todo-active-form");
-                contentArea.getChildren().add(activeFormLabel);
+                itemRow.getChildren().add(activeFormLabel);
             }
-            itemRow.getChildren().add(contentArea);
 
             Label statusLabel = new Label(getStatusText(status));
             statusLabel.getStyleClass().add("chat-message__todo-status-label");
@@ -71,30 +102,37 @@ public class TodoCard extends VBox {
             itemRow.getChildren().add(statusLabel);
 
             body.getChildren().add(itemRow);
+        }
+        getChildren().add(body);
+    }
 
-            if ("completed".equals(status)) {
-                completedCount++;
-            }
+    /**
+     * 创建环形进度指示器：背景灰圆环 + 前景绿圆环（按完成比例显示弧长）
+     */
+    private StackPane createProgressRing(int completed, int total) {
+        StackPane ring = new StackPane();
+        ring.getStyleClass().add("chat-message__todo-progress-ring");
+
+        Circle bg = new Circle(RING_RADIUS);
+        bg.getStyleClass().add("chat-message__todo-progress-ring-bg");
+        bg.setStrokeWidth(RING_STROKE);
+        bg.setFill(null);
+
+        Circle fg = new Circle(RING_RADIUS);
+        fg.getStyleClass().add("chat-message__todo-progress-ring-fg");
+        fg.setStrokeWidth(RING_STROKE);
+        fg.setFill(null);
+        fg.setRotationAxis(javafx.scene.transform.Rotate.Z_AXIS);
+        fg.setRotate(-90);
+        if (total > 0) {
+            double ratio = (double) completed / total;
+            fg.getStrokeDashArray().addAll(ratio * RING_CIRCUMFERENCE, RING_CIRCUMFERENCE);
+        } else {
+            fg.getStrokeDashArray().addAll(0.0, RING_CIRCUMFERENCE);
         }
 
-        if (totalCount > 0) {
-            HBox progressBar = new HBox();
-            progressBar.getStyleClass().add("chat-message__todo-progress-bar");
-            double progress = (double) completedCount / totalCount;
-
-            Region progressFill = new Region();
-            progressFill.getStyleClass().add("chat-message__todo-progress-fill");
-            progressFill.setPrefWidth(progress * 100);
-            progressFill.setMaxWidth(progress * 100);
-            progressBar.getChildren().add(progressFill);
-            body.getChildren().add(progressBar);
-
-            Label summary = new Label(completedCount + " / " + totalCount + " 已完成");
-            summary.getStyleClass().add("chat-message__todo-summary");
-            body.getChildren().add(summary);
-        }
-
-        this.getChildren().add(body);
+        ring.getChildren().addAll(bg, fg);
+        return ring;
     }
 
     private String getStatusText(String status) {

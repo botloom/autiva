@@ -59,13 +59,13 @@
 │   │   ├── config.json          ← MCP server + 工具白名单 + skill + subagent（覆盖根 config.json）
 │   │   └── sessions/<session-id>/
 │   │       ├── metadata.json    ← Session 序列化（唯一状态源）
-│   │       └── messages.jsonl   ← 消息持久化
+│   │       └── events.jsonl     ← 事件持久化
 │   └── <agent-id>/              ← 自定义智能体（主智能体的扩展）
 │       ├── xxx.md               ← 自定义提示词文件（覆盖根目录同名文件）
 │       ├── config.json          ← 智能体级配置（覆盖根 config.json）
 │       └── sessions/<session-id>/
 │           ├── metadata.json    ← Session 序列化（唯一状态源）
-│           └── messages.jsonl   ← 消息持久化
+│           └── events.jsonl     ← 事件持久化
 ├── skills/                      ← 静态：技能目录
 ├── subagents/                   ← 静态：子 agent 声明
 ├── logs/                        ← 日志目录

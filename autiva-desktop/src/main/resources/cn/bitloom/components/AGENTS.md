@@ -85,14 +85,15 @@ VBox (sideBar)
 - 只有 `ScrollPane` 会随着内容增长而扩展，其他元素保持固定高度
 
 ### EditorPanel.fxml
-统一编辑器面板组件，通过 StackPane 管理三个视图：终端、项目、变更。默认隐藏，点击 ButtonBar 右侧"终端"/"变更"/"项目"按钮 toggle 切换（相同视图再次点击则关闭），嵌入主区域右侧的 SplitPane 中，支持拖拽调整大小。面板无 header 栏，外层容器透明无 padding，直接铺满 mainSplit 区域。
+统一编辑器面板组件，通过 StackPane 管理四个视图：终端、项目、工具调用、待办。默认隐藏，点击 ButtonBar 右侧"终端"/"项目"/"工具"/"待办"按钮 toggle 切换（相同视图再次点击则关闭），嵌入主区域右侧的 SplitPane 中，支持拖拽调整大小。面板无 header 栏，外层容器透明无 padding，直接铺满 mainSplit 区域。Diff 不再独立成视图，而是注入到项目视图右侧内容区（单栏行内高亮）。
 
 **功能：**
-- 三视图切换（终端/项目/变更），通过 StackPane + visible/managed 控制
+- 四视图切换（终端/项目/工具调用/待办），通过 StackPane + visible/managed 控制
 - 终端视图（JediTerminalView，支持 ANSI 解析、光标控制）
-- 项目视图（SplitPane：左侧文件树 + 右侧文件内容显示区，双击文件在右侧显示带语法高亮的代码）
-- 变更视图（SplitPane：左侧变更文件列表富单元格 + 右侧 diff 显示区，含顶部元信息条 + 底部审核按钮栏）
-- 无关闭按钮，通过 ButtonBar 三个按钮 toggle 切换
+- 项目视图（SplitPane：左侧文件树 + 右侧文件内容/diff 显示区，双击文件在右侧显示带语法高亮的代码；点击对话框上方 diff 文件卡片在右侧渲染 diff）
+- 工具调用视图（ScrollPane + VBox，直接展示 ToolMessageCard，不再通过 ToolGroupCard 分组，样式复用 home-page.css 与聊天区域一致）
+- 待办视图（ScrollPane + VBox，展示 TodoCard，样式复用 home-page.css 与聊天区域一致）
+- 无关闭按钮，通过 ButtonBar 四个按钮 toggle 切换
 
 **控制器：** EditorPanelController
 
@@ -104,43 +105,42 @@ VBox (editorPanel, #1c1c1e 背景 + 12px 圆角 + Rectangle clip 裁剪, 默认�
     ├── SplitPane (projectSplit, 默认显示, HORIZONTAL, dividerPositions=0.35) - 项目视图
     │   ├── VBox (treePanel, minWidth=140, prefWidth=240)
     │   │   └── TreeView (fileTree, VBox.vgrow=ALWAYS) - FileTreeCell 富渲染
-    │   └── VBox (fileContentPanel, minWidth=200) - 动态注入 CodeArea
+    │   └── VBox (fileContentPanel, minWidth=200) - 动态注入 CodeArea（文件内容或 diff 渲染）
     │       └── Label (fileContentPlaceholder) "双击文件查看内容"
-    └── SplitPane (changesSplit, 默认隐藏, HORIZONTAL, dividerPositions=0.3) - 变更视图
-        ├── VBox (diffListPanel, minWidth=140, prefWidth=240)
-        │   └── ListView (diffList, VBox.vgrow=ALWAYS) - DiffListCell 富单元格
-        └── VBox (diffViewPanel, minWidth=200) - 动态注入 VBox(metaBar + scrollPane + actionBar)
-            └── Label (diffPlaceholder) "点击变更文件查看差异"
+    ├── VBox (toolCallsView, 默认隐藏) - 工具调用视图
+    │   └── ScrollPane (editor-panel__card-scroll, fitToWidth=true)
+    │       └── VBox (toolCallsContainer, editor-panel__card-container) - ToolMessageCard 卡片
+    └── VBox (todoView, 默认隐藏) - 待办视图
+        └── ScrollPane (editor-panel__card-scroll, fitToWidth=true)
+            └── VBox (todoContainer, editor-panel__card-container) - TodoCard 卡片
 ```
 
 **布局说明：**
 - 外层 VBox 透明背景 + padding 8 8 8 0（上右下留白，左侧贴 SplitPane 分隔条），留白区域透出 SplitPane 背景色
-- viewContainer（StackPane）承载 #1c1c1e 深色背景 + 12px 四角圆角，并通过 Rectangle clip（arcWidth/arcHeight=24）裁剪所有子视图（终端/项目/变更）的方角到圆角形状
-- 无 header 栏、无标题文字（文件树和变更列表直接显示，无"项目文件"/"变更文件"标题）
-- StackPane 通过 visible/managed 切换三视图，单一视图模式
-- 项目和变更视图内部各有 SplitPane，支持左右拖拽调整比例
+- viewContainer（StackPane）承载 #1c1c1e 深色背景 + 12px 四角圆角，并通过 Rectangle clip（arcWidth/arcHeight=24）裁剪所有子视图（终端/项目/工具调用/待办）的方角到圆角形状
+- 无 header 栏、无标题文字（文件树直接显示，无"项目文件"标题）
+- StackPane 通过 visible/managed 切换四视图，单一视图模式
+- 项目视图内部 SplitPane 支持左右拖拽调整比例
 - 外层 index.fxml 的 SplitPane 支持面板与主区域拖拽调整大小
-- **动态内容注入**：fileContentPanel 和 diffViewPanel 初始显示占位符 Label，运行时由控制器替换为富内容
+- **动态内容注入**：fileContentPanel 初始显示占位符 Label，运行时由控制器替换为富内容
   - 文件内容：CodeArea + 行号 + SyntaxHighlighter，外层包 VirtualizedScrollPane
-  - Diff 视图：VBox(顶部元信息条 + 中部 StyleClassedTextArea 滚动 + 底部审核按钮栏)
+  - Diff 渲染：StackPane(VirtualizedScrollPane<CodeArea> + 顶部悬浮横幅)，单栏行内高亮（ADD 行绿色背景，REMOVE 行红色背景+删除线）
 
-**样式表：** `@../style/editor-panel.css`
+**样式表：** `@../style/editor-panel.css, @../style/home-page.css`（加载两个样式表：editor-panel.css 提供深色主题骨架，home-page.css 提供工具卡片/TodoCard 浅色样式以保证与聊天区域显示完全一致）
 
 **样式类（详见 style/AGENTS.md 的 editor-panel.css 部分）：**
 - `.editor-panel`: 容器样式（透明背景，padding 8 8 8 0）
 - `.editor-panel__views`: 视图容器 StackPane（#1c1c1e 深色背景，12px 圆角）
 - `.editor-panel__view`: 终端视图容器
-- `.editor-panel__project-split` / `.editor-panel__changes-split`: 内部 SplitPane
+- `.editor-panel__project-split`: 内部 SplitPane
 - `.editor-panel__tree-panel`: 文件树面板 VBox
 - `.editor-panel__tree`: TreeView
-- `.editor-panel__content-panel` / `.editor-panel__diff-view-panel`: 右侧内容面板
+- `.editor-panel__content-panel`: 右侧内容面板（同时承载 diff 渲染）
 - `.editor-panel__placeholder`: 占位符
-- `.editor-panel__diff-list`: 变更列表 ListView
 - 代码与 Diff 区相关：`.editor-panel__code-scroll` / `.editor-panel__code-area` / `.editor-panel__diff-area` / `.lineno`
 - 语法高亮 Token：`.syntax-keyword` / `.syntax-string` / `.syntax-comment` / `.syntax-number` / `.syntax-annotation` / `.syntax-literal` / `.syntax-type` / `.syntax-key` / `.syntax-operator`
-- Diff 元信息条：`.editor-panel__meta-bar` / `.editor-panel__meta-path` / `.editor-panel__meta-badge(--add/--delete/--modify)` / `.editor-panel__meta-stat(--add/--remove)`
-- Diff 行级：`.diff-meta` / `.diff-hunk-header` / `.diff-line-add` / `.diff-line-remove` / `.diff-line-context`
-- 审核按钮：`.editor-panel__diff-actions` / `.editor-panel__diff-btn--approve` / `.editor-panel__diff-btn--reject`
+- Diff 悬浮横幅：`.diff-banner` / `.diff-banner__path` / `.diff-banner__btn` / `.diff-banner__btn--reject` / `.diff-banner__btn--approve`
+- Diff 行级（单栏行内高亮）：`.diff-line-add` / `.diff-line-remove-marker` / `.diff-lineno` / `.diff-lineno--single`
 - 状态：`.editor-panel__loading-text` / `.editor-panel__error-text` / `.editor-panel__retry-btn`
 - 终端：`.jedi-terminal-view`
 

@@ -37,7 +37,6 @@ public class Router {
         RouteConfig.Route route = this.routeConfig.getRoute(path);
         if (route == null) {
             log.error("Route not found: {}", path);
-            Store.statusText.set("路由未找到: " + path);
             return;
         }
 

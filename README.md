@@ -32,9 +32,10 @@ autiva/
 │       ├── agentic/         # 智能体核心
 │       │   ├── a2ui/        #   动态界面协议（组件模型）
 │       │   ├── agent/       #   智能体核心（MAIN + SUBAGENT 双类型）
+│       │   │   └── advisor/ #     Agent 建议器
 │       │   ├── diff/        #   差异计算服务
 │       │   ├── event/       #   事件总线（含 A2UI 事件）
-│       │   ├── evolve/      #   进化系统引擎（完整 16 子包）
+│       │   ├── evolve/      #   进化系统引擎
 │       │   ├── hook/        #   Agent 钩子系统
 │       │   ├── memory/      #   对话记忆（含压缩）
 │       │   ├── model/       #   AI 模型工厂
@@ -42,8 +43,12 @@ autiva/
 │       │   ├── session/     #   会话管理
 │       │   ├── skill/       #   技能系统
 │       │   ├── task/        #   后台任务管理
-│       │   ├── tool/        #   工具系统（13 子类，43+ 工具）
-│       │   └── util/        #   Agent 工具类
+│       │   │   └── repository/ # 任务持久化
+│       │   ├── tool/        #   工具系统
+│       │   │   └── manage/  #     工具管理（含进化管理）
+│       │   ├── trace/       #   调用链追踪
+│       │   ├── util/        #   Agent 工具类
+│       │   └── verify/      #   验证服务
 │       ├── bridge/          # 外部集成
 │       │   ├── wechat/      #   微信 iLink 协议接入
 │       │   └── desktop/     #   Tool ↔ UI 桥接
@@ -54,20 +59,22 @@ autiva/
 │       ├── cron/            # 定时任务引擎
 │       ├── exception/       # 异常体系
 │       ├── holder/          # UI 组件持有者
-│       ├── node/            # 自定义 UI 节点（A2UI、终端、画布、编辑器等）
+│       ├── node/            # 自定义 UI 节点
+│       │   ├── a2ui/        #   A2UI 组件渲染
+│       │   └── terminal/    #   终端模拟器
 │       ├── router/          # 页面路由
 │       ├── store/           # 全局状态管理
 │       ├── util/            # 通用工具类
 │       ├── vm/              # 视图模型层
 │       └── window/          # 窗口管理
 ├── autiva-gene-door/        # 进化基因入口模块（骨架项目）
-└── sandbox/                 # 沙箱执行环境（Python OpenSandbox，独立项目）
+└── images/                  # 项目截图
 ```
 
 ## 核心功能
 
 ### 智能体系统
-- 统一 Agent 架构：MAIN（主智能体）和 SUBAGENT（子智能体）均为 `Agent` 类实例，由 `AgentDefinition` 区分
+- **统一 Agent 架构**：MAIN（主智能体）和 SUBAGENT（子智能体）均为 `Agent` 类实例，由 `AgentDefinition` 区分
 - 支持流式 / 阻塞两种响应模式
 - 多模型切换（DeepSeek、智谱 AI 等）
 - 对话记忆自动压缩与上下文管理
@@ -109,6 +116,14 @@ autiva/
 - 会话记忆（in-memory）：自动压缩
 - 4 个管理工具：MemorySave / MemoryUpdate / MemoryDelete / MemorySearch
 
+### 调用链追踪（Trace）
+- 请求全链路追踪，支持异步任务嵌套
+- 可视化调用树，方便调试与性能分析
+
+### 验证服务（Verify）
+- 智能体输出验证，确保回复质量
+- 可配置验证规则
+
 ### MCP 集成
 - 支持 STDIO、SSE、STREAMABLE_HTTP 传输协议
 - 基于 Spring AI MCP Client 实现
@@ -117,7 +132,7 @@ autiva/
 ### A2UI 动态界面
 智能体可以通过标准化协议动态生成交互式 UI，包括：
 - 布局组件：Row、Column、List、Tabs、Card
-- 交互组件：TextFiled、Button、CheckBox、ChoicePicker、Slider
+- 交互组件：TextField、Button、CheckBox、ChoicePicker、Slider、DateTimeInput
 - 展示组件：Text、Image、Icon、Divider
 - 事件系统：A2UIEvent + A2UIActionEvent 完整生命周期
 
