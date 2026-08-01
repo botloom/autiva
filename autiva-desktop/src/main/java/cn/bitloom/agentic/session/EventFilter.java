@@ -293,20 +293,23 @@ public record EventFilter(@Nullable Instant from, @Nullable Instant to, @Nullabl
 				return false;
 			}
 		}
-		if (this.branch != null) {
-			String eventBranch = me.getBranch();
+		String eventBranch = me.getBranch();
+		if (this.branch == null) {
+			// 主智能体: 仅可见 root 事件（branch == null），排除所有子智能体事件
 			if (eventBranch != null) {
-				// eventBranch is visible to filterBranch if it is the same branch or an
-				// ancestor (i.e. filterBranch starts with eventBranch + ".")
-				// TODO: what convention to use for branching trees (. or / or something
-				// else)? Should we support wildcards (e.g. "orch.*")?
-				// TODO: Should we support rootEventId for branch?
-				boolean visible = this.branch.equals(eventBranch) || this.branch.startsWith(eventBranch + ".");
-				if (!visible) {
-					return false;
-				}
+				return false;
 			}
-			// eventBranch == null: root event, visible to all agents
+		}
+		else {
+			// 子智能体: 不共享主智能体历史，完全排除 root 事件；
+			// 仅可见自己 branch 内的事件或祖先 branch 的事件
+			if (eventBranch == null) {
+				return false;
+			}
+			boolean visible = this.branch.equals(eventBranch) || this.branch.startsWith(eventBranch + ".");
+			if (!visible) {
+				return false;
+			}
 		}
 		return true;
 	}

@@ -7,24 +7,29 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 运行时上下文，携带 sessionId、userId、eventSink 等运行时信息。
+ * 运行时上下文，携带 sessionId、userId、branch、eventSink 等运行时信息。
  * <p>
  * Agent 实例无状态可复用，per-session 的运行时数据通过 RuntimeContext 传入。
  * 参考 AgentScope 2.0 的 RuntimeContext.builder().sessionId(...).userId(...).put(...).build() 模式。
  * <p>
  * Agent.runStream 内部通过 Flux.create 创建 sink，包装为 EventPublisher 后
  * 调用 {@link #put} 注入到 params，再通过 {@link #toToolContextMap()} 传递给 ToolContext。
+ * <p>
+ * branch 用于子智能体隔离：主智能体 branch 为 null（root），子智能体 branch 形如
+ * "subagent.{name}"。事件持久化和历史检索都基于 branch 进行过滤。
  */
 @Getter
 public class RuntimeContext {
 
     private final String sessionId;
     private final String userId;
+    private final String branch;
     private final Map<String, Object> params;
 
-    private RuntimeContext(String sessionId, String userId, Map<String, Object> params) {
+    private RuntimeContext(String sessionId, String userId, String branch, Map<String, Object> params) {
         this.sessionId = sessionId;
         this.userId = userId;
+        this.branch = branch;
         this.params = params != null ? params : new HashMap<>();
     }
 
@@ -40,7 +45,7 @@ public class RuntimeContext {
     }
 
     /**
-     * 转为 ToolContext 用的 Map（含 sessionId、userId 及 params 中所有项）。
+     * 转为 ToolContext 用的 Map（含 sessionId、userId、branch 及 params 中所有项）。
      */
     public Map<String, Object> toToolContextMap() {
         Map<String, Object> map = new HashMap<>(params);
@@ -49,6 +54,9 @@ public class RuntimeContext {
         }
         if (userId != null) {
             map.put("userId", userId);
+        }
+        if (branch != null) {
+            map.put("branch", branch);
         }
         return map;
     }
@@ -60,6 +68,7 @@ public class RuntimeContext {
     public static class RuntimeContextBuilder {
         private String sessionId;
         private String userId;
+        private String branch;
         private final Map<String, Object> params = new HashMap<>();
 
         public RuntimeContextBuilder sessionId(String sessionId) {
@@ -69,6 +78,11 @@ public class RuntimeContext {
 
         public RuntimeContextBuilder userId(String userId) {
             this.userId = userId;
+            return this;
+        }
+
+        public RuntimeContextBuilder branch(String branch) {
+            this.branch = branch;
             return this;
         }
 
@@ -83,7 +97,7 @@ public class RuntimeContext {
         }
 
         public RuntimeContext build() {
-            return new RuntimeContext(sessionId, userId, params);
+            return new RuntimeContext(sessionId, userId, branch, params);
         }
     }
 }

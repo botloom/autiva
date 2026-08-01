@@ -36,7 +36,7 @@
         <ScrollPane fx:id="diffReviewListScroll" styleClass="home-page__diff-review-list-scroll"
                     visible="false" managed="false"
                     fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED"
-                    maxHeight="244">
+                    minHeight="244" prefHeight="244" maxHeight="244">
             <VBox fx:id="diffReviewList" styleClass="home-page__diff-review-list"/>
         </ScrollPane>
         <HBox fx:id="diffReviewHeader" styleClass="home-page__diff-review-header">

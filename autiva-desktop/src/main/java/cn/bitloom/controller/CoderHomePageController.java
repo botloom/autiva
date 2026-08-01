@@ -118,7 +118,6 @@ public class CoderHomePageController extends AbstractHomePageController {
                 diffReviewExpanded = false;
                 diffReviewListScroll.setVisible(false);
                 diffReviewListScroll.setManaged(false);
-                diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
                 updateDiffReviewBar();
             }
         });
@@ -131,6 +130,36 @@ public class CoderHomePageController extends AbstractHomePageController {
 
     // ===== Diff 审查条 =====
 
+    /**
+     * 从 DiffService 刷新 diff 审查条（diff 看板中撤销/保留后调用）
+     * 重建卡片列表，仅保留 diffService 中仍 pending 的 diff
+     */
+    @Override
+    public void refreshDiffReviewBarFromService() {
+        java.util.List<FileDiff> pending = diffService.getPendingDiffs();
+        java.util.Set<String> pendingIds = pending.stream()
+                .map(FileDiff::id)
+                .collect(java.util.stream.Collectors.toSet());
+
+        // 移除已不在 pending 中的卡片
+        diffReviewList.getChildren().removeIf(node ->
+                !(node.getUserData() instanceof FileDiff diff) || !pendingIds.contains(diff.id()));
+
+        // 添加新增的卡片（pending 中有但卡片列表中没有的）
+        java.util.Set<String> existingIds = diffReviewList.getChildren().stream()
+                .filter(node -> node.getUserData() instanceof FileDiff)
+                .map(node -> ((FileDiff) node.getUserData()).id())
+                .collect(java.util.stream.Collectors.toSet());
+
+        for (FileDiff diff : pending) {
+            if (!existingIds.contains(diff.id())) {
+                diffReviewList.getChildren().add(createDiffFileCard(diff));
+            }
+        }
+
+        updateDiffReviewBar();
+    }
+
     private void addDiffFileCard(FileDiff diff) {
         diffReviewList.getChildren().add(createDiffFileCard(diff));
         updateDiffReviewBar();
@@ -142,10 +171,6 @@ public class CoderHomePageController extends AbstractHomePageController {
         boolean hasDiffs = count > 0;
         diffReviewBar.setVisible(hasDiffs);
         diffReviewBar.setManaged(hasDiffs);
-        if (hasDiffs && !diffReviewExpanded) {
-            diffReviewBar.setPrefHeight(Region.USE_COMPUTED_SIZE);
-            diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
-        }
     }
 
     @FXML
@@ -153,13 +178,6 @@ public class CoderHomePageController extends AbstractHomePageController {
         diffReviewExpanded = !diffReviewExpanded;
         diffReviewListScroll.setVisible(diffReviewExpanded);
         diffReviewListScroll.setManaged(diffReviewExpanded);
-        if (diffReviewExpanded) {
-            diffReviewBar.setMaxHeight(280);
-            diffReviewBar.setPrefHeight(Region.USE_COMPUTED_SIZE);
-        } else {
-            diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
-            diffReviewBar.setPrefHeight(Region.USE_COMPUTED_SIZE);
-        }
     }
 
     @FXML
@@ -173,7 +191,6 @@ public class CoderHomePageController extends AbstractHomePageController {
         diffReviewExpanded = false;
         diffReviewListScroll.setVisible(false);
         diffReviewListScroll.setManaged(false);
-        diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
         updateDiffReviewBar();
     }
 
@@ -188,7 +205,6 @@ public class CoderHomePageController extends AbstractHomePageController {
         diffReviewExpanded = false;
         diffReviewListScroll.setVisible(false);
         diffReviewListScroll.setManaged(false);
-        diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
         updateDiffReviewBar();
     }
 
@@ -376,7 +392,6 @@ public class CoderHomePageController extends AbstractHomePageController {
         this.diffReviewExpanded = false;
         this.diffReviewListScroll.setVisible(false);
         this.diffReviewListScroll.setManaged(false);
-        this.diffReviewBar.setMaxHeight(Region.USE_PREF_SIZE);
         this.updateDiffReviewBar();
     }
 

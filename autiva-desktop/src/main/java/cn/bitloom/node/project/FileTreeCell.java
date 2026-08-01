@@ -1,6 +1,7 @@
 package cn.bitloom.node.project;
 
 import cn.bitloom.node.svg.SvgImageView;
+import javafx.scene.Node;
 import javafx.scene.control.TreeCell;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
@@ -32,7 +33,7 @@ import java.util.Set;
 @Slf4j
 public class FileTreeCell extends TreeCell<Path> {
 
-    private static final String FOLDER_SVG = "/cn/bitloom/images/folder.svg";
+    private static final String FOLDER_SVG = "/cn/bitloom/images/folder-light.svg";
     private static final String DEFAULT_FILE_SVG = "/cn/bitloom/images/file.svg";
     private static final String CODE_FILE_SVG = "/cn/bitloom/images/file-code.svg";
     private static final String DATA_FILE_SVG = "/cn/bitloom/images/file-data.svg";
@@ -83,7 +84,7 @@ public class FileTreeCell extends TreeCell<Path> {
 
         String fileName = item.getFileName() != null ? item.getFileName().toString() : item.toString();
         setText(fileName);
-        setGraphic(createIcon(item));
+        setGraphic(createGraphic(item));
 
         refreshStyleClasses(item, fileName);
 
@@ -99,6 +100,13 @@ public class FileTreeCell extends TreeCell<Path> {
         } else {
             setOnDragDetected(null);
         }
+    }
+
+    /**
+     * 创建节点图形：文件/文件夹图标。
+     */
+    private Node createGraphic(Path path) {
+        return createIcon(path);
     }
 
     private SvgImageView createIcon(Path path) {

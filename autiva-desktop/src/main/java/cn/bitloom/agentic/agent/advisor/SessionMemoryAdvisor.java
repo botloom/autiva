@@ -107,6 +107,13 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 
 	public static final String EVENT_FILTER_CONTEXT_KEY = "chat_memory_event_filter_id";
 
+	/**
+	 * 用于将 branch 传递到 advisor 每个请求的上下文键。
+	 * 子智能体通过 branch 隔离事件：主智能体为 null（root），子智能体形如 "subagent.{name}"。
+	 * 持久化事件时写入此 branch，检索历史时配合 {@link EventFilter#forBranch(String)} 过滤。
+	 */
+	public static final String BRANCH_CONTEXT_KEY = "chat_memory_branch";
+
 	private final ISessionManager sessionService;
 
 	private final String defaultUserId;
@@ -217,11 +224,15 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 		// 跳过仅影响持久化 — 输出提示词不受影响
 		Message userMessage = request.prompt().getLastUserOrToolResponseMessage();
 		if (userMessage != null && shouldPersist(userMessage, sessionId)) {
-			this.sessionService.appendEvent(MessageEvent.builder()
+			String branch = getBranch(request.context());
+			MessageEvent.MessageEventBuilder eventBuilder = MessageEvent.builder()
 				.id(this.requestEventIdGenerator.generate(request, userMessage))
 				.sessionId(sessionId)
-				.message(userMessage)
-				.build());
+				.message(userMessage);
+			if (branch != null) {
+				eventBuilder.branch(branch);
+			}
+			this.sessionService.appendEvent(eventBuilder.build());
 		}
 
 		return request.mutate().prompt(request.prompt().mutate().messages(combined).build()).build();
@@ -230,6 +241,7 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 	@Override
 	public ChatClientResponse after(ChatClientResponse response, AdvisorChain advisorChain) {
 		String sessionId = getSessionId(response.context());
+		String branch = getBranch(response.context());
 
 		// 1. 将模型生成的助手消息追加到会话，受配置的消息过滤器约束。
 		// 默认情况下排除无内容的消息 — 空白文本、无工具调用、无媒体
@@ -239,11 +251,16 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 				.stream()
 				.map(g -> (Message) g.getOutput())
 				.filter(msg -> shouldPersist(msg, sessionId))
-				.forEach(msg -> this.sessionService.appendEvent(MessageEvent.builder()
-					.id(this.responseEventIdGenerator.generate(response, msg))
-					.sessionId(sessionId)
-					.message(msg)
-					.build()));
+				.forEach(msg -> {
+					MessageEvent.MessageEventBuilder eventBuilder = MessageEvent.builder()
+						.id(this.responseEventIdGenerator.generate(response, msg))
+						.sessionId(sessionId)
+						.message(msg);
+					if (branch != null) {
+						eventBuilder.branch(branch);
+					}
+					this.sessionService.appendEvent(eventBuilder.build());
+				});
 		}
 
 		// 2. 同步压缩（如果配置）— 完整轮次（用户 + 助手）
@@ -281,6 +298,14 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 	private String getUserId(Map<String, @Nullable Object> context) {
 		Object value = context.get(USER_ID_CONTEXT_KEY);
 		return (value instanceof String s && !s.isBlank()) ? s : this.defaultUserId;
+	}
+
+	/**
+	 * 从请求上下文读取 branch（可能为 null）。子智能体通过 branch 隔离事件。
+	 */
+	private String getBranch(Map<String, @Nullable Object> context) {
+		Object value = context.get(BRANCH_CONTEXT_KEY);
+		return (value instanceof String s && !s.isBlank()) ? s : null;
 	}
 
 	/**

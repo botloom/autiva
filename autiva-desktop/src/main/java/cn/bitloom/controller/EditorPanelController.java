@@ -32,7 +32,7 @@ import java.util.ResourceBundle;
 @Primary
 public class EditorPanelController implements Initializable {
 
-    public enum ViewType { TERMINAL, PROJECT, TOOL_CALLS, TODO }
+    public enum ViewType { TERMINAL, PROJECT, DIFF, TOOL_CALLS, TODO }
 
     @FXML
     @Getter
@@ -119,18 +119,21 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 添加工具调用卡片到工具调用视图，并自动弹出面板
+     * 显示 Diff 视图（通用基类空实现，coder 模式 override）
+     */
+    public void showDiffView() {
+        // work 模式不支持 diff 视图
+    }
+
+    /**
+     * 添加工具调用卡片到工具调用视图。
+     * 不自动弹出面板，用户需主动点击工具按钮查看。
      */
     public void addToolCallCard(Node card) {
         if (card instanceof Region region) {
             region.setMaxWidth(Double.MAX_VALUE);
         }
         toolCallsContainer.getChildren().add(card);
-        if (indexController != null) {
-            indexController.ensureEditorVisible();
-        }
-        show();
-        showToolCallsView();
     }
 
     /**

@@ -147,6 +147,19 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             this.stopButton.setManaged(streaming && !paused);
         });
 
+        // 历史消息加载期间：禁用发送按钮和输入框，显示加载提示
+        this.getViewModel().historyLoadingProperty().addListener((obs, oldVal, newVal) -> {
+            boolean loading = newVal != null && newVal;
+            this.sendButton.setDisable(loading);
+            this.sendField.setDisable(loading);
+            this.addFileButton.setDisable(loading);
+            if (loading) {
+                this.chatContainer.getChildren().add(createLoadingIndicator());
+            } else {
+                this.chatContainer.getChildren().removeIf(n -> "history-loading".equals(n.getUserData()));
+            }
+        });
+
         homePage.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene != null) {
                 newScene.addPostLayoutPulseListener(() -> {
@@ -185,6 +198,26 @@ public abstract class AbstractHomePageController implements Initializable, Butto
      */
     protected void onMessagesChanged(boolean hasMessages) {
         // 默认空实现，子类可 override
+    }
+
+    /**
+     * 创建历史消息加载指示器（Apple 风格 ProgressIndicator + 文字）
+     */
+    private javafx.scene.layout.VBox createLoadingIndicator() {
+        javafx.scene.layout.VBox box = new javafx.scene.layout.VBox(8);
+        box.setAlignment(javafx.geometry.Pos.CENTER);
+        box.setPadding(new javafx.geometry.Insets(32));
+        box.setUserData("history-loading");
+
+        javafx.scene.control.ProgressIndicator indicator = new javafx.scene.control.ProgressIndicator();
+        indicator.setPrefSize(24, 24);
+        indicator.setStyle("-fx-progress-color: #86868b;");
+
+        javafx.scene.control.Label label = new javafx.scene.control.Label("加载历史对话...");
+        label.setStyle("-fx-text-fill: #86868b; -fx-font-size: 13px;");
+
+        box.getChildren().addAll(indicator, label);
+        return box;
     }
 
     private void setupDragDrop() {
@@ -407,6 +440,14 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         }
         sendField.requestFocus();
         sendField.end();
+    }
+
+    /**
+     * 从 DiffService 刷新 diff 审查条（通用基类空实现，coder 模式 override）
+     * 在 diff 看板中撤销/保留文件后，通知首页同步更新 diff 卡片列表。
+     */
+    public void refreshDiffReviewBarFromService() {
+        // work 模式不支持 diff 审查条
     }
 
     public void addAttachedFile(File file) {

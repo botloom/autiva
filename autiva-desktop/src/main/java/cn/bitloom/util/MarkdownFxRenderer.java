@@ -23,6 +23,7 @@ import org.commonmark.node.*;
 import org.commonmark.node.Image;
 
 import java.awt.*;
+import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,24 @@ public class MarkdownFxRenderer {
     private static final String CODE_FONT_FAMILY = "\"SF Mono\", Monaco, \"Cascadia Code\", monospace";
     private static final double BASE_FONT_SIZE = 15;
     private static final double CODE_FONT_SIZE = 13;
+
+    /**
+     * 链接处理器：应用启动时由 IndexController 注入。
+     * 返回 true 表示已处理（如用项目视图打开文件），false 表示回退到默认行为（浏览器）。
+     */
+    @FunctionalInterface
+    public interface LinkHandler {
+        boolean handle(String dest);
+    }
+
+    private static volatile LinkHandler linkHandler;
+
+    /**
+     * 注入链接处理器（应用启动时调用一次）。
+     */
+    public static void setLinkHandler(LinkHandler handler) {
+        linkHandler = handler;
+    }
 
     private static final org.commonmark.parser.Parser PARSER = org.commonmark.parser.Parser.builder()
         .extensions(java.util.List.of(
@@ -66,6 +85,34 @@ public class MarkdownFxRenderer {
         "import", "export", "from", "async", "await", "try", "catch", "finally", "throw", "typeof",
         "instanceof", "null", "undefined", "true", "false"
     );
+
+    /**
+     * 打开链接：优先用注入的 handler（如项目视图打开文件），未处理则回退到系统默认。
+     */
+    private static void openLink(String dest) {
+        try {
+            // 优先交给注入的 handler（file:// 链接在项目视图中打开）
+            LinkHandler handler = linkHandler;
+            if (handler != null && handler.handle(dest)) {
+                return;
+            }
+            // 回退：file:// 用 Desktop.open，其它用 Desktop.browse
+            if (!Desktop.isDesktopSupported()) return;
+            Desktop desktop = Desktop.getDesktop();
+            if (dest.startsWith("file:")) {
+                File file = new File(new URI(dest));
+                if (file.exists()) {
+                    desktop.open(file);
+                } else {
+                    log.warn("链接指向的文件不存在: {}", dest);
+                }
+            } else {
+                desktop.browse(new URI(dest));
+            }
+        } catch (Exception ex) {
+            log.error("Failed to open link: {}", dest, ex);
+        }
+    }
 
     public static VBox render(String markdown) {
         if (markdown == null || markdown.isBlank()) {
@@ -289,15 +336,7 @@ public class MarkdownFxRenderer {
             hyperlink.setFocusTraversable(false);
             hyperlink.setText(extractNodeText(link));
             String dest = link.getDestination();
-            hyperlink.setOnAction(e -> {
-                try {
-                    if (Desktop.isDesktopSupported()) {
-                        Desktop.getDesktop().browse(new URI(dest));
-                    }
-                } catch (Exception ex) {
-                    log.error("Failed to open link: {}", dest, ex);
-                }
-            });
+            hyperlink.setOnAction(e -> openLink(dest));
             textFlow.getChildren().add(hyperlink);
         } else if (inline instanceof Image img) {
             Text altText = new Text(img.getTitle() != null ? img.getTitle() : "🖼");

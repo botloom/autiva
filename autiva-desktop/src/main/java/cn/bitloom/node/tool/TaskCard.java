@@ -140,7 +140,7 @@ public class TaskCard extends VBox {
         String finishReason = e.getFinishReason();
         String text = e.getText();
 
-        if (finishReason == null || finishReason.isBlank()) {
+        if (finishReason == null || finishReason.isBlank() || "_UNKNOWN".equals(finishReason)) {
             streamBuffer.append(text != null ? text : "");
             String accumulated = streamBuffer.toString();
             if (accumulated.isBlank()) {

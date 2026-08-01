@@ -7,6 +7,7 @@ import cn.bitloom.controller.EditorPanelController.ViewType;
 import cn.bitloom.router.HomePageRouter;
 import cn.bitloom.router.Router;
 import cn.bitloom.store.Store;
+import cn.bitloom.util.MarkdownFxRenderer;
 import cn.bitloom.vm.CoderHomePageViewModel;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -20,6 +21,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.ResourceBundle;
@@ -75,6 +77,9 @@ public class IndexController implements Initializable {
         this.settingsPageController.setIndexController(this);
         this.skillPageController.setIndexController(this);
         this.taskPageController.setIndexController(this);
+
+        // 注入 Markdown 链接处理器：file:// 链接在项目视图中打开
+        MarkdownFxRenderer.setLinkHandler(this::handleMarkdownLink);
 
         // 预加载两套 FXML 并绑定占位容器，初始模式由 Store.currentAgent 决定
         homePageRouter.bind(this, homePageSlot, editorPanelSlot);
@@ -266,6 +271,26 @@ public class IndexController implements Initializable {
     }
 
     /**
+     * Markdown 链接处理器：file:// 链接在项目视图中打开，返回 true 表示已处理。
+     * 非 file:// 链接返回 false，回退到默认浏览器打开。
+     */
+    private boolean handleMarkdownLink(String dest) {
+        if (dest == null || !dest.startsWith("file:")) {
+            return false;
+        }
+        try {
+            Path filePath = Path.of(new URI(dest));
+            if (java.nio.file.Files.isRegularFile(filePath)) {
+                Platform.runLater(() -> showFileInPanel(filePath));
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("无法解析 file:// 链接: {}", dest, e);
+        }
+        return false;
+    }
+
+    /**
      * 在项目视图中显示指定文件的 diff（点击对话框上方的 diff 文件卡片时调用）
      */
     public void showDiffInProjectView(FileDiff diff) {
@@ -273,6 +298,16 @@ public class IndexController implements Initializable {
         if (editor == null) return;
         ensureEditorVisible();
         editor.showDiffInProjectView(diff);
+    }
+
+    /**
+     * 刷新首页的 diff 审查条（diff 看板中撤销/保留后调用）
+     */
+    public void refreshDiffReviewBar() {
+        AbstractHomePageController home = getHomePageController();
+        if (home != null) {
+            home.refreshDiffReviewBarFromService();
+        }
     }
 
     /**

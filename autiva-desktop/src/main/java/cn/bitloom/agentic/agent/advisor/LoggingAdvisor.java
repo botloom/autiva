@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatResponse;
 import reactor.core.publisher.Flux;
@@ -111,10 +112,14 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
                     lines.add(String.format("┌─ LLM [#%d] %s · %dms ──────────────────────────", seq, time, durationMs));
                     lines.addAll(requestLines);
                     lines.add(BORDER_MID);
-                    lines.add(String.format("│ %-8s│ %s (%dms)", "Error", error.getMessage(), durationMs));
+                    lines.add(String.format("│ %-8s│ %s: %s", "Error", error.getClass().getSimpleName(), error.getMessage()));
+                    // 打印完整消息序列，便于排查 tool_calls/tool_response 配对问题
+                    lines.addAll(buildMessageSequenceLines(chatClientRequest));
                     lines.add(BORDER_BOTTOM);
 
                     lines.forEach(log::error);
+                    // 打印完整堆栈
+                    log.error("[LoggingAdvisor] LLM stream error detail", error);
                 });
     }
 
@@ -136,10 +141,12 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
             lines.add(String.format("┌─ LLM [#%d] %s · %dms ──────────────────────────", seq, time, durationMs));
             lines.addAll(requestLines);
             lines.add(BORDER_MID);
-            lines.add(String.format("│ %-8s│ %s (%dms)", "Error", e.getMessage(), durationMs));
+            lines.add(String.format("│ %-8s│ %s: %s", "Error", e.getClass().getSimpleName(), e.getMessage()));
+            lines.addAll(buildMessageSequenceLines(chatClientRequest));
             lines.add(BORDER_BOTTOM);
 
             lines.forEach(log::error);
+            log.error("[LoggingAdvisor] LLM call error detail", e);
             throw e;
         }
 
@@ -193,11 +200,22 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
         lines.add(String.format("│ %-8s│ %s", "Seq", "#" + seq));
         lines.add(String.format("│ %-8s│ %s", "Time", time));
 
+        // 从上下文提取 sessionId 和 branch，便于追踪主/子智能体
+        Object sessionIdVal = request.context().get(ChatMemory.CONVERSATION_ID);
+        if (sessionIdVal instanceof String sid) {
+            lines.add(String.format("│ %-8s│ %s", "Session", sid));
+        }
+        Object branchVal = request.context().get(SessionMemoryAdvisor.BRANCH_CONTEXT_KEY);
+        if (branchVal instanceof String br) {
+            lines.add(String.format("│ %-8s│ %s", "Branch", br));
+        }
+
         var prompt = request.prompt();
         var instructions = prompt.getInstructions();
 
         AtomicInteger userCount = new AtomicInteger(0);
         AtomicInteger assistantCount = new AtomicInteger(0);
+        AtomicInteger assistantToolCallCount = new AtomicInteger(0);
         AtomicInteger toolRespCount = new AtomicInteger(0);
         String lastUserMessage = null;
 
@@ -207,9 +225,12 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
             } else if (message instanceof UserMessage userMsg) {
                 lastUserMessage = userMsg.getText();
                 userCount.incrementAndGet();
-            } else if (message instanceof AssistantMessage) {
+            } else if (message instanceof AssistantMessage am) {
                 assistantCount.incrementAndGet();
-            } else if (message instanceof ToolResponseMessage) {
+                if (am.hasToolCalls()) {
+                    assistantToolCallCount.incrementAndGet();
+                }
+            } else if (message instanceof ToolResponseMessage trm) {
                 toolRespCount.incrementAndGet();
             }
         }
@@ -221,13 +242,10 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
         if (userCount.get() > 1 || assistantCount.get() > 0 || toolRespCount.get() > 0) {
             StringBuilder history = new StringBuilder();
             if (userCount.get() > 1) history.append("User:").append(userCount.get()).append(" ");
-            if (assistantCount.get() > 0) history.append("Asst:").append(assistantCount.get()).append(" ");
+            if (assistantCount.get() > 0) history.append("Asst:").append(assistantCount.get());
+            if (assistantToolCallCount.get() > 0) history.append("(").append(assistantToolCallCount.get()).append("tc) ");
             if (toolRespCount.get() > 0) history.append("Tool:").append(toolRespCount.get());
             lines.add(String.format("│ %-8s│ %s", "History", history.toString().trim()));
-        }
-
-        if (!request.context().isEmpty()) {
-            lines.add(String.format("│ %-8s│ %s", "Context", truncate(JsonUtils.toJson(request.context()), 300)));
         }
 
         return lines;
@@ -238,5 +256,51 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
         String normalized = text.replaceAll("[\\r\\n]+", " ").replaceAll("\\s+", " ");
         if (normalized.length() <= maxLen) return normalized;
         return normalized.substring(0, maxLen) + "...(+" + (normalized.length() - maxLen) + " chars)";
+    }
+
+    /**
+     * 构建完整消息序列日志行，用于错误排查。
+     * 打印每条消息的类型、tool_calls 数量、tool_response 数量，便于发现配对问题。
+     */
+    private List<String> buildMessageSequenceLines(ChatClientRequest request) {
+        List<String> lines = new ArrayList<>();
+        var instructions = request.prompt().getInstructions();
+        lines.add(String.format("│ %-8s│ (%d messages in sequence)", "MsgSeq", instructions.size()));
+
+        int idx = 0;
+        for (Message message : instructions) {
+            idx++;
+            String type;
+            String detail;
+            if (message instanceof SystemMessage sysMsg) {
+                type = "SYSTEM";
+                detail = truncate(sysMsg.getText(), 100);
+            } else if (message instanceof UserMessage userMsg) {
+                type = "USER";
+                detail = truncate(userMsg.getText(), 100);
+            } else if (message instanceof AssistantMessage am) {
+                type = "ASST";
+                if (am.hasToolCalls()) {
+                    var calls = am.getToolCalls();
+                    detail = "tool_calls=[" + calls.stream()
+                            .map(tc -> tc.name() + "(" + tc.id() + ")")
+                            .reduce((a, b) -> a + ", " + b)
+                            .orElse("") + "]";
+                } else {
+                    detail = truncate(am.getText(), 100);
+                }
+            } else if (message instanceof ToolResponseMessage trm) {
+                type = "TOOL";
+                detail = "responses=[" + trm.getResponses().stream()
+                        .map(r -> r.name() + "(" + r.id() + ")")
+                        .reduce((a, b) -> a + ", " + b)
+                        .orElse("") + "]";
+            } else {
+                type = message.getMessageType().name();
+                detail = truncate(message.getText(), 100);
+            }
+            lines.add(String.format("│   #%-4d  %-7s %s", idx, type, detail));
+        }
+        return lines;
     }
 }

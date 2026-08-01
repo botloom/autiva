@@ -12,11 +12,10 @@ import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
-import cn.bitloom.agentic.session.CreateSessionRequest;
+import cn.bitloom.agentic.session.EventFilter;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.session.MessageFilter;
 import cn.bitloom.agentic.session.Session;
-import cn.bitloom.agentic.session.SessionTypeEnum;
 import cn.bitloom.agentic.session.compaction.RecursiveSummarizationCompactionStrategy;
 import cn.bitloom.agentic.session.compaction.TokenCountTrigger;
 import cn.bitloom.agentic.task.repository.TaskRepository;
@@ -56,12 +55,14 @@ import java.util.Objects;
  * Task工具启动专门的代理（子进程），它们自主处理复杂任务。
  * 每种代理类型都有特定的能力和可用的工具。
  * <p>
- * 子 Session 机制：
- * - 每个子智能体任务通过 ISessionManager 创建一个子 Session（持久化）
- * - 子智能体 Agent 由本工具的 buildAgent 构建
- * - 子 Session 通过 parentId 关联父 Session，支持多轮对话上下文
- * - resume 时通过子 Session 恢复历史对话
- * - 子智能体事件通过 ToolUIBridge 推送到 UI
+ * Branch 隔离机制：
+ * - 子智能体复用父 Session，不创建独立 Session
+ * - 通过 branch 字段隔离事件（branch 形如 "subagent.{name}"）
+ * - SessionMemoryAdvisor 配合 EventFilter.forBranch(branch) 实现上下文隔离：
+ *   子智能体仅可见自己 branch 的事件 + root 事件（主智能体历史）
+ * - RuntimeContext 携带 branch，Agent.runStream 自动给事件打标
+ * - 子智能体事件通过 ToolUIBridge 推送到 UI（taskId = branch）
+ * - resume 时传入 branch 名以延续同名分支上下文
  */
 @Slf4j
 public class TaskTool extends AbstractTool<TaskTool.Input> {
@@ -128,22 +129,25 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                 input.run_in_background()
         );
 
-        // 创建或恢复子 Session
-        Session subSession;
+        // 子智能体复用父 Session，通过 branch 隔离事件
         String parentSessionId = resolveParentSessionId(context);
-
-        if (Objects.nonNull(taskCall.resume())) {
-            // resume：从 ISessionManager 获取已有子 Session
-            subSession = sessionManager.getById(taskCall.resume());
-            if (subSession == null) {
-                throw AgentException.subagentNotFound("无法恢复代理ID: " + taskCall.resume());
-            }
-        } else {
-            // 新建子 Session
-            subSession = createSubSession(subagentName, parentSessionId);
+        if (parentSessionId == null) {
+            throw AgentException.subagentExecutionFailed(subagentName,
+                    new IllegalStateException("无法解析父会话ID"));
+        }
+        Session parentSession = sessionManager.getById(parentSessionId);
+        if (parentSession == null) {
+            throw AgentException.subagentNotFound("父会话不存在: " + parentSessionId);
         }
 
-        String taskId = subSession.id();
+        // branch 标识：resume 时复用传入分支名，否则按 subagent 名生成
+        // 同一 subagent 多次调用共享同一 branch，便于上下文延续
+        String branch = Objects.nonNull(taskCall.resume())
+                ? taskCall.resume()
+                : "subagent." + subagentName;
+
+        // taskId 直接用 branch，供 ToolUIBridge 路由
+        String taskId = branch;
 
         // TaskCard UI
         if (this.toolUIBridge != null) {
@@ -158,7 +162,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         if (Boolean.TRUE.equals(taskCall.runInBackground())) {
             var bgTask = this.taskRepository.putTask(taskId, () -> {
                 try {
-                    String result = executeSubagent(taskCall, subSession);
+                    String result = executeSubagent(taskCall, parentSession, branch);
                     if (this.toolUIBridge != null) {
                         this.toolUIBridge.completeTaskCard(taskId, null);
                     }
@@ -178,7 +182,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
 
         // 前台同步执行
         try {
-            String result = executeSubagent(taskCall, subSession);
+            String result = executeSubagent(taskCall, parentSession, branch);
             if (this.toolUIBridge != null) {
                 this.toolUIBridge.completeTaskCard(taskId, null);
             }
@@ -221,69 +225,51 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
     }
 
     /**
-     * 创建子 Session（继承父 session 的 mode 和 projectName）。
-     */
-    private Session createSubSession(String subagentName, String parentSessionId) {
-        String[] parts = parentSessionId.split("-", 3);
-        String mode = parts[0];
-        String sessionId;
-        if ("code".equals(mode) && parts.length > 1) {
-            // code 模式：code-{projectName}-SUB-...
-            sessionId = "code-" + parts[1] + "-" + SessionTypeEnum.SUB + "-" + "desktopApp" + "-" + Store.userId.get() + "-" + System.currentTimeMillis();
-        } else {
-            // work 模式：work-SUB-...
-            sessionId = "work-" + SessionTypeEnum.SUB + "-" + "desktopApp" + "-" + Store.userId.get() + "-" + System.currentTimeMillis();
-        }
-
-        CreateSessionRequest request = CreateSessionRequest.builder()
-                .id(sessionId)
-                .userId(Store.userId.get() != null ? Store.userId.get() : "default-user")
-                .build();
-        return sessionManager.create(request);
-    }
-
-    /**
-     * 执行子智能体任务（直接调用 Agent.runStream，per-session 锁保证串行）。
+     * 执行子智能体任务（复用父 Session，通过 branch 隔离事件）。
      * <p>
      * 流程：
-     * 1. 在 per-session 锁保护下构建 Agent 并执行
-     * 2. 通过 ToolUIBridge 推送事件到 UI
-     * 3. 阻塞等待流完成（blockLast），累积 assistant 文本作为返回结果
+     * 1. 构建带 branch 过滤的 Agent（SessionMemoryAdvisor 仅检索本 branch + root 事件）
+     * 2. RuntimeContext 携带 branch，Agent.runStream 自动给事件打标
+     * 3. 通过 ToolUIBridge 推送事件到 UI（taskId = branch）
+     * 4. 阻塞等待流完成（blockLast），累积 assistant 文本作为返回结果
+     * <p>
+     * 不再创建子 Session，事件直接持久化到父 Session（带 branch 字段）。
+     * 前台同步执行时主智能体阻塞等待，无并发写入风险；后台任务事件有 branch 隔离。
      */
-    private String executeSubagent(TaskCall taskCall, Session subSession) {
-        String taskId = subSession.id();
-        MessageEvent inputEvent = MessageEvent.userMessage(taskId, taskCall.prompt());
+    private String executeSubagent(TaskCall taskCall, Session parentSession, String branch) {
+        String parentSessionId = parentSession.id();
+        String taskId = branch;
+        MessageEvent inputEvent = MessageEvent.userMessage(parentSessionId, taskCall.prompt());
 
-        return sessionManager.withLock(taskId, () -> {
-            Agent agent = buildAgent(subSession, taskCall.subagentName());
-            RuntimeContext ctx = RuntimeContext.builder()
-                    .sessionId(taskId)
-                    .userId(subSession.userId())
-                    .build();
-            StringBuilder result = new StringBuilder();
-            agent.runStream(inputEvent, ctx)
-                    .doOnNext(event -> {
-                        if (toolUIBridge != null) {
-                            Platform.runLater(() -> toolUIBridge.processEvent(taskId, event));
-                        }
-                        if (event instanceof MessageEvent me && me.isAssistantMessage() && me.getText() != null) {
-                            result.append(me.getText());
-                        }
-                    })
-                    .blockLast();
-            try {
-                sessionManager.flush(taskId);
-            } catch (Exception e) {
-                log.warn("[TaskTool] flush 失败: taskId={}", taskId, e);
-            }
-            return "agent_id: " + taskId + "\n\n" + result;
-        });
+        Agent agent = buildAgent(parentSession, taskCall.subagentName(), branch);
+        RuntimeContext ctx = RuntimeContext.builder()
+                .sessionId(parentSessionId)
+                .userId(parentSession.userId())
+                .branch(branch)
+                .build();
+        StringBuilder result = new StringBuilder();
+        agent.runStream(inputEvent, ctx)
+                .doOnNext(event -> {
+                    if (toolUIBridge != null) {
+                        Platform.runLater(() -> toolUIBridge.processEvent(taskId, event));
+                    }
+                    if (event instanceof MessageEvent me && me.isAssistantMessage() && me.getText() != null) {
+                        result.append(me.getText());
+                    }
+                })
+                .blockLast();
+        try {
+            sessionManager.flush(parentSessionId);
+        } catch (Exception e) {
+            log.warn("[TaskTool] flush 失败: parentSessionId={}, branch={}", parentSessionId, branch, e);
+        }
+        return "agent_id: " + taskId + "\n\n" + result;
     }
 
     /**
-     * 构建 Agent。
+     * 构建 Agent（带 branch 过滤的 SessionMemoryAdvisor）。
      */
-    private Agent buildAgent(Session session, String agentId) {
+    private Agent buildAgent(Session parentSession, String agentId, String branch) {
         AgentDefinition definition = definitionManager.getDefinition(agentId);
         if (definition == null) {
             throw AgentException.subagentNotFound("子智能体定义不存在: " + agentId
@@ -292,12 +278,15 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         }
         ModelTypeEnum modelType = Store.selectedModel.get() != null ? Store.selectedModel.get() : ModelTypeEnum.DEEPSEEK;
         ChatModel chatModel = modelFactory.model(modelType);
-        String uid = session.userId() != null ? session.userId() : "default-user";
+        String uid = parentSession.userId() != null ? parentSession.userId() : "default-user";
 
         List<Advisor> advisors = new ArrayList<>();
 
+        // EventFilter.forBranch(branch): 子智能体仅能看到自己 branch 的事件 + root 事件（主智能体历史）
+        // 配合 SessionMemoryAdvisor 写入 branch 字段，实现多智能体共享 session 但上下文隔离
         SessionMemoryAdvisor sessionMemoryAdvisor = SessionMemoryAdvisor.builder(sessionManager)
                 .defaultUserId(uid)
+                .eventFilter(EventFilter.forBranch(branch))
                 .messageFilter(MessageFilter.byMessageType(MessageType.USER, MessageType.ASSISTANT, MessageType.TOOL)
                         .and(MessageFilter.skipEmptyMessages()))
                 .compactionTrigger(TokenCountTrigger.builder()
@@ -310,7 +299,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                 .build();
         advisors.add(sessionMemoryAdvisor);
 
-        Path memoriesDir = resolveMemoriesDir(session.id());
+        Path memoriesDir = resolveMemoriesDir(parentSession.id());
         AutoMemoryToolsAdvisor autoMemoryToolsAdvisor = AutoMemoryToolsAdvisor.builder()
                 .memoriesRootDirectory(memoriesDir.toString())
                 .build();
@@ -331,7 +320,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                 .hooks(List.of())
                 .advisors(advisors)
                 .build();
-        log.info("构建子智能体: agentId={}", agentId);
+        log.info("构建子智能体: agentId={}, branch={}", agentId, branch);
         return agent;
     }
 

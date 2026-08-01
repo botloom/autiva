@@ -7,6 +7,7 @@ import cn.bitloom.agentic.agent.RuntimeContext;
 import cn.bitloom.agentic.agent.advisor.AutoMemoryToolsAdvisor;
 import cn.bitloom.agentic.agent.advisor.SessionMemoryAdvisor;
 import cn.bitloom.agentic.agent.advisor.SkillContextAdvisor;
+import cn.bitloom.agentic.agent.advisor.SubagentContextAdvisor;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.DiffEvent;
@@ -32,6 +33,8 @@ import cn.bitloom.node.message.ToolMessageCard;
 import cn.bitloom.node.message.UserMessageCard;
 import cn.bitloom.store.Store;
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import lombok.Getter;
@@ -89,9 +92,18 @@ public abstract class AbstractHomePageViewModel {
     protected Consumer<DiffEvent> diffHandler;
 
     /**
-     * 历史消息加载标志：prepareHistoricalMessages 期间为 true，用于跳过工具消息（历史工具不显示）
+     * 历史消息加载状态：prepareHistoricalMessages 期间为 true，加载完成自动置 false。
+     * UI 绑定此属性：加载期间禁用发送按钮并显示加载提示。
      */
-    protected boolean isLoadingHistory = false;
+    private final BooleanProperty historyLoading = new SimpleBooleanProperty(false);
+
+    public BooleanProperty historyLoadingProperty() {
+        return historyLoading;
+    }
+
+    public boolean isHistoryLoading() {
+        return historyLoading.get();
+    }
 
     /**
      * 待响应的工具调用卡片，按 toolCallId 索引。
@@ -156,47 +168,32 @@ public abstract class AbstractHomePageViewModel {
     }
 
     public void prepareHistoricalMessages() {
-        // 从 events.jsonl 加载所有未压缩的历史事件（压缩字段已弃用，默认从头加载）
+        // 从 events.jsonl 同步加载历史事件，直接渲染为完成态卡片。
+        // 只处理 USER / ASSISTANT 消息，跳过 TOOL 消息（历史工具不显示）。
+        // 加载期间 historyLoading=true，UI 据此禁用发送并显示加载提示。
         List<AbstractEvent> events = sessionManager.getEvents(this.session.id());
         if (events.isEmpty()) {
             return;
         }
 
-        // 历史加载期间跳过工具消息（历史工具不显示）
-        isLoadingHistory = true;
+        historyLoading.set(true);
         try {
-            // 分批渲染避免阻塞 FX 线程
-            int batchSize = 20;
-            for (int i = 0; i < events.size(); i += batchSize) {
-                int end = Math.min(i + batchSize, events.size());
-                List<AbstractEvent> batch = new ArrayList<>(events.subList(i, end));
-                boolean isLastBatch = end == events.size();
-                if (i == 0) {
-                    // 首批同步处理
-                    for (AbstractEvent event : batch) {
-                        if (event instanceof MessageEvent me) {
-                            processMessageEvent(me);
-                        }
-                    }
-                    if (isLastBatch) {
-                        isLoadingHistory = false;
-                    }
-                } else {
-                    Platform.runLater(() -> {
-                        for (AbstractEvent event : batch) {
-                            if (event instanceof MessageEvent me) {
-                                processMessageEvent(me);
-                            }
-                        }
-                        if (isLastBatch) {
-                            isLoadingHistory = false;
-                        }
-                    });
+            for (AbstractEvent event : events) {
+                if (!(event instanceof MessageEvent me)) {
+                    continue;
                 }
+                if (me.isUserMessage()) {
+                    messages.add(new UserMessageCard(me.getText()));
+                } else if (me.isAssistantMessage()) {
+                    String text = me.getText();
+                    if (text != null && !text.isBlank()) {
+                        messages.add(new AssistantMessageCard(text, "STOP"));
+                    }
+                }
+                // TOOL 消息跳过：历史工具调用不显示
             }
-        } catch (Exception e) {
-            isLoadingHistory = false;
-            throw e;
+        } finally {
+            historyLoading.set(false);
         }
     }
 
@@ -306,6 +303,11 @@ public abstract class AbstractHomePageViewModel {
         advisors.add(autoMemoryToolsAdvisor);
 
         advisors.add(SkillContextAdvisor.builder().skillManager(skillManager).build());
+
+        advisors.add(SubagentContextAdvisor.builder()
+                .definitionManager(definitionManager)
+                .definition(definition)
+                .build());
 
         List<ToolCallback> allTools = new ArrayList<>(toolkit.buildToolCallbacks(definition));
         allTools.add(ConversationSearchTool.builder(sessionManager).build().toToolCallback());
@@ -437,7 +439,7 @@ public abstract class AbstractHomePageViewModel {
         String finishReason = e.getFinishReason();
         String text = e.getText();
 
-        if (finishReason == null || finishReason.isBlank()) {
+        if (finishReason == null || finishReason.isBlank() || "_UNKNOWN".equals(finishReason)) {
             // 流式 chunk：直接累积
             if (Store.isPaused.get()) {
                 return;
@@ -472,8 +474,8 @@ public abstract class AbstractHomePageViewModel {
                 currentAssistantCard = null;
             }
 
-            // 创建工具调用卡片（历史加载期间跳过：历史工具不显示）
-            if (e.getToolCalls() != null && !isLoadingHistory) {
+            // 创建工具调用卡片
+            if (e.getToolCalls() != null) {
                 for (MessageEvent.ToolCallInfo tc : e.getToolCalls()) {
                     ToolMessageCard card = new ToolMessageCard(tc.id(), tc.name(), tc.arguments());
                     pendingToolCards.put(tc.id(), card);
@@ -484,10 +486,6 @@ public abstract class AbstractHomePageViewModel {
     }
 
     private void processToolEvent(MessageEvent e) {
-        // 历史加载期间跳过工具响应消息（历史工具不显示）
-        if (isLoadingHistory) {
-            return;
-        }
         if (e.getResponses() != null && !e.getResponses().isEmpty()) {
             for (MessageEvent.ToolResponseInfo resp : e.getResponses()) {
                 ToolMessageCard card = pendingToolCards.remove(resp.id());

@@ -2,6 +2,7 @@ package cn.bitloom.agentic.agent;
 
 import cn.bitloom.agentic.agent.advisor.HookAdvisor;
 import cn.bitloom.agentic.agent.advisor.LoggingAdvisor;
+import cn.bitloom.agentic.agent.advisor.SessionMemoryAdvisor;
 import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.EventConverter;
 import cn.bitloom.agentic.event.EventPublisher;
@@ -77,11 +78,21 @@ public class Agent {
      */
     public Flux<AbstractEvent> runStream(MessageEvent inputEvent, RuntimeContext ctx) {
         String sessionId = ctx.getSessionId();
+        String branch = ctx.getBranch();
         return Flux.<AbstractEvent>create(sink -> {
-            // 把 sink::next 包装为 EventPublisher，注入 ctx 供工具层使用
-            EventPublisher runtimePublisher = sink::next;
+            // 把 sink::next 包装为 EventPublisher，自动给 MessageEvent 设置 branch
+            // （工具事件和 LLM 流事件统一打标，便于 UI 路由和历史过滤）
+            EventPublisher runtimePublisher = event -> {
+                if (branch != null && event instanceof MessageEvent me && me.getBranch() == null) {
+                    me.setBranch(branch);
+                }
+                sink.next(event);
+            };
             ctx.put("eventSink", runtimePublisher);
             ctx.put("sessionId", sessionId);
+            if (branch != null) {
+                ctx.put("branch", branch);
+            }
 
             UserMessage userMessage = EventConverter.toUserMessage(inputEvent);
             this.chatClient.prompt()
@@ -89,18 +100,31 @@ public class Agent {
                         if (sessionId != null) {
                             a.param(ChatMemory.CONVERSATION_ID, sessionId);
                         }
+                        if (branch != null) {
+                            a.param(SessionMemoryAdvisor.BRANCH_CONTEXT_KEY, branch);
+                        }
                         a.param("runtimeContext", ctx);
                     })
                     .toolContext(ctx.toToolContextMap())
                     .messages(userMessage)
                     .stream()
                     .chatResponse()
-                    .map(cr -> EventConverter.fromMessage(sessionId, cr.getResult().getOutput()))
+                    .map(cr -> {
+                        MessageEvent event = EventConverter.fromMessage(sessionId, cr.getResult().getOutput());
+                        if (branch != null && event.getBranch() == null) {
+                            event.setBranch(branch);
+                        }
+                        return event;
+                    })
                     .subscribe(sink::next, sink::error, sink::complete);
         }).onErrorResume(e -> {
             log.error("LLM stream error: {}, msg: {}", e.getClass().getSimpleName(), e.getMessage());
             AssistantMessage fallback = MessageUtil.buildFallbackMessage();
-            return Flux.just(EventConverter.fromMessage(sessionId, fallback));
+            MessageEvent fallbackEvent = EventConverter.fromMessage(sessionId, fallback);
+            if (branch != null && fallbackEvent.getBranch() == null) {
+                fallbackEvent.setBranch(branch);
+            }
+            return Flux.just(fallbackEvent);
         });
     }
 

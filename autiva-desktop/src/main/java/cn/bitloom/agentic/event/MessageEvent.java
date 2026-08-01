@@ -60,11 +60,9 @@ public final class MessageEvent extends AbstractEvent {
     @Override
     public EventTypeEnum getEventType() { return eventType; }
 
-    public boolean isArchived() { return archived; }
-
     public MessageEvent asArchived() {
         if (this.archived) return this;
-        MessageEvent copy = MessageEvent.builder()
+        return MessageEvent.builder()
             .sessionId(this.getSessionId())
             .eventType(this.getEventType())
             .id(this.getId())
@@ -74,7 +72,6 @@ public final class MessageEvent extends AbstractEvent {
             .metadata(new HashMap<>(this.getMetadata()))
             .archived(true)
             .build();
-        return copy;
     }
 
     @JsonIgnore

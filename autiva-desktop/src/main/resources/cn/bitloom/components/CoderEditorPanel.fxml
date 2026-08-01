@@ -21,9 +21,26 @@
                 <TreeView fx:id="fileTree" styleClass="editor-panel__tree" VBox.vgrow="ALWAYS"/>
             </VBox>
             <VBox fx:id="fileContentPanel" styleClass="editor-panel__content-panel" minWidth="200">
-                <Label fx:id="fileContentPlaceholder" text="双击文件查看内容"
+                <Label fx:id="fileContentPlaceholder" text="单击文件查看内容"
                        styleClass="editor-panel__placeholder" VBox.vgrow="ALWAYS"
                        maxWidth="Infinity" maxHeight="Infinity"/>
+            </VBox>
+        </SplitPane>
+        <SplitPane fx:id="diffView" styleClass="editor-panel__diff-view"
+                   visible="false" managed="false" VBox.vgrow="ALWAYS"
+                   dividerPositions="0.22">
+            <VBox styleClass="editor-panel__diff-file-list-panel" minWidth="160" prefWidth="220">
+                <Label text="变更文件" styleClass="editor-panel__diff-file-list-header"/>
+                <ListView fx:id="diffFileListView" styleClass="editor-panel__diff-file-list" VBox.vgrow="ALWAYS"/>
+            </VBox>
+            <VBox fx:id="diffContentPanel" styleClass="editor-panel__diff-content-panel" minWidth="300">
+                <HBox fx:id="diffToolbar" styleClass="editor-panel__diff-toolbar" alignment="CENTER_LEFT">
+                    <Label fx:id="diffToolbarPath" styleClass="editor-panel__diff-toolbar-path" text=""/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="diffRejectBtn" styleClass="editor-panel__diff-toolbar-btn,editor-panel__diff-toolbar-btn--reject" text="撤销"/>
+                    <Button fx:id="diffApproveBtn" styleClass="editor-panel__diff-toolbar-btn,editor-panel__diff-toolbar-btn--approve" text="保留"/>
+                </HBox>
+                <StackPane fx:id="diffContentStack" styleClass="editor-panel__diff-content-stack" VBox.vgrow="ALWAYS"/>
             </VBox>
         </SplitPane>
         <VBox fx:id="toolCallsView" styleClass="editor-panel__view"

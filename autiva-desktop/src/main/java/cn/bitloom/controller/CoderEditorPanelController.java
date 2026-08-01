@@ -11,9 +11,12 @@ import cn.bitloom.node.terminal.JediTerminalView;
 import cn.bitloom.node.terminal.PtySession;
 import cn.bitloom.node.terminal.PtyTerminalService;
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +41,8 @@ import java.util.ResourceBundle;
  * 继承通用 {@link EditorPanelController}（TOOL_CALLS / TODO 视图），
  * 扩展 coder 专有的 TERMINAL / PROJECT / DIFF 视图。
  * <p>
- * 通过 CoderEditorPanel.fxml 加载，基类 @FXML 字段（toolCallsView/todoView 等）
- * 由继承关系注入到父类 protected 字段。
+ * DIFF 视图为独立的左右对比 diff 看板，左侧文件列表 + 右侧 IDEA 风格双栏对比，
+ * 支持差异导航（上一个/下一个）和多文件切换。
  */
 @Slf4j
 @Component
@@ -56,6 +59,20 @@ public class CoderEditorPanelController extends EditorPanelController implements
     @FXML
     private Label fileContentPlaceholder;
 
+    // ===== Diff 视图字段 =====
+    @FXML
+    private SplitPane diffView;
+    @FXML
+    private ListView<FileDiff> diffFileListView;
+    @FXML
+    private Label diffToolbarPath;
+    @FXML
+    private Button diffRejectBtn;
+    @FXML
+    private Button diffApproveBtn;
+    @FXML
+    private StackPane diffContentStack;
+
     private final FileTreeService fileTreeService;
     private final PtyTerminalService ptyTerminalService;
     private final DiffService diffService;
@@ -64,6 +81,12 @@ public class CoderEditorPanelController extends EditorPanelController implements
     private PtySession terminalSession;
     private Path lastTerminalWorkingDir;
     private ProjectInfo currentProject;
+
+    // Diff 视图运行时状态
+    private final ObservableList<FileDiff> diffFileList = FXCollections.observableArrayList();
+    private FileDiff currentDiff;
+    private CodeArea currentLeftArea;
+    private CodeArea currentRightArea;
 
     public CoderEditorPanelController(FileTreeService fileTreeService,
                                       PtyTerminalService ptyTerminalService,
@@ -77,16 +100,19 @@ public class CoderEditorPanelController extends EditorPanelController implements
     public void initialize(URL location, ResourceBundle resources) {
         super.initialize(location, resources);
         setupFileTree();
+        setupDiffFileListView();
+        setupDiffToolbarButtons();
     }
 
     private void setupFileTree() {
         fileTree.setCellFactory(tree -> new FileTreeCell());
         fileTree.setOnMouseClicked(event -> {
-            if (event.getClickCount() == 2) {
+            if (event.getClickCount() == 1) {
                 TreeItem<Path> selected = fileTree.getSelectionModel().getSelectedItem();
                 if (selected != null && Files.isRegularFile(selected.getValue())) {
                     showFileContent(selected.getValue());
                 }
+                // 目录展开/折叠由 JavaFX 箭头默认行为处理
             }
         });
     }
@@ -100,6 +126,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
         terminalView.setManaged(false);
         projectSplit.setVisible(false);
         projectSplit.setManaged(false);
+        diffView.setVisible(false);
+        diffView.setManaged(false);
     }
 
     @Override
@@ -116,6 +144,14 @@ public class CoderEditorPanelController extends EditorPanelController implements
         projectSplit.setVisible(true);
         projectSplit.setManaged(true);
         currentViewType = ViewType.PROJECT;
+    }
+
+    @Override
+    public void showDiffView() {
+        hideAllViews();
+        diffView.setVisible(true);
+        diffView.setManaged(true);
+        currentViewType = ViewType.DIFF;
     }
 
     // ===== 项目与文件树 =====
@@ -258,14 +294,177 @@ public class CoderEditorPanelController extends EditorPanelController implements
 
     // ===== Diff 视图 =====
 
+    /**
+     * 在 diff 视图中显示指定文件的 diff（点击对话框上方的 diff 文件卡片时调用）
+     */
     @Override
     public void showDiffInProjectView(FileDiff diff) {
         show();
-        showProjectView();
-        renderDiffIntoPanel(diff, fileContentPanel);
+        showDiffView();
+        refreshDiffFileList(diff);
+        renderDiffIntoDiffView(diff);
     }
 
-    private void renderDiffIntoPanel(FileDiff diff, VBox targetPanel) {
+    /**
+     * 刷新左侧文件列表，确保传入的 diff 被选中
+     */
+    private void refreshDiffFileList(FileDiff selectedDiff) {
+        List<FileDiff> pending = diffService.getPendingDiffs();
+        // 确保传入的 diff 在列表中
+        if (selectedDiff != null && pending.stream().noneMatch(d -> d.id().equals(selectedDiff.id()))) {
+            pending.add(selectedDiff);
+        }
+        diffFileList.setAll(pending);
+        if (selectedDiff != null) {
+            diffFileListView.getSelectionModel().select(selectedDiff);
+        }
+    }
+
+    /**
+     * 初始化文件列表 ListView 和单元格工厂
+     */
+    private void setupDiffFileListView() {
+        diffFileListView.setItems(diffFileList);
+        diffFileListView.setCellFactory(list -> new ListCell<>() {
+            @Override
+            protected void updateItem(FileDiff diff, boolean empty) {
+                super.updateItem(diff, empty);
+                if (empty || diff == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    setGraphic(createDiffFileCell(diff));
+                    setText(null);
+                }
+            }
+        });
+        diffFileListView.getSelectionModel().selectedItemProperty().addListener((obs, old, val) -> {
+            if (val != null && (currentDiff == null || !val.id().equals(currentDiff.id()))) {
+                renderDiffIntoDiffView(val);
+            }
+        });
+    }
+
+    /**
+     * 创建文件列表项（徽章 + 文件名 + 统计）
+     */
+    private Node createDiffFileCell(FileDiff diff) {
+        HBox cell = new HBox(6);
+        cell.getStyleClass().add("diff-file-cell");
+        cell.setAlignment(Pos.CENTER_LEFT);
+
+        Label badge = new Label();
+        badge.getStyleClass().add("diff-file-cell__badge");
+        if (diff.isCreate()) {
+            badge.setText("A");
+            badge.getStyleClass().add("diff-file-cell__badge--add");
+        } else if (diff.isDelete()) {
+            badge.setText("D");
+            badge.getStyleClass().add("diff-file-cell__badge--delete");
+        } else {
+            badge.setText("M");
+            badge.getStyleClass().add("diff-file-cell__badge--modify");
+        }
+        cell.getChildren().add(badge);
+
+        String filePath = diff.filePath();
+        String fileName = filePath;
+        int lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+        if (lastSep >= 0 && lastSep < filePath.length() - 1) {
+            fileName = filePath.substring(lastSep + 1);
+        }
+        Label nameLabel = new Label(fileName);
+        nameLabel.getStyleClass().add("diff-file-cell__name");
+        nameLabel.setTooltip(new Tooltip(filePath));
+        cell.getChildren().add(nameLabel);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        cell.getChildren().add(spacer);
+
+        int[] stats = computeDiffStats(diff);
+        Label statsLabel = new Label("+" + stats[0] + " -" + stats[1]);
+        statsLabel.getStyleClass().add("diff-file-cell__stats");
+        cell.getChildren().add(statsLabel);
+
+        return cell;
+    }
+
+    private static int[] computeDiffStats(FileDiff diff) {
+        int added = 0, removed = 0;
+        if (diff.hunks() == null) return new int[]{0, 0};
+        for (FileDiff.Hunk hunk : diff.hunks()) {
+            if (hunk.lines() == null) continue;
+            for (FileDiff.DiffLine line : hunk.lines()) {
+                if (line.type() == FileDiff.Type.ADD) added++;
+                else if (line.type() == FileDiff.Type.REMOVE) removed++;
+            }
+        }
+        return new int[]{added, removed};
+    }
+
+    /**
+     * 初始化工具栏按钮事件
+     */
+    private void setupDiffToolbarButtons() {
+        diffRejectBtn.setOnAction(e -> handleDiffReject());
+        diffApproveBtn.setOnAction(e -> handleDiffApprove());
+    }
+
+    /**
+     * 撤销当前 diff
+     */
+    private void handleDiffReject() {
+        if (currentDiff == null) return;
+        FileDiff rejected = currentDiff;
+        diffService.rejectFileDiff(rejected);
+        diffFileList.remove(rejected);
+        // 通知首页刷新 diffReviewBar
+        if (indexController != null) {
+            indexController.refreshDiffReviewBar();
+        }
+        if (diffFileList.isEmpty()) {
+            showDiffPlaceholder();
+        } else {
+            diffFileListView.getSelectionModel().select(0);
+        }
+    }
+
+    /**
+     * 保留当前 diff
+     */
+    private void handleDiffApprove() {
+        if (currentDiff == null) return;
+        FileDiff approved = currentDiff;
+        diffService.approveFileDiff(approved);
+        diffFileList.remove(approved);
+        if (indexController != null) {
+            indexController.refreshDiffReviewBar();
+        }
+        if (diffFileList.isEmpty()) {
+            showDiffPlaceholder();
+        } else {
+            diffFileListView.getSelectionModel().select(0);
+        }
+    }
+
+    /**
+     * 显示无 diff 占位符
+     */
+    private void showDiffPlaceholder() {
+        currentDiff = null;
+        currentLeftArea = null;
+        currentRightArea = null;
+        diffToolbarPath.setText("");
+        diffContentStack.getChildren().setAll(new Label("没有待审查的变更"));
+    }
+
+    /**
+     * 渲染 diff 内容到右侧内容区（IDEA 风格左右对比）
+     */
+    private void renderDiffIntoDiffView(FileDiff diff) {
+        currentDiff = diff;
+
         StringBuilder leftText = new StringBuilder();
         StringBuilder rightText = new StringBuilder();
         List<Integer> leftLineNumbers = new ArrayList<>();
@@ -316,6 +515,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
 
         CodeArea leftArea = buildDiffCodeArea(leftText.toString(), leftLineNumbers, leftParagraphStyles, diff.filePath());
         CodeArea rightArea = buildDiffCodeArea(rightText.toString(), rightLineNumbers, rightParagraphStyles, diff.filePath());
+        currentLeftArea = leftArea;
+        currentRightArea = rightArea;
 
         final boolean[] syncing = {false};
         leftArea.estimatedScrollYProperty().addListener((obs, old, val) -> {
@@ -348,17 +549,12 @@ public class CoderEditorPanelController extends EditorPanelController implements
         splitPane.setDividerPositions(0.5);
         VBox.setVgrow(splitPane, Priority.ALWAYS);
 
-        HBox banner = createDiffBanner(diff);
-        banner.setMaxWidth(Region.USE_PREF_SIZE);
-        banner.setMaxHeight(Region.USE_PREF_SIZE);
+        diffContentStack.getChildren().setAll(splitPane);
 
-        StackPane stack = new StackPane(splitPane, banner);
-        StackPane.setAlignment(banner, Pos.TOP_CENTER);
-        StackPane.setMargin(banner, new javafx.geometry.Insets(8, 12, 0, 12));
-        VBox.setVgrow(stack, Priority.ALWAYS);
-
-        targetPanel.getChildren().setAll(stack);
-        VBox.setVgrow(stack, Priority.ALWAYS);
+        // 更新工具栏文件名
+        String fileName = Paths.get(diff.filePath()).getFileName().toString();
+        diffToolbarPath.setText(fileName);
+        diffToolbarPath.setTooltip(new Tooltip(diff.filePath()));
 
         setupCodeAreaContextMenu(leftArea);
         setupCodeAreaContextMenu(rightArea);
@@ -408,38 +604,6 @@ public class CoderEditorPanelController extends EditorPanelController implements
         }
 
         return codeArea;
-    }
-
-    private HBox createDiffBanner(FileDiff diff) {
-        String filePath = diff.filePath();
-        String fileName = Paths.get(filePath).getFileName().toString();
-
-        Label pathLabel = new Label(fileName);
-        pathLabel.getStyleClass().add("diff-banner__path");
-        pathLabel.setTooltip(new Tooltip(filePath));
-
-        Region spring = new Region();
-        HBox.setHgrow(spring, Priority.ALWAYS);
-
-        Button rejectBtn = new Button("撤销");
-        rejectBtn.getStyleClass().addAll("diff-banner__btn", "diff-banner__btn--reject");
-        Button approveBtn = new Button("保留");
-        approveBtn.getStyleClass().addAll("diff-banner__btn", "diff-banner__btn--approve");
-
-        rejectBtn.setOnAction(e -> {
-            diffService.rejectFileDiff(diff);
-            fileContentPanel.getChildren().setAll(fileContentPlaceholder);
-            VBox.setVgrow(fileContentPlaceholder, Priority.ALWAYS);
-        });
-        approveBtn.setOnAction(e -> {
-            diffService.approveFileDiff(diff);
-            fileContentPanel.getChildren().setAll(fileContentPlaceholder);
-            VBox.setVgrow(fileContentPlaceholder, Priority.ALWAYS);
-        });
-
-        HBox banner = new HBox(pathLabel, spring, rejectBtn, approveBtn);
-        banner.getStyleClass().add("diff-banner");
-        return banner;
     }
 
     // ===== 加载与错误状态 =====
