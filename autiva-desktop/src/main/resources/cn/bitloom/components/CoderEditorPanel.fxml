@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:id="editorPanel"
+      styleClass="editor-panel"
+      xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="cn.bitloom.controller.CoderEditorPanelController"
+      stylesheets="@../style/editor-panel.css, @../style/home-page.css"
+      visible="false" managed="false"
+      minWidth="480" prefWidth="640"
+>
+    <StackPane fx:id="viewContainer" styleClass="editor-panel__views" VBox.vgrow="ALWAYS">
+        <VBox fx:id="terminalView" styleClass="editor-panel__view"
+              visible="false" managed="false" VBox.vgrow="ALWAYS"/>
+        <SplitPane fx:id="projectSplit" styleClass="editor-panel__project-split"
+                   dividerPositions="0.35">
+            <VBox styleClass="editor-panel__tree-panel" minWidth="140" prefWidth="240">
+                <TreeView fx:id="fileTree" styleClass="editor-panel__tree" VBox.vgrow="ALWAYS"/>
+            </VBox>
+            <VBox fx:id="fileContentPanel" styleClass="editor-panel__content-panel" minWidth="200">
+                <Label fx:id="fileContentPlaceholder" text="双击文件查看内容"
+                       styleClass="editor-panel__placeholder" VBox.vgrow="ALWAYS"
+                       maxWidth="Infinity" maxHeight="Infinity"/>
+            </VBox>
+        </SplitPane>
+        <VBox fx:id="toolCallsView" styleClass="editor-panel__view"
+              visible="false" managed="false" VBox.vgrow="ALWAYS">
+            <ScrollPane styleClass="editor-panel__card-scroll" fitToWidth="true" VBox.vgrow="ALWAYS">
+                <VBox fx:id="toolCallsContainer" styleClass="editor-panel__card-container"/>
+            </ScrollPane>
+        </VBox>
+        <VBox fx:id="todoView" styleClass="editor-panel__view"
+              visible="false" managed="false" VBox.vgrow="ALWAYS">
+            <ScrollPane styleClass="editor-panel__card-scroll" fitToWidth="true" VBox.vgrow="ALWAYS">
+                <VBox fx:id="todoContainer" styleClass="editor-panel__card-container"/>
+            </ScrollPane>
+        </VBox>
+    </StackPane>
+</VBox>

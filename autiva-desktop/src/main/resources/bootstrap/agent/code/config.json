@@ -1,0 +1,29 @@
+{
+  "tools": [
+    "Command",
+    "Process",
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "WebFetch",
+    "WebSearch",
+    "TodoWrite",
+    "AskUserQuestion",
+    "Task",
+    "TaskOutput",
+    "Skill",
+    "memory_save",
+    "memory_update",
+    "memory_delete",
+    "memory_search"
+  ],
+  "mcpServers": {},
+  "skills": [],
+  "subagents": [
+    "Explore",
+    "Plan",
+    "Review"
+  ]
+}

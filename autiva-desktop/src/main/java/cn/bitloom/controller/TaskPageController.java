@@ -1,6 +1,6 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.cron.CronManager.CronTaskInfo;
+import cn.bitloom.agentic.cron.CronManager.CronTaskInfo;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.vm.TaskPageViewModel;

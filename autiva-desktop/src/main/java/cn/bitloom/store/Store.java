@@ -12,7 +12,7 @@ public class Store {
 
     public static final StringProperty currentSessionId = new SimpleStringProperty();
 
-    public static final ObjectProperty<String> currentAgent = new SimpleObjectProperty<>("default");
+    public static final ObjectProperty<String> currentAgent = new SimpleObjectProperty<>("work");
 
     public static final BooleanProperty isStreaming = new SimpleBooleanProperty(false);
 
@@ -22,4 +22,7 @@ public class Store {
 
     /** 侧边栏历史列表刷新信号，翻转此值触发 SideBarController 刷新 */
     public static final BooleanProperty refreshHistory = new SimpleBooleanProperty(false);
+
+    /** UI 警告消息（如 code 模式未选项目时提示） */
+    public static final StringProperty warnMessage = new SimpleStringProperty();
 }

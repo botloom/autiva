@@ -1,5 +1,8 @@
 package cn.bitloom.agentic.tool;
 
+import cn.bitloom.agentic.event.EventConverter;
+import cn.bitloom.agentic.event.EventPublisher;
+import cn.bitloom.agentic.event.MessageEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -72,6 +75,18 @@ public class AutivaToolCallingManager implements ToolCallingManager {
         AssistantMessage assistantMessage = toolCallGeneration.get().getOutput();
         ToolContext toolContext = buildToolContext(prompt);
 
+        // 1.1 从 ToolContext 获取 eventSink 和 sessionId，发布工具调用事件（含 toolCalls 的 AssistantMessage）
+        EventPublisher eventSink = extractEventSink(toolContext);
+        String sessionId = extractSessionId(toolContext);
+        if (eventSink != null && sessionId != null) {
+            try {
+                MessageEvent toolCallEvent = EventConverter.fromMessage(sessionId, assistantMessage);
+                eventSink.publish(toolCallEvent);
+            } catch (Exception e) {
+                log.warn("[ToolCall] 发布工具调用事件失败", e);
+            }
+        }
+
         // 2. 从 prompt options 获取已注册的 ToolCallback 列表
         List<ToolCallback> toolCallbacks = List.of();
         if (prompt.getOptions() instanceof ToolCallingChatOptions options
@@ -128,6 +143,16 @@ public class AutivaToolCallingManager implements ToolCallingManager {
         ToolResponseMessage toolResponseMessage = ToolResponseMessage.builder()
                 .responses(toolResponses).build();
 
+        // 4.1 发布工具响应事件（ToolResponseMessage）
+        if (eventSink != null && sessionId != null) {
+            try {
+                MessageEvent toolResponseEvent = EventConverter.fromMessage(sessionId, toolResponseMessage);
+                eventSink.publish(toolResponseEvent);
+            } catch (Exception e) {
+                log.warn("[ToolCall] 发布工具响应事件失败", e);
+            }
+        }
+
         List<Message> conversationHistory = new ArrayList<>(prompt.getInstructions());
         conversationHistory.add(assistantMessage);
         conversationHistory.add(toolResponseMessage);
@@ -136,6 +161,24 @@ public class AutivaToolCallingManager implements ToolCallingManager {
                 .conversationHistory(conversationHistory)
                 .returnDirect(Objects.requireNonNullElse(returnDirect, false))
                 .build();
+    }
+
+    /**
+     * 从 ToolContext 提取 EventPublisher（可能为 null，如测试场景）。
+     */
+    private EventPublisher extractEventSink(ToolContext toolContext) {
+        if (toolContext == null) return null;
+        Object sink = toolContext.getContext().get("eventSink");
+        return sink instanceof EventPublisher publisher ? publisher : null;
+    }
+
+    /**
+     * 从 ToolContext 提取 sessionId。
+     */
+    private String extractSessionId(ToolContext toolContext) {
+        if (toolContext == null) return null;
+        Object id = toolContext.getContext().get("sessionId");
+        return id instanceof String sid ? sid : null;
     }
 
     private static ToolContext buildToolContext(Prompt prompt) {

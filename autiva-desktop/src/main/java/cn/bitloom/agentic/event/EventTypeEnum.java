@@ -7,8 +7,6 @@ package cn.bitloom.agentic.event;
 public enum EventTypeEnum {
     MESSAGE,
     MEMORY,
-    A2UI,
-    A2UI_ACTION,
     DIFF,
     UI_CARD
 }

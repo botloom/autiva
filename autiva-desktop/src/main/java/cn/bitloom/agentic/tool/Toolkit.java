@@ -1,12 +1,11 @@
 package cn.bitloom.agentic.tool;
 
 import cn.bitloom.agentic.agent.AgentDefinition;
-import cn.bitloom.agentic.diff.DiffService;
-import cn.bitloom.agentic.memory.MemoryManager;
-import cn.bitloom.agentic.session.InMemorySessionManager;
+import cn.bitloom.agentic.agent.AgentDefinitionManager;
+import cn.bitloom.agentic.model.ModelFactory;
+import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.task.repository.TaskRepository;
-import cn.bitloom.agentic.tool.a2ui.A2UITool;
 import cn.bitloom.agentic.tool.command.CommandTool;
 import cn.bitloom.agentic.tool.command.ProcessManager;
 import cn.bitloom.agentic.tool.command.ProcessTool;
@@ -14,11 +13,7 @@ import cn.bitloom.agentic.tool.cron.CronCreateTool;
 import cn.bitloom.agentic.tool.cron.CronDeleteTool;
 import cn.bitloom.agentic.tool.cron.CronListTool;
 import cn.bitloom.agentic.tool.cron.CronTriggerTool;
-import cn.bitloom.agentic.evolve.EvolutionEngine;
-import cn.bitloom.agentic.tool.manage.evolve.ClimbAnalyzeTool;
-import cn.bitloom.agentic.tool.manage.evolve.GeneQueryTool;
-import cn.bitloom.agentic.tool.manage.evolve.GeneRollbackTool;
-import cn.bitloom.agentic.tool.manage.evolve.GeneToggleTool;
+import cn.bitloom.agentic.tool.file.DiffGenerator;
 import cn.bitloom.agentic.tool.file.EditTool;
 import cn.bitloom.agentic.tool.file.ReadTool;
 import cn.bitloom.agentic.tool.file.WriteTool;
@@ -31,10 +26,6 @@ import cn.bitloom.agentic.tool.manage.app.AppConfigSetIsolationTool;
 import cn.bitloom.agentic.tool.manage.mcp.McpConfigListTool;
 import cn.bitloom.agentic.tool.manage.mcp.McpConfigPathTool;
 import cn.bitloom.agentic.tool.manage.mcp.McpConfigUpdateTool;
-import cn.bitloom.agentic.tool.manage.memory.MemoryDeleteTool;
-import cn.bitloom.agentic.tool.manage.memory.MemorySaveTool;
-import cn.bitloom.agentic.tool.manage.memory.MemorySearchTool;
-import cn.bitloom.agentic.tool.manage.memory.MemoryUpdateTool;
 import cn.bitloom.agentic.tool.manage.skill.SkillConfigDeleteTool;
 import cn.bitloom.agentic.tool.manage.skill.SkillConfigGetTool;
 import cn.bitloom.agentic.tool.manage.skill.SkillConfigListTool;
@@ -51,10 +42,11 @@ import cn.bitloom.agentic.util.GuiQuestionHandler;
 import cn.bitloom.agentic.util.GuiTodoEventHandler;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.config.ConfigManager;
-import cn.bitloom.cron.CronManager;
+import cn.bitloom.agentic.cron.CronManager;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.ai.mcp.AsyncMcpToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
@@ -78,12 +70,13 @@ public class Toolkit {
     private final CronManager cronManager;
     private final ToolUIBridge toolUIBridge;
     private final AsyncMcpToolCallbackProvider mcpToolCallbackProvider;
-    private final MemoryManager memoryManager;
     private final TaskRepository taskRepository;
     private final ProcessManager processManager;
-    private final InMemorySessionManager inMemorySessionManager;
-    private final DiffService diffService;
-    private final EvolutionEngine evolutionEngine;
+    private final FileSystemSessionManager fileSystemSessionManager;
+    private final AgentDefinitionManager definitionManager;
+    private final ModelFactory modelFactory;
+    private final ObjectProvider<DiffGenerator> diffGeneratorProvider;
+    private final ObjectProvider<Toolkit> selfProvider;
 
     @PostConstruct
     public void init() {
@@ -110,7 +103,11 @@ public class Toolkit {
             TaskTool taskTool = TaskTool.builder()
                     .taskRepository(taskRepository)
                     .toolUIBridge(toolUIBridge)
-                    .inMemorySessionManager(inMemorySessionManager)
+                    .sessionManager(fileSystemSessionManager)
+                    .definitionManager(definitionManager)
+                    .modelFactory(modelFactory)
+                    .toolkit(selfProvider.getIfAvailable())
+                    .skillManager(skillManager)
                     .build();
             filtered = new ArrayList<>(filtered);
             filtered.add(taskTool.toToolCallback());
@@ -136,9 +133,10 @@ public class Toolkit {
         List<AbstractTool<?>> tools = new ArrayList<>();
 
         // 文件操作
+        DiffGenerator dg = diffGeneratorProvider.getIfAvailable();
         tools.add(ReadTool.builder().build());
-        tools.add(WriteTool.builder().diffService(diffService).build());
-        tools.add(EditTool.builder().diffService(diffService).build());
+        tools.add(WriteTool.builder().diffGenerator(dg).build());
+        tools.add(EditTool.builder().diffGenerator(dg).build());
         // 搜索
         tools.add(GlobTool.builder().build());
         tools.add(GrepTool.builder().build());
@@ -155,9 +153,6 @@ public class Toolkit {
                 .questionHandler(new GuiQuestionHandler(toolUIBridge)).build());
         tools.add(TodoWriteTool.builder()
                 .todoEventHandler(new GuiTodoEventHandler(toolUIBridge)).build());
-        // A2UI 动态界面生成
-        tools.add(A2UITool.builder()
-                .handler(toolUIBridge::handleA2UIMessage).build());
         // 定时任务
         tools.add(CronCreateTool.builder().cronManager(cronManager).build());
         tools.add(CronListTool.builder().cronManager(cronManager).build());
@@ -166,11 +161,6 @@ public class Toolkit {
         // 任务（TaskTool 按 agent 配置在 buildToolCallbacks 中单独创建）
         tools.add(TaskOutputTool.builder()
                 .taskRepository(taskRepository).build());
-        // 记忆管理（智能体主动记忆）
-        tools.add(new MemorySaveTool(memoryManager));
-        tools.add(new MemoryUpdateTool(memoryManager));
-        tools.add(new MemoryDeleteTool(memoryManager));
-        tools.add(new MemorySearchTool(memoryManager));
         // 技能
         tools.add(SkillTool.builder().skillManager(skillManager).build());
         // 技能配置
@@ -187,12 +177,6 @@ public class Toolkit {
         tools.add(AppConfigPathTool.builder().configManager(configManager).build());
         tools.add(AppConfigReadTool.builder().configManager(configManager).build());
         tools.add(AppConfigSetIsolationTool.builder().configManager(configManager).build());
-        // L4 自优化（Gene 管理 + 爬山分析）
-        tools.add(new ClimbAnalyzeTool(evolutionEngine));
-        tools.add(new GeneQueryTool(evolutionEngine));
-        tools.add(new GeneToggleTool(evolutionEngine));
-        tools.add(new GeneRollbackTool(evolutionEngine));
-
         return tools;
     }
 

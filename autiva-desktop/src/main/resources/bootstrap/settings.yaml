@@ -1,0 +1,12 @@
+app:
+  session:
+    isolation: PER_PEER
+spring:
+  ai:
+    deepseek:
+      chat:
+        base-url: https://api.deepseek.com
+        completions-path: /chat/completions
+        api-key: sk-0e2219d6b24f425e8bfa4f256610c421
+        options:
+          model: deepseek-v4-flash

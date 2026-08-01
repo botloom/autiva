@@ -1,42 +1,89 @@
 package cn.bitloom.agentic.agent;
 
-import cn.bitloom.agentic.session.Session;
+import cn.bitloom.agentic.event.EventPublisher;
 import lombok.Getter;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 运行时上下文，通过 ChatClientRequest.context() 传递给 Advisor。
+ * 运行时上下文，携带 sessionId、userId、eventSink 等运行时信息。
  * <p>
- * 主智能体场景：包含 Session，Advisor 从中获取 Session 状态
- * 子智能体场景：无 Session，只包含必要的参数（conversationId 等）
+ * Agent 实例无状态可复用，per-session 的运行时数据通过 RuntimeContext 传入。
+ * 参考 AgentScope 2.0 的 RuntimeContext.builder().sessionId(...).userId(...).put(...).build() 模式。
+ * <p>
+ * Agent.runStream 内部通过 Flux.create 创建 sink，包装为 EventPublisher 后
+ * 调用 {@link #put} 注入到 params，再通过 {@link #toToolContextMap()} 传递给 ToolContext。
  */
 @Getter
 public class RuntimeContext {
-    private final Session session;
-    private final String conversationId;
+
+    private final String sessionId;
+    private final String userId;
     private final Map<String, Object> params;
 
-    public RuntimeContext(Session session) {
-        this.session = session;
-        this.conversationId = session != null ? session.getId() : null;
-        this.params = new HashMap<>();
+    private RuntimeContext(String sessionId, String userId, Map<String, Object> params) {
+        this.sessionId = sessionId;
+        this.userId = userId;
+        this.params = params != null ? params : new HashMap<>();
     }
 
-    /** 创建无 Session 的 RuntimeContext（子智能体场景） */
-    public RuntimeContext(String conversationId) {
-        this.session = null;
-        this.conversationId = conversationId;
-        this.params = new HashMap<>();
-    }
-
-    public RuntimeContext param(String key, Object value) {
+    /**
+     * 运行时注入参数（如 Agent.runStream 内部注入 eventSink）。
+     */
+    public void put(String key, Object value) {
         this.params.put(key, value);
-        return this;
     }
 
     public Object getParam(String key) {
         return this.params.get(key);
+    }
+
+    /**
+     * 转为 ToolContext 用的 Map（含 sessionId、userId 及 params 中所有项）。
+     */
+    public Map<String, Object> toToolContextMap() {
+        Map<String, Object> map = new HashMap<>(params);
+        if (sessionId != null) {
+            map.put("sessionId", sessionId);
+        }
+        if (userId != null) {
+            map.put("userId", userId);
+        }
+        return map;
+    }
+
+    public static RuntimeContextBuilder builder() {
+        return new RuntimeContextBuilder();
+    }
+
+    public static class RuntimeContextBuilder {
+        private String sessionId;
+        private String userId;
+        private final Map<String, Object> params = new HashMap<>();
+
+        public RuntimeContextBuilder sessionId(String sessionId) {
+            this.sessionId = sessionId;
+            return this;
+        }
+
+        public RuntimeContextBuilder userId(String userId) {
+            this.userId = userId;
+            return this;
+        }
+
+        public RuntimeContextBuilder put(String key, Object value) {
+            this.params.put(key, value);
+            return this;
+        }
+
+        public RuntimeContextBuilder eventSink(EventPublisher eventSink) {
+            this.params.put("eventSink", eventSink);
+            return this;
+        }
+
+        public RuntimeContext build() {
+            return new RuntimeContext(sessionId, userId, params);
+        }
     }
 }

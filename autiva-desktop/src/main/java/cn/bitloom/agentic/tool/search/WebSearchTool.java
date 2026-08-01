@@ -2,11 +2,11 @@ package cn.bitloom.agentic.tool.search;
 
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
+import cn.bitloom.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.util.json.JsonParser;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -84,7 +84,7 @@ public class WebSearchTool extends AbstractTool<WebSearchTool.Input> {
                     .status(ToolResult.Status.SUCCESS)
                     .message(filteredResults.size() + " 条搜索结果")
                     .data(Map.of("query", input.query(), "count", filteredResults.size()))
-                    .rawOutput(JsonParser.toJson(filteredResults))
+                    .rawOutput(JsonUtils.toJson(filteredResults))
                     .build();
 
         }

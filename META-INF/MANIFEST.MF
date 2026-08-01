@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Automatic-Module-Name: spring.boot
+Build-Jdk-Spec: 17
+Built-By: Spring
+Implementation-Title: Spring Boot
+Implementation-Version: 4.1.0
+

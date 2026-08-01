@@ -1,6 +1,6 @@
 .skill-page {
     -fx-background-color: #ffffff;
-    -fx-padding: 24;
+    -fx-padding: 24 0 0 0;
     -fx-alignment: top-center;
     -fx-vgrow: always;
 }
@@ -13,6 +13,7 @@
     -fx-max-width: 700;
     -fx-hbar-policy: never;
     -fx-fit-to-width: true;
+    -fx-fit-to-height: true;
 }
 
 .skill-page__scroll-pane > .viewport {
@@ -63,6 +64,7 @@
     -fx-background-color: #ffffff;
     -fx-padding: 0 32 32 32;
     -fx-spacing: 12;
+    -fx-alignment: top-center;
 }
 
 .skill-page__empty {

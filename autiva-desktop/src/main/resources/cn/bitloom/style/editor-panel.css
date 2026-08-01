@@ -9,7 +9,7 @@
  * - 文件树/列表项采用 BEM 命名
  */
 
-/* ===== Apple 系统色变量 ===== */
+/* ===== Apple 系统色变量（深色主题） ===== */
 
 * {
     -autiva-bg: #1c1c1e;
@@ -30,7 +30,7 @@
     -autiva-gray: #98989d;
 }
 
-/* ===== 容器（透明，用 padding 创建右下留白） ===== */
+/* ===== 容器（透明，右侧留出窗口圆角边距） ===== */
 
 .editor-panel {
     -fx-background-color: transparent;
@@ -38,11 +38,11 @@
     -fx-border-width: 0;
 }
 
-/* ===== 视图容器（深色圆角卡片，承载所有内容） ===== */
+/* ===== 视图容器（深色背景，右上右下圆角与窗口对齐） ===== */
 
 .editor-panel__views {
     -fx-background-color: -autiva-bg;
-    -fx-background-radius: 12;
+    -fx-background-radius: 0 10 10 0;
 }
 
 /* ===== 终端视图 ===== */

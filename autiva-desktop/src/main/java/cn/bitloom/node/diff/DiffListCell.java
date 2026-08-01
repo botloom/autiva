@@ -1,6 +1,6 @@
 package cn.bitloom.node.diff;
 
-import cn.bitloom.agentic.diff.FileDiff;
+import cn.bitloom.agentic.tool.file.FileDiff;
 import cn.bitloom.node.svg.SvgImageView;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Label;

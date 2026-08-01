@@ -27,6 +27,8 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 public class TaskCard extends VBox {
@@ -41,6 +43,7 @@ public class TaskCard extends VBox {
     private final VBox messageContainer;
     private final StringBuilder streamBuffer = new StringBuilder();
     private VBox currentStreamBox = null;
+    private final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
 
     private boolean userCollapsed = false;
 
@@ -175,7 +178,7 @@ public class TaskCard extends VBox {
 
             if (e.getToolCalls() != null) {
                 for (MessageEvent.ToolCallInfo tc : e.getToolCalls()) {
-                    appendToolCallCard(tc.name(), tc.arguments());
+                    appendToolCallCard(tc.id(), tc.name(), tc.arguments());
                 }
             }
             streamBuffer.setLength(0);
@@ -185,7 +188,7 @@ public class TaskCard extends VBox {
     private void processToolEvent(MessageEvent e) {
         if (e.getResponses() != null && !e.getResponses().isEmpty()) {
             for (MessageEvent.ToolResponseInfo resp : e.getResponses()) {
-                appendToolResponseCard(resp.name(), resp.responseData());
+                appendToolResponseCard(resp.id(), resp.name(), resp.responseData());
             }
         }
     }
@@ -237,18 +240,19 @@ public class TaskCard extends VBox {
         messageContainer.getChildren().add(mdBox);
     }
 
-    private void appendToolCallCard(String toolName, String arguments) {
-        ToolMessageCard card = new ToolMessageCard(toolName, arguments, true);
+    private void appendToolCallCard(String toolCallId, String toolName, String arguments) {
+        ToolMessageCard card = new ToolMessageCard(toolCallId, toolName, arguments);
+        pendingToolCards.put(toolCallId, card);
         HBox wrapper = new HBox(card);
         wrapper.setAlignment(Pos.CENTER_LEFT);
         messageContainer.getChildren().add(wrapper);
     }
 
-    private void appendToolResponseCard(String toolName, String responseData) {
-        ToolMessageCard card = new ToolMessageCard(toolName, responseData, false);
-        HBox wrapper = new HBox(card);
-        wrapper.setAlignment(Pos.CENTER_LEFT);
-        messageContainer.getChildren().add(wrapper);
+    private void appendToolResponseCard(String toolCallId, String toolName, String responseData) {
+        ToolMessageCard card = pendingToolCards.remove(toolCallId);
+        if (card != null) {
+            card.setResponse(responseData);
+        }
     }
 
     private void ensureBodyVisible() {

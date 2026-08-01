@@ -2,7 +2,7 @@ spring:
   application:
     name: autiva
   config:
-    import: optional:file:${user.home}/.autiva/settings.properties
+    import: optional:file:${user.home}/.autiva/settings.yaml
   main:
     web-application-type: none
   threads:

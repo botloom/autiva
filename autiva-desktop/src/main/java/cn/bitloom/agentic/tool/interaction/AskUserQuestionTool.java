@@ -2,12 +2,12 @@ package cn.bitloom.agentic.tool.interaction;
 
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
+import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.util.json.JsonParser;
 import org.springframework.util.Assert;
 
 import java.util.List;
@@ -175,7 +175,7 @@ public class AskUserQuestionTool extends AbstractTool<AskUserQuestionTool.Input>
 			logger.debug("收到用户 {} 个答案", result.size());
 		}
 
-		return ToolResult.success("用户已回答你的问题", Map.of("answers", result), "用户已回答你的问题: " + JsonParser.toJson(result));
+		return ToolResult.success("用户已回答你的问题", Map.of("answers", result), "用户已回答你的问题: " + JsonUtils.toJson(result));
 	}
 
 	/**

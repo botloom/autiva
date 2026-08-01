@@ -1,63 +1,57 @@
 package cn.bitloom.agentic.session;
 
-import cn.bitloom.agentic.model.ModelTypeEnum;
+import cn.bitloom.agentic.event.AbstractEvent;
+import cn.bitloom.agentic.session.compaction.CompactionResult;
+import cn.bitloom.agentic.session.compaction.CompactionStrategy;
+import cn.bitloom.agentic.session.compaction.CompactionTrigger;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.messages.Message;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
 
-/**
- * Session 管理器统一接口。
- * <p>
- * 不同的实现提供不同的存储策略：
- * - FileSystemSessionManager：磁盘持久化，用于主会话
- * - InMemorySessionManager：纯内存，用于子智能体会话
- */
 public interface ISessionManager {
 
-    /**
-     * 创建新的 Session
-     *
-     * @param agentId         智能体标识
-     * @param parentSessionId 父会话ID（子 Session 关联父 Session，主会话传 null）
-     * @param type            会话类型
-     * @param respType        响应类型
-     * @param model           模型类型
-     * @return 新创建的 Session
-     */
-    Session create(String agentId, String parentSessionId, SessionTypeEnum type, SessionRespTypeEnum respType, ModelTypeEnum model);
-
-    /**
-     * 根据 ID 获取 Session
-     */
+    Session create(CreateSessionRequest request);
     Session getById(String sessionId);
-
-    /**
-     * 移除 Session
-     */
+    List<Session> findByUserId(String userId);
     void remove(String sessionId);
+    int deleteExpiredSessions(Instant before);
 
-    /**
-     * 存储消息到 Session
-     */
-    void store(String sessionId, List<Message> messages);
+    void appendEvent(AbstractEvent event);
+    List<AbstractEvent> getEvents(String sessionId, EventFilter filter);
 
-    /**
-     * 激活会话：per-session 创建 ChatMemory + Agent + SessionRunner，启动消息循环。
-     * <p>
-     * 幂等设计：已激活（runner 存在且未停止）则直接返回，不重复创建。
-     * 按 sessionId 加锁，防止并发调用创建多个 SessionRunner。
-     * - FileSystemSessionManager：从磁盘加载状态 + buildAgent（主智能体，含 verification/gene/compact）
-     * - InMemorySessionManager：纯内存 + buildAgent（子智能体，不含 verification/gene/compact）
-     *
-     * @param sessionId 会话ID
-     */
-    void activate(String sessionId);
+    default List<AbstractEvent> getEvents(String sessionId) {
+        return getEvents(sessionId, EventFilter.all());
+    }
 
-    /**
-     * 持久化 Session 元数据。
-     * FileSystemSessionManager 写入 metadata.json，InMemorySessionManager 为 no-op。
-     *
-     * @param session 要持久化的 Session
-     */
+    default List<Message> getMessages(String sessionId) {
+        return getEvents(sessionId).stream()
+                .filter(e -> e instanceof cn.bitloom.agentic.event.MessageEvent)
+                .map(e -> ((cn.bitloom.agentic.event.MessageEvent) e).getMessage())
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    CompactionResult compact(String sessionId, CompactionTrigger trigger, CompactionStrategy strategy);
+
     void persistSession(Session session);
+
+    void flush(String sessionId);
+
+    @Nullable
+    Session loadMetadata(String sessionId);
+
+    /**
+     * 在 per-session 锁保护下执行 action，保证同一 session 的串行处理。
+     * 子智能体使用独立 sessionId，与父 session 锁互不冲突。
+     *
+     * @param sessionId 会话 ID
+     * @param action    要执行的动作
+     * @param <T>       返回类型
+     * @return action 的返回值
+     */
+    <T> T withLock(String sessionId, Supplier<T> action);
 }

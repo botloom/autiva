@@ -1,6 +1,6 @@
 package cn.bitloom.node.tool;
 
-import cn.bitloom.agentic.diff.FileDiff;
+import cn.bitloom.agentic.tool.file.FileDiff;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;

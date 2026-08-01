@@ -7,11 +7,6 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
 
-/**
- * UI 卡片事件（TaskCard / QuestionCard），支持事件化驱动和历史回放。
- * <p>
- * CREATED/ASKED 事件 persist=false（实时 UI 用），COMPLETED/FAILED/ANSWERED 事件 persist=true（持久化用于历史回放）。
- */
 @Getter
 @Setter
 @SuperBuilder
@@ -29,13 +24,13 @@ public final class UICardEvent extends AbstractEvent {
     private String cardId;
     private String cardJson;
     private Status status;
-    /** 完成结果 / 回答内容 */
     private String result;
+
+    @Builder.Default
+    private boolean persist = false;
 
     @Override
     public EventTypeEnum getEventType() { return eventType; }
-
-    // ===== TaskCard 工厂方法 =====
 
     public static UICardEvent taskCreated(String sessionId, String taskId, String taskJson) {
         return UICardEvent.builder()
@@ -58,8 +53,6 @@ public final class UICardEvent extends AbstractEvent {
                 .build();
     }
 
-    // ===== QuestionCard 工厂方法 =====
-
     public static UICardEvent questionAsked(String sessionId, String questionId, String questionsJson) {
         return UICardEvent.builder()
                 .sessionId(sessionId).type(Type.QUESTION_CARD).cardId(questionId)
@@ -73,8 +66,6 @@ public final class UICardEvent extends AbstractEvent {
                 .cardJson(questionsJson).status(Status.ANSWERED).result(answersJson).persist(true)
                 .build();
     }
-
-    // ===== 便捷方法 =====
 
     public boolean isTaskCard() { return type == Type.TASK_CARD; }
     public boolean isQuestionCard() { return type == Type.QUESTION_CARD; }

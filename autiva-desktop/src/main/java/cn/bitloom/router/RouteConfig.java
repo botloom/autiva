@@ -19,16 +19,15 @@ public class RouteConfig {
         public static final String AGENT = "/agent";
         public static final String SETTINGS = "/settings";
         public static final String SKILLS = "/skills";
-        public static final String GEP = "/gep";
         public static final String TASK = "/task";
     }
 
     private final Map<String, Route> routes = new HashMap<>();
 
     public void init() {
-        registerRoute(Path.HOME, "主页", HomePageController.class,
-                ic -> safeCall(ic.getHomePageController(), PageHolder::show),
-                ic -> safeCall(ic.getHomePageController(), PageHolder::hide));
+        registerRoute(Path.HOME, "主页", AbstractHomePageController.class,
+                ic -> { ic.showHomePageSlot(); safeCall(ic.getHomePageController(), PageHolder::show); },
+                ic -> { safeCall(ic.getHomePageController(), PageHolder::hide); ic.hideHomePageSlot(); });
 
         registerRoute(Path.AGENT, "智能体", AgentPageController.class,
                 ic -> safeCall(ic.getAgentPageController(), PageHolder::show),
@@ -41,10 +40,6 @@ public class RouteConfig {
         registerRoute(Path.SKILLS, "技能管理", SkillPageController.class,
                 ic -> safeCall(ic.getSkillPageController(), PageHolder::show),
                 ic -> safeCall(ic.getSkillPageController(), PageHolder::hide));
-
-        registerRoute(Path.GEP, "进化引擎", GepPageController.class,
-                ic -> safeCall(ic.getGepPageController(), PageHolder::show),
-                ic -> safeCall(ic.getGepPageController(), PageHolder::hide));
 
         registerRoute(Path.TASK, "任务", TaskPageController.class,
                 ic -> safeCall(ic.getTaskPageController(), PageHolder::show),

@@ -91,18 +91,18 @@ public class AgentPageViewModel {
         try {
             Files.createDirectories(agentDir);
 
-            // 复制 default 模板
-            Path defaultDir = AppConstants.Agents.agentDir(AppConstants.Agents.DEFAULT_AGENT_NAME);
-            if (Files.exists(defaultDir)) {
-                try (DirectoryStream<Path> stream = Files.newDirectoryStream(defaultDir)) {
+            // 复制 work 模板
+            Path workDir = AppConstants.Agents.agentDir(AppConstants.Agents.WORK_AGENT);
+            if (Files.exists(workDir)) {
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(workDir)) {
                     for (Path source : stream) {
                         if (Files.isRegularFile(source)) {
                             Path target = agentDir.resolve(source.getFileName());
                             String content = Files.readString(source, StandardCharsets.UTF_8);
                             // 替换名称
                             if (source.getFileName().toString().equals("agent.md")) {
-                                content = content.replace("name: default", "name: " + agentId)
-                                        .replace("name: " + AppConstants.Agents.DEFAULT_AGENT_NAME, "name: " + agentId);
+                                content = content.replace("name: work", "name: " + agentId)
+                                        .replace("name: " + AppConstants.Agents.WORK_AGENT, "name: " + agentId);
                             }
                             Files.writeString(target, content, StandardCharsets.UTF_8);
                         }
@@ -115,14 +115,7 @@ public class AgentPageViewModel {
 
                 String configJson = "{\"tools\":[],\"mcpServers\":{},\"skills\":[],\"subagents\":[]}";
                 Files.writeString(AppConstants.MainAgent.configFile(agentId), configJson, StandardCharsets.UTF_8);
-
-                String memoryMd = "# 记忆\n";
-                Files.writeString(AppConstants.MainAgent.memoryFile(agentId), memoryMd, StandardCharsets.UTF_8);
             }
-
-            // 创建 workspace 目录
-            Files.createDirectories(AppConstants.MainAgent.sessionsDir(agentId));
-            Files.createDirectories(AppConstants.MainAgent.contextDir(agentId));
 
             // 重新加载定义
             definitionManager.getOrLoadMainDefinition(agentId);
@@ -179,10 +172,6 @@ public class AgentPageViewModel {
                     }
                 }
             }
-
-            // 创建 workspace 目录
-            Files.createDirectories(AppConstants.MainAgent.sessionsDir(targetAgentId));
-            Files.createDirectories(AppConstants.MainAgent.contextDir(targetAgentId));
 
             // 重新加载定义
             definitionManager.getOrLoadMainDefinition(targetAgentId);

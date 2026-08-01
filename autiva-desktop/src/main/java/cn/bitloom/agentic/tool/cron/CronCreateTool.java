@@ -2,7 +2,8 @@ package cn.bitloom.agentic.tool.cron;
 
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
-import cn.bitloom.cron.CronManager;
+import cn.bitloom.agentic.cron.CronManager;
+import cn.bitloom.store.Store;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -39,7 +40,8 @@ public class CronCreateTool extends AbstractTool<CronCreateTool.Input> {
 
         try {
             cronManager.createTask(input.name(), input.type(), input.intervalSeconds(),
-                    input.delaySeconds(), input.cronExpression(), input.message(), getSessionId(toolContext));
+                    input.delaySeconds(), input.cronExpression(), input.message(),
+                    getSessionId(toolContext), Store.currentAgent.get());
             log.info("[ToolCall] cron_create - 创建成功: name={}", input.name());
             return ToolResult.success("定时任务创建成功: " + input.name());
 

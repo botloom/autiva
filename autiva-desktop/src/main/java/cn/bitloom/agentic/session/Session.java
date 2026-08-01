@@ -1,65 +1,147 @@
+/*
+ * Copyright 2023-present the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package cn.bitloom.agentic.session;
 
-import cn.bitloom.agentic.model.ModelTypeEnum;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.jspecify.annotations.Nullable;
+
+import org.springframework.util.Assert;
 
 /**
- * 会话实体类，唯一的状态源。
+ * Immutable metadata container for a single, continuous conversation between a user and
+ * an agent. Holds only identity and lifecycle fields — the event log is stored separately
+ * in {@link SessionRepository} and retrieved on demand via {@link SessionService}.
+ *
  * <p>
- * 所有持久化字段直接在本类中定义，序列化为 metadata.json。
- * 瞬态字段（agent、messages、memoryManager）不参与序列化。
- * 编排逻辑（消息循环、记忆事件处理）由 SessionRunner 负责。
+ * Mutations return new instances; the original is never modified.
+ *
+ * @author Christian Tzolov
+ * @since 2.0.0
  */
-@Slf4j
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class Session {
+@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY,
+        getterVisibility = JsonAutoDetect.Visibility.NONE,
+        isGetterVisibility = JsonAutoDetect.Visibility.NONE)
+public final class Session {
 
-    private String id;
-    private String agentId;
-    private String userId;
-    private SessionTypeEnum sessionType;
-    private SessionRespTypeEnum respType;
-    private String source;
-    private ModelTypeEnum model;
+	private final String id;
 
-    /** 父会话ID（子 Session 关联父 Session） */
-    private String parentId;
+	private final String userId;
 
-    @Builder.Default
-    private String title = "新对话";
+	private final Instant createdAt;
 
-    @Builder.Default
-    private Long createdAt = System.currentTimeMillis();
+	private final Instant expiresAt;
 
-    @Builder.Default
-    private Long updateAt = System.currentTimeMillis();
+	private final Map<String, Object> metadata;
 
-    // ===== 对话上下文 =====
+	@JsonCreator
+	private Session(
+			@JsonProperty("id") String id,
+			@JsonProperty("userId") String userId,
+			@JsonProperty("createdAt") Instant createdAt,
+			@JsonProperty("expiresAt") Instant expiresAt,
+			@JsonProperty("metadata") Map<String, Object> metadata) {
+		this.id = id;
+		this.userId = userId;
+		this.createdAt = createdAt;
+		this.expiresAt = expiresAt;
+		this.metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+	}
 
-    @Builder.Default
-    private int messageCount = 0;
+	/** Unique identifier for this session. */
+	public String id() {
+		return this.id;
+	}
 
-    @Builder.Default
-    private int memoryCursor = 0;
+	/** The actor (user or agent) who owns this session. Critical for isolation. */
+	public String userId() {
+		return this.userId;
+	}
 
-    private String summary;
+	/** When this session was created. */
+	public Instant createdAt() {
+		return this.createdAt;
+	}
 
-    // ===== 压缩上下文 =====
+	/**
+	 * When this session expires (TTL-based lifecycle). {@code null} means no expiry.
+	 */
+	@Nullable public Instant expiresAt() {
+		return this.expiresAt;
+	}
 
-    @Builder.Default
-    private int contextCapacity = 128000;
+	/** Arbitrary metadata: model info, tags, agent type, etc. */
+	public Map<String, Object> metadata() {
+		return this.metadata;
+	}
 
-    @Builder.Default
-    private double compactionThreshold = 0.8;
+	public static Builder builder() {
+		return new Builder();
+	}
 
-    @Builder.Default
-    private int currentContextLength = 0;
+	public static final class Builder {
+
+		private String id = "";
+
+		private String userId = "";
+
+		private Instant createdAt = Instant.now();
+
+		private Instant expiresAt = Instant.now().plus(Duration.ofDays(60));
+
+		private Map<String, Object> metadata = new HashMap<>();
+
+		public Builder id(String id) {
+			this.id = id;
+			return this;
+		}
+
+		public Builder userId(String userId) {
+			this.userId = userId;
+			return this;
+		}
+
+		public Builder createdAt(Instant createdAt) {
+			this.createdAt = createdAt;
+			return this;
+		}
+
+		public Builder expiresAt(Instant expiresAt) {
+			this.expiresAt = expiresAt;
+			return this;
+		}
+
+		public Builder metadata(Map<String, Object> metadata) {
+			this.metadata = new HashMap<>(metadata);
+			return this;
+		}
+
+		public Session build() {
+			Assert.hasText(this.id, "id must not be null or empty");
+			Assert.hasText(this.userId, "userId must not be null or empty");
+			return new Session(this.id, this.userId, this.createdAt, this.expiresAt, this.metadata);
+		}
+
+	}
 
 }

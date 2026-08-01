@@ -549,7 +549,11 @@
 
 /* 状态圆点 */
 .chat-message__tool-status-dot {
-    -fx-fill: #22c55e;
+    -fx-fill: #86868b;
+}
+
+.chat-message__tool-status-dot--pending {
+    -fx-fill: #86868b;
 }
 
 .chat-message__tool-status-dot--success {
@@ -562,6 +566,19 @@
 
 .chat-message__tool-status-dot--warning {
     -fx-fill: #f59e0b;
+}
+
+/* 工具卡片区块标题（请求参数/执行结果） */
+.chat-message__tool-section-label {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #86868b;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.chat-message__tool-request-box,
+.chat-message__tool-response-box {
+    -fx-spacing: 4;
 }
 
 /* 状态变体下的工具名颜色 */

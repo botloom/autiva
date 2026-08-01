@@ -185,7 +185,43 @@
 
 .sidebar__history-delete-btn:hover {
     -fx-opacity: 1;
-    -fx-background-color: rgba(255, 59, 48, 0.1);
+    -fx-background-color: rgba(0, 113, 227, 0.1);
+}
+
+/* ===== Code 模式项目折叠卡片 ===== */
+
+.sidebar__project-card {
+    -fx-spacing: 0;
+}
+
+.sidebar__project-header {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8px;
+    -fx-cursor: hand;
+    -fx-padding: 8 12;
+    -fx-spacing: 8;
+    -fx-alignment: center-left;
+}
+
+.sidebar__project-header:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar__project-icon {
+    -fx-min-width: 18px;
+    -fx-alignment: center;
+}
+
+.sidebar__project-name {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+.sidebar__project-sessions {
+    -fx-spacing: 2;
+    -fx-padding: 0 0 0 26;
 }
 
 /* 智能体模式分段切换按钮（iOS SegmentedControl 风格） */

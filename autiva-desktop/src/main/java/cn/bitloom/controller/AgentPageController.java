@@ -105,8 +105,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
 
         Map<String, String> configFiles = Map.of(
                 "agent.md", "智能体定义",
-                "config.json", "工具与子智能体配置",
-                "memory.md", "记忆文件"
+                "config.json", "工具与子智能体配置"
         );
 
         for (Map.Entry<String, String> entry : configFiles.entrySet()) {

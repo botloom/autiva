@@ -40,22 +40,28 @@ public class AgentDefinitionManager {
     }
 
     /**
-     * 从 classpath 加载所有子智能体定义（subagent 目录下的 agent.md）
+     * 从 ~/.autiva/subagents/ 加载所有子智能体定义
      */
     private void loadSubagentDefinitions() {
-        try {
-            PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-            Resource[] resources = resolver.getResources("classpath:subagent/*/agent.md");
-            for (Resource resource : resources) {
-                try {
-                    String markdown = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    AgentDefinition definition = AgentDefinition.fromMarkdown(markdown);
-                    definitions.put(definition.name(), definition);
-                    log.info("加载子智能体定义: {}", definition.name());
-                } catch (Exception e) {
-                    log.warn("加载子智能体定义失败: {}", resource, e);
-                }
-            }
+        Path subagentsDir = AppConstants.Base.SUBAGENTS_DIR;
+        if (!Files.exists(subagentsDir)) {
+            log.warn("子智能体目录不存在: {}", subagentsDir);
+            return;
+        }
+        try (Stream<Path> dirs = Files.list(subagentsDir)) {
+            dirs.filter(Files::isDirectory)
+                .forEach(dir -> {
+                    Path agentFile = dir.resolve("agent.md");
+                    if (Files.exists(agentFile)) {
+                        try {
+                            AgentDefinition definition = AgentDefinition.fromMarkdown(agentFile);
+                            definitions.put(definition.name(), definition);
+                            log.info("加载子智能体定义: {}", definition.name());
+                        } catch (Exception e) {
+                            log.warn("加载子智能体定义失败: {}", agentFile, e);
+                        }
+                    }
+                });
         } catch (IOException e) {
             log.warn("扫描子智能体目录失败", e);
         }
@@ -93,13 +99,26 @@ public class AgentDefinitionManager {
     }
 
     /**
-     * 获取指定名称的定义（MAIN 或 SUBAGENT）
+     * 获取指定名称的定义（MAIN 或 SUBAGENT）。
+     * 支持大小写不敏感查找（LLM 可能传入小写名称）。
      *
      * @param name 定义名称
      * @return AgentDefinition，不存在返回 null
      */
     public AgentDefinition getDefinition(String name) {
-        return definitions.get(name);
+        if (name == null) {
+            return null;
+        }
+        AgentDefinition definition = definitions.get(name);
+        if (definition != null) {
+            return definition;
+        }
+        // 大小写不敏感查找
+        return definitions.entrySet().stream()
+                .filter(e -> e.getKey().equalsIgnoreCase(name))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -151,7 +170,7 @@ public class AgentDefinitionManager {
      * 加载并合并 WorkspaceConfig（default + agentId，agentId 优先）。
      */
     public WorkspaceConfig loadWorkspaceConfig(String agentId) {
-        WorkspaceConfig rootConfig = loadConfigFromFile(AppConstants.MainAgent.configFile("default"));
+        WorkspaceConfig rootConfig = loadConfigFromFile(AppConstants.MainAgent.configFile(AppConstants.Agents.WORK_AGENT));
         WorkspaceConfig agentConfig = loadConfigFromFile(AppConstants.MainAgent.configFile(agentId));
 
         WorkspaceConfig merged = new WorkspaceConfig();

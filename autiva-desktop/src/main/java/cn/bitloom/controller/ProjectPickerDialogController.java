@@ -1,7 +1,7 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.project.ProjectInfo;
-import cn.bitloom.agentic.project.ProjectRegistry;
+import cn.bitloom.project.ProjectInfo;
+import cn.bitloom.project.ProjectRegistry;
 import cn.bitloom.holder.DialogHolder;
 import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;

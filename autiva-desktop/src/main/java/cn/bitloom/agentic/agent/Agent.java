@@ -1,14 +1,12 @@
 package cn.bitloom.agentic.agent;
 
-import cn.bitloom.agentic.agent.advisor.GeneInjectAdvisor;
 import cn.bitloom.agentic.agent.advisor.HookAdvisor;
 import cn.bitloom.agentic.agent.advisor.LoggingAdvisor;
-import cn.bitloom.agentic.agent.advisor.ProactiveContextAdvisor;
-import cn.bitloom.agentic.agent.advisor.UsageAdvisor;
-import cn.bitloom.agentic.evolve.inject.GeneInjector;
+import cn.bitloom.agentic.event.AbstractEvent;
+import cn.bitloom.agentic.event.EventConverter;
+import cn.bitloom.agentic.event.EventPublisher;
+import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.hook.IAgentHook;
-import cn.bitloom.agentic.trace.TraceHook;
-import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.AutivaToolCallingManager;
 import cn.bitloom.agentic.util.MessageUtil;
 import lombok.Getter;
@@ -16,18 +14,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.ToolCallback;
 import reactor.core.publisher.Flux;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -65,60 +62,57 @@ public class Agent {
     }
 
     /**
-     * 流式调用 LLM
+     * 流式调用 LLM，返回事件流。
      * <p>
-     * 参数从 RuntimeContext 获取，与 Session 解耦：
-     * - 主智能体：ctx 包含 Session，conversationId = session.getId()
-     * - 子智能体：ctx 无 Session，conversationId = taskId
+     * 入参 MessageEvent + RuntimeContext，出参 Flux&lt;AbstractEvent&gt;。
+     * <ul>
+     *   <li>Flux.create 内部创建 sink 作为事件汇聚点</li>
+     *   <li>sink::next 包装为 EventPublisher 注入 ctx，通过 ToolContext 传递给工具层</li>
+     *   <li>LLM 流的 AssistantMessage 通过 EventConverter 转 MessageEvent 推入 sink</li>
+     *   <li>工具事件由 AutivaToolCallingManager 通过 EventPublisher 推入同一 sink</li>
+     * </ul>
+     * Agent 实例不绑定 session，可复用（不同 session 传不同 ctx）。
      * <p>
-     * 错误处理：onErrorResume 将异常转换为兜底 AssistantMessage，避免错误裸抛到订阅层。
+     * 错误处理：onErrorResume 将异常转换为兜底 MessageEvent，避免错误裸抛到订阅层。
      */
-    public Flux<AssistantMessage> runStream(RuntimeContext ctx, Message message) {
-        String conversationId = ctx.getConversationId();
-        return this.chatClient
-                .prompt()
-                .advisors(a -> {
-                    if (conversationId != null) {
-                        a.param(ChatMemory.CONVERSATION_ID, conversationId);
-                    }
-                    a.param("runtimeContext", ctx);
-                })
-                .toolContext(ctx.getParams())
-                .messages(message)
-                .stream()
-                .chatResponse()
-                .map(chatResponse -> chatResponse.getResult().getOutput())
-                .onErrorResume(e -> {
-                    log.error("LLM stream error: {}, msg: {}", e.getClass().getSimpleName(), e.getMessage());
-                    return Flux.just(MessageUtil.buildFallbackMessage());
-                });
-    }
+    public Flux<AbstractEvent> runStream(MessageEvent inputEvent, RuntimeContext ctx) {
+        String sessionId = ctx.getSessionId();
+        return Flux.<AbstractEvent>create(sink -> {
+            // 把 sink::next 包装为 EventPublisher，注入 ctx 供工具层使用
+            EventPublisher runtimePublisher = sink::next;
+            ctx.put("eventSink", runtimePublisher);
+            ctx.put("sessionId", sessionId);
 
-    /**
-     * 阻塞调用 LLM
-     */
-    public AssistantMessage runBlock(RuntimeContext ctx, Message message) {
-        String conversationId = ctx.getConversationId();
-        try {
-            var promptSpec = this.chatClient.prompt()
+            UserMessage userMessage = EventConverter.toUserMessage(inputEvent);
+            this.chatClient.prompt()
                     .advisors(a -> {
-                        if (conversationId != null) {
-                            a.param(ChatMemory.CONVERSATION_ID, conversationId);
+                        if (sessionId != null) {
+                            a.param(ChatMemory.CONVERSATION_ID, sessionId);
                         }
                         a.param("runtimeContext", ctx);
                     })
-                    .toolContext(ctx.getParams())
-                    .messages(message);
+                    .toolContext(ctx.toToolContextMap())
+                    .messages(userMessage)
+                    .stream()
+                    .chatResponse()
+                    .map(cr -> EventConverter.fromMessage(sessionId, cr.getResult().getOutput()))
+                    .subscribe(sink::next, sink::error, sink::complete);
+        }).onErrorResume(e -> {
+            log.error("LLM stream error: {}, msg: {}", e.getClass().getSimpleName(), e.getMessage());
+            AssistantMessage fallback = MessageUtil.buildFallbackMessage();
+            return Flux.just(EventConverter.fromMessage(sessionId, fallback));
+        });
+    }
 
-            ChatResponse response = promptSpec.call().chatResponse();
-            if (Objects.nonNull(response)) {
-                return response.getResult().getOutput();
-            }
-        } catch (Exception e) {
-            log.error("LLM block error: {}, msg: {}", e.getClass().getSimpleName(), e.getMessage());
-            return MessageUtil.buildFallbackMessage();
-        }
-        return null;
+    /**
+     * 阻塞调用 LLM，返回最终 MessageEvent。
+     * 仅返回最后一条非空 assistant 消息事件。
+     */
+    public MessageEvent runBlock(MessageEvent inputEvent, RuntimeContext ctx) {
+        return runStream(inputEvent, ctx)
+                .filter(e -> e instanceof MessageEvent)
+                .cast(MessageEvent.class)
+                .blockLast();
     }
 
     public static Builder builder() {
@@ -132,16 +126,8 @@ public class Agent {
         private ChatModel model;
         private List<ToolCallback> tools = new ArrayList<>();
         private List<IAgentHook> hooks = new ArrayList<>();
-        private IAgentHook verificationHook;
-        private TraceHook traceHook;
-        private GeneInjector geneInjector;
+        private List<Advisor> advisors = new ArrayList<>();
         private boolean enableLogging = true;
-        private boolean enableMemory = false;
-        private ChatMemory chatMemory;
-        private boolean enableCompact = false;
-        private SkillManager skillManager;
-        private AgentDefinitionManager definitionManager;
-        private Path memoryFilePath;
 
         public Builder name(String name) {
             this.name = name;
@@ -173,63 +159,13 @@ public class Agent {
             return this;
         }
 
-        /**
-         * 设置 L2 校验 Hook。仅在 AgentDefinition.verification().enabled() 时生效。
-         */
-        public Builder verificationHook(IAgentHook verificationHook) {
-            this.verificationHook = verificationHook;
-            return this;
-        }
-
-        /**
-         * 设置 Trace 记录 Hook。非 null 时自动注册到 hooks 列表。
-         */
-        public Builder traceHook(TraceHook traceHook) {
-            this.traceHook = traceHook;
-            return this;
-        }
-
-        /**
-         * 设置 Gene 注入器。非 null 且 enableCompact=true 时，自动注册 GeneInjectAdvisor。
-         */
-        public Builder geneInjector(GeneInjector geneInjector) {
-            this.geneInjector = geneInjector;
-            return this;
-        }
-
-        public Builder memory(ChatMemory chatMemory) {
-            this.enableMemory = true;
-            this.chatMemory = chatMemory;
+        public Builder advisors(List<Advisor> advisors) {
+            this.advisors = advisors;
             return this;
         }
 
         public Builder logging(boolean enableLogging) {
             this.enableLogging = enableLogging;
-            return this;
-        }
-
-        public Builder chatMemory(ChatMemory chatMemory) {
-            this.chatMemory = chatMemory;
-            return this;
-        }
-
-        public Builder compact(boolean enableCompact) {
-            this.enableCompact = enableCompact;
-            return this;
-        }
-
-        public Builder skillManager(SkillManager skillManager) {
-            this.skillManager = skillManager;
-            return this;
-        }
-
-        public Builder definitionManager(AgentDefinitionManager definitionManager) {
-            this.definitionManager = definitionManager;
-            return this;
-        }
-
-        public Builder memoryFilePath(Path memoryFilePath) {
-            this.memoryFilePath = memoryFilePath;
             return this;
         }
 
@@ -252,38 +188,11 @@ public class Agent {
                             .toolCallingManager(toolCallingManager)
                             .build()
             );
-            if (this.enableMemory) {
-                builder.defaultAdvisors(
-                        MessageChatMemoryAdvisor
-                                .builder(chatMemory)
-                                .order(BaseAdvisor.HIGHEST_PRECEDENCE + 400)
-                                .build()
-                );
-            }
-            if (this.enableCompact) {
-                builder.defaultAdvisors(
-                        UsageAdvisor.builder().build(),
-                        ProactiveContextAdvisor.builder()
-                                .skillManager(this.skillManager)
-                                .definitionManager(this.definitionManager)
-                                .definition(this.definition)
-                                .memoryFilePath(this.memoryFilePath)
-                                .build()
-                );
-                // Gene 注入 Advisor（L4 优化结果注入到 SystemMessage）
-                if (this.geneInjector != null) {
-                    builder.defaultAdvisors(new GeneInjectAdvisor(this.geneInjector));
-                }
+            if (!this.advisors.isEmpty()) {
+                builder.defaultAdvisors(new ArrayList<>(this.advisors));
             }
 
-            // 合并 hooks：用户自定义 hooks + TraceHook + VerificationHook
             List<IAgentHook> allHooks = new ArrayList<>(this.hooks);
-            if (this.traceHook != null) {
-                allHooks.add(this.traceHook);
-            }
-            if (this.verificationHook != null && this.definition != null && this.definition.verification().enabled()) {
-                allHooks.add(this.verificationHook);
-            }
             if (!allHooks.isEmpty()) {
                 builder.defaultAdvisors(HookAdvisor.builder().hooks(allHooks).build());
             }

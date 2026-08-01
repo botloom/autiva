@@ -5,99 +5,84 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Spring AI Message ↔ MessageEvent 转换器。
- * 这是唯一同时依赖 Spring AI 和事件类型的类。
- */
 public class EventConverter {
 
-    /**
-     * Spring AI Message → MessageEvent（保留模型生成的工具调用 id）
-     */
     public static MessageEvent fromMessage(String sessionId, Message message) {
+        Map<String, Object> eventMetadata = new HashMap<>();
+        eventMetadata.put("persist", true);
+
         if (message instanceof UserMessage um) {
-            return MessageEvent.userMessage(sessionId, um.getText());
+            return MessageEvent.builder()
+                    .sessionId(sessionId)
+                    .message(message)
+                    .metadata(eventMetadata)
+                    .build();
         } else if (message instanceof AssistantMessage am) {
             Object finishReasonObj = am.getMetadata().get("finishReason");
             String finishReason = finishReasonObj != null ? finishReasonObj.toString() : null;
             if ("TOOL_CALLS".equals(finishReason)) {
                 List<MessageEvent.ToolCallInfo> toolCalls = am.getToolCalls().stream()
-                .map(tc -> new MessageEvent.ToolCallInfo(tc.id(), tc.name(), tc.arguments()))
-                .toList();
-                return MessageEvent.assistantToolCalls(sessionId, toolCalls);
+                        .map(tc -> new MessageEvent.ToolCallInfo(tc.id(), tc.name(), tc.arguments()))
+                        .toList();
+                eventMetadata.put("finishReason", "TOOL_CALLS");
+                eventMetadata.put("toolCalls", toolCalls);
+                return MessageEvent.builder()
+                        .sessionId(sessionId)
+                        .message(message)
+                        .metadata(eventMetadata)
+                        .build();
             } else if ("STOP".equals(finishReason)) {
-                return MessageEvent.assistantStop(sessionId, am.getText());
+                eventMetadata.put("finishReason", "STOP");
+                return MessageEvent.builder()
+                        .sessionId(sessionId)
+                        .message(message)
+                        .metadata(eventMetadata)
+                        .build();
             } else {
-                return MessageEvent.assistantStream(sessionId, am.getText());
+                return MessageEvent.builder()
+                        .sessionId(sessionId)
+                        .message(message)
+                        .metadata(eventMetadata)
+                        .build();
             }
         } else if (message instanceof ToolResponseMessage trm) {
             List<MessageEvent.ToolResponseInfo> responses = trm.getResponses().stream()
                     .map(r -> new MessageEvent.ToolResponseInfo(r.id(), r.name(), r.responseData()))
                     .toList();
-            return MessageEvent.toolResponse(sessionId, responses);
+            eventMetadata.put("responses", responses);
+            return MessageEvent.builder()
+                    .sessionId(sessionId)
+                    .message(message)
+                    .metadata(eventMetadata)
+                    .build();
         }
-        throw new IllegalArgumentException("Unknown message type: " + message.getClass());
+        return MessageEvent.builder()
+                .sessionId(sessionId)
+                .message(message)
+                .metadata(eventMetadata)
+                .build();
     }
 
-    /**
-     * MessageEvent → Spring AI Message（按 type 分发，供 LLM 上下文加载）
-     */
     public static Message toMessage(MessageEvent event) {
-        switch (event.getType()) {
-            case USER -> {
-                return UserMessage.builder().text(event.getText()).build();
-            }
-            case ASSISTANT -> {
-                Map<String, Object> metadata = event.getFinishReason() != null
-                        ? Map.of("finishReason", event.getFinishReason())
-                        : Map.of();
-                if ("TOOL_CALLS".equals(event.getFinishReason()) && event.getToolCalls() != null) {
-                    List<AssistantMessage.ToolCall> toolCalls = event.getToolCalls().stream()
-                            .map(tc -> new AssistantMessage.ToolCall(tc.id(), "function", tc.name(), tc.arguments()))
-                            .toList();
-                    return AssistantMessage.builder()
-                            .content(event.getText())
-                            .properties(metadata)
-                            .toolCalls(toolCalls)
-                            .build();
-                }
-                return AssistantMessage.builder()
-                        .content(event.getText())
-                        .properties(metadata)
-                        .build();
-            }
-            case TOOL -> {
-                List<ToolResponseMessage.ToolResponse> responses = event.getResponses().stream()
-                        .map(r -> new ToolResponseMessage.ToolResponse(r.id(), r.name(), r.responseData()))
-                        .toList();
-                return ToolResponseMessage.builder()
-                        .responses(responses)
-                        .build();
-            }
-        }
-        throw new IllegalArgumentException("Unknown event type: " + event.getType());
+        return event.getMessage();
     }
 
-    /**
-     * MessageEvent → Spring AI UserMessage（Agent 输入用）
-     */
     public static UserMessage toUserMessage(MessageEvent event) {
-        return UserMessage.builder().text(event.getText()).build();
+        if (event.getMessage() instanceof UserMessage um) {
+            return um;
+        }
+        String text = event.getMessage() != null ? event.getMessage().getText() : null;
+        return UserMessage.builder().text(text != null ? text : "").build();
     }
 
-    /**
-     * 批量转换：Spring AI Messages → MessageEvents
-     */
     public static List<MessageEvent> fromMessages(String sessionId, List<Message> messages) {
         return messages.stream().map(m -> fromMessage(sessionId, m)).toList();
     }
 
-    /**
-     * 批量转换：MessageEvents → Spring AI Messages（供 LLM 上下文加载）
-     */
     public static List<Message> toMessages(List<MessageEvent> events) {
         return events.stream().map(EventConverter::toMessage).toList();
     }
