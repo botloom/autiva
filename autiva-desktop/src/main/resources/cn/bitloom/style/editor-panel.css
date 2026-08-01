@@ -124,6 +124,7 @@
     -fx-min-height: 12;
     -fx-pref-height: 12;
     -fx-max-height: 12;
+    -fx-translate-y: 5;
     -fx-shape: "M2,0 L6,4 L2,8 L0,6 L4,4 L0,2 Z";
 }
 .editor-panel__tree .tree-cell:expanded .arrow {
