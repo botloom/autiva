@@ -5,64 +5,66 @@
     -fx-vgrow: always;
 }
 
-.agent-page__scroll-pane {
-    -fx-background-color: transparent;
-    -fx-background: transparent;
+.agent-page__list {
+    -fx-background-color: #ffffff;
+    -fx-padding: 0 32 32 32;
     -fx-border-color: transparent;
+    -fx-border-width: 0;
     -fx-pref-width: 600;
     -fx-max-width: 700;
-    -fx-hbar-policy: never;
-    -fx-fit-to-width: true;
 }
 
-.agent-page__scroll-pane > .viewport {
-    -fx-background-color: transparent;
+/* 隐藏水平滚动条：内容宽度已绑定到 ListView */
+.agent-page__list > .virtual-flow > .scroll-bar:horizontal {
+    -fx-opacity: 0;
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
 }
 
-.agent-page__scroll-pane .scroll-bar {
+.agent-page__list > .virtual-flow > .scroll-bar:vertical {
     -fx-background-color: transparent;
     -fx-pref-width: 6;
-    -fx-pref-height: 6;
 }
 
-.agent-page__scroll-pane .scroll-bar .thumb {
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .thumb {
     -fx-background-color: rgba(0, 0, 0, 0.15);
     -fx-background-radius: 3;
 }
 
-.agent-page__scroll-pane .scroll-bar .thumb:hover {
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .thumb:hover {
     -fx-background-color: rgba(0, 0, 0, 0.25);
 }
 
-.agent-page__scroll-pane .scroll-bar .thumb:pressed {
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .thumb:pressed {
     -fx-background-color: rgba(0, 0, 0, 0.4);
 }
 
-.agent-page__scroll-pane .scroll-bar .track {
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .track {
     -fx-background-color: transparent;
 }
 
-.agent-page__scroll-pane .scroll-bar .increment-button,
-.agent-page__scroll-pane .scroll-bar .decrement-button {
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .increment-button,
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .decrement-button {
     -fx-background-color: transparent;
     -fx-padding: 0;
 }
 
-.agent-page__scroll-pane .scroll-bar .increment-arrow,
-.agent-page__scroll-pane .scroll-bar .decrement-arrow {
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .increment-arrow,
+.agent-page__list > .virtual-flow > .scroll-bar:vertical .decrement-arrow {
     -fx-background-color: transparent;
     -fx-shape: "";
     -fx-padding: 0;
 }
 
-.agent-page__scroll-pane .corner {
+.agent-page__list .list-cell {
     -fx-background-color: transparent;
+    -fx-padding: 0 0 12 0;
 }
 
-.agent-page__list {
-    -fx-background-color: #ffffff;
-    -fx-padding: 0 32 32 32;
-    -fx-spacing: 12;
+.agent-page__list .list-cell:empty {
+    -fx-padding: 0;
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
 }
 
 .agent-page__empty {

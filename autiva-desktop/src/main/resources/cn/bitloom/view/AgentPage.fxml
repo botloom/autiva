@@ -8,7 +8,5 @@
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.AgentPageController"
       stylesheets="@../style/agent-page.css">
 
-    <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="agent-page__scroll-pane">
-        <VBox fx:id="agentListContainer" styleClass="agent-page__list"/>
-    </ScrollPane>
+    <ListView fx:id="agentListView" VBox.vgrow="ALWAYS" styleClass="agent-page__list"/>
 </VBox>

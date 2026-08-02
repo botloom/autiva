@@ -2,9 +2,13 @@ package cn.bitloom.controller;
 
 import cn.bitloom.agentic.tool.file.FileDiff;
 import cn.bitloom.project.ProjectInfo;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.Node;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -42,11 +46,14 @@ public class EditorPanelController implements Initializable {
     @FXML
     protected VBox toolCallsView;
     @FXML
-    protected VBox toolCallsContainer;
+    protected ListView<Node> toolCallsListView;
     @FXML
     protected VBox todoView;
     @FXML
-    protected VBox todoContainer;
+    protected ListView<Node> todoListView;
+
+    private final ObservableList<Node> toolCallNodes = FXCollections.observableArrayList();
+    private final ObservableList<Node> todoNodes = FXCollections.observableArrayList();
 
     @Setter
     @Getter
@@ -58,6 +65,38 @@ public class EditorPanelController implements Initializable {
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         setupRoundedClip();
+        setupToolCallsListView();
+        setupTodoListView();
+    }
+
+    private void setupToolCallsListView() {
+        toolCallsListView.setFocusTraversable(false);
+        toolCallsListView.setItems(toolCallNodes);
+        toolCallsListView.setCellFactory(list -> new ToolListCell());
+    }
+
+    private void setupTodoListView() {
+        todoListView.setFocusTraversable(false);
+        todoListView.setItems(todoNodes);
+        todoListView.setCellFactory(list -> new ToolListCell());
+    }
+
+    /**
+     * 工具/待办列表通用 cell：直接 setGraphic(node)，Region 撑满宽度
+     */
+    private static class ToolListCell extends ListCell<Node> {
+        @Override
+        protected void updateItem(Node node, boolean empty) {
+            super.updateItem(node, empty);
+            if (empty || node == null) {
+                setGraphic(null);
+            } else {
+                if (node instanceof Region region) {
+                    region.setMaxWidth(Double.MAX_VALUE);
+                }
+                setGraphic(node);
+            }
+        }
     }
 
     /**
@@ -130,20 +169,14 @@ public class EditorPanelController implements Initializable {
      * 不自动弹出面板，用户需主动点击工具按钮查看。
      */
     public void addToolCallCard(Node card) {
-        if (card instanceof Region region) {
-            region.setMaxWidth(Double.MAX_VALUE);
-        }
-        toolCallsContainer.getChildren().add(card);
+        toolCallNodes.add(card);
     }
 
     /**
      * 添加待办卡片到待办视图，并自动弹出面板
      */
     public void addTodoCard(Node card) {
-        if (card instanceof Region region) {
-            region.setMaxWidth(Double.MAX_VALUE);
-        }
-        todoContainer.getChildren().add(card);
+        todoNodes.add(card);
         if (indexController != null) {
             indexController.ensureEditorVisible();
         }
@@ -155,14 +188,14 @@ public class EditorPanelController implements Initializable {
      * 清空工具调用卡片
      */
     public void clearToolCalls() {
-        toolCallsContainer.getChildren().clear();
+        toolCallNodes.clear();
     }
 
     /**
      * 清空待办卡片
      */
     public void clearTodos() {
-        todoContainer.getChildren().clear();
+        todoNodes.clear();
     }
 
     // ===== 面板显示/隐藏 =====

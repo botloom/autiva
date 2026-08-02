@@ -476,6 +476,57 @@
     -fx-background-color: #ffffff;
 }
 
+/* ===== 消息区 ListView（替代 ScrollPane + VBox） ===== */
+.chat-list-view {
+    -fx-background-color: #ffffff;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.chat-list-view > .virtual-flow > .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6;
+}
+
+.chat-list-view > .virtual-flow > .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.2);
+    -fx-background-radius: 3;
+}
+
+.chat-list-view > .virtual-flow > .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+
+.chat-list-view > .virtual-flow > .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.chat-list-view > .virtual-flow > .scroll-bar:vertical .increment-button,
+.chat-list-view > .virtual-flow > .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.chat-list-view > .virtual-flow > .scroll-bar:vertical .increment-arrow,
+.chat-list-view > .virtual-flow > .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.chat-list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 6 16;
+    -fx-spacing: 0;
+}
+
+.chat-list-view .list-cell:empty {
+    -fx-padding: 0;
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
+}
+
 .chat-row {
     -fx-alignment: center-left;
     -fx-padding: 0;
@@ -1408,8 +1459,84 @@
 }
 
 .chat-message__task-messages {
-    -fx-spacing: 6;
+    -fx-background-color: transparent;
     -fx-padding: 8 4;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.chat-message__task-messages .list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 3 0;
+}
+
+.chat-message__task-messages .list-cell:empty {
+    -fx-padding: 0;
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
+}
+
+/* TaskCard 内部 ListView 滚动条（Apple 风格细条） */
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.2);
+    -fx-background-radius: 3;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical .increment-button,
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical .increment-arrow,
+.chat-message__task-messages > .virtual-flow > .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+    -fx-pref-height: 6;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.2);
+    -fx-background-radius: 3;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal .track {
+    -fx-background-color: transparent;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal .increment-button,
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal .increment-arrow,
+.chat-message__task-messages > .virtual-flow > .scroll-bar:horizontal .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
 }
 
 .chat-message__task-assistant {

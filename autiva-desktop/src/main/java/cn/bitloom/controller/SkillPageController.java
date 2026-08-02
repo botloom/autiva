@@ -6,10 +6,11 @@ import cn.bitloom.holder.PageHolder;
 import cn.bitloom.vm.SkillPageViewModel;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -36,7 +37,7 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
     @FXML
     private VBox skillPage;
     @FXML
-    private VBox skillListContainer;
+    private ListView<Skill> skillListView;
 
     @Getter
     @Setter
@@ -44,25 +45,20 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        skillListView.setFocusTraversable(false);
+        skillListView.setItems(viewModel.getSkills());
+        skillListView.setCellFactory(list -> new SkillListCell());
         renderSkills();
     }
 
     private void renderSkills() {
-        skillListContainer.getChildren().clear();
-        viewModel.loadSkillsAsync(() -> {
-            List<Skill> skills = viewModel.getSkills();
-            for (Skill skill : skills) {
-                VBox card = createSkillCard(skill);
-                skillListContainer.getChildren().add(card);
-            }
-        });
+        viewModel.loadSkillsAsync(null);
     }
 
     private VBox createSkillCard(Skill skill) {
         VBox card = new VBox();
         card.getStyleClass().add("skill-page__card");
         card.setMaxWidth(Double.MAX_VALUE);
-        VBox.setMargin(card, new Insets(0, 0, 16, 0));
 
         HBox header = new HBox();
         header.getStyleClass().add("skill-page__card-header");
@@ -134,5 +130,28 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
                         event -> importSkillFromZip()
                 )
         );
+    }
+
+    /**
+     * 技能列表 cell：渲染技能卡片，约束宽度避免水平滚动条
+     */
+    private class SkillListCell extends ListCell<Skill> {
+        @Override
+        protected void updateItem(Skill skill, boolean empty) {
+            super.updateItem(skill, empty);
+            if (empty || skill == null) {
+                setGraphic(null);
+            } else {
+                VBox card = createSkillCard(skill);
+                // 减去 ListView 左右 padding(32+32) + 垂直滚动条(6)
+                card.prefWidthProperty().bind(
+                        getListView().widthProperty().subtract(70)
+                );
+                card.maxWidthProperty().bind(
+                        getListView().widthProperty().subtract(70)
+                );
+                setGraphic(card);
+            }
+        }
     }
 }

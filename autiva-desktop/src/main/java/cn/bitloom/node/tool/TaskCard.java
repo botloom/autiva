@@ -10,10 +10,14 @@ import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -40,7 +44,8 @@ public class TaskCard extends VBox {
     private Timeline pulseTimeline;
     private final Circle pulseDot;
 
-    private final VBox messageContainer;
+    private final ListView<Node> messageListView;
+    private final ObservableList<Node> messageNodes = FXCollections.observableArrayList();
     private final StringBuilder streamBuffer = new StringBuilder();
     private VBox currentStreamBox = null;
     private final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
@@ -96,9 +101,12 @@ public class TaskCard extends VBox {
         body.setVisible(false);
         body.setManaged(false);
 
-        messageContainer = new VBox(6);
-        messageContainer.getStyleClass().add("chat-message__task-messages");
-        body.getChildren().add(messageContainer);
+        messageListView = new ListView<>();
+        messageListView.getStyleClass().add("chat-message__task-messages");
+        messageListView.setFocusTraversable(false);
+        messageListView.setItems(messageNodes);
+        messageListView.setCellFactory(list -> new TaskMessageListCell());
+        body.getChildren().add(messageListView);
 
         this.getChildren().add(body);
 
@@ -107,7 +115,7 @@ public class TaskCard extends VBox {
 
     public void addTodoCard(TodoCard card) {
         Platform.runLater(() -> {
-            messageContainer.getChildren().add(card);
+            messageNodes.add(card);
             ensureBodyVisible();
             notifyContentChanged();
         });
@@ -115,7 +123,7 @@ public class TaskCard extends VBox {
 
     public void addQuestionCard(QuestionCard card) {
         Platform.runLater(() -> {
-            messageContainer.getChildren().add(card);
+            messageNodes.add(card);
             ensureBodyVisible();
             notifyContentChanged();
         });
@@ -149,7 +157,7 @@ public class TaskCard extends VBox {
             if (currentStreamBox == null) {
                 currentStreamBox = new VBox(4);
                 currentStreamBox.getStyleClass().add("chat-message__task-assistant");
-                messageContainer.getChildren().add(currentStreamBox);
+                messageNodes.add(currentStreamBox);
             }
             renderLightweightStream(currentStreamBox, accumulated);
         } else if ("STOP".equals(finishReason)) {
@@ -158,7 +166,7 @@ public class TaskCard extends VBox {
                 if (!content.isBlank()) {
                     renderStreamContent(currentStreamBox, content);
                 } else {
-                    messageContainer.getChildren().remove(currentStreamBox);
+                    messageNodes.remove(currentStreamBox);
                 }
                 currentStreamBox = null;
             } else if (text != null && !text.isBlank()) {
@@ -171,7 +179,7 @@ public class TaskCard extends VBox {
                 if (!content.isBlank()) {
                     renderStreamContent(currentStreamBox, content);
                 } else {
-                    messageContainer.getChildren().remove(currentStreamBox);
+                    messageNodes.remove(currentStreamBox);
                 }
                 currentStreamBox = null;
             }
@@ -237,7 +245,7 @@ public class TaskCard extends VBox {
         VBox mdBox = new VBox(4);
         mdBox.getStyleClass().add("chat-message__task-assistant");
         renderStreamContent(mdBox, content);
-        messageContainer.getChildren().add(mdBox);
+        messageNodes.add(mdBox);
     }
 
     private void appendToolCallCard(String toolCallId, String toolName, String arguments) {
@@ -245,7 +253,7 @@ public class TaskCard extends VBox {
         pendingToolCards.put(toolCallId, card);
         HBox wrapper = new HBox(card);
         wrapper.setAlignment(Pos.CENTER_LEFT);
-        messageContainer.getChildren().add(wrapper);
+        messageNodes.add(wrapper);
     }
 
     private void appendToolResponseCard(String toolCallId, String toolName, String responseData) {
@@ -353,5 +361,23 @@ public class TaskCard extends VBox {
             case "a2a" -> "A2A";
             default -> subagentType;
         };
+    }
+
+    /**
+     * 子智能体消息列表 cell：直接 setGraphic(node)，Region 撑满宽度
+     */
+    private static class TaskMessageListCell extends ListCell<Node> {
+        @Override
+        protected void updateItem(Node node, boolean empty) {
+            super.updateItem(node, empty);
+            if (empty || node == null) {
+                setGraphic(null);
+            } else {
+                if (node instanceof Region region) {
+                    region.setMaxWidth(Double.MAX_VALUE);
+                }
+                setGraphic(node);
+            }
+        }
     }
 }

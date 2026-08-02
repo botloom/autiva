@@ -15,15 +15,11 @@
     <StackPane fx:id="viewContainer" styleClass="editor-panel__views" VBox.vgrow="ALWAYS">
         <VBox fx:id="toolCallsView" styleClass="editor-panel__view"
               visible="false" managed="false" VBox.vgrow="ALWAYS">
-            <ScrollPane styleClass="editor-panel__card-scroll" fitToWidth="true" VBox.vgrow="ALWAYS">
-                <VBox fx:id="toolCallsContainer" styleClass="editor-panel__card-container"/>
-            </ScrollPane>
+            <ListView fx:id="toolCallsListView" styleClass="editor-panel__card-list" VBox.vgrow="ALWAYS"/>
         </VBox>
         <VBox fx:id="todoView" styleClass="editor-panel__view"
               visible="false" managed="false" VBox.vgrow="ALWAYS">
-            <ScrollPane styleClass="editor-panel__card-scroll" fitToWidth="true" VBox.vgrow="ALWAYS">
-                <VBox fx:id="todoContainer" styleClass="editor-panel__card-container"/>
-            </ScrollPane>
+            <ListView fx:id="todoListView" styleClass="editor-panel__card-list" VBox.vgrow="ALWAYS"/>
         </VBox>
     </StackPane>
 </VBox>

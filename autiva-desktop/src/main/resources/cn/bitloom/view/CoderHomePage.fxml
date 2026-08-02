@@ -18,16 +18,12 @@
         <SvgImageView fitWidth="120" fitHeight="120" svgPath="/cn/bitloom/images/icon.svg"/>
     </VBox>
 
-    <ScrollPane fx:id="chatScrollPane"
-                visible="false" managed="false"
-                maxWidth="1000" prefWidth="600" minWidth="300"
-                VBox.vgrow="ALWAYS"
-                fitToWidth="true"
-                styleClass="chat-scroll-pane"
-                hbarPolicy="NEVER"
-    >
-        <VBox fx:id="chatContainer" styleClass="chat-container"/>
-    </ScrollPane>
+    <ListView fx:id="chatListView"
+              visible="false" managed="false"
+              maxWidth="1000" prefWidth="600" minWidth="300"
+              VBox.vgrow="ALWAYS"
+              styleClass="chat-list-view"
+    />
 
     <VBox fx:id="diffReviewBar" styleClass="home-page__diff-review-bar"
           visible="false" managed="false"

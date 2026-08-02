@@ -5,66 +5,66 @@
     -fx-vgrow: always;
 }
 
-.skill-page__scroll-pane {
-    -fx-background-color: transparent;
-    -fx-background: transparent;
+.skill-page__list {
+    -fx-background-color: #ffffff;
+    -fx-padding: 0 32 32 32;
     -fx-border-color: transparent;
+    -fx-border-width: 0;
     -fx-pref-width: 600;
     -fx-max-width: 700;
-    -fx-hbar-policy: never;
-    -fx-fit-to-width: true;
-    -fx-fit-to-height: true;
 }
 
-.skill-page__scroll-pane > .viewport {
-    -fx-background-color: transparent;
+/* 隐藏水平滚动条：内容宽度已绑定到 ListView */
+.skill-page__list > .virtual-flow > .scroll-bar:horizontal {
+    -fx-opacity: 0;
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
 }
 
-.skill-page__scroll-pane .scroll-bar {
+.skill-page__list > .virtual-flow > .scroll-bar:vertical {
     -fx-background-color: transparent;
     -fx-pref-width: 6;
-    -fx-pref-height: 6;
 }
 
-.skill-page__scroll-pane .scroll-bar .thumb {
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .thumb {
     -fx-background-color: rgba(0, 0, 0, 0.15);
     -fx-background-radius: 3;
 }
 
-.skill-page__scroll-pane .scroll-bar .thumb:hover {
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .thumb:hover {
     -fx-background-color: rgba(0, 0, 0, 0.25);
 }
 
-.skill-page__scroll-pane .scroll-bar .thumb:pressed {
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .thumb:pressed {
     -fx-background-color: rgba(0, 0, 0, 0.4);
 }
 
-.skill-page__scroll-pane .scroll-bar .track {
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .track {
     -fx-background-color: transparent;
 }
 
-.skill-page__scroll-pane .scroll-bar .increment-button,
-.skill-page__scroll-pane .scroll-bar .decrement-button {
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .increment-button,
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .decrement-button {
     -fx-background-color: transparent;
     -fx-padding: 0;
 }
 
-.skill-page__scroll-pane .scroll-bar .increment-arrow,
-.skill-page__scroll-pane .scroll-bar .decrement-arrow {
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .increment-arrow,
+.skill-page__list > .virtual-flow > .scroll-bar:vertical .decrement-arrow {
     -fx-background-color: transparent;
     -fx-shape: "";
     -fx-padding: 0;
 }
 
-.skill-page__scroll-pane .corner {
+.skill-page__list .list-cell {
     -fx-background-color: transparent;
+    -fx-padding: 0 0 12 0;
 }
 
-.skill-page__list {
-    -fx-background-color: #ffffff;
-    -fx-padding: 0 32 32 32;
-    -fx-spacing: 12;
-    -fx-alignment: top-center;
+.skill-page__list .list-cell:empty {
+    -fx-padding: 0;
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
 }
 
 .skill-page__empty {

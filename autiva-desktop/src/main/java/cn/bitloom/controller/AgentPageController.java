@@ -7,11 +7,12 @@ import cn.bitloom.vm.AgentPageViewModel;
 import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.Separator;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -38,7 +39,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
     @FXML
     private VBox agentPage;
     @FXML
-    private VBox agentListContainer;
+    private ListView<AgentDefinition> agentListView;
 
     @Getter
     @Setter
@@ -46,25 +47,20 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        agentListView.setFocusTraversable(false);
+        agentListView.setItems(viewModel.getMainAgents());
+        agentListView.setCellFactory(list -> new AgentListCell());
         renderAgents();
     }
 
     private void renderAgents() {
-        agentListContainer.getChildren().clear();
-        viewModel.loadAgentsAsync(() -> {
-            List<AgentDefinition> agents = viewModel.getMainAgents();
-            for (AgentDefinition agent : agents) {
-                VBox card = createAgentCard(agent);
-                agentListContainer.getChildren().add(card);
-            }
-        });
+        viewModel.loadAgentsAsync(null);
     }
 
     private VBox createAgentCard(AgentDefinition agent) {
         VBox card = new VBox();
         card.getStyleClass().add("agent-page__card");
         card.setMaxWidth(Double.MAX_VALUE);
-        VBox.setMargin(card, new Insets(0, 0, 16, 0));
 
         HBox header = new HBox();
         header.getStyleClass().add("agent-page__card-header");
@@ -255,5 +251,28 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
         alert.setContentText(message);
         alert.initOwner(agentPage.getScene().getWindow());
         alert.showAndWait();
+    }
+
+    /**
+     * 智能体列表 cell：渲染智能体卡片，约束宽度避免水平滚动条
+     */
+    private class AgentListCell extends ListCell<AgentDefinition> {
+        @Override
+        protected void updateItem(AgentDefinition agent, boolean empty) {
+            super.updateItem(agent, empty);
+            if (empty || agent == null) {
+                setGraphic(null);
+            } else {
+                VBox card = createAgentCard(agent);
+                // 减去 ListView 左右 padding(32+32) + 垂直滚动条(6)
+                card.prefWidthProperty().bind(
+                        getListView().widthProperty().subtract(70)
+                );
+                card.maxWidthProperty().bind(
+                        getListView().widthProperty().subtract(70)
+                );
+                setGraphic(card);
+            }
+        }
     }
 }

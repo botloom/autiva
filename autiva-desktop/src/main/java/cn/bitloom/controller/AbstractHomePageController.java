@@ -7,6 +7,7 @@ import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.message.AssistantMessageCard;
 import cn.bitloom.node.message.MessageCard;
+import cn.bitloom.node.message.NodeMessageCard;
 import cn.bitloom.node.message.ToolMessageCard;
 import cn.bitloom.node.AutoResizeTextArea;
 import cn.bitloom.node.svg.SvgImageView;
@@ -21,8 +22,6 @@ import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -79,12 +78,13 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     @FXML
     protected VBox icon;
     @FXML
-    protected ScrollPane chatScrollPane;
-    @FXML
-    protected VBox chatContainer;
+    protected ListView<MessageCard> chatListView;
 
     protected final List<File> attachedFiles = new ArrayList<>();
-    protected final BooleanProperty shouldScrollToBottom = new SimpleBooleanProperty(false);
+    /**
+     * 历史消息加载提示卡片（包装为 NodeMessageCard 加入 messages 列表）
+     */
+    private NodeMessageCard loadingIndicatorCard = null;
 
     @Getter
     protected final ToolUIBridge toolUIBridge;
@@ -147,6 +147,11 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             this.stopButton.setManaged(streaming && !paused);
         });
 
+        // 初始化消息 ListView：绑定 ViewModel 的 messages，设置 cell factory
+        this.chatListView.setFocusTraversable(false);
+        this.chatListView.setItems(this.getViewModel().getMessages());
+        this.chatListView.setCellFactory(list -> new MessageListCell());
+
         // 历史消息加载期间：禁用发送按钮和输入框，显示加载提示
         this.getViewModel().historyLoadingProperty().addListener((obs, oldVal, newVal) -> {
             boolean loading = newVal != null && newVal;
@@ -154,20 +159,15 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             this.sendField.setDisable(loading);
             this.addFileButton.setDisable(loading);
             if (loading) {
-                this.chatContainer.getChildren().add(createLoadingIndicator());
+                if (loadingIndicatorCard == null) {
+                    loadingIndicatorCard = new NodeMessageCard(createLoadingIndicator());
+                    this.getViewModel().getMessages().add(loadingIndicatorCard);
+                }
             } else {
-                this.chatContainer.getChildren().removeIf(n -> "history-loading".equals(n.getUserData()));
-            }
-        });
-
-        homePage.sceneProperty().addListener((obs, oldScene, newScene) -> {
-            if (newScene != null) {
-                newScene.addPostLayoutPulseListener(() -> {
-                    if (shouldScrollToBottom.get()) {
-                        shouldScrollToBottom.set(false);
-                        chatScrollPane.setVvalue(1.0);
-                    }
-                });
+                if (loadingIndicatorCard != null) {
+                    this.getViewModel().getMessages().remove(loadingIndicatorCard);
+                    loadingIndicatorCard = null;
+                }
             }
         });
 
@@ -177,7 +177,13 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             while (change.next()) {
                 if (change.wasAdded()) {
                     for (MessageCard card : change.getAddedSubList()) {
-                        addChatCard(card);
+                        if (card instanceof ToolMessageCard toolCard) {
+                            addToolToEditorPanel(toolCard, toolCard.getToolName());
+                        }
+                    }
+                    int size = this.getViewModel().getMessages().size();
+                    if (size > 0) {
+                        this.chatListView.scrollTo(size - 1);
                     }
                 }
             }
@@ -244,14 +250,13 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         event.consume();
     }
 
-    private void addChatCard(MessageCard card) {
-        if (card.getMessageType() == MessageEvent.Type.TOOL && card instanceof ToolMessageCard toolCard) {
-            addToolToEditorPanel(toolCard, toolCard.getToolName());
-            return;
-        }
-
+    /**
+     * 为消息卡片组装行视图（card + actionBar + row 对齐）。
+     * 由 MessageListCell 在 updateItem 中调用。
+     */
+    private HBox buildMessageRow(MessageCard card) {
         card.maxWidthProperty().bind(
-                Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.75))
+                Bindings.max(100, chatListView.widthProperty().subtract(32).multiply(0.75))
         );
 
         VBox messageWrapper = new VBox();
@@ -266,9 +271,33 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             assistantCard.setOnContentChanged(c -> scrollToBottom());
         }
 
-        HBox row = createMessageRow(messageWrapper, card.getMessageType());
-        chatContainer.getChildren().add(row);
-        scrollToBottom();
+        return createMessageRow(messageWrapper, card.getMessageType());
+    }
+
+    /**
+     * 消息列表 cell：根据卡片类型渲染。
+     * - NodeMessageCard：直接 setGraphic(node)，左对齐
+     * - TOOL 类型：不显示（已由 ListChangeListener 路由到工具区），高度置 0
+     * - USER/ASSISTANT：组装 messageWrapper + actionBar + row
+     */
+    private class MessageListCell extends ListCell<MessageCard> {
+        @Override
+        protected void updateItem(MessageCard card, boolean empty) {
+            super.updateItem(card, empty);
+            if (empty || card == null) {
+                setGraphic(null);
+                setStyle(null);
+            } else if (card instanceof NodeMessageCard nmc) {
+                setGraphic(nmc.getNode());
+                setStyle(null);
+            } else if (card.getMessageType() == MessageEvent.Type.TOOL) {
+                setGraphic(null);
+                setStyle("-fx-padding: 0; -fx-min-height: 0; -fx-pref-height: 0; -fx-max-height: 0;");
+            } else {
+                setGraphic(buildMessageRow(card));
+                setStyle(null);
+            }
+        }
     }
 
     private void addToolToEditorPanel(Node toolCard, String toolName) {
@@ -289,19 +318,13 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         }
         if (node instanceof Region region) {
             region.maxWidthProperty().bind(
-                    Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.85))
+                    Bindings.max(100, chatListView.widthProperty().subtract(32).multiply(0.85))
             );
         }
         if (node instanceof TaskCard taskCard) {
             taskCard.setOnContentChanged(c -> scrollToBottom());
         }
-        HBox row = new HBox();
-        row.getStyleClass().add("chat-row");
-        row.setMaxWidth(Double.MAX_VALUE);
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.getChildren().add(node);
-        chatContainer.getChildren().add(row);
-        scrollToBottom();
+        this.getViewModel().getMessages().add(new NodeMessageCard(node));
     }
 
     private HBox createMessageRow(Node card, MessageEvent.Type type) {
@@ -393,7 +416,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             return;
         }
         String text = this.sendField.getText();
-        if (!this.chatScrollPane.isVisible()) {
+        if (!this.chatListView.isVisible()) {
             this.animateToChatState();
         }
         List<String> filePaths = this.attachedFiles.stream()
@@ -467,7 +490,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     private void handleCanvasContent(String canvasContent) {
-        if (!this.chatScrollPane.isVisible()) {
+        if (!this.chatListView.isVisible()) {
             this.animateToChatState();
         }
         this.getViewModel().addUserMessage(canvasContent);
@@ -514,7 +537,10 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     private void scrollToBottom() {
-        shouldScrollToBottom.set(true);
+        int size = this.chatListView.getItems().size();
+        if (size > 0) {
+            this.chatListView.scrollTo(size - 1);
+        }
     }
 
     protected void animateToChatState() {
@@ -531,8 +557,8 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
             this.homePage.setAlignment(Pos.BOTTOM_CENTER);
 
-            this.chatScrollPane.setVisible(true);
-            this.chatScrollPane.setManaged(true);
+            this.chatListView.setVisible(true);
+            this.chatListView.setManaged(true);
         });
 
         timeline.play();
@@ -595,7 +621,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     public void resetForNewSession() {
         this.sendField.setText("");
         this.clearAttachedFiles();
-        this.chatContainer.getChildren().clear();
+        this.getViewModel().getMessages().clear();
         toolUIBridge.resetTodoCard();
         if (indexController != null && indexController.getEditorPanelController() != null) {
             indexController.getEditorPanelController().clearToolCalls();
@@ -604,8 +630,8 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
         this.homePage.setAlignment(Pos.CENTER);
         VBox.setMargin(this.sendBox, new Insets(0, 0, 0, 0));
-        this.chatScrollPane.setVisible(false);
-        this.chatScrollPane.setManaged(false);
+        this.chatListView.setVisible(false);
+        this.chatListView.setManaged(false);
 
         this.icon.setVisible(true);
         this.icon.setManaged(true);

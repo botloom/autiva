@@ -841,6 +841,56 @@
     -fx-spacing: 8;
 }
 
+/* ===== 工具/待办 ListView（替代 ScrollPane + VBox） ===== */
+.editor-panel__card-list {
+    -fx-background-color: -autiva-bg;
+    -fx-padding: 8;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6;
+}
+
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.2);
+    -fx-background-radius: 3;
+}
+
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical .increment-button,
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical .increment-arrow,
+.editor-panel__card-list > .virtual-flow > .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+.editor-panel__card-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 4 0;
+}
+
+.editor-panel__card-list .list-cell:empty {
+    -fx-padding: 0;
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
+}
+
 .jedi-terminal-view .terminal-wrapper {
     -fx-background-color: -autiva-bg;
 }
