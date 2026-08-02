@@ -202,7 +202,9 @@ public class Agent {
                 builder.defaultTools(this.tools);
             }
             if (this.enableLogging) {
-                builder.defaultAdvisors(LoggingAdvisor.builder().build());
+                builder.defaultAdvisors(LoggingAdvisor.builder()
+                        .agentName(this.name)
+                        .build());
             }
             AutivaToolCallingManager toolCallingManager = new AutivaToolCallingManager(this.tools);
             builder.defaultAdvisors(
