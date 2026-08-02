@@ -14,7 +14,8 @@ import lombok.experimental.SuperBuilder;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "eventType", visible = true)
 @JsonSubTypes({
         @JsonSubTypes.Type(value = MessageEvent.class, name = "MESSAGE"),
-        @JsonSubTypes.Type(value = UICardEvent.class, name = "UI_CARD")
+        @JsonSubTypes.Type(value = UICardEvent.class, name = "UI_CARD"),
+        @JsonSubTypes.Type(value = DiffEvent.class, name = "DIFF")
 })
 public non-sealed abstract class AbstractEvent implements IEvent {
     private String sessionId;

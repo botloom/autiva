@@ -14,10 +14,12 @@
     "Task",
     "TaskOutput",
     "Skill",
-    "memory_save",
-    "memory_update",
-    "memory_delete",
-    "memory_search"
+    "MemoryView",
+    "MemoryCreate",
+    "MemoryStrReplace",
+    "MemoryInsert",
+    "MemoryDelete",
+    "MemoryRename"
   ],
   "mcpServers": {},
   "skills": [],

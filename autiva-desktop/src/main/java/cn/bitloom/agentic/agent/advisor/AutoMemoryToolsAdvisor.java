@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiPredicate;
 
+import cn.bitloom.agentic.memory.AgentMemoryStore;
+import cn.bitloom.agentic.memory.FileSystemAgentMemoryStore;
 import cn.bitloom.agentic.tool.memory.MemoryViewTool;
 import cn.bitloom.agentic.tool.memory.MemoryCreateTool;
 import cn.bitloom.agentic.tool.memory.MemoryStrReplaceTool;
@@ -254,6 +256,8 @@ public class AutoMemoryToolsAdvisor implements BaseChatMemoryAdvisor {
 
 		private int order = BaseAdvisor.HIGHEST_PRECEDENCE + 200;
 
+		private AgentMemoryStore memoryStore;
+
 		private String memoriesRootDirectory = "";
 
 		private String memorySystemPrompt = DEFAULT_MEMORY_SYSTEM_PROMPT;
@@ -265,6 +269,15 @@ public class AutoMemoryToolsAdvisor implements BaseChatMemoryAdvisor {
 
 		public Builder order(int order) {
 			this.order = order;
+			return this;
+		}
+
+		/**
+		 * 注入自定义 {@link AgentMemoryStore} 实现（如 JDBC/Redis 后端）。
+		 * 未设置时使用 {@link FileSystemAgentMemoryStore}，由 {@link #memoriesRootDirectory} 决定路径。
+		 */
+		public Builder memoryStore(AgentMemoryStore memoryStore) {
+			this.memoryStore = memoryStore;
 			return this;
 		}
 
@@ -289,13 +302,23 @@ public class AutoMemoryToolsAdvisor implements BaseChatMemoryAdvisor {
 
 			Assert.hasText(this.memoriesRootDirectory, "Memories root directory must not be empty");
 
+			// 未注入自定义 store 时，使用文件系统默认实现
+			AgentMemoryStore store = this.memoryStore != null
+					? this.memoryStore
+					: new FileSystemAgentMemoryStore(this.memoriesRootDirectory);
+			try {
+				store.init();
+			} catch (java.io.IOException e) {
+				throw new IllegalStateException("初始化记忆存储失败：" + this.memoriesRootDirectory, e);
+			}
+
 			List<ToolCallback> memoryToolCallbacks = Arrays.asList(
-				MemoryViewTool.builder().memoriesDir(this.memoriesRootDirectory).build().toToolCallback(),
-				MemoryCreateTool.builder().memoriesDir(this.memoriesRootDirectory).build().toToolCallback(),
-				MemoryStrReplaceTool.builder().memoriesDir(this.memoriesRootDirectory).build().toToolCallback(),
-				MemoryInsertTool.builder().memoriesDir(this.memoriesRootDirectory).build().toToolCallback(),
-				MemoryDeleteTool.builder().memoriesDir(this.memoriesRootDirectory).build().toToolCallback(),
-				MemoryRenameTool.builder().memoriesDir(this.memoriesRootDirectory).build().toToolCallback()
+				MemoryViewTool.builder().store(store).build().toToolCallback(),
+				MemoryCreateTool.builder().store(store).build().toToolCallback(),
+				MemoryStrReplaceTool.builder().store(store).build().toToolCallback(),
+				MemoryInsertTool.builder().store(store).build().toToolCallback(),
+				MemoryDeleteTool.builder().store(store).build().toToolCallback(),
+				MemoryRenameTool.builder().store(store).build().toToolCallback()
 			);
 
 			String memorySystemPromptText = this.memorySystemPrompt.replace("{MEMORIES_ROOT_DIRECTORY}",
