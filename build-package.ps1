@@ -148,7 +148,7 @@ Remove-Item -Recurse -Force autiva-desktop\target\jpackage-output -ErrorAction S
   --java-options "-XX:+UseStringDeduplication" `
   --java-options "-XX:+UseCompactObjectHeaders" `
   --dest autiva-desktop\target\jpackage-output `
-  --app-version 1.0.0 `
+  --app-version 1.0.1 `
   --vendor "Bitloom" `
   --description "Autiva AI Agent Desktop Application" `
   --icon autiva-desktop\target\jpackage-input\icon.ico
@@ -157,13 +157,13 @@ if ($LASTEXITCODE -ne 0) { throw "jpackage failed" }
 Write-Host "=== Step 5: Build MSI installer ===" -ForegroundColor Green
 $appImageDir = "$PROJECT\autiva-desktop\target\jpackage-output\Autiva"
 $msiOutput = "$PROJECT\autiva-desktop\target\jpackage-output"
-Remove-Item "$msiOutput\Autiva-1.0.0.msi" -Force -ErrorAction SilentlyContinue
+Remove-Item "$msiOutput\Autiva-1.0.1.msi" -Force -ErrorAction SilentlyContinue
 
 & "$JDK\bin\jpackage" `
   --type msi `
   --app-image $appImageDir `
   --name Autiva `
-  --app-version 1.0.0 `
+  --app-version 1.0.1 `
   --vendor "Bitloom" `
   --description "Autiva AI Agent Desktop Application" `
   --dest $msiOutput `
@@ -173,7 +173,7 @@ Remove-Item "$msiOutput\Autiva-1.0.0.msi" -Force -ErrorAction SilentlyContinue
   --win-upgrade-uuid "7307B9E5-7646-314A-868F-FFDA3A0204A2"
 if ($LASTEXITCODE -ne 0) { throw "MSI build failed" }
 
-$msiFile = "$msiOutput\Autiva-1.0.0.msi"
+$msiFile = "$msiOutput\Autiva-1.0.1.msi"
 if (Test-Path $msiFile) {
     $msiSize = "{0:N2} MB" -f ((Get-Item $msiFile).Length / 1MB)
     Write-Host "  MSI generated: $msiSize" -ForegroundColor Cyan
@@ -184,5 +184,5 @@ if (Test-Path $msiFile) {
 $imageSize = "{0:N2} MB" -f ((Get-ChildItem $appImageDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB)
 Write-Host ""
 Write-Host "=== Build Complete ===" -ForegroundColor Green
-Write-Host "MSI Installer : autiva-desktop\target\jpackage-output\Autiva-1.0.0.msi ($msiSize)"
+Write-Host "MSI Installer : autiva-desktop\target\jpackage-output\Autiva-1.0.1.msi ($msiSize)"
 Write-Host "App Image     : autiva-desktop\target\jpackage-output\Autiva\ ($imageSize)"
