@@ -31,7 +31,7 @@ autiva/
 │   └── src/main/java/cn/bitloom/
 │       ├── agentic/             # 智能体核心
 │       │   ├── agent/           #   智能体核心（MAIN + SUBAGENT 双类型）
-│       │   │   └── advisor/     #     Agent 建议器（记忆、技能、环境、日志等）
+│       │   │   └── advisor/     #     Agent 建议器（记忆、会话、技能、环境、日志等）
 │       │   ├── cron/            #   定时任务引擎
 │       │   ├── event/           #   事件总线（消息、Diff、UI 卡片事件）
 │       │   ├── evolve/          #   进化系统引擎
@@ -45,7 +45,7 @@ autiva/
 │       │   ├── hook/            #   Agent 钩子系统（权限控制）
 │       │   ├── memory/          #   长期记忆存储
 │       │   ├── model/           #   AI 模型工厂
-│       │   ├── session/         #   会话管理（含记忆压缩）
+│       │   ├── session/         #   会话管理（含记忆压缩、事件过滤等）
 │       │   │   └── compaction/  #     压缩策略与触发器
 │       │   ├── skill/           #   技能系统
 │       │   ├── task/            #   后台任务管理
@@ -55,20 +55,20 @@ autiva/
 │       │   │   ├── file/        #     文件读写、搜索、Diff
 │       │   │   ├── web/         #     网络搜索、网页获取
 │       │   │   ├── task/        #     子智能体委派
-│       │   │   ├── memory/      #     长期记忆工具（6 个）
+│       │   │   ├── memory/      #     长期记忆工具
 │       │   │   ├── cron/        #     定时任务工具
 │       │   │   ├── skill/       #     技能工具
 │       │   │   ├── session/     #     会话搜索工具
 │       │   │   ├── interaction/ #     TodoWrite、AskUserQuestion
-│       │   │   ├── manage/      #     配置管理（App/Skill/MCP/Evolve）
+│       │   │   ├── manage/      #     配置管理（App/Skill/MCP）
 │       │   │   └── evolve/      #     进化管理工具
 │       │   └── util/            #   Agent 工具类
 │       ├── bridge/              # 外部集成
 │       │   ├── wechat/          #   微信 iLink 协议接入
 │       │   └── desktop/         #   Tool ↔ UI 桥接
-│       ├── bootstrap/           # 应用启动引导（splash screen、资源初始化）
-│       ├── config/              # 配置管理（EhCache、Evolve、调度）
-│       ├── constant/            # 常量定义
+│       ├── bootstrap/           # 应用启动引导（splash screen、目录/配置初始化）
+│       ├── config/              # 配置管理（调度、Evolve 等）
+│       ├── constant/            # 常量定义（目录结构、Session 路由、Evolve 布局）
 │       ├── controller/          # JavaFX 页面控制器
 │       ├── holder/              # UI 组件持有者
 │       ├── node/                # 自定义 UI 节点
@@ -80,7 +80,7 @@ autiva/
 │       │   ├── svg/             #   SVG 图像视图
 │       │   ├── terminal/        #   终端模拟器（PTY）
 │       │   └── tool/            #   工具卡片（Todo、Question、Task、Approval、DiffReview）
-│       ├── project/             # 项目管理（文件树 / Git）
+│       ├── project/             # 项目管理（文件树 / Git / 注册表）
 │       ├── router/              # 页面路由
 │       ├── store/               # 全局状态管理
 │       ├── util/                # 通用工具类
@@ -95,13 +95,19 @@ autiva/
 
 ### 智能体系统
 - **统一 Agent 架构**：MAIN（主智能体）和 SUBAGENT（子智能体）均为 `Agent` 类实例，由 `AgentDefinition` 区分
-- **双范式支持**：Work（工作智能体）与 Coder（编码智能体）并存，各自拥有独立的工作流
+- **双范式支持**：Work（工作智能体）与 Coder（编码智能体）并存，各自拥有独立的工作流、工具白名单与记忆体系
 - **建议器体系（Advisor）**：记忆注入、会话记忆、技能上下文、环境信息、钩子链、日志追踪等
 - 支持流式 / 阻塞两种响应模式
-- 多模型切换（DeepSeek、智谱 AI 等）
+- 多模型切换（DeepSeek 等，通过 `spring.ai.openai` 适配）
 - 对话记忆自动压缩与上下文管理
 - 支持自定义智能体定义（agent.md + config.json），通过 `~/.autiva/agents/` 管理
 - **子智能体系统**：Coder（编码）、Explore（探索）、Plan（架构规划）、Review（代码审查）、Doctor（诊断）、General（全栈编码）
+
+### Coder 编码模式（按项目隔离）
+- Session 以 `code-{projectName}-...` 命名，工作区按项目隔离：`~/.autiva/workspace/code/{projectName}/`
+- 每个项目独立的会话、记忆（`memory/`）存储
+- 全局编码规则文件：`~/.autiva/workspace/code/AUTIVA.md`
+- 保留名校验（sessions/memory 不可作为 projectName）
 
 ### 工具系统
 - **文件操作**：Read / Write / Edit（精确字符串替换）
@@ -110,18 +116,21 @@ autiva/
 - **命令执行**：Command（Shell 执行，含命令分类与批准流程）、Process（后台进程管理）
 - **持久 Shell**：跨调用保持工作目录与环境的 Shell 会话
 - **终端模拟器**：基于 PTY 的完整终端（PTY + JediTerm）
-- **网络操作**：WebSearch（含博查 API）、WebFetch
+- **网络操作**：WebSearch、WebFetch
 - **任务管理**：Task（子智能体委派）、TaskOutput
 - **用户交互**：AskUserQuestion、TodoWrite
-- **配置管理**：AppConfig（读取/修改/路径查询）、Memory（6 个工具）、MCP（3 个配置工具）、Skill（4 个配置工具）、Evolve（8 个管理工具）
+- **配置管理**：AppConfig（读取/修改/路径查询）、Memory、MCP、Skill 等管理工具
 - **定时任务**：Cron（创建/列表/触发/删除）
 - **会话搜索**：ConversationSearch、CrossSessionSearch
 
 ### 记忆系统
 - **长期记忆**：基于文件的持久记忆存储，跨会话持续存在
-- 6 个记忆工具：MemoryView / MemoryCreate / MemoryStrReplace / MemoryInsert / MemoryDelete / MemoryRename
-- 记忆类型：用户（user）、反馈（feedback）、项目（project）、引用（reference）
+- 记忆按智能体 / 项目隔离：Work 模式在 `workspace/work/memory/`，Coder 模式在 `workspace/code/{projectName}/memory/`
+- **工具命名随范式不同**：
+  - Coder：`MemoryView / MemoryCreate / MemoryStrReplace / MemoryInsert / MemoryDelete / MemoryRename`
+  - Work：`memory_save / memory_update / memory_delete / memory_search`
 - **会话记忆**：自动压缩，支持多种压缩策略（递归摘要、滑窗、Token 计数触发）
+- 会话事件以追加式 `events.jsonl` 持久化
 
 ### 技能系统
 - 通过 ZIP 包动态加载专业知识
@@ -138,6 +147,7 @@ autiva/
 - **固化器**：CanaryCheck（金丝雀检查）+ Solidifier + EvolutionEvent
 - **经验引擎**：ExperienceEngine + Experience + ExperienceStatus
 - **安全保障**：EvolutionSafety（安全校验）
+- 数据存储于 `~/.autiva/evolve/`（基因、路由、经验、进化事件）与 `~/.autiva/logs/executions/`
 
 ### 画布系统
 - 类似 Excalidraw 的手绘风格画布
@@ -194,7 +204,7 @@ macOS 打包：
 
 ## 配置
 
-配置文件位于 `~/.autiva/settings.yaml`：
+配置文件位于 `~/.autiva/settings.yaml`（首次启动时从 classpath 自动生成）：
 
 ```yaml
 app:
@@ -202,9 +212,6 @@ app:
     isolation: PER_PEER          # 会话隔离模式
   evolve:
     enabled: false               # 进化系统开关
-  search:
-    bocha-api-key: your-api-key  # 搜索（可选，博查 API）
-
 spring:
   ai:
     deepseek:
@@ -213,26 +220,23 @@ spring:
         completions-path: /chat/completions
         api-key: your-api-key
         options:
-          model: deepseek-chat
-
-# 微信接入（可选）
-weixin:
-  ilink:
-    enabled: false
+          model: deepseek-v4-flash   # 默认模型
 ```
 
 ## 数据目录
 
+启动时会自动在 `~/.autiva/` 下初始化目录结构与默认配置：
+
 ```
 ~/.autiva/
-├── agents/                      # 智能体定义（不随 session 变化）
+├── settings.yaml                # 应用配置（自动生成，可修改 API Key 等）
+├── agents/                      # 主智能体定义
 │   ├── work/                    # Work 主智能体
 │   │   ├── agent.md             # 智能体定义（YAML frontmatter + 提示词）
 │   │   └── config.json          # MCP + 工具白名单 + skill + subagent
-│   ├── code/                    # Coder 编码智能体
-│   │   ├── agent.md
-│   │   └── config.json
-│   └── <agent-id>/              # 用户自定义智能体
+│   └── code/                    # Coder 编码智能体
+│       ├── agent.md
+│       └── config.json
 ├── subagents/                   # 子智能体定义
 │   ├── coder/
 │   ├── explore/
@@ -240,16 +244,32 @@ weixin:
 │   ├── review/
 │   ├── doctor/
 │   └── general/
-├── workspace/                   # 运行时数据（仅 session 相关）
-│   └── <agent-id>/
-│       └── sessions/
-│           ├── metadata.json    # Session 序列化
-│           └── messages.jsonl   # 消息持久化
-├── memory/                      # 长期记忆
-│   └── MEMORY.md                # 记忆索引
-├── skills/                      # 技能目录
-├── mcp/                         # MCP 配置
-└── settings.yaml                # 应用配置
+├── workspace/                   # 运行时数据（按模式隔离）
+│   ├── work/                    # Work 模式
+│   │   ├── sessions/            # 会话
+│   │   │   └── work-.../        #   每个会话一个目录
+│   │   │       ├── metadata.json
+│   │   │       └── events.jsonl #   会话事件（追加式）
+│   │   └── memory/              # Work 长期记忆
+│   │       └── MEMORY.md
+│   └── code/                    # Coder 模式（按项目隔离）
+│       ├── AUTIVA.md            # Coder 全局编码规则
+│       └── {projectName}/       #   每个项目一个目录
+│           ├── sessions/        #   项目会话（code-{project}-...）
+│           │   └── code-{project}-.../
+│           │       ├── metadata.json
+│           │       └── events.jsonl
+│           └── memory/          #   项目长期记忆
+├── projects/                    # 项目注册表
+│   └── registry.json
+├── skills/                      # 技能目录（ZIP 包）
+├── evolve/                      # 进化系统数据
+│   ├── genes/
+│   ├── routing.json
+│   └── memory/                  # 进化经验、事件
+└── logs/                        # 运行日志
+    ├── autiva-front.log
+    └── executions/              # 进化执行轨迹日志
 ```
 
 ## 许可证
