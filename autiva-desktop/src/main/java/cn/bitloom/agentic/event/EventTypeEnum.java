@@ -8,5 +8,6 @@ public enum EventTypeEnum {
     MESSAGE,
     MEMORY,
     DIFF,
-    UI_CARD
+    UI_CARD,
+    COMPACT
 }

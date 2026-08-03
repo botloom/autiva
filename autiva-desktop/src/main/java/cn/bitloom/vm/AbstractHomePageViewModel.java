@@ -10,6 +10,7 @@ import cn.bitloom.agentic.agent.advisor.SkillContextAdvisor;
 import cn.bitloom.agentic.agent.advisor.SubagentContextAdvisor;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.event.AbstractEvent;
+import cn.bitloom.agentic.event.CompactionEvent;
 import cn.bitloom.agentic.event.DiffEvent;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelFactory;
@@ -29,6 +30,7 @@ import cn.bitloom.constant.AppConstants;
 import cn.bitloom.constant.AgentMode;
 import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.node.message.AssistantMessageCard;
+import cn.bitloom.node.message.CompactionCard;
 import cn.bitloom.node.message.MessageCard;
 import cn.bitloom.node.message.ToolMessageCard;
 import cn.bitloom.node.message.UserMessageCard;
@@ -183,7 +185,15 @@ public abstract class AbstractHomePageViewModel {
         historyLoading.set(true);
         try {
             for (AbstractEvent event : events) {
+                if (event instanceof CompactionEvent ce) {
+                    messages.add(new CompactionCard(ce.getArchivedCount(), ce.getActiveCount()));
+                    continue;
+                }
                 if (!(event instanceof MessageEvent me)) {
+                    continue;
+                }
+                // 跳过已归档事件（已被摘要替代，不重复显示）
+                if (me.isArchived()) {
                     continue;
                 }
                 if (me.isUserMessage()) {
@@ -416,6 +426,8 @@ public abstract class AbstractHomePageViewModel {
     private void processEvent(AbstractEvent event) {
         if (event instanceof MessageEvent messageEvent) {
             processMessageEvent(messageEvent);
+        } else if (event instanceof CompactionEvent ce) {
+            messages.add(new CompactionCard(ce.getArchivedCount(), ce.getActiveCount()));
         } else if (event instanceof DiffEvent diffEvent) {
             if (diffHandler != null) {
                 diffHandler.accept(diffEvent);

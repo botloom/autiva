@@ -18,6 +18,8 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollBar;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -51,6 +53,10 @@ public class TaskCard extends VBox {
     private final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
 
     private boolean userCollapsed = false;
+
+    // ===== stick-to-bottom 跟随模式 =====
+    private boolean stickToBottom = true;
+    private boolean scrollBarBound = false;
 
     @Setter
     private Consumer<String> onContentChanged;
@@ -106,6 +112,7 @@ public class TaskCard extends VBox {
         messageListView.setFocusTraversable(false);
         messageListView.setItems(messageNodes);
         messageListView.setCellFactory(list -> new TaskMessageListCell());
+        setupStickToBottom();
         body.getChildren().add(messageListView);
 
         this.getChildren().add(body);
@@ -344,6 +351,49 @@ public class TaskCard extends VBox {
         if (onContentChanged != null) {
             onContentChanged.accept(streamBuffer.toString());
         }
+        scrollToBottom();
+    }
+
+    // ===== stick-to-bottom 跟随模式 =====
+    private void setupStickToBottom() {
+        messageListView.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (e.getDeltaY() > 0) {
+                stickToBottom = false;
+            }
+        });
+        messageListView.skinProperty().addListener((obs, oldSkin, newSkin) -> {
+            if (newSkin != null && !scrollBarBound) {
+                Platform.runLater(this::bindVerticalScrollBar);
+            }
+        });
+    }
+
+    private void bindVerticalScrollBar() {
+        if (scrollBarBound) return;
+        Node bar = messageListView.lookup(".scroll-bar:vertical");
+        if (bar instanceof ScrollBar scrollBar) {
+            scrollBar.valueProperty().addListener((o, ov, nv) -> {
+                if (nv.doubleValue() >= 0.95) {
+                    stickToBottom = true;
+                }
+            });
+            scrollBarBound = true;
+        }
+    }
+
+    private void scrollToBottom() {
+        if (!stickToBottom) return;
+        Platform.runLater(() -> {
+            Node bar = messageListView.lookup(".scroll-bar:vertical");
+            if (bar instanceof ScrollBar scrollBar) {
+                scrollBar.setValue(scrollBar.getMax());
+            } else {
+                int size = messageNodes.size();
+                if (size > 0) {
+                    messageListView.scrollTo(size - 1);
+                }
+            }
+        });
     }
 
     private JsonNode parseTask(String taskJson) {

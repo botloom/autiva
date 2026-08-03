@@ -10,6 +10,8 @@ import javafx.fxml.Initializable;
 import javafx.scene.Node;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollBar;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -56,6 +58,12 @@ public class EditorPanelController implements Initializable {
     private final ObservableList<Node> toolCallNodes = FXCollections.observableArrayList();
     private final ObservableList<Node> todoNodes = FXCollections.observableArrayList();
 
+    // ===== stick-to-bottom 跟随模式 =====
+    private boolean toolListStickToBottom = true;
+    private boolean todoListStickToBottom = true;
+    private boolean toolScrollBarBound = false;
+    private boolean todoScrollBarBound = false;
+
     @Setter
     @Getter
     protected IndexController indexController;
@@ -74,12 +82,71 @@ public class EditorPanelController implements Initializable {
         toolCallsListView.setFocusTraversable(false);
         toolCallsListView.setItems(toolCallNodes);
         toolCallsListView.setCellFactory(list -> new ToolListCell());
+        setupStickToBottom(toolCallsListView, () -> toolListStickToBottom, v -> toolListStickToBottom = v,
+                () -> toolScrollBarBound, v -> toolScrollBarBound = v);
     }
 
     private void setupTodoListView() {
         todoListView.setFocusTraversable(false);
         todoListView.setItems(todoNodes);
         todoListView.setCellFactory(list -> new ToolListCell());
+        setupStickToBottom(todoListView, () -> todoListStickToBottom, v -> todoListStickToBottom = v,
+                () -> todoScrollBarBound, v -> todoScrollBarBound = v);
+    }
+
+    /**
+     * 为 ListView 配置 stick-to-bottom 跟随模式。
+     * 用户向上滚动时停止跟随，滚回底部时恢复跟随。
+     */
+    private void setupStickToBottom(ListView<?> listView,
+                                    java.util.function.BooleanSupplier stickGetter,
+                                    java.util.function.Consumer<Boolean> stickSetter,
+                                    java.util.function.BooleanSupplier boundGetter,
+                                    java.util.function.Consumer<Boolean> boundSetter) {
+        listView.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (e.getDeltaY() > 0) {
+                stickSetter.accept(false);
+            }
+        });
+        listView.skinProperty().addListener((obs, oldSkin, newSkin) -> {
+            if (newSkin != null && !boundGetter.getAsBoolean()) {
+                Platform.runLater(() -> bindVerticalScrollBar(listView, stickSetter, boundGetter, boundSetter));
+            }
+        });
+    }
+
+    private void bindVerticalScrollBar(ListView<?> listView,
+                                       java.util.function.Consumer<Boolean> stickSetter,
+                                       java.util.function.BooleanSupplier boundGetter,
+                                       java.util.function.Consumer<Boolean> boundSetter) {
+        if (boundGetter.getAsBoolean()) return;
+        Node bar = listView.lookup(".scroll-bar:vertical");
+        if (bar instanceof ScrollBar scrollBar) {
+            scrollBar.valueProperty().addListener((o, ov, nv) -> {
+                if (nv.doubleValue() >= 0.95) {
+                    stickSetter.accept(true);
+                }
+            });
+            boundSetter.accept(true);
+        }
+    }
+
+    /**
+     * 滚动指定 ListView 到底部（仅在 stickToBottom 时）
+     */
+    private void scrollToBottom(ListView<?> listView, boolean stickToBottom) {
+        if (!stickToBottom) return;
+        Platform.runLater(() -> {
+            Node bar = listView.lookup(".scroll-bar:vertical");
+            if (bar instanceof ScrollBar scrollBar) {
+                scrollBar.setValue(scrollBar.getMax());
+            } else {
+                int size = listView.getItems().size();
+                if (size > 0) {
+                    listView.scrollTo(size - 1);
+                }
+            }
+        });
     }
 
     /**
@@ -171,11 +238,7 @@ public class EditorPanelController implements Initializable {
      */
     public void addToolCallCard(Node card) {
         toolCallNodes.add(card);
-        Platform.runLater(() -> {
-            if (!toolCallNodes.isEmpty()) {
-                toolCallsListView.scrollTo(toolCallNodes.size() - 1);
-            }
-        });
+        scrollToBottom(toolCallsListView, toolListStickToBottom);
     }
 
     /**
@@ -188,6 +251,7 @@ public class EditorPanelController implements Initializable {
         }
         show();
         showTodoView();
+        scrollToBottom(todoListView, todoListStickToBottom);
     }
 
     /**

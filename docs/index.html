@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Autiva — 会进化的桌面智能体</title>
-<meta name="description" content="Autiva 是一款基于 Spring Boot + JavaFX 的桌面 AI 智能体，融合统一 Agent 系统、GeneOS 自进化引擎、30+ 工具集、A2UI 动态界面与两层记忆架构。" />
+<title>Autiva — AI 智能体桌面客户端</title>
+<meta name="description" content="Autiva 是一款基于 JavaFX 25 + Spring Boot 4.1 + Spring AI 2.0 的 AI 智能体桌面客户端。提供多智能体架构、工具系统、技能系统、记忆系统、进化引擎与 IM 集成。" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Manrope:wght@300..800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -205,6 +205,23 @@
   .arch-layer:hover .arch-chip{color:var(--text);border-color:var(--line-2)}
   @media(max-width:680px){.arch-layer{grid-template-columns:1fr;gap:12px}}
 
+  /* data directory tree */
+  .dq-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:28px;align-items:start}
+  @media(max-width:880px){.dq-grid{grid-template-columns:1fr}}
+  .dq-card{padding:28px;border-radius:var(--radius-lg);background:linear-gradient(180deg,rgba(22,28,36,0.7),rgba(11,15,20,0.7));border:1px solid var(--line)}
+  .dq-card h3{font-family:"Fraunces",serif;font-weight:400;font-size:20px;margin:0 0 4px;letter-spacing:-0.01em}
+  .dq-card .dq-sub{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted-2);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:18px}
+  .tree{margin:0;padding:0;list-style:none;font-family:"JetBrains Mono",monospace;font-size:12.5px;line-height:2;overflow-x:auto}
+  .tree li{white-space:nowrap}
+  .tree .dir{color:var(--teal);font-weight:600}
+  .tree .file{color:var(--text)}
+  .tree .cm{color:var(--muted-2)}
+  .dq-point{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+  .dq-point:last-child{border-bottom:none}
+  .dq-point .n{width:30px;height:30px;border-radius:8px;flex-shrink:0;display:grid;place-items:center;background:var(--teal-soft);color:var(--teal);font-family:"JetBrains Mono",monospace;font-size:11px}
+  .dq-point b{color:var(--text);font-weight:600;display:block;font-size:14px}
+  .dq-point span{color:var(--muted);font-size:13px}
+
   /* evolution loop */
   .loop-wrap{position:relative;padding:30px 0}
   .loop{display:grid;grid-template-columns:repeat(6,1fr);gap:0;position:relative}
@@ -355,9 +372,10 @@
       <span class="brand-name">Autiva</span>
     </a>
     <div class="nav-links">
+      <a href="#overview">概览</a>
       <a href="#capabilities">能力</a>
       <a href="#architecture">架构</a>
-      <a href="#evolution">进化</a>
+      <a href="#data">数据</a>
       <a href="#tools">工具</a>
       <a href="#demo">演示</a>
       <a href="#start">开始</a>
@@ -370,9 +388,9 @@
 <header class="hero" id="top">
   <div class="container hero-inner">
     <div>
-      <span class="eyebrow reveal"><span class="dot"></span>GeneOS · 自进化智能体运行时</span>
-      <h1 class="title reveal d1">会<em>进化</em>的<br>桌面智能体。</h1>
-      <p class="lede reveal d2">Autiva 把"基因、经验、进化"概念落到工程实现——基于 Spring Boot + JavaFX，让智能体在使用中持续自我改进。本地优先、可版本回溯、工具可扩展。</p>
+      <span class="eyebrow reveal"><span class="dot"></span>JavaFX 25 · Spring Boot 4.1 · Spring AI 2.0</span>
+      <h1 class="title reveal d1">可扩展的<br>AI 智能体<em>桌面</em>应用。</h1>
+      <p class="lede reveal d2">Autiva 打造一个可自主进化的 AI 代理平台——多智能体架构、工具系统、技能系统、记忆系统、进化引擎与 IM 集成，全部以 JavaFX 原生桌面体验承载。</p>
       <div class="cta-row reveal d3">
         <a class="btn btn-primary" href="#start">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -384,25 +402,26 @@
         </a>
       </div>
       <div class="hero-meta reveal d4">
-        <div class="meta-item"><div class="num">30<span>+</span></div><div class="lbl">工具集</div></div>
-        <div class="meta-item"><div class="num">6</div><div class="lbl">能力模块</div></div>
-        <div class="meta-item"><div class="num">100<span>%</span></div><div class="lbl">本地化</div></div>
+        <div class="meta-item"><div class="num">2</div><div class="lbl">智能体范式</div></div>
+        <div class="meta-item"><div class="num">6<span>+</span></div><div class="lbl">子智能体</div></div>
+        <div class="meta-item"><div class="num">30<span>+</span></div><div class="lbl">内置工具</div></div>
+        <div class="meta-item"><div class="num">100<span>%</span></div><div class="lbl">本地运行</div></div>
       </div>
     </div>
     <div class="hero-card reveal d2">
       <div class="hc-bar">
         <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
-        <span class="title">~/.autiva/evolve/genes/gene_repair_from_errors</span>
+        <span class="title">~/.autiva/agents/code/config.json</span>
       </div>
       <div class="hc-body">
-        <div class="hc-line"><span class="ln">1</span><span class="tk"><span class="c">// 种子基因：从错误信号中修复</span></span></div>
-        <div class="hc-line"><span class="ln">2</span><span class="tk"><span class="k">signals</span>: [<span class="s">"LOG_ERROR"</span>, <span class="s">"RECURRING_ERROR"</span>]</span></div>
-        <div class="hc-line"><span class="ln">3</span><span class="tk"><span class="k">strategy</span>: <span class="s">"分析根因 → 查找修复方案"</span></span></div>
-        <div class="hc-line"><span class="ln">4</span><span class="tk"><span class="k">runtime</span>: <span class="g">JAVA</span></span></div>
-        <div class="hc-line"><span class="ln">5</span><span class="tk"><span class="k">epigenetic</span>: <span class="g">1.20</span> <span class="c">// 成功增强</span></span></div>
-        <div class="hc-line"><span class="ln">6</span><span class="tk"><span class="k">mutation</span>: <span class="s">"LLM 驱动代码改写"</span></span></div>
-        <div class="hc-line"><span class="ln">7</span><span class="tk"><span class="k">version</span>: <span class="amber">v3</span> <span class="c">parentId: v2</span></span></div>
-        <div class="hc-line cursor"><span class="ln">8</span><span class="tk"><span class="c">// JGit 已提交，下次执行改进</span></span></div>
+        <div class="hc-line"><span class="ln">1</span><span class="tk">{</span></div>
+        <div class="hc-line"><span class="ln">2</span><span class="tk">  <span class="k">"mode"</span>: <span class="s">"code"</span>,</span></div>
+        <div class="hc-line"><span class="ln">3</span><span class="tk">  <span class="k">"model"</span>: <span class="s">"deepseek-v4-flash"</span>,</span></div>
+        <div class="hc-line"><span class="ln">4</span><span class="tk">  <span class="k">"tools"</span>: [<span class="s">"Read"</span>, <span class="s">"Write"</span>, <span class="s">"Edit"</span>, <span class="s">"Command"</span>],</span></div>
+        <div class="hc-line"><span class="ln">5</span><span class="tk">  <span class="k">"workspace"</span>: <span class="s">"workspace/code/{project}"</span></span></div>
+        <div class="hc-line"><span class="ln">6</span><span class="tk">}</span></div>
+        <div class="hc-line"><span class="ln">7</span><span class="tk"><span class="c">// Work / Coder 双范式，按项目隔离</span></span></div>
+        <div class="hc-line cursor"><span class="ln">8</span><span class="tk"><span class="c">// 会话、记忆、工作区各自独立</span></span></div>
       </div>
     </div>
   </div>
@@ -417,24 +436,24 @@
   <div class="container">
     <div class="sec-head reveal">
       <div class="sec-tag">概览 · OVERVIEW</div>
-      <h2 class="sec-title">一个能在<em>使用中</em>持续改进的本地智能体。</h2>
-      <p class="sec-desc">Autiva 不只是一个聊天框。它把执行日志沉淀为经验，把经验驱动基因突变、路由更新与规则沉淀，再用 JGit 版本化固化——形成自我进化的闭环。</p>
+      <h2 class="sec-title">一个承载<em>完整智能体</em>生命周期的工作台。</h2>
+      <p class="sec-desc">从多智能体编排、工具执行、技能加载到记忆与进化，Autiva 把智能体所需的全部能力打包进一个原生桌面应用，数据可控、离线可用、按需扩展。</p>
     </div>
     <div class="value-grid">
       <div class="value-card reveal d1">
-        <div class="vc-icon vc-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg></div>
-        <h3>本地优先</h3>
-        <p>智能体定义、会话、记忆、基因全部存于 ~/.autiva/，数据不出本机。JGit 管理基因版本，可随时 diff 与回滚。</p>
+        <div class="vc-icon vc-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg></div>
+        <h3>多智能体架构</h3>
+        <p>统一 Agent 设计：MAIN 与 SUBAGENT 同为 Agent 实例，Work（工作）与 Coder（编码）双范式并存，各自动态加载 agent.md + config.json。</p>
       </div>
       <div class="value-card reveal d2">
-        <div class="vc-icon vc-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg></div>
-        <h3>自我进化</h3>
-        <p>GeneOS 三层架构：基因执行 → 经验提取 → 进化决策。表观遗传值基于历史成功率动态调整，越用越聪明。</p>
+        <div class="vc-icon vc-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg></div>
+        <h3>本地优先</h3>
+        <p>智能体定义、会话（events.jsonl）、记忆、进化数据全部存于 ~/.autiva/，数据不出本机。会话按模式与项目隔离管理。</p>
       </div>
       <div class="value-card reveal d3">
         <div class="vc-icon vc-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg></div>
         <h3>可扩展工具</h3>
-        <p>30+ 内置工具覆盖文件、搜索、命令、交互、任务、定时、记忆与 MCP。AbstractTool + Toolkit 模式，一个工具一个类。</p>
+        <p>30+ 内置工具覆盖文件、搜索、命令、任务、交互、定时、记忆、技能、MCP 与配置管理，支持自定义 AgentDefinition 扩展。</p>
       </div>
     </div>
   </div>
@@ -445,74 +464,74 @@
   <div class="container">
     <div class="sec-head reveal">
       <div class="sec-tag">核心能力 · CAPABILITIES</div>
-      <h2 class="sec-title">六个模块，<em>协同</em>驱动智能体。</h2>
-      <p class="sec-desc">从统一 Agent 模型到 A2UI 声明式界面，从自进化引擎到两层记忆，每个模块都为"越用越聪明"这一目标服务。</p>
+      <h2 class="sec-title">六大系统，<em>协同</em>驱动智能体。</h2>
+      <p class="sec-desc">从智能体编排到工具执行，从长期记忆到技能加载，从自进化到画布交互，每个系统都为\"可自主进化的 AI 代理平台\"这一目标服务。</p>
     </div>
     <div class="cap-grid">
       <div class="cap-card reveal d1" style="--accent:#2DD4BF;--accent-soft:rgba(45,212,191,0.14);--accent-line:rgba(45,212,191,0.25)">
         <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg></div>
-        <h3>统一 Agent</h3>
-        <div class="sub">UNIFIED AGENT MODEL</div>
-        <p>主智能体与子智能体同为 Agent 实例，区别仅在 AgentDefinition 配置。纯 POJO 设计，依赖通过 RuntimeContext 运行时传递。</p>
+        <h3>智能体系统</h3>
+        <div class="sub">MAIN + SUBAGENT</div>
+        <p>统一 Agent 架构：MAIN 与 SUBAGENT 均为 Agent 类实例，Work 与 Coder 双范式并存，每范式独立工作流、工具白名单与记忆体系。</p>
         <ul class="cap-points">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Builder 方法链启用可选能力</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>基于 Spring AI Advisor 拦截</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>子智能体内置不可配置</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>agent.md + config.json 定义</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>6 种内置子智能体</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Advisor 建议器体系 + 多模型切换</li>
         </ul>
       </div>
-      <div class="cap-card reveal d2" style="--accent:#F6B95A;--accent-soft:rgba(246,185,90,0.14);--accent-line:rgba(246,185,90,0.25)">
-        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h10"/><path d="M12 21V3"/><path d="M5 8c3 0 5 2 7 5 2 3 4 5 7 5"/></svg></div>
-        <h3>自进化引擎</h3>
-        <div class="sub">GENEOS · EVOLUTION</div>
-        <p>基于 GeneOS 三层架构：基因执行层、经验引擎层、进化引擎层。基因可突变、路由可更新、规则可沉淀。</p>
-        <ul class="cap-points">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>表观遗传动态权重</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>JGit 基因版本仓库</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>金丝雀检查 + 安全防护</li>
-        </ul>
-      </div>
-      <div class="cap-card reveal d3" style="--accent:#7DD3A0;--accent-soft:rgba(125,211,160,0.14);--accent-line:rgba(125,211,160,0.25)">
+      <div class="cap-card reveal d2" style="--accent:#7DD3A0;--accent-soft:rgba(125,211,160,0.14);--accent-line:rgba(125,211,160,0.25)">
         <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg></div>
         <h3>工具系统</h3>
         <div class="sub">30+ BUILT-IN TOOLS</div>
-        <p>AbstractTool&lt;I&gt; + Toolkit 模式，统一 ToolResult 返回。AutivaToolCallingManager 实现工具校验与权限控制，LLM 幻觉工具名时友好降级。</p>
+        <p>覆盖文件、搜索、命令、Diff、网络、任务委派、用户交互、定时、记忆、技能、MCP 与配置管理。跨平台 Shell 会话保持环境。</p>
         <ul class="cap-points">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>跨平台 Shell 抽象</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>MCP 客户端集成</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>白名单注册机制</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>持久 Shell 会话</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>命令分类与批准流程</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>PTY 终端 + Diff 服务</li>
         </ul>
       </div>
-      <div class="cap-card reveal d4" style="--accent:#9B8CFF;--accent-soft:rgba(155,140,255,0.14);--accent-line:rgba(155,140,255,0.25)">
+      <div class="cap-card reveal d3" style="--accent:#9B8CFF;--accent-soft:rgba(155,140,255,0.14);--accent-line:rgba(155,140,255,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"/><path d="M21 3v6h-6"/><path d="M21 9c-1.5-2-4-3-7-3"/></svg></div>
+        <h3>记忆系统</h3>
+        <div class="sub">PERSISTENT MEMORY</div>
+        <p>基于文件的长期记忆跨会话持续存在，按智能体 / 项目隔离。会话事件以 events.jsonl 追加持久化，并自动压缩保持上下文。</p>
+        <ul class="cap-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Coder / Work 双记忆命名</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>递归摘要 / 滑窗压缩</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Token 计数触发压缩</li>
+        </ul>
+      </div>
+      <div class="cap-card reveal d4" style="--accent:#F6B95A;--accent-soft:rgba(246,185,90,0.14);--accent-line:rgba(246,185,90,0.25)">
         <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div>
         <h3>技能系统</h3>
         <div class="sub">SKILL · KNOWLEDGE</div>
-        <p>SKILL.md + YAML frontmatter 定义专业知识技能。支持 ZIP 导入、文件系统 / JAR / 类路径多来源加载，技能信息注入系统提示词。</p>
+        <p>通过 ZIP 包动态加载专业知识，YAML frontmatter 定义技能。技能上下文自动注入系统提示词，支持运行时热加载与管理。</p>
         <ul class="cap-points">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>动态加载与重载</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>ZIP / URL 导入</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>MarkdownParser 解析</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>ZIP 动态导入</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>技能热加载</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>SkillContextAdvisor 注入</li>
         </ul>
       </div>
       <div class="cap-card reveal d5" style="--accent:#2DD4BF;--accent-soft:rgba(45,212,191,0.14);--accent-line:rgba(45,212,191,0.25)">
-        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg></div>
-        <h3>A2UI 动态界面</h3>
-        <div class="sub">AGENT-TO-UI v0.9.1</div>
-        <p>声明式动态 UI 生成协议。Agent 通过 A2UITool 创建 Surface、更新组件、更新数据模型，用户交互回流为事件触发新一轮推理。</p>
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h10"/><path d="M12 21V3"/><path d="M5 8c3 0 5 2 7 5 2 3 4 5 7 5"/></svg></div>
+        <h3>进化系统</h3>
+        <div class="sub">EVOLVE ENGINE</div>
+        <p>基于基因模型、执行轨迹与质量验证，演进智能体行为。路由引擎动态路由，金丝雀检查保障进化安全，经验引擎沉淀经验。</p>
         <ul class="cap-points">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>邻接列表组件模型</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>事件 / 函数调用双轨</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>验证规则与禁用逻辑</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>基因模型 + 执行轨迹记录</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>三层质量验证器</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>动态路由 + 金丝雀检查</li>
         </ul>
       </div>
-      <div class="cap-card reveal d6" style="--accent:#F6B95A;--accent-soft:rgba(246,185,90,0.14);--accent-line:rgba(246,185,90,0.25)">
-        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"/><path d="M21 3v6h-6"/><path d="M21 9c-1.5-2-4-3-7-3"/></svg></div>
-        <h3>两层记忆</h3>
-        <div class="sub">COMPACT CHAT MEMORY</div>
-        <p>热记忆（memory.md）智能体主动读写；上下文桥接（session.summary）压缩早期对话。游标感知 + 事件驱动异步压缩。</p>
+      <div class="cap-card reveal d6" style="--accent:#9B8CFF;--accent-soft:rgba(155,140,255,0.14);--accent-line:rgba(155,140,255,0.25)">
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6"/><path d="m15 9-6 6"/></svg></div>
+        <h3>画布与 UI 界面</h3>
+        <div class="sub">CANVAS · A2UI</div>
+        <p>手绘风格的 Excalidraw 画布支持矩形、箭头、自由笔迹与 SVG 导出；A2UI 协议让智能体动态生成交互界面；Tool ↔ UI 桥接渲染各类卡片。</p>
         <ul class="cap-points">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>UsageAdvisor 触发压缩</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>工具调用成对性保障</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>ProactiveContextAdvisor 注入</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Excalidraw 手绘画布</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>A2UI 声明式动态界面</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>微信 iLink 接入</li>
         </ul>
       </div>
     </div>
@@ -524,96 +543,80 @@
   <div class="container">
     <div class="sec-head reveal">
       <div class="sec-tag">架构 · ARCHITECTURE</div>
-      <h2 class="sec-title">六层分层，<em>各司其职</em>。</h2>
-      <p class="sec-desc">从 JavaFX 视图到文件系统持久化，Autiva 的六层架构清晰解耦。Agent 保持纯 POJO，依赖在运行时通过 RuntimeContext 传递。</p>
+      <h2 class="sec-title">功能分层，<em>核心聚焦</em>。</h2>
+      <p class="sec-desc">单一核心模块 autiva-desktop，内部按职能分层：智能体核心、桥接集成、UI 视图与持久化。Agent 保持纯 POJO，依赖运行时注入。</p>
     </div>
     <div class="arch reveal">
       <div class="arch-layer" style="--accent:#2DD4BF">
-        <div><span class="ltag">L6 · PRESENTATION</span><div class="lname">UI 层</div></div>
+        <div><span class="ltag">AGENTIC</span><div class="lname">智能体核心</div></div>
         <div class="arch-modules">
-          <span class="arch-chip">AgentPage</span><span class="arch-chip">CanvasDialog</span><span class="arch-chip">JediTerminal</span><span class="arch-chip">EditorPanel</span><span class="arch-chip">A2UISurface</span><span class="arch-chip">TaskCard</span>
+          <span class="arch-chip">agent</span><span class="arch-chip">advisors</span><span class="arch-chip">cron</span><span class="arch-chip">event</span><span class="arch-chip">evolve</span><span class="arch-chip">memory</span><span class="arch-chip">session</span><span class="arch-chip">skill</span><span class="arch-chip">task</span><span class="arch-chip">tool</span>
         </div>
       </div>
       <div class="arch-layer" style="--accent:#9B8CFF">
-        <div><span class="ltag">L5 · BRIDGE</span><div class="lname">桥接层</div></div>
+        <div><span class="ltag">BRIDGE</span><div class="lname">桥接集成</div></div>
         <div class="arch-modules">
-          <span class="arch-chip">ToolUIBridge</span><span class="arch-chip">EventPublisher</span><span class="arch-chip">WechatILink</span>
+          <span class="arch-chip">wechat iLink</span><span class="arch-chip">Tool ↔ UI</span><span class="arch-chip">EventPublisher</span>
         </div>
       </div>
       <div class="arch-layer" style="--accent:#7DD3A0">
-        <div><span class="ltag">L4 · AGENT</span><div class="lname">Agent 层</div></div>
+        <div><span class="ltag">CONTROLLER · VM</span><div class="lname">页面与状态</div></div>
         <div class="arch-modules">
-          <span class="arch-chip">Agent</span><span class="arch-chip">AgentDefinition</span><span class="arch-chip">RuntimeContext</span><span class="arch-chip">Session</span><span class="arch-chip">Advisor</span><span class="arch-chip">SkillManager</span>
+          <span class="arch-chip">JavaFX 页面控制器</span><span class="arch-chip">视图模型</span><span class="arch-chip">全局状态</span><span class="arch-chip">路由</span><span class="arch-chip">窗口管理</span>
         </div>
       </div>
       <div class="arch-layer" style="--accent:#F6B95A">
-        <div><span class="ltag">L3 · TOOL</span><div class="lname">工具层</div></div>
+        <div><span class="ltag">NODE · HOLDER</span><div class="lname">UI 组件</div></div>
         <div class="arch-modules">
-          <span class="arch-chip">AbstractTool</span><span class="arch-chip">Toolkit</span><span class="arch-chip">AutivaToolCallingManager</span><span class="arch-chip">MCP Client</span><span class="arch-chip">30+ Tools</span>
-        </div>
-      </div>
-      <div class="arch-layer" style="--accent:#2DD4BF">
-        <div><span class="ltag">L2 · EVOLVE</span><div class="lname">进化层</div></div>
-        <div class="arch-modules">
-          <span class="arch-chip">EvolutionEngine</span><span class="arch-chip">ExperienceEngine</span><span class="arch-chip">GeneMutator</span><span class="arch-chip">RoutingEngine</span><span class="arch-chip">MemoryEngine</span><span class="arch-chip">GeneRepository</span>
+          <span class="arch-chip">canvas</span><span class="arch-chip">diff</span><span class="arch-chip">editor</span><span class="arch-chip">message</span><span class="arch-chip">project</span><span class="arch-chip">svg</span><span class="arch-chip">terminal(PTY)</span><span class="arch-chip">tool cards</span>
         </div>
       </div>
       <div class="arch-layer" style="--accent:#8B96A3">
-        <div><span class="ltag">L1 · PERSISTENCE</span><div class="lname">持久化层</div></div>
+        <div><span class="ltag">PERSISTENCE</span><div class="lname">数据目录</div></div>
         <div class="arch-modules">
-          <span class="arch-chip">~/.autiva/agents/</span><span class="arch-chip">workspace/sessions/</span><span class="arch-chip">memory.md</span><span class="arch-chip">evolve/genes/</span><span class="arch-chip">JGit</span><span class="arch-chip">JSONL</span>
+          <span class="arch-chip">~/.autiva/agents/</span><span class="arch-chip">workspace/sessions/</span><span class="arch-chip">workspace/{work,code}/memory/</span><span class="arch-chip">evolve/</span><span class="arch-chip">skills/</span><span class="arch-chip">projects/registry.json</span>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ===================== EVOLUTION LOOP ===================== -->
-<section id="evolution">
+
+<!-- ===================== DATA LAYOUT ===================== -->
+<section id="data">
   <div class="container">
     <div class="sec-head reveal">
-      <div class="sec-tag">进化闭环 · EVOLUTION LOOP</div>
-      <h2 class="sec-title">执行 → 经验 → <em>进化</em> → 固化。</h2>
-      <p class="sec-desc">每次执行都被记录、提取为经验、驱动进化决策，再经金丝雀检查与 JGit 提交固化，最终在下次执行中改进。这是一个真正闭环的自我改进系统。</p>
+      <div class="sec-tag">数据布局 · DATA LAYOUT</div>
+      <h2 class="sec-title">~/.autiva/，<em>目录即架构</em>。</h2>
+      <p class="sec-desc">启动时自动初始化目录结构与默认配置。智能体定义、子智能体、按模式隔离的工作区、进化数据与日志，全部落在单一数据目录中。</p>
     </div>
-    <div class="loop-wrap reveal">
-      <div class="loop" id="loop">
-        <div class="loop-node" style="--accent:#2DD4BF">
-          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 7-7 7 7"/><path d="M12 2v13"/><path d="M5 9c0 4 3 7 7 7"/></svg></div>
-          <div class="step">STEP 01</div>
-          <div class="name">基因执行</div>
-          <div class="desc">GeneRuntime 分发到 Shell / Java / Strategy 执行器</div>
-        </div>
-        <div class="loop-node" style="--accent:#9B8CFF">
-          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg></div>
-          <div class="step">STEP 02</div>
-          <div class="name">执行记录</div>
-          <div class="desc">ExecutionRecorder 写入 logs/executions/*.jsonl</div>
-        </div>
-        <div class="loop-node" style="--accent:#7DD3A0">
-          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg></div>
-          <div class="step">STEP 03</div>
-          <div class="name">经验提取</div>
-          <div class="desc">LLM 从日志挖掘失败模式与根因，置信度 ≥ 0.7</div>
-        </div>
-        <div class="loop-node" style="--accent:#F6B95A">
-          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg></div>
-          <div class="step">STEP 04</div>
-          <div class="name">进化决策</div>
-          <div class="desc">基因突变 + 路由更新 + 规则沉淀</div>
-        </div>
-        <div class="loop-node" style="--accent:#2DD4BF">
-          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div>
-          <div class="step">STEP 05</div>
-          <div class="name">JGit 提交</div>
-          <div class="desc">金丝雀检查通过后，GeneRepository 版本化固化</div>
-        </div>
-        <div class="loop-node" style="--accent:#7DD3A0">
-          <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></div>
-          <div class="step">STEP 06</div>
-          <div class="name">下次改进</div>
-          <div class="desc">表观遗传增强，连续成功 ≥3 次生成胶囊</div>
-        </div>
+    <div class="dq-grid">
+      <div class="dq-card reveal d1">
+        <h3>数据目录</h3>
+        <div class="dq-sub">~/.AUTIVA/</div>
+        <ul class="tree">
+          <li><span class="dir">~/.autiva/</span> <span class="cm">// 应用主目录</span></li>
+          <li>├─ <span class="file">settings.yaml</span> <span class="cm">// 配置（API Key 等）</span></li>
+          <li>├─ <span class="dir">agents/</span> <span class="cm">// work + code 主智能体</span></li>
+          <li>│&nbsp;&nbsp;├─ work/{agent.md, config.json}</li>
+          <li>│&nbsp;&nbsp;└─ code/{agent.md, config.json}</li>
+          <li>├─ <span class="dir">subagents/</span> <span class="cm">// coder/explore/plan/review/doctor/general</span></li>
+          <li>├─ <span class="dir">workspace/</span> <span class="cm">// 运行时数据（按模式隔离）</span></li>
+          <li>│&nbsp;&nbsp;├─ <span class="dir">work/</span> {sessions/, memory/}</li>
+          <li>│&nbsp;&nbsp;└─ <span class="dir">code/</span> AUTIVA.md + {projectName}/{sessions, memory}</li>
+          <li>├─ <span class="dir">projects/</span> <span class="cm">// registry.json 项目注册表</span></li>
+          <li>├─ <span class="dir">skills/</span> <span class="cm">// ZIP 技能包</span></li>
+          <li>├─ <span class="dir">evolve/</span> <span class="cm">// 基因、路由、经验、事件</span></li>
+          <li>└─ <span class="dir">logs/</span> <span class="cm">// autiva-front.log + executions/</span></li>
+        </ul>
+      </div>
+      <div class="dq-card reveal d2">
+        <h3>设计要点</h3>
+        <div class="dq-sub">DESIGN PRINCIPLES</div>
+        <div class="dq-point"><div class="n">1</div><div><b>Work / Coder 双范式隔离</b><span>工作智能体与会话、记忆、工作区按项目分别隔离，互不串扰。</span></div></div>
+        <div class="dq-point"><div class="n">2</div><div><b>会话事件追加持久化</b><span>每个会话 events.jsonl 追加式记录，可回溯可审计。</span></div></div>
+        <div class="dq-point"><div class="n">3</div><div><b>按范式切换记忆命名</b><span>Coder 与 Work 使用各自独立的记忆工具命名，语义清晰。</span></div></div>
+        <div class="dq-point"><div class="n">4</div><div><b>自动初始化</b><span>首次启动从 classpath 生成 settings.yaml 与目录骨架，零配置起步。</span></div></div>
       </div>
     </div>
   </div>
@@ -658,7 +661,7 @@
       </div>
       <div class="tool-cat reveal d4">
         <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9"/><path d="M21 3v6h-6"/></svg></div><div class="tc-name">记忆</div><div class="tc-count">4 tools</div></div>
-        <div class="tc-chips"><span class="chip">memory_save</span><span class="chip">memory_update</span><span class="chip">memory_delete</span><span class="chip">memory_search</span></div>
+        <div class="tc-chips"><span class="chip">memory_save</span><span class="chip">memory_update</span><span class="chip">memory_delete</span><span class="chip">memory_search</span><span class="chip">MemoryView · Coder</span><span class="chip">MemoryCreate · Coder</span><span class="chip">MemoryStrReplace · Coder</span></div>
       </div>
       <div class="tool-cat reveal d5">
         <div class="tc-head"><div class="tc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6"/><path d="M15 2v6"/><path d="M3 8h18"/><path d="M5 8v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M9 14h6"/></svg></div><div class="tc-name">MCP 配置</div><div class="tc-count">3 tools</div></div>
@@ -752,10 +755,10 @@
         <!-- terminal -->
         <div class="demo-panel term-panel" data-panel="terminal">
           <div class="term-line"><span class="p">autiva@desktop</span>:<span class="o">~/project</span>$ autiva run "分析项目结构"</div>
-          <div class="term-line"><span class="c">[Bootstrap]</span> 正在初始化智能体 <span class="g">default</span>...</div>
-          <div class="term-line"><span class="c">[Agent]</span> 加载定义: ~/.autiva/agents/default/agent.md</div>
+          <div class="term-line"><span class="c">[Bootstrap]</span> 正在初始化智能体 <span class="g">code</span>...</div>
+          <div class="term-line"><span class="c">[Agent]</span> 加载定义: ~/.autiva/agents/code/agent.md</div>
           <div class="term-line"><span class="c">[Tool]</span> 注册工具 30 个 · 白名单已合并 config.json</div>
-          <div class="term-line"><span class="c">[Session]</span> 创建会话 default-chat-ui-<span class="g">a1f3c2d</span></div>
+          <div class="term-line"><span class="c">[Session]</span> 创建会话 code-project-<span class="g">a1f3c2d</span></div>
           <div class="term-line"><span class="c">[Evolve]</span> 加载基因 4 个 · 路由表 12 条</div>
           <div class="term-line"><span class="c">[Memory]</span> 注入热记忆 1.2KB · 摘要 0.4KB</div>
           <div class="term-line"><span class="c">[Agent]</span> <span class="g">●</span> 流式推理中...</div>
@@ -801,10 +804,10 @@
       <p class="sec-desc">Spring AI 提供推理与工具调用骨架，JavaFX 承载原生体验，JGit 管理基因版本，JediTermFX 还原终端。</p>
     </div>
     <div class="stack-grid reveal">
-      <div class="stack-item"><div class="gd"></div><div class="nm">Spring Boot</div><div class="vr">3.x</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">Spring Boot</div><div class="vr">4.x</div></div>
       <div class="stack-item"><div class="gd"></div><div class="nm">Spring AI</div><div class="vr">OpenAI · MCP</div></div>
       <div class="stack-item"><div class="gd"></div><div class="nm">JavaFX</div><div class="vr">OpenJFX</div></div>
-      <div class="stack-item"><div class="gd"></div><div class="nm">JGit</div><div class="vr">7.1</div></div>
+      <div class="stack-item"><div class="gd"></div><div class="nm">JGit</div><div class="vr">7.2</div></div>
       <div class="stack-item"><div class="gd"></div><div class="nm">RichTextFX</div><div class="vr">0.11.7</div></div>
       <div class="stack-item"><div class="gd"></div><div class="nm">JediTermFX</div><div class="vr">1.1.0</div></div>
       <div class="stack-item"><div class="gd"></div><div class="nm">CommonMark</div><div class="vr">+ GFM Tables</div></div>
@@ -857,7 +860,7 @@
     <div class="reveal d4" style="margin-top:32px;padding:20px 24px;border-radius:14px;background:var(--teal-soft);border:1px solid rgba(45,212,191,0.25);display:flex;gap:14px;align-items:flex-start">
       <svg style="width:20px;height:20px;color:var(--teal);flex-shrink:0;margin-top:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
       <div style="font-size:13.5px;color:var(--text);line-height:1.6">
-        <strong style="color:var(--teal)">提示：</strong>需要 JDK 25 与 Maven。首次运行会从 <code class="mono" style="color:var(--amber)">classpath:evolve/genes.seed.json</code> 初始化 4 个种子基因到 <code class="mono" style="color:var(--amber)">~/.autiva/evolve/genes/</code>。在 <code class="mono" style="color:var(--amber)">~/.autiva/settings.properties</code> 中配置模型 API Key 后即可开始对话。
+        <strong style="color:var(--teal)">提示：</strong>需要 JDK 25 与 Maven。首次运行会自动从 <code class="mono" style="color:var(--amber)">classpath:bootstrap</code> 初始化 <code class="mono" style="color:var(--amber)">~/.autiva/</code> 目录、默认配置与智能体定义。在 <code class="mono" style="color:var(--amber)">~/.autiva/settings.yaml</code> 中配置模型 API Key 后即可开始对话。
       </div>
     </div>
   </div>

@@ -1,6 +1,7 @@
 package cn.bitloom.agentic.session;
 
 import cn.bitloom.agentic.event.AbstractEvent;
+import cn.bitloom.agentic.event.CompactionEvent;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.constant.AppConstants;
 import cn.bitloom.exception.StorageException;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -327,12 +329,37 @@ public class FileSystemSessionManager implements ISessionManager {
         // 但 activeWindow 开头可能残留 ToolResponseMessage（对应的 assistant(toolCalls)
         // 被归档/摘要了），导致历史不成对，违反 LLM API 的成对约束。
         // 统一过滤掉孤儿 toolResponse，所有策略都受益。
-        List<MessageEvent> finalEvents = CompactionUtils.dropOrphanToolResponses(result.compactedEvents());
+        List<MessageEvent> finalActive = CompactionUtils.dropOrphanToolResponses(result.compactedEvents());
+
+        // 归档事件标记为 archived=true 保留在文件中（而不是物理删除）。
+        // 架构设计了 archived 标记机制：
+        //   - SessionMemoryAdvisor.before() 用 EventFilter.active() 读取，排除 archived（不发给 LLM）
+        //   - prepareHistoricalMessages() 用 EventFilter.all() 读取，包含 archived（UI 能看到完整历史）
+        //   - 搜索工具用 all() 读取，能搜到归档事件
+        // compactedEvents（synthetic summary + activeWindow）保持 archived=false，
+        // 其余旧事件标记为 archived=true。
+        Set<String> activeIds = finalActive.stream()
+                .map(MessageEvent::getId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<MessageEvent> toWrite = new ArrayList<>();
+        // 先写旧事件中不在 active 集合里的，标记为 archived
+        for (AbstractEvent e : allEvents) {
+            if (!(e instanceof MessageEvent me)) continue;
+            if (activeIds.contains(me.getId())) continue; // 这些会在 finalActive 里写
+            if (me.isArchived()) {
+                toWrite.add(me); // 已经是 archived，保持
+            } else {
+                toWrite.add(me.asArchived()); // 标记为 archived
+            }
+        }
+        // 再写 compactedEvents（synthetic summary + activeWindow，archived=false）
+        toWrite.addAll(finalActive);
 
         Path eventsFile = AppConstants.Session.eventsFile(sessionId);
         try {
             StringBuilder sb = new StringBuilder();
-            for (MessageEvent e : finalEvents) {
+            for (MessageEvent e : toWrite) {
                 sb.append(JsonUtils.toJson(e)).append("\n");
             }
             Files.writeString(eventsFile, sb.toString());
@@ -340,7 +367,17 @@ public class FileSystemSessionManager implements ISessionManager {
             log.error("重写 compacted events 失败: {}", sessionId, e);
         }
 
-        return new CompactionResult(finalEvents, result.archivedEvents(), result.tokensEstimatedSaved());
+        log.info("压缩完成: sessionId={}, archived={}, active={}",
+                sessionId, result.archivedEvents().size(), finalActive.size());
+
+        // 追加压缩事件，UI 在聊天消息展示处渲染为"上下文已压缩"提示卡片。
+        // 非 MessageEvent，SessionMemoryAdvisor.before() 只读 MessageEvent 时自动排除。
+        CompactionEvent compactionEvent = CompactionEvent.completed(
+                sessionId, strategy.getClass().getSimpleName(),
+                result.archivedEvents().size(), finalActive.size());
+        appendEvent(compactionEvent);
+
+        return new CompactionResult(finalActive, result.archivedEvents(), result.tokensEstimatedSaved());
     }
 
     @Nullable
