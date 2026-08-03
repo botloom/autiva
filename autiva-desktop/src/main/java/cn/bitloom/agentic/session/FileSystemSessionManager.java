@@ -11,6 +11,7 @@ import cn.bitloom.agentic.session.compaction.CompactionRequest;
 import cn.bitloom.agentic.session.compaction.CompactionResult;
 import cn.bitloom.agentic.session.compaction.CompactionStrategy;
 import cn.bitloom.agentic.session.compaction.CompactionTrigger;
+import cn.bitloom.agentic.session.compaction.CompactionUtils;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -322,10 +323,16 @@ public class FileSystemSessionManager implements ISessionManager {
 
         CompactionResult result = strategy.compact(request);
 
+        // 压缩策略把旧事件摘要成纯文本 synthetic assistant（没有 toolCalls），
+        // 但 activeWindow 开头可能残留 ToolResponseMessage（对应的 assistant(toolCalls)
+        // 被归档/摘要了），导致历史不成对，违反 LLM API 的成对约束。
+        // 统一过滤掉孤儿 toolResponse，所有策略都受益。
+        List<MessageEvent> finalEvents = CompactionUtils.dropOrphanToolResponses(result.compactedEvents());
+
         Path eventsFile = AppConstants.Session.eventsFile(sessionId);
         try {
             StringBuilder sb = new StringBuilder();
-            for (AbstractEvent e : result.compactedEvents()) {
+            for (MessageEvent e : finalEvents) {
                 sb.append(JsonUtils.toJson(e)).append("\n");
             }
             Files.writeString(eventsFile, sb.toString());
@@ -333,7 +340,7 @@ public class FileSystemSessionManager implements ISessionManager {
             log.error("重写 compacted events 失败: {}", sessionId, e);
         }
 
-        return result;
+        return new CompactionResult(finalEvents, result.archivedEvents(), result.tokensEstimatedSaved());
     }
 
     @Nullable

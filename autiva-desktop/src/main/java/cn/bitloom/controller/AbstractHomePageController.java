@@ -35,6 +35,7 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
@@ -156,6 +157,9 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.chatListView.setItems(visibleMessages);
         this.chatListView.setCellFactory(list -> new MessageListCell());
 
+        // 配置 stick-to-bottom 跟随模式
+        setupStickToBottom();
+
         // 历史消息加载期间：禁用发送按钮和输入框，显示加载提示
         this.getViewModel().historyLoadingProperty().addListener((obs, oldVal, newVal) -> {
             boolean loading = newVal != null && newVal;
@@ -185,12 +189,9 @@ public abstract class AbstractHomePageController implements Initializable, Butto
                             addToolToEditorPanel(toolCard, toolCard.getToolName());
                         }
                     }
+                    // 只在有新增消息时滚动到底部
+                    scrollToBottom();
                 }
-            }
-            // 滚动到底部：基于过滤后的可见列表，用 runLater 确保布局完成后再滚动
-            int size = this.chatListView.getItems().size();
-            if (size > 0) {
-                Platform.runLater(() -> this.chatListView.scrollTo(size - 1));
             }
             onMessagesChanged(!this.getViewModel().getMessages().isEmpty());
         });
@@ -541,11 +542,56 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.fileTagsScroll.setManaged(hasFiles);
     }
 
-    private void scrollToBottom() {
-        int size = this.chatListView.getItems().size();
-        if (size > 0) {
-            Platform.runLater(() -> this.chatListView.scrollTo(size - 1));
+    // ===== stick-to-bottom 跟随模式 =====
+    // 用户向上滚动时停止自动跟随，滚回底部时恢复跟随。
+    // 流式内容增加导致 vvalue 下降不会误判（只响应鼠标滚轮）。
+    private boolean stickToBottom = true;
+    private boolean scrollBarBound = false;
+
+    private void setupStickToBottom() {
+        // 鼠标滚轮向上滚动 → 停止跟随
+        chatListView.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (e.getDeltaY() > 0) {
+                stickToBottom = false;
+            }
+        });
+
+        // skin 加载后绑定垂直滚动条，监听是否滚回底部
+        chatListView.skinProperty().addListener((obs, oldSkin, newSkin) -> {
+            if (newSkin != null && !scrollBarBound) {
+                Platform.runLater(this::bindVerticalScrollBar);
+            }
+        });
+    }
+
+    private void bindVerticalScrollBar() {
+        if (scrollBarBound) return;
+        Node bar = chatListView.lookup(".scroll-bar:vertical");
+        if (bar instanceof ScrollBar scrollBar) {
+            scrollBar.valueProperty().addListener((o, ov, nv) -> {
+                // 滚动条到底部附近 → 恢复跟随
+                if (nv.doubleValue() >= 0.95) {
+                    stickToBottom = true;
+                }
+            });
+            scrollBarBound = true;
         }
+    }
+
+    private void scrollToBottom() {
+        if (!stickToBottom) return;
+        Platform.runLater(() -> {
+            Node bar = chatListView.lookup(".scroll-bar:vertical");
+            if (bar instanceof ScrollBar scrollBar) {
+                scrollBar.setValue(scrollBar.getMax());
+            } else {
+                // fallback：找不到滚动条时用 scrollTo
+                int size = chatListView.getItems().size();
+                if (size > 0) {
+                    chatListView.scrollTo(size - 1);
+                }
+            }
+        });
     }
 
     protected void animateToChatState() {

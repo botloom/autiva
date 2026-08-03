@@ -83,7 +83,7 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 工具/待办列表通用 cell：直接 setGraphic(node)，绑定 maxWidth 到 ListView 宽度
+     * 工具/待办列表通用 cell：直接 setGraphic(node)，Region 撑满宽度
      */
     private static class ToolListCell extends ListCell<Node> {
         @Override
@@ -93,9 +93,7 @@ public class EditorPanelController implements Initializable {
                 setGraphic(null);
             } else {
                 if (node instanceof Region region) {
-                    region.maxWidthProperty().bind(
-                            getListView().widthProperty().subtract(24)
-                    );
+                    region.setMaxWidth(Double.MAX_VALUE);
                 }
                 setGraphic(node);
             }

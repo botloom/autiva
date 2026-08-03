@@ -372,7 +372,7 @@ public class TaskCard extends VBox {
     }
 
     /**
-     * 子智能体消息列表 cell：直接 setGraphic(node)，绑定 maxWidth 到 ListView 宽度
+     * 子智能体消息列表 cell：直接 setGraphic(node)，Region 撑满宽度
      */
     private static class TaskMessageListCell extends ListCell<Node> {
         @Override
@@ -382,9 +382,7 @@ public class TaskCard extends VBox {
                 setGraphic(null);
             } else {
                 if (node instanceof Region region) {
-                    region.maxWidthProperty().bind(
-                            getListView().widthProperty().subtract(24)
-                    );
+                    region.setMaxWidth(Double.MAX_VALUE);
                 }
                 setGraphic(node);
             }

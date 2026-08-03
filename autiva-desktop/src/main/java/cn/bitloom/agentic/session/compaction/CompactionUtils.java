@@ -16,7 +16,10 @@
 
 package cn.bitloom.agentic.session.compaction;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -30,7 +33,7 @@ import cn.bitloom.agentic.event.MessageEvent;
  * @author Christian Tzolov
  * @since 2.0.0
  */
-final class CompactionUtils {
+public final class CompactionUtils {
 
 	private CompactionUtils() {
 	}
@@ -103,6 +106,60 @@ final class CompactionUtils {
 			idx++;
 		}
 		return idx;
+	}
+
+	/**
+	 * 移除压缩后 compacted 列表中没有对应 assistant(toolCalls) 的孤儿 ToolResponseMessage。
+	 *
+	 * <p>
+	 * 压缩策略把旧事件摘要成纯文本 synthetic assistant（没有 toolCalls），但如果
+	 * activeWindow 开头残留了 ToolResponseMessage（对应的 assistant(toolCalls) 被归档/摘要了），
+	 * 历史会出现不成对的 (纯文本 assistant) + (孤儿 toolResponse)，违反 LLM API 的
+	 * 成对约束导致 400 报错。
+	 *
+	 * <p>
+	 * 本方法线性扫描 compacted 列表，跟踪已见 assistant(toolCalls) 的 toolCall id，
+	 * 遇到 ToolResponseMessage 时检查其 responses 的 id 是否都已被见过。
+	 * 完全孤儿的 ToolResponseMessage 被移除；部分孤儿时只保留已见 id 对应的 responses。
+	 *
+	 * @param compacted 压缩后的事件列表（可能含孤儿 toolResponse）
+	 * @return 过滤后的新列表，保证 ToolResponseMessage 都有对应 assistant(toolCalls)
+	 */
+	public static List<MessageEvent> dropOrphanToolResponses(List<MessageEvent> compacted) {
+		Set<String> seenToolCallIds = new HashSet<>();
+		List<MessageEvent> filtered = new ArrayList<>(compacted.size());
+		for (MessageEvent event : compacted) {
+			if (event.getMessage() instanceof AssistantMessage am && am.hasToolCalls()) {
+				am.getToolCalls().forEach(tc -> seenToolCallIds.add(tc.id()));
+				filtered.add(event);
+			}
+			else if (event.getMessage() instanceof ToolResponseMessage trm) {
+				List<ToolResponseMessage.ToolResponse> valid = trm.getResponses().stream()
+					.filter(r -> seenToolCallIds.contains(r.id()))
+					.collect(Collectors.toList());
+				if (valid.isEmpty()) {
+					// 孤儿 toolResponse：对应的 assistant(toolCalls) 已被摘要/归档，丢弃
+					continue;
+				}
+				if (valid.size() < trm.getResponses().size()) {
+					// 部分孤儿：重建只含有效 responses 的 ToolResponseMessage
+					filtered.add(MessageEvent.builder()
+						.sessionId(event.getSessionId())
+						.timestamp(event.getTimestamp())
+						.branch(event.getBranch())
+						.message(ToolResponseMessage.builder().responses(valid).build())
+						.metadata(event.getMetadata())
+						.build());
+				}
+				else {
+					filtered.add(event);
+				}
+			}
+			else {
+				filtered.add(event);
+			}
+		}
+		return filtered;
 	}
 
 }
