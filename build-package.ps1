@@ -18,7 +18,11 @@ $jlinkOutput = "$PROJECT\autiva-desktop\target\custom-jre"
 Remove-Item -Recurse -Force $jlinkOutput -ErrorAction SilentlyContinue
 
 $depDir = "$PROJECT\autiva-desktop\target\dependency"
-$javafxJars = (Get-ChildItem "$depDir\javafx-*-win.jar" -ErrorAction SilentlyContinue)
+# dependency 目录里可能同时存在多个版本的 javafx-*-win.jar（jeditermfx 会传递 javafx-base 19.0.2.1，
+# 而项目直接依赖 25.0.3）。jlink 遇到重复模块会行为不确定，这里按 artifactId 去重，只保留版本号最高的。
+$javafxJars = Get-ChildItem "$depDir\javafx-*-win.jar" -ErrorAction SilentlyContinue |
+    Group-Object { ($_.BaseName -replace '-\d+(\.\d+)*-win$', '') } |
+    ForEach-Object { $_.Group | Sort-Object Name -Descending | Select-Object -First 1 }
 $javafxModulePath = ($javafxJars.FullName -join ";")
 
 $javafxModules = "javafx.controls,javafx.fxml,javafx.swing"
@@ -46,7 +50,11 @@ Remove-Item -Recurse -Force $jpackageInput -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $jpackageInput | Out-Null
 
 Copy-Item autiva-desktop\target\autiva-desktop-1.0-SNAPSHOT.jar $jpackageInput\ -Force
-Get-ChildItem "$depDir\*.jar" | Where-Object { $_.Name -notmatch '^javafx-.*-win\.jar$' } | Copy-Item -Destination $jpackageInput\ -Force
+# JavaFX jar 分两种：
+#   - javafx-*-win.jar：含真实类与 native 库，已被 jlink 打入自定义 JRE（named module）
+#   - javafx-*.jar（无 -win）：仅含 META-INF/MANIFEST.MF 的空壳 jar
+# 两种都不能放进 classpath：空壳会让 LauncherImpl 加载到无类的 jar，-win 会和 JRE 模块重复。
+Get-ChildItem "$depDir\*.jar" | Where-Object { $_.Name -notmatch '^javafx-.*\.jar$' } | Copy-Item -Destination $jpackageInput\ -Force
 
 Write-Host "  Removing platform-irrelevant JARs..." -ForegroundColor Cyan
 $removePatterns = @(
@@ -135,7 +143,6 @@ Remove-Item -Recurse -Force autiva-desktop\target\jpackage-output -ErrorAction S
   --runtime-image $jlinkOutput `
   --java-options "-Xms128m" `
   --java-options "-Xmx1024m" `
-  --java-options "-XX:SharedArchiveFile=`$APPDIR/app-cds.jsa" `
   --java-options "-XX:+UseCompressedOops" `
   --java-options "-XX:+UseCompressedClassPointers" `
   --java-options "-XX:+UseStringDeduplication" `
@@ -143,46 +150,39 @@ Remove-Item -Recurse -Force autiva-desktop\target\jpackage-output -ErrorAction S
   --dest autiva-desktop\target\jpackage-output `
   --app-version 1.0.0 `
   --vendor "Bitloom" `
-  --win-console `
   --description "Autiva AI Agent Desktop Application" `
   --icon autiva-desktop\target\jpackage-input\icon.ico
 if ($LASTEXITCODE -ne 0) { throw "jpackage failed" }
 
-Write-Host "=== Step 5: Generate CDS archive ===" -ForegroundColor Green
-$appDir = "$PROJECT\autiva-desktop\target\jpackage-output\Autiva"
-$cdsArchive = "$appDir\app-cds.jsa"
+Write-Host "=== Step 5: Build MSI installer ===" -ForegroundColor Green
+$appImageDir = "$PROJECT\autiva-desktop\target\jpackage-output\Autiva"
+$msiOutput = "$PROJECT\autiva-desktop\target\jpackage-output"
+Remove-Item "$msiOutput\Autiva-1.0.0.msi" -Force -ErrorAction SilentlyContinue
 
-$proc = Start-Process "$appDir\Autiva.exe" -ArgumentList "-XX:ArchiveClassesAtExit=$cdsArchive" -PassThru
+& "$JDK\bin\jpackage" `
+  --type msi `
+  --app-image $appImageDir `
+  --name Autiva `
+  --app-version 1.0.0 `
+  --vendor "Bitloom" `
+  --description "Autiva AI Agent Desktop Application" `
+  --dest $msiOutput `
+  --win-menu-group "Autiva" `
+  --win-shortcut `
+  --win-dir-chooser `
+  --win-upgrade-uuid "7307B9E5-7646-314A-868F-FFDA3A0204A2"
+if ($LASTEXITCODE -ne 0) { throw "MSI build failed" }
 
-Write-Host "  Waiting for app to start and load classes..." -ForegroundColor Cyan
-Start-Sleep -Seconds 15
-
-if ($proc.HasExited -and $proc.ExitCode -ne 0) {
-    Write-Host "  WARNING: App exited with error code $($proc.ExitCode)" -ForegroundColor Yellow
-    Write-Host "  CDS archive not generated. Check console output above for errors." -ForegroundColor Yellow
+$msiFile = "$msiOutput\Autiva-1.0.0.msi"
+if (Test-Path $msiFile) {
+    $msiSize = "{0:N2} MB" -f ((Get-Item $msiFile).Length / 1MB)
+    Write-Host "  MSI generated: $msiSize" -ForegroundColor Cyan
 } else {
-    if (!$proc.HasExited) {
-        Write-Host "  App is running, generating CDS archive..." -ForegroundColor Cyan
-        Start-Sleep -Seconds 5
-        $proc.Kill()
-        $proc.WaitForExit(5000)
-    }
-
-    if (Test-Path $cdsArchive) {
-        $cdsSize = "{0:N2} MB" -f ((Get-Item $cdsArchive).Length / 1MB)
-        Write-Host "  CDS archive generated: $cdsSize" -ForegroundColor Cyan
-    } else {
-        Write-Host "  WARNING: CDS archive not generated" -ForegroundColor Yellow
-        Write-Host "  You can generate it manually by running:" -ForegroundColor Yellow
-        Write-Host "    $appDir\Autiva.exe -XX:ArchiveClassesAtExit=$cdsArchive" -ForegroundColor Yellow
-        Write-Host "  Then close the app normally." -ForegroundColor Yellow
-    }
+    throw "MSI file not found at $msiFile"
 }
 
-$size = "{0:N2} MB" -f ((Get-ChildItem autiva-desktop\target\jpackage-output\Autiva -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB)
+$imageSize = "{0:N2} MB" -f ((Get-ChildItem $appImageDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB)
 Write-Host ""
 Write-Host "=== Build Complete ===" -ForegroundColor Green
-Write-Host "Output: autiva-desktop\target\jpackage-output\Autiva\Autiva.exe"
-Write-Host "Size: $size"
-Write-Host ""
-Write-Host "NOTE: Remove --win-console from this script for production builds." -ForegroundColor Yellow
+Write-Host "MSI Installer : autiva-desktop\target\jpackage-output\Autiva-1.0.0.msi ($msiSize)"
+Write-Host "App Image     : autiva-desktop\target\jpackage-output\Autiva\ ($imageSize)"

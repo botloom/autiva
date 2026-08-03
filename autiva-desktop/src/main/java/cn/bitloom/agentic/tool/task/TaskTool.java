@@ -277,11 +277,6 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                     }
                 })
                 .blockLast();
-        try {
-            sessionManager.flush(parentSessionId);
-        } catch (Exception e) {
-            log.warn("[TaskTool] flush 失败: parentSessionId={}, branch={}", parentSessionId, branch, e);
-        }
         return "agent_id: " + taskId + "\n\n" + result;
     }
 

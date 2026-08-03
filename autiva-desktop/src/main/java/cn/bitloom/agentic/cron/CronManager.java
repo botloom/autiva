@@ -251,7 +251,6 @@ public class CronManager {
                         .build();
                 agent.runStream(inputEvent, ctx)
                         .doOnError(e -> log.error("[CronManager] agent run error: name={}", taskInfo.getName(), e))
-                        .doOnComplete(() -> safeFlush(session.id()))
                         .blockLast();
             } catch (Exception e) {
                 log.error("[CronManager] triggerTaskInternal error: name={}", taskInfo.getName(), e);
@@ -259,14 +258,6 @@ public class CronManager {
             return null;
         });
         log.info("[CronManager] 定时任务执行完成: name={}, sessionId={}", taskInfo.getName(), taskInfo.getSessionId());
-    }
-
-    private void safeFlush(String sessionId) {
-        try {
-            fileSystemSessionManager.flush(sessionId);
-        } catch (Exception ex) {
-            log.error("[CronManager] flush 失败: sessionId={}", sessionId, ex);
-        }
     }
 
     /**

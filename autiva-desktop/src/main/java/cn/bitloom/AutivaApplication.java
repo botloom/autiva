@@ -11,6 +11,7 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.Group;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.image.Image;
@@ -132,6 +133,9 @@ public class AutivaApplication extends Application {
         hiddenOwner.setWidth(1);
         hiddenOwner.setHeight(1);
         hiddenOwner.setOpacity(0);
+        // PopupWindow.show(owner, x, y) 在 JavaFX 25+ 要求 owner 已挂 Scene，
+        // 否则在 doVisibleChanged 时取不到 InputMethodStateManager 而抛 NPE。
+        hiddenOwner.setScene(new Scene(new Group()));
         hiddenOwner.show();
         hiddenOwner.toBack();
 

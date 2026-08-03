@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +32,6 @@ import java.util.stream.Stream;
 @Slf4j
 @Component
 public class FileSystemSessionManager implements ISessionManager {
-
-    private final ConcurrentHashMap<String, List<AbstractEvent>> eventBuffers = new ConcurrentHashMap<>();
 
     /** per-session 可重入锁，保证同一 session 的事件串行处理 */
     private final ConcurrentHashMap<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
@@ -113,7 +110,6 @@ public class FileSystemSessionManager implements ISessionManager {
                             });
                 }
             }
-            eventBuffers.remove(sessionId);
             log.info("删除会话: {}", sessionId);
         } catch (IOException e) {
             log.error("删除会话失败: {}", sessionId, e);
@@ -187,36 +183,76 @@ public class FileSystemSessionManager implements ISessionManager {
         return result;
     }
 
+    /**
+     * 直接将事件以一行 JSON 追加到 events.jsonl 文件。
+     * 无内存缓冲：写入即落盘，进程崩溃不丢数据，中断时无需 flush 善后。
+     */
     @Override
     public void appendEvent(AbstractEvent event) {
         String sessionId = event.getSessionId();
-        eventBuffers.computeIfAbsent(sessionId, k -> Collections.synchronizedList(new ArrayList<>())).add(event);
-    }
-
-    @Override
-    public void flush(String sessionId) {
-        List<AbstractEvent> buffer = eventBuffers.get(sessionId);
-        if (buffer == null || buffer.isEmpty()) return;
-
-        Session session = getById(sessionId);
-        if (session == null) return;
-
         try {
             Path eventsFile = AppConstants.Session.eventsFile(sessionId);
             Files.createDirectories(eventsFile.getParent());
-            StringBuilder sb = new StringBuilder();
-            synchronized (buffer) {
-                for (AbstractEvent event : buffer) {
-                    sb.append(JsonUtils.toJson(event)).append("\n");
-                }
-                buffer.clear();
-            }
-            if (!sb.isEmpty()) {
-                Files.writeString(eventsFile, sb.toString(),
-                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            }
+            String line = JsonUtils.toJson(event) + "\n";
+            Files.writeString(eventsFile, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            throw StorageException.writeError("events-flush-" + sessionId, e);
+            log.error("追加事件失败: sessionId={}, eventType={}", sessionId, event.getEventType(), e);
+            throw StorageException.writeError("events-append-" + sessionId, e);
+        }
+    }
+
+    /**
+     * 善后被中断的 toolCalls：检查 events.jsonl 末尾，若最后一条事件是
+     * 含 toolCalls 的 assistant 消息（缺少对应 ToolResponseMessage），
+     * 为每个 toolCall 补一条虚拟 ToolResponse（content 标记被用户中断）。
+     */
+    @Override
+    public void finalizeInterruptedToolCalls(String sessionId) {
+        Path eventsFile = AppConstants.Session.eventsFile(sessionId);
+        if (!Files.exists(eventsFile)) return;
+
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(eventsFile);
+        } catch (IOException e) {
+            log.error("读取事件文件失败: sessionId={}", sessionId, e);
+            return;
+        }
+
+        // 从末尾往前找最后一条非空行
+        int last = -1;
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            if (!lines.get(i).isBlank()) {
+                last = i;
+                break;
+            }
+        }
+        if (last < 0) return;
+
+        AbstractEvent lastEvent = deserializeEvent(lines.get(last));
+        if (!(lastEvent instanceof MessageEvent me)) return;
+        if (!(me.isAssistantMessage() && me.hasToolCalls())) return;
+
+        // 为每个 toolCall 补一条虚拟 ToolResponse，标记为被用户中断
+        // 参考 Claude Code 的做法：保持历史成对完整，LLM 能感知中断自然续接
+        List<MessageEvent.ToolCallInfo> toolCalls = me.getToolCalls();
+        if (toolCalls == null || toolCalls.isEmpty()) return;
+
+        List<MessageEvent.ToolResponseInfo> virtualResponses = toolCalls.stream()
+                .map(tc -> new MessageEvent.ToolResponseInfo(
+                        tc.id(),
+                        tc.name(),
+                        "[Tool execution interrupted by user]"))
+                .toList();
+        MessageEvent toolResponseEvent = MessageEvent.toolResponse(sessionId, virtualResponses);
+
+        try {
+            String line = JsonUtils.toJson(toolResponseEvent) + "\n";
+            Files.writeString(eventsFile, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            log.info("补虚拟 ToolResponse 善后被中断的 toolCalls: sessionId={}, toolCount={}",
+                    sessionId, toolCalls.size());
+        } catch (IOException e) {
+            log.error("补虚拟 ToolResponse 失败: sessionId={}", sessionId, e);
         }
     }
 
@@ -240,13 +276,6 @@ public class FileSystemSessionManager implements ISessionManager {
             }
         } catch (IOException e) {
             log.error("加载事件失败: {}", sessionId, e);
-        }
-
-        List<AbstractEvent> buffered = eventBuffers.get(sessionId);
-        if (buffered != null) {
-            synchronized (buffered) {
-                allEvents.addAll(buffered);
-            }
         }
 
         List<AbstractEvent> matched = allEvents.stream()

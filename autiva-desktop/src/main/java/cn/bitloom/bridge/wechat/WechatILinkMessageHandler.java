@@ -96,7 +96,6 @@ public class WechatILinkMessageHandler {
                             }
                         })
                         .doOnError(e -> log.error("Wechat agent run error: userId={}", userId, e))
-                        .doOnComplete(() -> safeFlush(session.id()))
                         .blockLast();
             } catch (Exception e) {
                 log.error("Wechat handleMessage error: userId={}", userId, e);
@@ -117,14 +116,6 @@ public class WechatILinkMessageHandler {
         Session session = fileSystemSessionManager.create(request);
         log.info("[Wechat] 绑定 session: userId={}, sessionId={}", userId, sessionId);
         return session;
-    }
-
-    private void safeFlush(String sessionId) {
-        try {
-            fileSystemSessionManager.flush(sessionId);
-        } catch (Exception ex) {
-            log.error("[Wechat] flush 失败: sessionId={}", sessionId, ex);
-        }
     }
 
     /**

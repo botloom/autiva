@@ -352,6 +352,10 @@ public abstract class AbstractHomePageViewModel {
             Store.currentSessionId.set(this.session.id());
         }
 
+        // 兜底：清理上一轮 pause 后异步 after() 竞态写入的孤儿 toolCalls
+        // 此时距上次 pause 已隔用户操作时间，in-flight after 必已完成，能可靠检测
+        sessionManager.finalizeInterruptedToolCalls(this.session.id());
+
         Store.isStreaming.set(true);
         Store.isPaused.set(false);
         cancelSink = Sinks.empty();
@@ -380,7 +384,6 @@ public abstract class AbstractHomePageViewModel {
                             .doOnComplete(() -> Platform.runLater(() -> {
                                 Store.isStreaming.set(false);
                                 Store.isPaused.set(false);
-                                safeFlush(currentSession.id());
                             }))
                             .doOnError(e -> {
                                 log.error("agent run error", e);
@@ -403,14 +406,6 @@ public abstract class AbstractHomePageViewModel {
 
         // 触发侧边栏刷新（更新会话标题）
         Store.refreshHistory.set(!Store.refreshHistory.get());
-    }
-
-    private void safeFlush(String sessionId) {
-        try {
-            sessionManager.flush(sessionId);
-        } catch (Exception ex) {
-            log.error("[ViewModel] flush 失败: sessionId={}", sessionId, ex);
-        }
     }
 
     // ===== 事件处理 =====
@@ -524,10 +519,28 @@ public abstract class AbstractHomePageViewModel {
 
     public void pauseGeneration() {
         if (Store.isStreaming.get() && !Store.isPaused.get()) {
+            Store.isStreaming.set(false);
             Store.isPaused.set(true);
             cancelCurrentSubscription();
 
-            if (currentAssistantCard != null) {
+            // 中途停止时善后事件文件，避免下次调用 LLM 时历史不成对导致报错：
+            //   1. 保存已流式生成的 assistant 文本为 STOP 事件，避免上一轮内容丢失
+            //   2. 为末尾不成对的 assistant(toolCalls) 补虚拟 ToolResponse（若存在）
+            //      — pause 时调用是尽力而为；竞态残留的孤儿由 sendMessage 开头兜底再补
+            if (this.session != null) {
+                String sid = this.session.id();
+
+                if (currentAssistantCard != null) {
+                    String partial = currentAssistantCard.getContent();
+                    if (partial != null && !partial.isBlank()) {
+                        sessionManager.appendEvent(MessageEvent.assistantStop(sid, partial));
+                    }
+                    currentAssistantCard.setStreaming(false);
+                    currentAssistantCard = null;
+                }
+
+                sessionManager.finalizeInterruptedToolCalls(sid);
+            } else if (currentAssistantCard != null) {
                 currentAssistantCard.setStreaming(false);
                 currentAssistantCard = null;
             }
