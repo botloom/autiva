@@ -22,6 +22,7 @@ import cn.bitloom.agentic.session.SessionTypeEnum;
 import cn.bitloom.agentic.session.compaction.RecursiveSummarizationCompactionStrategy;
 import cn.bitloom.agentic.session.compaction.TokenCountTrigger;
 import cn.bitloom.agentic.tool.Toolkit;
+import cn.bitloom.agentic.tool.command.ShellSession;
 import cn.bitloom.agentic.tool.session.ConversationSearchTool;
 import cn.bitloom.agentic.tool.session.CrossSessionSearchTool;
 import cn.bitloom.constant.AppConstants;
@@ -76,6 +77,7 @@ public abstract class AbstractHomePageViewModel {
     protected final ModelFactory modelFactory;
     protected final Toolkit toolkit;
     protected final SkillManager skillManager;
+    protected final cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher;
 
     @Getter
     private final ObservableList<MessageCard> messages = FXCollections.observableArrayList();
@@ -115,12 +117,14 @@ public abstract class AbstractHomePageViewModel {
                                         AgentDefinitionManager definitionManager,
                                         ModelFactory modelFactory,
                                         Toolkit toolkit,
-                                        SkillManager skillManager) {
+                                        SkillManager skillManager,
+                                        cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
         this.sessionManager = sessionManager;
         this.definitionManager = definitionManager;
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
         this.skillManager = skillManager;
+        this.evolveEnricher = evolveEnricher;
     }
 
     public void createNewSession() {
@@ -247,7 +251,7 @@ public abstract class AbstractHomePageViewModel {
     protected String buildSystemPrompt(String agentId, AgentDefinition definition) {
         String systemPrompt = definition.content();
         if (AgentMode.fromAgentId(agentId) != AgentMode.CODER) {
-            return systemPrompt;
+            return systemPrompt + ShellSession.envBlock();
         }
         try {
             Path globalRules = AppConstants.Rules.codeGlobalRulesFile();
@@ -268,7 +272,8 @@ public abstract class AbstractHomePageViewModel {
                 log.warn("读取项目规则失败: {}", project.path(), e);
             }
         }
-        return systemPrompt;
+        // code 模式注入项目路径作为 Working directory，让 LLM 感知项目根目录
+        return systemPrompt + ShellSession.envBlock(project != null ? project.path() : null);
     }
 
     /**
@@ -309,6 +314,9 @@ public abstract class AbstractHomePageViewModel {
                 .definition(definition)
                 .build());
 
+        // 进化系统：条件注入 GeneInjector Advisor
+        evolveEnricher.enrichAdvisors(advisors);
+
         List<ToolCallback> allTools = new ArrayList<>(toolkit.buildToolCallbacks(definition));
         allTools.add(ConversationSearchTool.builder(sessionManager).build().toToolCallback());
         allTools.add(CrossSessionSearchTool.builder(sessionManager, uid).build().toToolCallback());
@@ -319,7 +327,7 @@ public abstract class AbstractHomePageViewModel {
                 .model(chatModel)
                 .systemPrompt(buildSystemPrompt(agentId, definition))
                 .tools(allTools)
-                .hooks(List.of())
+                .hooks(evolveEnricher.buildHooks())
                 .advisors(advisors)
                 .build();
         log.info("构建智能体: agentId={}", agentId);
@@ -359,9 +367,11 @@ public abstract class AbstractHomePageViewModel {
             sessionManager.withLock(currentSession.id(), () -> {
                 try {
                     Agent agent = buildAgent(currentSession, agentId);
+                    ProjectInfo project = getCurrentProject();
                     RuntimeContext ctx = RuntimeContext.builder()
                             .sessionId(currentSession.id())
                             .userId(currentSession.userId())
+                            .projectPath(project != null ? project.path() : null)
                             .put("lastUserMessage", messageText)
                             .build();
                     currentSubscription = agent.runStream(inputEvent, ctx)

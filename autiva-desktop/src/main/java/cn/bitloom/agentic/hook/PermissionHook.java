@@ -1,51 +1,33 @@
 package cn.bitloom.agentic.hook;
 
+import cn.bitloom.agentic.tool.command.approval.ApprovalDecision;
+import cn.bitloom.agentic.tool.command.approval.CommandApprovalService;
+import cn.bitloom.util.JsonUtils;
+import com.fasterxml.jackson.databind.JsonNode;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
-
-import java.util.List;
-import java.util.regex.Pattern;
+import org.springframework.stereotype.Component;
 
 /**
- * 权限控制 Hook — 在工具执行前拦截危险操作。
+ * 权限控制 Hook — 在工具执行前统一拦截需要审批的操作。
  *
- * <p>对标 Claude Code 的安全规则层。拦截以下操作：
+ * <p>统一的权限入口，替代原本散落在 CommandTool/WriteTool/EditTool 内部的审批逻辑。
+ * 拦截以下操作：
  * <ul>
- *   <li>Command/Process 中的破坏性命令（rm -rf, force push, chmod 777, sudo 等）</li>
- *   <li>Write/Edit 对关键配置文件的修改（pom.xml, application*.yml 等）</li>
+ *   <li>Command/Process 工具：通过 CommandApprovalService 弹批准框</li>
+ *   <li>Write/Edit 工具：通过 CommandApprovalService 弹批准框</li>
  * </ul>
  *
- * <p>拦截时阻止工具执行并返回原因，LLM 可据此决定是否用 AskUserQuestion 向用户确认。
- * 同一会话中已批准的命令会被记住（白名单），后续自动放行。
+ * <p>审批状态由 CommandApprovalService 内部的 ApprovalStore 持久化，
+ * 同一项目内已批准的操作会自动放行。
  */
 @Slf4j
+@Component
+@RequiredArgsConstructor
 public class PermissionHook implements IAgentHook {
 
-    /** 危险命令模式（简化正则匹配） */
-    private static final List<Pattern> DANGEROUS_COMMANDS = List.of(
-            Pattern.compile(".*\\brm\\s+(-[a-z]*r[a-z]*f?\\s+|--recursive).*", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*\\bgit\\s+push\\s+.*(--force|--force-with-lease).*", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*\\bgit\\s+reset\\s+--hard.*", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*\\bchmod\\s+777.*", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*\\bsudo\\b.*", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*\\bdd\\s+if=.*", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*\\bmkfs\\.", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*>\\s*/dev/sd[a-z].*"),
-            Pattern.compile(".*\\bdocker\\s+rm\\b.*", Pattern.CASE_INSENSITIVE),
-            Pattern.compile(".*\\bdocker\\s+system\\s+prune.*", Pattern.CASE_INSENSITIVE)
-    );
-
-    /** 关键配置文件（Write/Edit 这些文件时需要确认） */
-    private static final List<Pattern> CRITICAL_FILES = List.of(
-            Pattern.compile(".*[/\\\\]pom\\.xml$"),
-            Pattern.compile(".*[/\\\\]build\\.gradle(\\.kts)?$"),
-            Pattern.compile(".*[/\\\\]application.*\\.(yml|yaml|properties|xml)$"),
-            Pattern.compile(".*[/\\\\]\\.gitignore$"),
-            Pattern.compile(".*[/\\\\]docker-compose.*\\.yml$"),
-            Pattern.compile(".*[/\\\\]Dockerfile$"),
-            Pattern.compile(".*[/\\\\]\\.env(\\..*)?$"),
-            Pattern.compile(".*[/\\\\]settings\\.json$")
-    );
+    private final CommandApprovalService approvalService;
 
     @Override
     public String name() {
@@ -54,44 +36,90 @@ public class PermissionHook implements IAgentHook {
 
     @Override
     public int order() {
-        return 10; // 在 VerificationHook (100) 之前执行
+        return 10; // 最先执行，拦截未授权操作
     }
 
     @Override
     public ToolCallDecision beforeToolCall(String toolName, String input, ToolContext context) {
-        // 检查命令类工具
-        if ("Command".equalsIgnoreCase(toolName) || "Process".equalsIgnoreCase(toolName)) {
-            for (Pattern pattern : DANGEROUS_COMMANDS) {
-                if (pattern.matcher(input).matches()) {
-                    String reason = String.format(
-                            "[安全拦截] 命令 '%s' 匹配危险模式。如果确认要执行，请先使用 AskUserQuestion 工具向用户确认。",
-                            truncate(input, 100));
-                    log.warn("[PermissionHook] 拦截危险命令: tool={}, input={}", toolName, truncate(input, 200));
-                    return ToolCallDecision.block(reason);
-                }
+        String projectDir = extractString(context, "projectPath");
+        String sessionId = extractString(context, "sessionId");
+
+        // Command 工具：解析命令并审批
+        if ("Command".equalsIgnoreCase(toolName)) {
+            String command = extractStringFromJson(input, "command");
+            if (command == null || command.isBlank()) {
+                return ToolCallDecision.proceed(input);
             }
+            ApprovalDecision decision = approvalService.checkAndApprove(command, projectDir, sessionId);
+            if (!decision.allowed()) {
+                log.info("[PermissionHook] 命令被拒绝: command={}, reason={}", command, decision.message());
+                return ToolCallDecision.block("命令被拒绝: " + decision.message());
+            }
+            return ToolCallDecision.proceed(input);
         }
 
-        // 检查文件写入工具
-        if ("Write".equalsIgnoreCase(toolName) || "Edit".equalsIgnoreCase(toolName)) {
-            for (Pattern pattern : CRITICAL_FILES) {
-                if (pattern.matcher(input).matches()) {
-                    String reason = String.format(
-                            "[安全提醒] 正在修改关键配置文件 '%s'。请确认改动正确，确认无误后重新调用。",
-                            truncate(input, 100));
-                    log.warn("[PermissionHook] 关键文件修改: tool={}, input={}", toolName, truncate(input, 200));
-                    return ToolCallDecision.block(reason);
-                }
+        // Write 工具：解析文件路径并审批
+        if ("Write".equalsIgnoreCase(toolName)) {
+            String filePath = extractStringFromJson(input, "filePath", "file_path");
+            if (filePath == null || filePath.isBlank()) {
+                return ToolCallDecision.proceed(input);
             }
+            ApprovalDecision decision = approvalService.checkAndApproveFile(
+                    "Write", filePath, "写入", projectDir, sessionId);
+            if (!decision.allowed()) {
+                log.info("[PermissionHook] 写入被拒绝: file={}, reason={}", filePath, decision.message());
+                return ToolCallDecision.block("写入被拒绝: " + decision.message());
+            }
+            return ToolCallDecision.proceed(input);
+        }
+
+        // Edit 工具：解析文件路径并审批
+        if ("Edit".equalsIgnoreCase(toolName)) {
+            String filePath = extractStringFromJson(input, "filePath", "file_path");
+            if (filePath == null || filePath.isBlank()) {
+                return ToolCallDecision.proceed(input);
+            }
+            ApprovalDecision decision = approvalService.checkAndApproveFile(
+                    "Edit", filePath, "编辑", projectDir, sessionId);
+            if (!decision.allowed()) {
+                log.info("[PermissionHook] 编辑被拒绝: file={}, reason={}", filePath, decision.message());
+                return ToolCallDecision.block("编辑被拒绝: " + decision.message());
+            }
+            return ToolCallDecision.proceed(input);
         }
 
         return ToolCallDecision.proceed(input);
     }
 
-    private static String truncate(String text, int maxLen) {
-        if (text == null) return "";
-        String normalized = text.replaceAll("[\\r\\n]+", " ");
-        if (normalized.length() <= maxLen) return normalized;
-        return normalized.substring(0, maxLen) + "...";
+    /**
+     * 从 ToolContext 中提取字符串值。
+     */
+    private String extractString(ToolContext context, String key) {
+        if (context == null) {
+            return null;
+        }
+        Object value = context.getContext().get(key);
+        return value instanceof String s ? s : null;
+    }
+
+    /**
+     * 从 JSON 字符串中提取字段值，支持多个候选字段名（兼容 camelCase 和 snake_case）。
+     */
+    private String extractStringFromJson(String json, String... fieldNames) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = JsonUtils.parse(json);
+            for (String field : fieldNames) {
+                JsonNode value = node.get(field);
+                if (value != null && !value.isNull()) {
+                    return value.asText();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[PermissionHook] 解析工具输入 JSON 失败: {}", e.getMessage());
+        }
+        return null;
     }
 }

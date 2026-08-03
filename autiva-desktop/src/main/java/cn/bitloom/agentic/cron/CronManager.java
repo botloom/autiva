@@ -6,6 +6,7 @@ import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.agent.RuntimeContext;
 import cn.bitloom.agentic.agent.advisor.AutoMemoryToolsAdvisor;
 import cn.bitloom.agentic.agent.advisor.SessionMemoryAdvisor;
+import cn.bitloom.agentic.evolve.EvolveAgentEnricher;
 import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
@@ -15,6 +16,7 @@ import cn.bitloom.agentic.session.Session;
 import cn.bitloom.agentic.session.compaction.RecursiveSummarizationCompactionStrategy;
 import cn.bitloom.agentic.session.compaction.TokenCountTrigger;
 import cn.bitloom.agentic.tool.Toolkit;
+import cn.bitloom.agentic.tool.command.ShellSession;
 import cn.bitloom.agentic.tool.session.ConversationSearchTool;
 import cn.bitloom.agentic.tool.session.CrossSessionSearchTool;
 import cn.bitloom.constant.AppConstants;
@@ -55,18 +57,21 @@ public class CronManager {
     private final AgentDefinitionManager definitionManager;
     private final ModelFactory modelFactory;
     private final Toolkit toolkit;
+    private final EvolveAgentEnricher evolveEnricher;
     private final Map<String, CronTaskInfo> taskMap = new ConcurrentHashMap<>();
 
     public CronManager(@Qualifier("taskScheduler") TaskScheduler taskScheduler,
                        @Lazy FileSystemSessionManager fileSystemSessionManager,
                        @Lazy AgentDefinitionManager definitionManager,
                        @Lazy ModelFactory modelFactory,
-                       @Lazy Toolkit toolkit) {
+                       @Lazy Toolkit toolkit,
+                       @Lazy EvolveAgentEnricher evolveEnricher) {
         this.taskScheduler = taskScheduler;
         this.fileSystemSessionManager = fileSystemSessionManager;
         this.definitionManager = definitionManager;
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
+        this.evolveEnricher = evolveEnricher;
     }
 
     public void createTask(String name, String type, Integer intervalSeconds,
@@ -295,6 +300,9 @@ public class CronManager {
                 .build();
         advisors.add(autoMemoryToolsAdvisor);
 
+        // 进化系统：条件注入 GeneInjector Advisor
+        evolveEnricher.enrichAdvisors(advisors);
+
         List<ToolCallback> allTools = new ArrayList<>(toolkit.buildToolCallbacks(definition));
         allTools.addAll(Arrays.asList(MethodToolCallbackProvider.builder()
                 .toolObjects(ConversationSearchTool.builder(fileSystemSessionManager).build())
@@ -309,9 +317,9 @@ public class CronManager {
                 .name(agentId)
                 .definition(definition)
                 .model(chatModel)
-                .systemPrompt(definition.content())
+                .systemPrompt(definition.content() + ShellSession.envBlock())
                 .tools(allTools)
-                .hooks(List.of())
+                .hooks(evolveEnricher.buildHooks())
                 .advisors(advisors)
                 .build();
         log.info("构建定时任务智能体: agentId={}", agentId);

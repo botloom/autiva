@@ -50,6 +50,9 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 			Path path = Paths.get(filePath);
 			File file = path.toFile();
 
+			boolean fileExists = file.exists();
+			String action = fileExists ? "覆盖" : "创建";
+
 			File parentDir = file.getParentFile();
 			if (parentDir != null && !parentDir.exists()) {
 				if (!parentDir.mkdirs()) {
@@ -57,7 +60,6 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 				}
 			}
 
-			boolean fileExists = file.exists();
 			String oldContent = fileExists
 					? Files.readString(path, StandardCharsets.UTF_8)
 					: null;
@@ -77,7 +79,6 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 				}
 			}
 
-			String action = fileExists ? "覆盖" : "创建";
 			String message = String.format("已%s %s（%d字节）", action, filePath, content.length());
 
 			Map<String, Object> data = new LinkedHashMap<>();
@@ -128,6 +129,12 @@ public class WriteTool extends AbstractTool<WriteTool.Input> {
 				log.warn("推送 DiffEvent 失败（不影响写入）: {}", fileDiff.filePath(), e);
 			}
 		}
+	}
+
+	private static String extractString(ToolContext context, String key) {
+		if (context == null || context.getContext() == null) return null;
+		Object v = context.getContext().get(key);
+		return v instanceof String s ? s : null;
 	}
 
 }

@@ -54,6 +54,33 @@ public class WindowsShellExecutor implements ShellExecutor {
     }
 
     @Override
+    public ProcessBuilder createPersistentShellBuilder(Map<String, String> env) {
+        // /v:on 启用延迟变量展开（!ERRORLEVEL! / !CD!）
+        // /q 关闭命令回显（关键：不关闭的话 cmd 会把 stdin 写入的命令回显到 stdout，
+        //   而回显的命令文本包含 markerId，会导致 stdout reader 误判命令已完成）
+        // /k 执行 chcp 后保持会话存活
+        ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/v:on", "/q", "/k", "chcp 65001 >nul 2>&1");
+        pb.directory(new File(System.getProperty("user.home")));
+        pb.redirectErrorStream(false); // stdout 与 stderr 分离（v13）
+        if (env != null) {
+            pb.environment().putAll(env);
+        }
+        return pb;
+    }
+
+    @Override
+    public String wrapPersistentCommand(String command, String markerId) {
+        // 关键：用户命令与 marker 用换行分隔（而非 & 连接）。
+        // 原因：cmd 的 & 连接符在遇到 if/for/括号块 时会把后续内容吞进块内解析，
+        //   例如 "if exist X (echo A) else (echo B) & echo MARKER" 中的 & echo MARKER
+        //   会被 cmd 当作 else 块的延续，导致 marker 永远不输出，stdout reader 阻塞。
+        // 换行让 cmd 逐行执行：先执行用户命令，再单独执行 marker 输出行。
+        // 用 set /a 捕获 ERRORLEVEL（避免 if/for 块内 ERRORLEVEL 被覆盖），
+        // !ERRORLEVEL! 在下一行仍可访问（cmd 在每行结束后才更新 ERRORLEVEL）。
+        return "@echo off\r\n" + command + "\r\necho " + markerId + "^|^|!ERRORLEVEL!^|^|!CD!";
+    }
+
+    @Override
     public ParseResult parseOutput(String rawOutput, String markerId, String fallbackCwd, boolean timedOut) {
         if (rawOutput == null || rawOutput.isEmpty()) {
             return new ParseResult("", -1, nvl(fallbackCwd));

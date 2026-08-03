@@ -137,18 +137,16 @@ public class AppConstants {
         public static final Path ROUTING_FILE = EVOLVE_DIR.resolve("routing.json");
         public static final Path MEMORY_DIR = EVOLVE_DIR.resolve("memory");
         public static final Path MEMORY_RULES_FILE = MEMORY_DIR.resolve("rules.jsonl");
+        public static final Path EXPERIENCES_DIR = MEMORY_DIR.resolve("experiences");
+        public static final Path EVOLUTION_EVENTS_FILE = MEMORY_DIR.resolve("evolution-events.jsonl");
         public static final Path EXECUTIONS_DIR = APP_DIR.resolve("logs").resolve("executions");
 
         public static Path geneDir(String geneId) {
             return GENES_DIR.resolve(geneId);
         }
 
-        public static Path geneMetaFile(String geneId) {
-            return geneDir(geneId).resolve("gene.json");
-        }
-
-        public static Path geneCodeFile(String geneId) {
-            return geneDir(geneId).resolve("impl.java");
+        public static Path geneFile(String geneId) {
+            return geneDir(geneId).resolve("gene.md");
         }
 
         public static Path geneVersionsDir(String geneId) {

@@ -2,10 +2,10 @@
 set -euo pipefail
 
 PROJECT="$(cd "$(dirname "$0")" && pwd)"
-MVN="mvn"
+MVN="${MVN:-mvn}"
 
-# Use Oracle JDK 17
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home
+# Use JDK 25 to match the project's Java version
+export JAVA_HOME="${JAVA_HOME:-/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home}"
 export PATH="$JAVA_HOME/bin:$PATH"
 
 echo "Using JDK: $JAVA_HOME"
@@ -14,16 +14,16 @@ java -version
 JDK_MODULES="java.base,java.desktop,java.net.http,java.logging,java.xml,java.sql,java.naming,java.management,java.instrument,java.scripting,java.prefs,java.security.sasl,java.transaction.xa,jdk.jsobject,jdk.unsupported,jdk.crypto.ec,jdk.xml.dom"
 
 echo -e "\033[32m=== Step 1: Build JAR ===\033[0m"
-$MVN package -pl autiva-front -am -DskipTests
-$MVN dependency:copy-dependencies -pl autiva-front -DincludeScope=runtime -DexcludeArtifactIds=lombok
+$MVN package -pl autiva-desktop -am -DskipTests
+$MVN dependency:copy-dependencies -pl autiva-desktop -DincludeScope=runtime -DexcludeArtifactIds=lombok
 
 echo -e "\033[32m=== Step 2: Create custom JRE ===\033[0m"
-JLINK_OUTPUT="$PROJECT/autiva-front/target/custom-jre"
+JLINK_OUTPUT="$PROJECT/autiva-desktop/target/custom-jre"
 rm -rf "$JLINK_OUTPUT"
 
-DEP_DIR="$PROJECT/autiva-front/target/dependency"
+DEP_DIR="$PROJECT/autiva-desktop/target/dependency"
 JAVAFX_MODULE_PATH=$(ls "$DEP_DIR"/javafx-*.jar 2>/dev/null | tr '\n' ':')
-JAVAFX_MODULES="javafx.controls,javafx.fxml"
+JAVAFX_MODULES="javafx.controls,javafx.fxml,javafx.swing"
 ALL_MODULES="$JDK_MODULES,$JAVAFX_MODULES"
 
 jlink \
@@ -38,11 +38,11 @@ jlink \
 echo -e "\033[36m  JRE size: $(du -sh "$JLINK_OUTPUT" | cut -f1)\033[0m"
 
 echo -e "\033[32m=== Step 3: Prepare jpackage input ===\033[0m"
-JPACKAGE_INPUT="$PROJECT/autiva-front/target/jpackage-input"
+JPACKAGE_INPUT="$PROJECT/autiva-desktop/target/jpackage-input"
 rm -rf "$JPACKAGE_INPUT"
 mkdir -p "$JPACKAGE_INPUT"
 
-cp autiva-front/target/autiva-front-1.0-SNAPSHOT.jar "$JPACKAGE_INPUT/"
+cp autiva-desktop/target/autiva-desktop-1.0-SNAPSHOT.jar "$JPACKAGE_INPUT/"
 for jar in "$DEP_DIR"/*.jar; do
     basename=$(basename "$jar")
     if [[ ! "$basename" =~ ^javafx-.*\.jar$ ]]; then
@@ -56,7 +56,7 @@ for pattern in "netty-transport-native-epoll-*.jar" "netty-transport-classes-epo
 done
 
 # Generate icon
-ICON_SRC="$PROJECT/autiva-front/src/main/resources/cn/bitloom/images/icon.png"
+ICON_SRC="$PROJECT/autiva-desktop/src/main/resources/cn/bitloom/images/icon.png"
 ICON_ICNS="$JPACKAGE_INPUT/icon.icns"
 ICONSET_DIR=$(mktemp -d)/icon.iconset
 mkdir -p "$ICONSET_DIR"
@@ -73,23 +73,23 @@ iconutil -c icns "$ICONSET_DIR" -o "$ICON_ICNS"
 rm -rf "$(dirname "$ICONSET_DIR")"
 
 echo -e "\033[32m=== Step 4: Build app ===\033[0m"
-rm -rf autiva-front/target/jpackage-output
+rm -rf autiva-desktop/target/jpackage-output
 jpackage \
   --type app-image \
   --name Autiva \
-  --input autiva-front/target/jpackage-input \
-  --main-jar autiva-front-1.0-SNAPSHOT.jar \
+  --input autiva-desktop/target/jpackage-input \
+  --main-jar autiva-desktop-1.0-SNAPSHOT.jar \
   --main-class cn.bitloom.AutivaApplication \
   --runtime-image "$JLINK_OUTPUT" \
   --java-options "-Xms128m" \
   --java-options "-Xmx1024m" \
-  --dest autiva-front/target/jpackage-output \
+  --dest autiva-desktop/target/jpackage-output \
   --app-version 1.0.0 \
   --vendor "Bitloom" \
   --icon "$ICON_ICNS"
 
 echo -e "\033[32m=== Step 5: Generate CDS archive ===\033[0m"
-APP_DIR="$PROJECT/autiva-front/target/jpackage-output/Autiva.app"
+APP_DIR="$PROJECT/autiva-desktop/target/jpackage-output/Autiva.app"
 CDS_ARCHIVE="$APP_DIR/Contents/app/app-cds.jsa"
 APP_LAUNCHER="$APP_DIR/Contents/MacOS/Autiva"
 
@@ -105,9 +105,9 @@ fi
 [ -f "$CDS_ARCHIVE" ] && echo -e "\033[36m  CDS archive: $(du -sh "$CDS_ARCHIVE" | cut -f1)\033[0m"
 
 echo -e "\033[32m=== Step 6: Create DMG ===\033[0m"
-DMG_OUTPUT="$PROJECT/autiva-front/target/jpackage-output"
+DMG_OUTPUT="$PROJECT/autiva-desktop/target/jpackage-output"
 DMG_FILE="$DMG_OUTPUT/Autiva-1.0.0.dmg"
-DMG_TEMP="$PROJECT/autiva-front/target/dmg-temp"
+DMG_TEMP="$PROJECT/autiva-desktop/target/dmg-temp"
 DMG_RAW="$DMG_OUTPUT/Autiva-raw.dmg"
 
 # Cleanup

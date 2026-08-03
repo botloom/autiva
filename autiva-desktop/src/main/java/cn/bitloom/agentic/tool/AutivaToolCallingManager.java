@@ -123,15 +123,26 @@ public class AutivaToolCallingManager implements ToolCallingManager {
 
                 String toolResult;
                 try {
+                    log.info("[ToolCall] 调用工具: name='{}', input='{}'", toolName, toolInput);
                     toolResult = toolCallback.call(toolInput, toolContext);
+                    log.info("[ToolCall] 工具 {} 执行完成, 结果长度={}", toolName, toolResult != null ? toolResult.length() : 0);
                 } catch (ToolExecutionException ex) {
+                    log.error("[ToolCall] 工具 {} 抛出 ToolExecutionException: {}", toolName, ex.getMessage(), ex);
                     toolResult = DefaultToolExecutionExceptionProcessor.builder().build().process(ex);
                 } catch (IllegalStateException ex) {
-                    // JSON 解析失败等异常：LLM 生成了无效的工具参数，返回友好错误让 LLM 自我纠正
+                    // 可能是 JSON 参数解析失败，也可能是工具内部抛出的 IllegalStateException（如 shell 启动失败）
+                    // 记录完整异常栈以便区分
+                    log.error("[ToolCall] 工具 {} 抛出 IllegalStateException: {}", toolName, ex.getMessage(), ex);
                     String errorMsg = ToolResult.error(
-                            "工具调用参数格式错误，请确保参数为合法的 JSON 格式，字段之间用逗号分隔。错误: " + ex.getMessage(),
+                            "工具执行异常: " + ex.getMessage(),
                             Map.of("raw_input", toolInput)).toJson();
-                    log.warn("[ToolCall] 工具 {} 参数解析失败: {}", toolName, ex.getMessage());
+                    toolResult = errorMsg;
+                } catch (Exception ex) {
+                    // 兜底：捕获所有未预期的异常，记录完整栈
+                    log.error("[ToolCall] 工具 {} 抛出未预期异常 {}: {}", toolName, ex.getClass().getName(), ex.getMessage(), ex);
+                    String errorMsg = ToolResult.error(
+                            "工具执行未预期异常: " + ex.getClass().getSimpleName() + ": " + ex.getMessage(),
+                            Map.of("raw_input", toolInput)).toJson();
                     toolResult = errorMsg;
                 }
                 toolResponses.add(new ToolResponseMessage.ToolResponse(

@@ -84,7 +84,9 @@ public interface IAgentHook {
      * <p>
      * 区别于 {@link #afterModelCall}：afterModelCall 在工具调用循环中可能多次触发，
      * 而此方法保证每轮对话只调用一次。
+     *
+     * @param ctx 运行时上下文（携带 sessionId 等信息，流式模式下可安全获取，不依赖 ThreadLocal）
      */
-    default void afterConversationRound() {
+    default void afterConversationRound(RuntimeContext ctx) {
     }
 }

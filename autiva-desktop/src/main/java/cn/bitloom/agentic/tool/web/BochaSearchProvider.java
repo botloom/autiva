@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.tool.search;
+package cn.bitloom.agentic.tool.web;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

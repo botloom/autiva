@@ -1,5 +1,6 @@
 package cn.bitloom.agentic.tool.command;
 
+import cn.bitloom.agentic.tool.command.shell.ShellExecutor;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -128,4 +129,34 @@ public class ShellSession {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ShellState(String cwd, Map<String, String> env) {}
+
+    /**
+     * 构建环境信息块（对标 Claude Code 的 {@code <env>} 注入），供系统提示使用。
+     *
+     * <p>读取当前持久化 cwd + 平台名称，让模型无需调用工具即可感知工作目录和运行平台。
+     *
+     * @return 形如 {@code "\n\n<env>\nWorking directory: ...\nPlatform: ...\n</env>"} 的字符串
+     */
+    public static String envBlock() {
+        String cwd = new ShellSession().getCwd();
+        String platform = ShellExecutor.create().platformName();
+        return "\n\n<env>\nWorking directory: " + cwd + "\nPlatform: " + platform + "\n</env>";
+    }
+
+    /**
+     * 构建环境信息块（带项目路径覆盖）。
+     *
+     * <p>code 模式下传入项目路径作为 Working directory，让模型感知项目根目录。
+     * projectPath 为 null 时回退到持久化 cwd。
+     *
+     * @param projectPath 项目路径（覆盖 cwd）；null 时用持久化 cwd
+     * @return env 块字符串
+     */
+    public static String envBlock(String projectPath) {
+        String cwd = (projectPath != null && !projectPath.isBlank())
+                ? projectPath
+                : new ShellSession().getCwd();
+        String platform = ShellExecutor.create().platformName();
+        return "\n\n<env>\nWorking directory: " + cwd + "\nPlatform: " + platform + "\n</env>";
+    }
 }

@@ -24,12 +24,14 @@ public class RuntimeContext {
     private final String sessionId;
     private final String userId;
     private final String branch;
+    private final String projectPath;
     private final Map<String, Object> params;
 
-    private RuntimeContext(String sessionId, String userId, String branch, Map<String, Object> params) {
+    private RuntimeContext(String sessionId, String userId, String branch, String projectPath, Map<String, Object> params) {
         this.sessionId = sessionId;
         this.userId = userId;
         this.branch = branch;
+        this.projectPath = projectPath;
         this.params = params != null ? params : new HashMap<>();
     }
 
@@ -45,7 +47,7 @@ public class RuntimeContext {
     }
 
     /**
-     * 转为 ToolContext 用的 Map（含 sessionId、userId、branch 及 params 中所有项）。
+     * 转为 ToolContext 用的 Map（含 sessionId、userId、branch、projectPath 及 params 中所有项）。
      */
     public Map<String, Object> toToolContextMap() {
         Map<String, Object> map = new HashMap<>(params);
@@ -58,6 +60,9 @@ public class RuntimeContext {
         if (branch != null) {
             map.put("branch", branch);
         }
+        if (projectPath != null) {
+            map.put("projectPath", projectPath);
+        }
         return map;
     }
 
@@ -69,6 +74,7 @@ public class RuntimeContext {
         private String sessionId;
         private String userId;
         private String branch;
+        private String projectPath;
         private final Map<String, Object> params = new HashMap<>();
 
         public RuntimeContextBuilder sessionId(String sessionId) {
@@ -86,6 +92,11 @@ public class RuntimeContext {
             return this;
         }
 
+        public RuntimeContextBuilder projectPath(String projectPath) {
+            this.projectPath = projectPath;
+            return this;
+        }
+
         public RuntimeContextBuilder put(String key, Object value) {
             this.params.put(key, value);
             return this;
@@ -97,7 +108,7 @@ public class RuntimeContext {
         }
 
         public RuntimeContext build() {
-            return new RuntimeContext(sessionId, userId, branch, params);
+            return new RuntimeContext(sessionId, userId, branch, projectPath, params);
         }
     }
 }

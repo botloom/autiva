@@ -2,17 +2,32 @@ package cn.bitloom.agentic.tool;
 
 import cn.bitloom.agentic.agent.AgentDefinition;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
+import cn.bitloom.agentic.evolve.EvolveAgentEnricher;
+import cn.bitloom.agentic.evolve.EvolverAgent;
+import cn.bitloom.agentic.evolve.experience.ExperienceEngine;
+import cn.bitloom.agentic.evolve.gene.GeneRepository;
+import cn.bitloom.agentic.evolve.trajectory.TrajectoryRepository;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.task.repository.TaskRepository;
+import cn.bitloom.agentic.tool.command.CommandExecutor;
 import cn.bitloom.agentic.tool.command.CommandTool;
+import cn.bitloom.agentic.tool.command.PersistentShellRegistry;
 import cn.bitloom.agentic.tool.command.ProcessManager;
 import cn.bitloom.agentic.tool.command.ProcessTool;
 import cn.bitloom.agentic.tool.cron.CronCreateTool;
 import cn.bitloom.agentic.tool.cron.CronDeleteTool;
 import cn.bitloom.agentic.tool.cron.CronListTool;
 import cn.bitloom.agentic.tool.cron.CronTriggerTool;
+import cn.bitloom.agentic.tool.evolve.EvolveStatusTool;
+import cn.bitloom.agentic.tool.evolve.EvolveTriggerTool;
+import cn.bitloom.agentic.tool.evolve.GeneActivateTool;
+import cn.bitloom.agentic.tool.evolve.GeneCreateTool;
+import cn.bitloom.agentic.tool.evolve.GeneDeleteTool;
+import cn.bitloom.agentic.tool.evolve.GeneGetTool;
+import cn.bitloom.agentic.tool.evolve.GeneListTool;
+import cn.bitloom.agentic.tool.evolve.GeneUpdateTool;
 import cn.bitloom.agentic.tool.file.DiffGenerator;
 import cn.bitloom.agentic.tool.file.EditTool;
 import cn.bitloom.agentic.tool.file.ReadTool;
@@ -30,10 +45,10 @@ import cn.bitloom.agentic.tool.manage.skill.SkillConfigDeleteTool;
 import cn.bitloom.agentic.tool.manage.skill.SkillConfigGetTool;
 import cn.bitloom.agentic.tool.manage.skill.SkillConfigListTool;
 import cn.bitloom.agentic.tool.manage.skill.SkillConfigReloadTool;
-import cn.bitloom.agentic.tool.search.BochaSearchProvider;
-import cn.bitloom.agentic.tool.search.GlobTool;
-import cn.bitloom.agentic.tool.search.GrepTool;
-import cn.bitloom.agentic.tool.search.WebSearchTool;
+import cn.bitloom.agentic.tool.web.BochaSearchProvider;
+import cn.bitloom.agentic.tool.file.GlobTool;
+import cn.bitloom.agentic.tool.file.GrepTool;
+import cn.bitloom.agentic.tool.web.WebSearchTool;
 import cn.bitloom.agentic.tool.skill.SkillTool;
 import cn.bitloom.agentic.tool.task.TaskOutputTool;
 import cn.bitloom.agentic.tool.task.TaskTool;
@@ -72,11 +87,17 @@ public class Toolkit {
     private final AsyncMcpToolCallbackProvider mcpToolCallbackProvider;
     private final TaskRepository taskRepository;
     private final ProcessManager processManager;
+    private final PersistentShellRegistry persistentShellRegistry;
     private final FileSystemSessionManager fileSystemSessionManager;
     private final AgentDefinitionManager definitionManager;
     private final ModelFactory modelFactory;
     private final ObjectProvider<DiffGenerator> diffGeneratorProvider;
     private final ObjectProvider<Toolkit> selfProvider;
+    private final EvolveAgentEnricher evolveEnricher;
+    private final GeneRepository geneRepository;
+    private final ObjectProvider<TrajectoryRepository> trajectoryRepositoryProvider;
+    private final ObjectProvider<ExperienceEngine> experienceEngineProvider;
+    private final ObjectProvider<EvolverAgent> evolverAgentProvider;
 
     @PostConstruct
     public void init() {
@@ -108,6 +129,7 @@ public class Toolkit {
                     .modelFactory(modelFactory)
                     .toolkit(selfProvider.getIfAvailable())
                     .skillManager(skillManager)
+                    .evolveEnricher(evolveEnricher)
                     .build();
             filtered = new ArrayList<>(filtered);
             filtered.add(taskTool.toToolCallback());
@@ -132,7 +154,7 @@ public class Toolkit {
     private List<AbstractTool<?>> buildAllTools() {
         List<AbstractTool<?>> tools = new ArrayList<>();
 
-        // 文件操作
+        // 文件操作（权限审批由 PermissionHook 统一处理）
         DiffGenerator dg = diffGeneratorProvider.getIfAvailable();
         tools.add(ReadTool.builder().build());
         tools.add(WriteTool.builder().diffGenerator(dg).build());
@@ -145,8 +167,13 @@ public class Toolkit {
         }
         // 网页
         tools.add(WebFetchTool.builder().build());
-        // 命令执行
-        tools.add(CommandTool.builder().processManager(processManager).build());
+        // 命令执行（持久化 Shell 会话 + 后台进程管理；权限审批由 PermissionHook 统一处理）
+        CommandExecutor backgroundExecutor = new CommandExecutor(persistentShellRegistry.getSharedShellSession());
+        tools.add(CommandTool.builder()
+                .shellRegistry(persistentShellRegistry)
+                .backgroundExecutor(backgroundExecutor)
+                .processManager(processManager)
+                .build());
         tools.add(ProcessTool.builder().processManager(processManager).build());
         // 交互
         tools.add(AskUserQuestionTool.builder()
@@ -177,7 +204,42 @@ public class Toolkit {
         tools.add(AppConfigPathTool.builder().configManager(configManager).build());
         tools.add(AppConfigReadTool.builder().configManager(configManager).build());
         tools.add(AppConfigSetIsolationTool.builder().configManager(configManager).build());
+        // 进化系统工具（仅当 app.evolve.enabled=true 时注册）
+        if (configManager.isEvolveEnabled()) {
+            addEvolveTools(tools);
+        }
         return tools;
+    }
+
+    /**
+     * 注册 8 个 Evolve 管理工具。
+     * <p>
+     * GeneList/Get/Create/Update/Delete/Activate 只依赖 GeneRepository；
+     * EvolveStatus 依赖 TrajectoryRepository + ExperienceEngine + GeneRepository；
+     * EvolveTrigger 依赖 EvolverAgent。后两者通过 ObjectProvider 获取。
+     */
+    private void addEvolveTools(List<AbstractTool<?>> tools) {
+        tools.add(GeneListTool.builder().geneRepository(geneRepository).build());
+        tools.add(GeneGetTool.builder().geneRepository(geneRepository).build());
+        tools.add(GeneCreateTool.builder().geneRepository(geneRepository).build());
+        tools.add(GeneUpdateTool.builder().geneRepository(geneRepository).build());
+        tools.add(GeneDeleteTool.builder().geneRepository(geneRepository).build());
+        tools.add(GeneActivateTool.builder().geneRepository(geneRepository).build());
+
+        TrajectoryRepository trajectoryRepo = trajectoryRepositoryProvider.getIfAvailable();
+        ExperienceEngine experienceEngine = experienceEngineProvider.getIfAvailable();
+        if (trajectoryRepo != null && experienceEngine != null) {
+            tools.add(EvolveStatusTool.builder()
+                    .trajectoryRepository(trajectoryRepo)
+                    .experienceEngine(experienceEngine)
+                    .geneRepository(geneRepository)
+                    .build());
+        }
+
+        EvolverAgent evolverAgent = evolverAgentProvider.getIfAvailable();
+        if (evolverAgent != null) {
+            tools.add(EvolveTriggerTool.builder().evolverAgent(evolverAgent).build());
+        }
     }
 
     /**

@@ -114,14 +114,14 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 			}
 
 			// 写入后生成 diff 并通过 EventPublisher 推送 DiffEvent（非阻塞，失败不影响写入结果）
-	if (diffGenerator != null) {
-		try {
-			FileDiff fileDiff = diffGenerator.generateDiff(path, originalContent, newContent);
-			publishDiffEvent(context, fileDiff);
-		} catch (Exception e) {
-			log.warn("生成 Diff 失败（不影响写入）: {}", filePath, e);
-		}
-	}
+			if (diffGenerator != null) {
+				try {
+					FileDiff fileDiff = diffGenerator.generateDiff(path, originalContent, newContent);
+					publishDiffEvent(context, fileDiff);
+				} catch (Exception e) {
+					log.warn("生成 Diff 失败（不影响写入）: {}", filePath, e);
+				}
+			}
 
 			String snippet = ToolUtils.generateEditSnippet(normalizedResult, normalizedNew);
 			String rawOutput = String.format(
@@ -178,6 +178,12 @@ public class EditTool extends AbstractTool<EditTool.Input> {
 				log.warn("推送 DiffEvent 失败（不影响写入）: {}", fileDiff.filePath(), e);
 			}
 		}
+	}
+
+	private static String extractString(ToolContext context, String key) {
+		if (context == null || context.getContext() == null) return null;
+		Object v = context.getContext().get(key);
+		return v instanceof String s ? s : null;
 	}
 
 }

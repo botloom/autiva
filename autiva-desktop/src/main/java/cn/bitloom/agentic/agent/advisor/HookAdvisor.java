@@ -68,7 +68,7 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
         }
 
         if (response.chatResponse() != null && response.chatResponse().hasFinishReasons(Set.of("STOP"))) {
-            afterConversationRound();
+            afterConversationRound(request);
         }
 
         return response;
@@ -107,7 +107,7 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
                 .doOnComplete(() -> {
                     // 此时内层 Advisor（含 MessageChatMemoryAdvisor）的 doOnComplete 已执行完毕
                     if (isStopped.get()) {
-                        afterConversationRound();
+                        afterConversationRound(finalRequest);
                     }
                 });
     }
@@ -120,9 +120,11 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
         }
     }
 
-    private void afterConversationRound() {
+    private void afterConversationRound(ChatClientRequest request) {
+        RuntimeContext ctx = (RuntimeContext) request.context().get("runtimeContext");
+        if (ctx == null) return;
         for (IAgentHook hook : hooks) {
-            hook.afterConversationRound();
+            hook.afterConversationRound(ctx);
         }
     }
 

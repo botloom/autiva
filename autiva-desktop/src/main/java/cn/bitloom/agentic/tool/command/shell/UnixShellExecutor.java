@@ -47,6 +47,25 @@ public class UnixShellExecutor implements ShellExecutor {
     }
 
     @Override
+    public ProcessBuilder createPersistentShellBuilder(Map<String, String> env) {
+        // --noprofile --norc 跳过启动文件，避免污染；stdin 为管道时 bash 自动进入非交互模式
+        ProcessBuilder pb = new ProcessBuilder("bash", "--noprofile", "--norc");
+        pb.directory(new File(System.getProperty("user.home")));
+        pb.redirectErrorStream(false); // stdout 与 stderr 分离（v13）
+        if (env != null) {
+            pb.environment().putAll(env);
+        }
+        return pb;
+    }
+
+    @Override
+    public String wrapPersistentCommand(String command, String markerId) {
+        // 换行分隔（与 Windows 一致）：用户命令单独一行，marker 输出单独一行。
+        // bash 的 ; 连接虽然不会有 cmd 那种括号吞噬问题，但换行更清晰，且支持多行命令。
+        return command + "\necho '" + markerId + "||$?||$(pwd)'";
+    }
+
+    @Override
     public ParseResult parseOutput(String rawOutput, String markerId, String fallbackCwd, boolean timedOut) {
         if (rawOutput == null || rawOutput.isEmpty()) {
             return new ParseResult("", -1, nvl(fallbackCwd));

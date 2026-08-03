@@ -2,6 +2,7 @@ package cn.bitloom.controller;
 
 import cn.bitloom.agentic.tool.file.FileDiff;
 import cn.bitloom.project.ProjectInfo;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -82,7 +83,7 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 工具/待办列表通用 cell：直接 setGraphic(node)，Region 撑满宽度
+     * 工具/待办列表通用 cell：直接 setGraphic(node)，绑定 maxWidth 到 ListView 宽度
      */
     private static class ToolListCell extends ListCell<Node> {
         @Override
@@ -92,7 +93,9 @@ public class EditorPanelController implements Initializable {
                 setGraphic(null);
             } else {
                 if (node instanceof Region region) {
-                    region.setMaxWidth(Double.MAX_VALUE);
+                    region.maxWidthProperty().bind(
+                            getListView().widthProperty().subtract(24)
+                    );
                 }
                 setGraphic(node);
             }
@@ -170,6 +173,11 @@ public class EditorPanelController implements Initializable {
      */
     public void addToolCallCard(Node card) {
         toolCallNodes.add(card);
+        Platform.runLater(() -> {
+            if (!toolCallNodes.isEmpty()) {
+                toolCallsListView.scrollTo(toolCallNodes.size() - 1);
+            }
+        });
     }
 
     /**

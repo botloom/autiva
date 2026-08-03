@@ -22,6 +22,7 @@ import cn.bitloom.agentic.task.repository.TaskRepository;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
 import cn.bitloom.agentic.tool.Toolkit;
+import cn.bitloom.agentic.tool.command.ShellSession;
 import cn.bitloom.agentic.tool.session.ConversationSearchTool;
 import cn.bitloom.agentic.tool.session.CrossSessionSearchTool;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
@@ -98,6 +99,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
     private final ModelFactory modelFactory;
     private final Toolkit toolkit;
     private final SkillManager skillManager;
+    private final cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher;
 
     private TaskTool(String description,
                      TaskRepository taskRepository,
@@ -106,7 +108,8 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                      AgentDefinitionManager definitionManager,
                      ModelFactory modelFactory,
                      Toolkit toolkit,
-                     SkillManager skillManager) {
+                     SkillManager skillManager,
+                     cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
         super("Task", description, Input.class);
         this.taskRepository = taskRepository;
         this.toolUIBridge = toolUIBridge;
@@ -115,6 +118,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
         this.skillManager = skillManager;
+        this.evolveEnricher = evolveEnricher;
     }
 
     @Override
@@ -135,6 +139,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             throw AgentException.subagentExecutionFailed(subagentName,
                     new IllegalStateException("无法解析父会话ID"));
         }
+        String projectPath = resolveProjectPath(context);
         Session parentSession = sessionManager.getById(parentSessionId);
         if (parentSession == null) {
             throw AgentException.subagentNotFound("父会话不存在: " + parentSessionId);
@@ -162,7 +167,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         if (Boolean.TRUE.equals(taskCall.runInBackground())) {
             var bgTask = this.taskRepository.putTask(taskId, () -> {
                 try {
-                    String result = executeSubagent(taskCall, parentSession, branch);
+                    String result = executeSubagent(taskCall, parentSession, branch, projectPath);
                     if (this.toolUIBridge != null) {
                         this.toolUIBridge.completeTaskCard(taskId, null);
                     }
@@ -182,7 +187,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
 
         // 前台同步执行
         try {
-            String result = executeSubagent(taskCall, parentSession, branch);
+            String result = executeSubagent(taskCall, parentSession, branch, projectPath);
             if (this.toolUIBridge != null) {
                 this.toolUIBridge.completeTaskCard(taskId, null);
             }
@@ -203,6 +208,19 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             Object sessionId = context.getContext().get("sessionId");
             if (sessionId instanceof String id) {
                 return id;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 从 ToolContext 解析项目路径
+     */
+    private String resolveProjectPath(ToolContext context) {
+        if (context != null) {
+            Object projectPath = context.getContext().get("projectPath");
+            if (projectPath instanceof String path) {
+                return path;
             }
         }
         return null;
@@ -236,7 +254,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
      * 不再创建子 Session，事件直接持久化到父 Session（带 branch 字段）。
      * 前台同步执行时主智能体阻塞等待，无并发写入风险；后台任务事件有 branch 隔离。
      */
-    private String executeSubagent(TaskCall taskCall, Session parentSession, String branch) {
+    private String executeSubagent(TaskCall taskCall, Session parentSession, String branch, String projectPath) {
         String parentSessionId = parentSession.id();
         String taskId = branch;
         MessageEvent inputEvent = MessageEvent.userMessage(parentSessionId, taskCall.prompt());
@@ -246,6 +264,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                 .sessionId(parentSessionId)
                 .userId(parentSession.userId())
                 .branch(branch)
+                .projectPath(projectPath)
                 .build();
         StringBuilder result = new StringBuilder();
         agent.runStream(inputEvent, ctx)
@@ -307,6 +326,9 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
 
         advisors.add(SkillContextAdvisor.builder().skillManager(skillManager).build());
 
+        // 进化系统：条件注入 GeneInjector Advisor
+        evolveEnricher.enrichAdvisors(advisors);
+
         List<ToolCallback> allTools = new ArrayList<>(toolkit.buildToolCallbacks(definition));
         allTools.add(ConversationSearchTool.builder(sessionManager).build().toToolCallback());
         allTools.add(CrossSessionSearchTool.builder(sessionManager, uid).build().toToolCallback());
@@ -315,9 +337,9 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                 .name(agentId)
                 .definition(definition)
                 .model(chatModel)
-                .systemPrompt(definition.content())
+                .systemPrompt(definition.content() + ShellSession.envBlock())
                 .tools(allTools)
-                .hooks(List.of())
+                .hooks(evolveEnricher.buildHooks())
                 .advisors(advisors)
                 .build();
         log.info("构建子智能体: agentId={}, branch={}", agentId, branch);
@@ -337,6 +359,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         private ModelFactory modelFactory;
         private Toolkit toolkit;
         private SkillManager skillManager;
+        private cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher;
 
         private Builder() {
         }
@@ -376,17 +399,24 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             return this;
         }
 
+        public Builder evolveEnricher(cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
+            this.evolveEnricher = evolveEnricher;
+            return this;
+        }
+
         public TaskTool build() {
             Assert.notNull(this.sessionManager, "必须提供sessionManager");
             Assert.notNull(this.definitionManager, "必须提供definitionManager");
             Assert.notNull(this.modelFactory, "必须提供modelFactory");
             Assert.notNull(this.toolkit, "必须提供toolkit");
             Assert.notNull(this.skillManager, "必须提供skillManager");
+            Assert.notNull(this.evolveEnricher, "必须提供evolveEnricher");
 
             return new TaskTool(TASK_DESCRIPTION,
                     this.taskRepository, this.toolUIBridge,
                     this.sessionManager, this.definitionManager,
-                    this.modelFactory, this.toolkit, this.skillManager);
+                    this.modelFactory, this.toolkit, this.skillManager,
+                    this.evolveEnricher);
         }
     }
 }

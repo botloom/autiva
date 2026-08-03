@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.tool.search;
+package cn.bitloom.agentic.tool.web;
 
 import java.util.List;
 

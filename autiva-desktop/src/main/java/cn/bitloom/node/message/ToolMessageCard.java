@@ -231,6 +231,27 @@ public class ToolMessageCard extends MessageCard {
         boolean expanded = content.isVisible();
         content.setVisible(!expanded);
         content.setManaged(!expanded);
+
+        // cell 高度变化后保持当前 cell 可见，避免 ListView 滚动位置跳动
+        javafx.application.Platform.runLater(() -> {
+            javafx.scene.Node parent = getParent();
+            Object target = this;
+            // TaskCard 中 ToolMessageCard 被 HBox 包装，需要以 HBox 作为查找目标
+            if (parent instanceof HBox hbox) {
+                target = hbox;
+                parent = hbox.getParent();
+            }
+            while (parent != null) {
+                if (parent instanceof javafx.scene.control.ListView<?> lv) {
+                    int index = lv.getItems().indexOf(target);
+                    if (index >= 0) {
+                        lv.scrollTo(index);
+                    }
+                    break;
+                }
+                parent = parent.getParent();
+            }
+        });
     }
 
     private String formatJSON(String jsonString) {

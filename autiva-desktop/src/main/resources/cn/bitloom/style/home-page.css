@@ -1918,3 +1918,175 @@
 .md-table-cell:last-child {
     -fx-border-width: 0;
 }
+
+/* ===== 批准卡片条（输入框上方，不持久化到聊天历史） ===== */
+.home-page__approval-bar {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12;
+    -fx-border-color: rgba(255, 149, 0, 0.3);
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.08), 10, 0, 0, 2);
+    -fx-padding: 0;
+    -fx-spacing: 0;
+    -fx-max-width: 1000;
+    -fx-pref-width: 600;
+    -fx-min-width: 300;
+}
+
+.approval-card {
+    -fx-padding: 12 16;
+    -fx-spacing: 8;
+}
+
+.approval-card__header {
+    -fx-spacing: 8;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.approval-card__icon {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ff9500;
+    -fx-background-color: rgba(255, 149, 0, 0.12);
+    -fx-background-radius: 50;
+    -fx-pref-width: 22;
+    -fx-pref-height: 22;
+    -fx-alignment: CENTER;
+}
+
+.approval-card__icon--danger {
+    -fx-text-fill: #ff3b30;
+    -fx-background-color: rgba(255, 59, 48, 0.12);
+}
+
+.approval-card__title {
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #1d1d1f;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.approval-card__risk-tag {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-text-fill: white;
+    -fx-background-radius: 4;
+    -fx-padding: 2 8;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.approval-card__risk-tag--warn {
+    -fx-background-color: #ff9500;
+}
+
+.approval-card__risk-tag--danger {
+    -fx-background-color: #ff3b30;
+}
+
+.approval-card__body {
+    -fx-spacing: 4;
+    -fx-padding: 0 0 0 30;
+}
+
+.approval-card__meta-row {
+    -fx-spacing: 8;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.approval-card__meta-tag {
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+    -fx-text-fill: #6e6e73;
+    -fx-background-color: #f5f5f7;
+    -fx-background-radius: 4;
+    -fx-padding: 2 8;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.approval-card__code {
+    -fx-font-family: "SF Mono", Monaco, "Cascadia Code", "Consolas", monospace;
+    -fx-font-size: 13px;
+    -fx-text-fill: #1d1d1f;
+    -fx-background-color: #f5f5f7;
+    -fx-background-radius: 6;
+    -fx-padding: 6 10;
+    -fx-wrap-text: true;
+}
+
+.approval-card__reason {
+    -fx-font-size: 12px;
+    -fx-text-fill: #86868b;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.approval-card__project {
+    -fx-font-size: 11px;
+    -fx-text-fill: #aeaeb2;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.approval-card__buttons {
+    -fx-spacing: 8;
+    -fx-alignment: CENTER_RIGHT;
+    -fx-padding: 4 0 0 0;
+}
+
+.approval-card__btn {
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-radius: 7;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+    -fx-border-radius: 7;
+    -fx-border-insets: 0;
+    -fx-padding: 6 16;
+    -fx-cursor: hand;
+}
+
+.approval-card__btn--primary {
+    -fx-background-color: #0071e3;
+    -fx-text-fill: white;
+}
+
+.approval-card__btn--primary:hover {
+    -fx-background-color: #0077ed;
+}
+
+.approval-card__btn--primary:pressed {
+    -fx-background-color: #006edb;
+}
+
+.approval-card__btn--secondary {
+    -fx-background-color: #e8e8ed;
+    -fx-text-fill: #1d1d1f;
+}
+
+.approval-card__btn--secondary:hover {
+    -fx-background-color: #dcdce3;
+}
+
+.approval-card__btn--secondary:pressed {
+    -fx-background-color: #c7c7d1;
+}
+
+.approval-card__btn--deny {
+    -fx-background-color: transparent;
+    -fx-text-fill: #ff3b30;
+    -fx-border-color: rgba(255, 59, 48, 0.3);
+    -fx-border-width: 1;
+}
+
+.approval-card__btn--deny:hover {
+    -fx-background-color: rgba(255, 59, 48, 0.08);
+    -fx-border-color: rgba(255, 59, 48, 0.5);
+}
+
+.approval-card__btn--deny:pressed {
+    -fx-background-color: rgba(255, 59, 48, 0.15);
+}
+
+.approval-card__btn:disabled {
+    -fx-opacity: 0.5;
+}

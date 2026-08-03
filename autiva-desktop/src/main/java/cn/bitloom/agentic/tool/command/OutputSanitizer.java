@@ -64,6 +64,49 @@ public final class OutputSanitizer {
                 + " total lines, showing first " + maxLines + "]\n";
     }
 
+    /** 头部保留行数 */
+    private static final int HEAD_LINES = 200;
+    /** 尾部保留行数 */
+    private static final int TAIL_LINES = 300;
+
+    /**
+     * 头+尾截断（v13）：当输出行数超过 maxLines 时，保留前 {@value #HEAD_LINES} 行 + 后 {@value #TAIL_LINES} 行，
+     * 中间插入 "[... X lines truncated ...]" 标记。对标 Claude Code 的输出截断策略，
+     * 保留头部（错误上下文，如编译错误的根因）和尾部（最终结果）。
+     *
+     * @param cleaned 已清理的输出
+     * @param maxLines 触发截断的行数阈值
+     * @return 头尾保留的输出
+     */
+    public static String truncateHeadTail(String cleaned, int maxLines) {
+        if (cleaned == null || cleaned.isEmpty() || maxLines <= 0) {
+            return cleaned == null ? "" : cleaned;
+        }
+        // 收集所有换行符位置（行边界）
+        java.util.List<Integer> newlines = new java.util.ArrayList<>();
+        for (int i = 0; i < cleaned.length(); i++) {
+            if (cleaned.charAt(i) == '\n') {
+                newlines.add(i);
+            }
+        }
+        int totalLines = newlines.size() + 1;
+        if (totalLines <= maxLines) {
+            return cleaned;
+        }
+        int preserve = HEAD_LINES + TAIL_LINES;
+        if (totalLines <= preserve) {
+            return cleaned;
+        }
+        // 头部结束位置：第 HEAD_LINES 行之后（即第 HEAD_LINES 个换行符之后）
+        int headEndIdx = newlines.get(HEAD_LINES - 1) + 1;
+        // 尾部起始位置：倒数第 TAIL_LINES 行的起点（即倒数第 TAIL_LINES 个换行符 + 1）
+        int tailStartIdx = newlines.get(newlines.size() - TAIL_LINES) + 1;
+        int truncated = totalLines - preserve;
+        return cleaned.substring(0, headEndIdx)
+                + "\n[... " + truncated + " lines truncated ...]\n"
+                + cleaned.substring(tailStartIdx);
+    }
+
     private static String stripProgressCarriageReturns(String s) {
         StringBuilder out = new StringBuilder(s.length());
         int lineStart = 0;

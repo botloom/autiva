@@ -54,6 +54,8 @@ public class CoderHomePageController extends AbstractHomePageController {
     @FXML
     private VBox diffReviewList;
     @FXML
+    private VBox approvalBar;
+    @FXML
     private MenuButton projectSelectButton;
     @FXML
     private Button branchDisplayButton;
@@ -101,6 +103,14 @@ public class CoderHomePageController extends AbstractHomePageController {
         // 向 viewModel 注入 diffHandler，DiffEvent 通过 agent 事件流传入
         this.viewModel.setDiffHandler(diffEvent -> Platform.runLater(() -> addDiffFileCard(diffEvent.getDiff())));
 
+        // 批准框：显示在输入框上方的 approvalBar（不持久化到聊天历史）
+        this.toolUIBridge.setOnShowApproval(card -> {
+            approvalBar.getChildren().clear();
+            approvalBar.getChildren().add(card);
+            approvalBar.setVisible(true);
+            approvalBar.setManaged(true);
+        });
+
         // diff 审查条按钮事件
         this.diffReviewHeader.setOnMouseClicked(e -> {
             if (e.getTarget() instanceof Button || e.getTarget() instanceof Label parentLabel
@@ -111,7 +121,7 @@ public class CoderHomePageController extends AbstractHomePageController {
         this.diffReviewRejectAllBtn.setOnAction(e -> handleRejectAllDiff());
         this.diffReviewApproveAllBtn.setOnAction(e -> handleApproveAllDiff());
 
-        // 监听会话切换：清空 diff 文件卡片条
+        // 监听会话切换：清空 diff 文件卡片条和批准框
         Store.currentSessionId.addListener((obs, oldVal, newVal) -> {
             if (oldVal != null && !oldVal.equals(newVal)) {
                 diffReviewList.getChildren().clear();
@@ -119,6 +129,9 @@ public class CoderHomePageController extends AbstractHomePageController {
                 diffReviewListScroll.setVisible(false);
                 diffReviewListScroll.setManaged(false);
                 updateDiffReviewBar();
+                approvalBar.getChildren().clear();
+                approvalBar.setVisible(false);
+                approvalBar.setManaged(false);
             }
         });
     }

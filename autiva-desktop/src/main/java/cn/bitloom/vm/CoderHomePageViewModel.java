@@ -39,8 +39,9 @@ public class CoderHomePageViewModel extends AbstractHomePageViewModel {
                                   ModelFactory modelFactory,
                                   Toolkit toolkit,
                                   cn.bitloom.agentic.skill.SkillManager skillManager,
+                                  cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher,
                                   ProjectRegistry projectRegistry) {
-        super(fileSystemSessionManager, definitionManager, modelFactory, toolkit, skillManager);
+        super(fileSystemSessionManager, definitionManager, modelFactory, toolkit, skillManager, evolveEnricher);
         this.projectRegistry = projectRegistry;
     }
 

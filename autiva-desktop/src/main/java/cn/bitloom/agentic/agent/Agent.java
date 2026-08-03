@@ -7,6 +7,7 @@ import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.EventConverter;
 import cn.bitloom.agentic.event.EventPublisher;
 import cn.bitloom.agentic.event.MessageEvent;
+import cn.bitloom.agentic.hook.HookedToolCallback;
 import cn.bitloom.agentic.hook.IAgentHook;
 import cn.bitloom.agentic.tool.AutivaToolCallingManager;
 import cn.bitloom.agentic.util.MessageUtil;
@@ -198,15 +199,29 @@ public class Agent {
             if (StringUtils.isNotBlank(this.systemPrompt)) {
                 builder.defaultSystem(this.systemPrompt);
             }
+
+            // 构建 HookAdvisor（如果有 Hook）
+            List<IAgentHook> allHooks = new ArrayList<>(this.hooks);
+            HookAdvisor hookAdvisor = allHooks.isEmpty() ? null : new HookAdvisor(allHooks);
+
+            // 用 HookedToolCallback 包装所有工具，使 Hook 能拦截工具调用
+            List<ToolCallback> wrappedTools = new ArrayList<>();
             if (!this.tools.isEmpty()) {
-                builder.defaultTools(this.tools);
+                for (ToolCallback tool : this.tools) {
+                    if (hookAdvisor != null) {
+                        wrappedTools.add(new HookedToolCallback(tool, hookAdvisor));
+                    } else {
+                        wrappedTools.add(tool);
+                    }
+                }
+                builder.defaultTools(wrappedTools);
             }
             if (this.enableLogging) {
                 builder.defaultAdvisors(LoggingAdvisor.builder()
                         .agentName(this.name)
                         .build());
             }
-            AutivaToolCallingManager toolCallingManager = new AutivaToolCallingManager(this.tools);
+            AutivaToolCallingManager toolCallingManager = new AutivaToolCallingManager(wrappedTools);
             builder.defaultAdvisors(
                     ToolCallingAdvisor.builder()
                             .disableInternalConversationHistory()
@@ -218,11 +233,10 @@ public class Agent {
                 builder.defaultAdvisors(new ArrayList<>(this.advisors));
             }
 
-            List<IAgentHook> allHooks = new ArrayList<>(this.hooks);
-            if (!allHooks.isEmpty()) {
-                builder.defaultAdvisors(HookAdvisor.builder().hooks(allHooks).build());
+            if (hookAdvisor != null) {
+                builder.defaultAdvisors(hookAdvisor);
             }
-            return new Agent(name, definition, builder.build(), tools, allHooks);
+            return new Agent(name, definition, builder.build(), wrappedTools, allHooks);
         }
     }
 }

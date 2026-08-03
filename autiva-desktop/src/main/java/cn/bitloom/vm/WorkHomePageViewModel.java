@@ -21,8 +21,9 @@ public class WorkHomePageViewModel extends AbstractHomePageViewModel {
                                  AgentDefinitionManager definitionManager,
                                  ModelFactory modelFactory,
                                  Toolkit toolkit,
-                                 cn.bitloom.agentic.skill.SkillManager skillManager) {
-        super(fileSystemSessionManager, definitionManager, modelFactory, toolkit, skillManager);
+                                 cn.bitloom.agentic.skill.SkillManager skillManager,
+                                 cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
+        super(fileSystemSessionManager, definitionManager, modelFactory, toolkit, skillManager, evolveEnricher);
     }
 
     @Override

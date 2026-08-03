@@ -23,6 +23,7 @@ import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.ListChangeListener;
+import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
@@ -147,9 +148,12 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             this.stopButton.setManaged(streaming && !paused);
         });
 
-        // 初始化消息 ListView：绑定 ViewModel 的 messages，设置 cell factory
+        // 初始化消息 ListView：用 FilteredList 过滤掉 TOOL 类型（已路由到 EditorPanel），
+        // 避免 0 高度 cell 干扰 ListView 的滚动条 thumb 大小估算
         this.chatListView.setFocusTraversable(false);
-        this.chatListView.setItems(this.getViewModel().getMessages());
+        FilteredList<MessageCard> visibleMessages = this.getViewModel().getMessages()
+                .filtered(card -> card.getMessageType() != MessageEvent.Type.TOOL);
+        this.chatListView.setItems(visibleMessages);
         this.chatListView.setCellFactory(list -> new MessageListCell());
 
         // 历史消息加载期间：禁用发送按钮和输入框，显示加载提示
@@ -181,11 +185,12 @@ public abstract class AbstractHomePageController implements Initializable, Butto
                             addToolToEditorPanel(toolCard, toolCard.getToolName());
                         }
                     }
-                    int size = this.getViewModel().getMessages().size();
-                    if (size > 0) {
-                        this.chatListView.scrollTo(size - 1);
-                    }
                 }
+            }
+            // 滚动到底部：基于过滤后的可见列表，用 runLater 确保布局完成后再滚动
+            int size = this.chatListView.getItems().size();
+            if (size > 0) {
+                Platform.runLater(() -> this.chatListView.scrollTo(size - 1));
             }
             onMessagesChanged(!this.getViewModel().getMessages().isEmpty());
         });
@@ -539,7 +544,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     private void scrollToBottom() {
         int size = this.chatListView.getItems().size();
         if (size > 0) {
-            this.chatListView.scrollTo(size - 1);
+            Platform.runLater(() -> this.chatListView.scrollTo(size - 1));
         }
     }
 

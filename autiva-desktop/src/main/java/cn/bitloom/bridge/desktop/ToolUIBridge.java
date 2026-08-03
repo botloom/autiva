@@ -2,6 +2,7 @@ package cn.bitloom.bridge.desktop;
 
 import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.MessageEvent;
+import cn.bitloom.node.tool.ApprovalCard;
 import cn.bitloom.node.tool.QuestionCard;
 import cn.bitloom.node.tool.TaskCard;
 import cn.bitloom.node.tool.TodoCard;
@@ -22,12 +23,17 @@ import java.util.function.Consumer;
 public class ToolUIBridge {
 
     private final Map<String, CompletableFuture<String>> pendingQuestions = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<String>> pendingApprovals = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> activeTaskCards = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> sessionTaskCards = new ConcurrentHashMap<>();
     private TodoCard currentTodoCard = null;
 
     @Setter
     private Consumer<Node> onNodeAdded;
+
+    /** 主智能体批准回调：把 ApprovalCard 放到输入框上方的 approvalBar（不持久化到聊天历史） */
+    @Setter
+    private Consumer<ApprovalCard> onShowApproval;
 
     /**
      * 处理子智能体事件（供 TaskTool 直接调用）。
@@ -69,6 +75,49 @@ public class ToolUIBridge {
             future.complete(answersJson);
         } else {
             log.warn("No pending question found for id: {}", questionId);
+        }
+    }
+
+    /**
+     * 显示命令批准对话框（供 CommandApprovalService 调用，同步阻塞等待用户选择）。
+     * 与 showQuestions 类似，但创建的是 ApprovalCard 而非 QuestionCard。
+     *
+     * @param approvalJson    ApprovalRequest 的 JSON
+     * @param approvalFuture  由调用方持有，UI 点击按钮后 complete
+     * @param sessionId       当前会话 ID（用于路由到对应 TaskCard）
+     */
+    public void showApproval(String approvalJson, CompletableFuture<String> approvalFuture, String sessionId) {
+        String approvalId = UUID.randomUUID().toString();
+        this.pendingApprovals.put(approvalId, approvalFuture);
+        approvalFuture.whenComplete((result, error) -> this.pendingApprovals.remove(approvalId));
+
+        Platform.runLater(() -> {
+            try {
+                ApprovalCard card = new ApprovalCard(approvalJson, approvalId, this::onApprovalAnswered);
+                TaskCard taskCard = sessionId != null ? this.sessionTaskCards.get(sessionId) : null;
+                if (taskCard != null) {
+                    // 子智能体场景：批准框加到 TaskCard 内
+                    taskCard.addApprovalCard(card);
+                } else if (this.onShowApproval != null) {
+                    // 主智能体场景：批准框加到输入框上方的 approvalBar（不持久化到聊天历史）
+                    this.onShowApproval.accept(card);
+                } else if (this.onNodeAdded != null) {
+                    // fallback：加到聊天区
+                    this.onNodeAdded.accept(card);
+                }
+            } catch (Exception e) {
+                log.error("Error showing approval", e);
+                approvalFuture.completeExceptionally(e);
+            }
+        });
+    }
+
+    public void onApprovalAnswered(String approvalId, String resultJson) {
+        CompletableFuture<String> future = this.pendingApprovals.remove(approvalId);
+        if (future != null) {
+            future.complete(resultJson);
+        } else {
+            log.warn("No pending approval found for id: {}", approvalId);
         }
     }
 

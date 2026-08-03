@@ -2,7 +2,9 @@ package cn.bitloom.agentic.tool.command;
 
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -10,54 +12,72 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 命令执行工具，无状态 ProcessBuilder 模式。
+ * 命令执行工具（v13 持久化 Shell 会话）。
  *
- * <p>支持前台执行、智能后台化（yield_ms）和立即后台模式。
- * cwd/env 通过 ShellSession 持久化，每次执行时通过命令前缀注入。
+ * <p>对标 Claude Code 的 BashTool：前台命令走持久 shell 进程（{@link PersistentShellSession}），
+ * {@code cd}/{@code export}/{@code source}/shell 函数/后台任务天然持久；后台命令（{@code run_in_background=true}）
+ * 启动独立 detached 进程，由 {@link ProcessManager} 管理。
+ *
+ * <p>stdout 与 stderr 分离返回，超长输出头+尾保留。
  */
+@Slf4j
 public class CommandTool extends AbstractTool<CommandTool.Input> {
 
     private static final String DESCRIPTION = """
-            执行 Bash 命令，持久化会话维护 cwd 和环境变量。默认同步执行，2 分钟超时。长任务用 background=true 异步执行，配合 Process 工具轮询/终止。
+            执行命令，持久化 Shell 会话维护 cwd 和环境变量（cd/export/source/函数天然持久）。默认前台同步执行，2 分钟超时。长任务用 run_in_background=true 异步执行，配合 Process 工具轮询/终止。stdout 与 stderr 分离返回。
             """;
 
-    private final CommandExecutor executor;
-
+    private final PersistentShellRegistry shellRegistry;
+    private final CommandExecutor backgroundExecutor;
     private final ProcessManager processManager;
 
     public record Input(
             @ToolParam(description = "要执行的命令") String command,
             @ToolParam(description = "5-10 字描述命令作用") String description,
             @ToolParam(description = "超时毫秒，默认 120000，最大 600000", required = false) Long timeout,
-            @ToolParam(description = "工作目录覆盖，不传则使用持久化的 cwd", required = false) String workdir,
-            @ToolParam(description = "环境变量覆盖（JSON 对象如 {\"KEY\":\"VALUE\"}），合并到持久化 env 之上", required = false) Map<String, String> env,
-            @ToolParam(description = "前台运行超过此毫秒数自动转后台，不传则纯前台执行", required = false) Long yieldMs,
-            @ToolParam(description = "true 则立即转为后台执行，忽略 yield_ms", required = false) Boolean background
+            @ToolParam(description = "是否后台运行，后台进程用 Process 工具轮询/终止", required = false) Boolean run_in_background,
+            @ToolParam(description = "是否复用上条命令的 prompt 上下文（跳过清理残留输出），默认 false", required = false) Boolean reuse_prompt
     ) {}
 
     private CommandTool(Builder builder) {
         super("Command", DESCRIPTION, Input.class);
-        this.executor = builder.executor;
+        this.shellRegistry = builder.shellRegistry;
+        this.backgroundExecutor = builder.backgroundExecutor;
         this.processManager = builder.processManager;
     }
 
     @Override
-    public @NonNull ToolResult execute(Input input, ToolContext context) {
-        // 验证命令长度
-        if (input.command() != null && input.command().length() > CommandExecutor.MAX_COMMAND_LENGTH) {
+    public @NonNull ToolResult execute(Input input, @Nullable ToolContext context) {
+        log.info("[CommandTool] execute called: command='{}', description='{}', timeout={}, run_in_background={}, reuse_prompt={}",
+                input.command(), input.description(), input.timeout(), input.run_in_background(), input.reuse_prompt());
+
+        if (input.command() == null || input.command().isEmpty()) {
+            log.warn("[CommandTool] command is empty");
+            return ToolResult.error("command 参数不能为空");
+        }
+        if (input.command().length() > PersistentShellSession.MAX_COMMAND_LENGTH) {
             return ToolResult.error("命令过长 (" + input.command().length() + " 字符)，最大允许 "
-                    + CommandExecutor.MAX_COMMAND_LENGTH + " 字符。请将命令拆分为多次执行。");
+                    + PersistentShellSession.MAX_COMMAND_LENGTH + " 字符。请将命令拆分为多次执行。");
         }
 
         CommandSafety.SafetyCheck safety = CommandSafety.check(input.command());
+        log.debug("[CommandTool] safety check: destructive={}, warning={}, rule={}",
+                safety.isDestructive(), safety.isWarning(), safety.rule());
+
+        String sessionId = extractSessionId(context);
+        String projectPath = extractProjectPath(context);
+        log.debug("[CommandTool] sessionId from context: {}, projectPath: {}", sessionId, projectPath);
+
         ToolResult result;
-        if (Boolean.TRUE.equals(input.background())) {
-            result = startImmediateBackground(input.command(), input.description(), input.workdir(), input.env());
-        } else if (input.yieldMs() != null && input.yieldMs() > 0) {
-            result = executeWithYield(input.command(), input.description(), input.timeout(), input.workdir(), input.env(), input.yieldMs());
+        if (Boolean.TRUE.equals(input.run_in_background())) {
+            result = startBackground(input.command(), input.description());
         } else {
-            result = executeForeground(input.command(), input.description(), input.timeout(), input.workdir(), input.env());
+            result = executeForeground(input.command(), input.description(),
+                    input.timeout(), Boolean.TRUE.equals(input.reuse_prompt()), sessionId, projectPath);
         }
+
+        log.info("[CommandTool] execute result: status={}, message='{}'",
+                result.getStatus(), result.getMessage());
 
         if (safety.isDestructive() || safety.isWarning()) {
             String warningText = safety.isDestructive()
@@ -75,13 +95,21 @@ public class CommandTool extends AbstractTool<CommandTool.Input> {
         return result;
     }
 
-    private ToolResult executeForeground(String command, String description, Long timeout, String workdir, Map<String, String> env) {
-        long effectiveTimeout = timeout != null ? timeout : CommandExecutor.DEFAULT_TIMEOUT_MS;
+    private ToolResult executeForeground(String command, String description, Long timeout, boolean reusePrompt, String sessionId, String projectPath) {
+        long effectiveTimeout = timeout != null ? timeout : PersistentShellSession.DEFAULT_TIMEOUT_MS;
         long start = System.currentTimeMillis();
-        CommandResult result = executor.execute(command, effectiveTimeout, workdir, env);
+        log.info("[CommandTool] executeForeground: sessionId='{}', projectPath='{}', effectiveTimeout={}ms",
+                sessionId, projectPath, effectiveTimeout);
+        PersistentShellSession shellSession = shellRegistry.getOrCreate(sessionId, projectPath);
+        log.debug("[CommandTool] got shell instance, calling shell.execute()");
+        CommandResult result = shellSession.execute(command, effectiveTimeout, reusePrompt);
         long elapsed = System.currentTimeMillis() - start;
+        log.info("[CommandTool] executeForeground done: exitCode={}, timedOut={}, elapsed={}ms",
+                result.exitCode(), result.timedOut(), elapsed);
 
-        ToolResult.Status status = result.exitCode() == 0 ? ToolResult.Status.SUCCESS : ToolResult.Status.ERROR;
+        ToolResult.Status status = result.exitCode() != null && result.exitCode() == 0
+                ? ToolResult.Status.SUCCESS : ToolResult.Status.ERROR;
+
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("description", description);
         data.put("elapsed_ms", elapsed);
@@ -94,53 +122,13 @@ public class CommandTool extends AbstractTool<CommandTool.Input> {
                 .status(status)
                 .message(description + " (" + elapsed + "ms)")
                 .data(data)
-                .rawOutput(buildRawOutput(data, result.output()))
+                .rawOutput(buildRawOutput(data, result.output(), result.stderr()))
                 .build();
     }
 
-    private ToolResult executeWithYield(String command, String description, Long timeout, String workdir, Map<String, String> env, long yieldMs) {
-        CommandExecutor.YieldResult result = executor.executeWithYield(command, yieldMs, workdir, env);
-
-        if (result.completed()) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("description", description);
-            data.put("exit_code", result.exitCode());
-
-            return ToolResult.builder()
-                    .status(result.exitCode() == 0 ? ToolResult.Status.SUCCESS : ToolResult.Status.ERROR)
-                    .message(description)
-                    .data(data)
-                    .rawOutput(buildRawOutput(data, result.output()))
-                    .build();
-        }
-
-        String id;
+    private ToolResult startBackground(String command, String description) {
         try {
-            id = processManager.register(result.backgroundProcess(), command, description);
-        } catch (Exception e) {
-            // 注册失败时销毁进程避免泄漏
-            result.backgroundProcess().destroyForcibly();
-            return ToolResult.error("注册后台进程失败: " + e.getMessage());
-        }
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("session_id", id);
-        data.put("status", "running (auto-backgrounded after " + yieldMs + "ms)");
-        data.put("description", description);
-
-        String rawOutput = buildRawOutput(data, "partial output", result.output());
-        rawOutput += "\n使用 Process(action=\"poll\", session_id=\"" + id + "\") 获取后续输出。";
-
-        return ToolResult.builder()
-                .status(ToolResult.Status.SUCCESS)
-                .message("已转后台: " + id)
-                .data(data)
-                .rawOutput(rawOutput)
-                .build();
-    }
-
-    private ToolResult startImmediateBackground(String command, String description, String workdir, Map<String, String> env) {
-        try {
-            Process process = executor.startBackground(command, workdir, env);
+            Process process = backgroundExecutor.startBackground(command, null, null);
             String id = processManager.register(process, command, description);
             String rawOutput = "session_id: " + id + "\nstatus: running\ndescription: " + description
                     + "\n使用 Process(action=\"poll\", session_id=\"" + id + "\") 获取输出。";
@@ -161,32 +149,37 @@ public class CommandTool extends AbstractTool<CommandTool.Input> {
         }
     }
 
-    /**
-     * 构建键值对格式的rawOutput字符串，带可选的输出部分。
-     */
-    private static String buildRawOutput(Map<String, Object> entries, String output) {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, Object> entry : entries.entrySet()) {
-            sb.append(entry.getKey()).append(": ").append(entry.getValue()).append('\n');
+    private String extractSessionId(ToolContext context) {
+        if (context == null || context.getContext() == null) {
+            return null;
         }
-        if (output != null && !output.isEmpty()) {
-            sb.append("\noutput:\n").append(output);
-        } else {
-            sb.append("\n(no output)");
+        Object id = context.getContext().get("sessionId");
+        return id instanceof String sid ? sid : null;
+    }
+
+    private String extractProjectPath(ToolContext context) {
+        if (context == null || context.getContext() == null) {
+            return null;
         }
-        return sb.toString();
+        Object path = context.getContext().get("projectPath");
+        return path instanceof String p ? p : null;
     }
 
     /**
-     * 构建键值对格式的rawOutput字符串，带自定义输出标签。
+     * 构建键值对格式的 rawOutput，stdout 与 stderr 分离展示。
      */
-    private static String buildRawOutput(Map<String, Object> entries, String outputLabel, String output) {
+    private static String buildRawOutput(Map<String, Object> entries, String stdout, String stderr) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, Object> entry : entries.entrySet()) {
             sb.append(entry.getKey()).append(": ").append(entry.getValue()).append('\n');
         }
-        if (output != null && !output.isEmpty()) {
-            sb.append("\n").append(outputLabel).append(":\n").append(output);
+        if (stdout != null && !stdout.isEmpty()) {
+            sb.append("\nstdout:\n").append(stdout);
+        } else {
+            sb.append("\n(no stdout)");
+        }
+        if (stderr != null && !stderr.isEmpty()) {
+            sb.append("\n\nstderr:\n").append(stderr);
         }
         return sb.toString();
     }
@@ -197,14 +190,20 @@ public class CommandTool extends AbstractTool<CommandTool.Input> {
 
     public static class Builder {
 
-        private CommandExecutor executor;
+        private PersistentShellRegistry shellRegistry;
+        private CommandExecutor backgroundExecutor;
         private ProcessManager processManager;
 
         private Builder() {
         }
 
-        public Builder executor(CommandExecutor executor) {
-            this.executor = executor;
+        public Builder shellRegistry(PersistentShellRegistry shellRegistry) {
+            this.shellRegistry = shellRegistry;
+            return this;
+        }
+
+        public Builder backgroundExecutor(CommandExecutor backgroundExecutor) {
+            this.backgroundExecutor = backgroundExecutor;
             return this;
         }
 
@@ -214,9 +213,11 @@ public class CommandTool extends AbstractTool<CommandTool.Input> {
         }
 
         public CommandTool build() {
-            if (this.executor == null) {
-                ShellSession envSession = new ShellSession();
-                this.executor = new CommandExecutor(envSession);
+            if (this.shellRegistry == null) {
+                throw new IllegalStateException("PersistentShellRegistry 必须注入");
+            }
+            if (this.backgroundExecutor == null) {
+                this.backgroundExecutor = new CommandExecutor(new ShellSession());
             }
             if (this.processManager == null) {
                 this.processManager = new ProcessManager();

@@ -26,6 +26,9 @@ public class ConfigManager {
     @Value("${app.search.bocha-api-key:}")
     private String bochaApiKey;
 
+    @Value("${app.evolve.enabled:false}")
+    private boolean evolveEnabled;
+
     @Value("${spring.ai.deepseek.chat.base-url:}")
     private String deepseekBaseUrl;
     @Value("${spring.ai.deepseek.chat.completions-path:/v1/chat/completions}")
