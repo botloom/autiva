@@ -13,13 +13,15 @@
       visible="false" managed="false"
       minWidth="480" prefWidth="640"
 >
-    <HBox fx:id="tabBar" styleClass="editor-panel__tab-bar" alignment="CENTER_LEFT" spacing="4">
-        <Button fx:id="addTabButton" styleClass="editor-panel__tab-add">
-            <graphic>
-                <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/tab-add.svg"/>
-            </graphic>
-        </Button>
-    </HBox>
+    <ScrollPane fx:id="tabScroll" styleClass="editor-panel__tab-scroll" fitToHeight="true" hbarPolicy="NEVER" vbarPolicy="NEVER">
+        <HBox fx:id="tabBar" styleClass="editor-panel__tab-bar" alignment="CENTER_LEFT" spacing="4">
+            <Button fx:id="addTabButton" styleClass="editor-panel__tab-add">
+                <graphic>
+                    <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/tab-add.svg"/>
+                </graphic>
+            </Button>
+        </HBox>
+    </ScrollPane>
     <StackPane fx:id="viewContainer" styleClass="editor-panel__views" VBox.vgrow="ALWAYS">
         <VBox fx:id="toolCallsView" styleClass="editor-panel__view"
               visible="false" managed="false" VBox.vgrow="ALWAYS">

@@ -16,6 +16,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollBar;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -52,6 +53,8 @@ public class EditorPanelController implements Initializable {
     private VBox editorPanel;
     @FXML
     protected HBox tabBar;
+    @FXML
+    protected ScrollPane tabScroll;
     @FXML
     protected Button addTabButton;
     @FXML
@@ -93,6 +96,27 @@ public class EditorPanelController implements Initializable {
         setupToolCallsListView();
         setupTodoListView();
         setupAddTabButton();
+        setupTabScroll();
+    }
+
+    /**
+     * tab 栏横向滚动：鼠标滚轮控制水平滚动
+     */
+    private void setupTabScroll() {
+        tabScroll.setFitToHeight(true);
+        tabScroll.addEventFilter(ScrollEvent.SCROLL, e -> {
+            double delta = (e.getDeltaX() != 0) ? e.getDeltaX() : e.getDeltaY();
+            if (delta == 0) return;
+            double contentWidth = tabScroll.getContent().getLayoutBounds().getWidth();
+            double viewportWidth = tabScroll.getViewportBounds().getWidth();
+            double maxScroll = contentWidth - viewportWidth;
+            if (maxScroll <= 0) return;
+            // delta 是像素，转换为 [0,1] 范围的比例
+            double newH = tabScroll.getHvalue() - delta / maxScroll;
+            newH = Math.max(0, Math.min(1, newH));
+            tabScroll.setHvalue(newH);
+            e.consume();
+        });
     }
 
     private void setupToolCallsListView() {

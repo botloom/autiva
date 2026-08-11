@@ -40,6 +40,27 @@
 
 /* ===== Tab 栏（与 side-bar Apple 风格统一） ===== */
 
+.editor-panel__tab-scroll {
+    -fx-background-color: -autiva-bg;
+    -fx-background-radius: 0;
+    -fx-padding: 0;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent rgba(0, 0, 0, 0.08) transparent;
+    -fx-fit-to-width: false;
+}
+
+.editor-panel__tab-scroll .viewport {
+    -fx-background-color: -autiva-bg;
+}
+
+.editor-panel__tab-scroll .scroll-bar {
+    -fx-opacity: 0;
+    -fx-pref-width: 0;
+    -fx-pref-height: 0;
+    -fx-max-width: 0;
+    -fx-max-height: 0;
+}
+
 .editor-panel__tab-bar {
     -fx-background-color: -autiva-bg;
     -fx-background-radius: 0;
@@ -47,8 +68,6 @@
     -fx-spacing: 2;
     -fx-min-height: 50;
     -fx-pref-height: 50;
-    -fx-border-width: 0 0 1 0;
-    -fx-border-color: transparent transparent rgba(0, 0, 0, 0.08) transparent;
 }
 
 .editor-panel__tab-add {
