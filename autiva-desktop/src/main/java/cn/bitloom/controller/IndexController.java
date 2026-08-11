@@ -253,7 +253,10 @@ public class IndexController implements Initializable {
             return false;
         }
         try {
-            Path filePath = Path.of(new URI(dest));
+            URI uri = new URI(dest);
+            // 剥离 fragment（如 #L123），Windows Path 不支持带 fragment 的 URI
+            uri = new URI(uri.getScheme(), uri.getSchemeSpecificPart(), null);
+            Path filePath = Path.of(uri);
             if (java.nio.file.Files.isRegularFile(filePath)) {
                 Platform.runLater(() -> showFileInPanel(filePath));
                 return true;

@@ -619,19 +619,10 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     /**
-     * 创建通用按钮配置（newChat/tool/todo），子类可在此基础上扩展。
+     * 创建通用按钮配置（tool/todo），子类可在此基础上扩展。
      */
     protected List<ButtonBarHolder.ButtonConfig> createCommonButtons() {
         List<ButtonBarHolder.ButtonConfig> configs = new ArrayList<>();
-        configs.add(new ButtonBarHolder.ButtonConfig(
-                "newChatButton",
-                "",
-                "button-bar__icon-btn",
-                "/cn/bitloom/images/chat-new.svg",
-                _ -> {
-                    this.getViewModel().createNewSession();
-                    resetForNewSession();
-                }));
         configs.add(new ButtonBarHolder.ButtonConfig(
                 "toolCallsButton",
                 "工具",

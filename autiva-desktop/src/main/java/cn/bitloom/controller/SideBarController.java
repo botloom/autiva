@@ -141,8 +141,6 @@ public class SideBarController implements Initializable, PageHolder {
             }
         });
 
-        this.homeOption.getStyleClass().add(ACTIVE_CSS_CLASS);
-
         // 监听 session 切换，刷新历史列表
         Store.currentSessionId.addListener((obs, oldVal, newVal) -> {
             Platform.runLater(this::refreshHistoryList);
@@ -620,6 +618,11 @@ public class SideBarController implements Initializable, PageHolder {
     public void updateActiveState(String path) {
         this.routeOptionMap.values().forEach(option ->
                 option.getStyleClass().remove(ACTIVE_CSS_CLASS));
+
+        // homeOption 是"新建对话"动作按钮，不参与页面选中高亮
+        if (RouteConfig.Path.HOME.equals(path)) {
+            return;
+        }
 
         HBox activeOption = this.routeOptionMap.get(path);
         if (activeOption != null) {

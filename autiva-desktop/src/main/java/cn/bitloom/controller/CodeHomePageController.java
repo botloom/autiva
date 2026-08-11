@@ -367,9 +367,8 @@ public class CodeHomePageController extends AbstractHomePageController {
     @Override
     public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
         List<ButtonBarHolder.ButtonConfig> configs = new ArrayList<>(createCommonButtons());
-        // 在通用按钮之后插入 coder 专有的终端按钮（插入到 tool 按钮之前）
-        int insertIndex = 1; // 在 newChat 之后插入
-        configs.add(insertIndex, new ButtonBarHolder.ButtonConfig(
+        // 插入 coder 专有的终端按钮（tool 按钮之前）
+        configs.add(0, new ButtonBarHolder.ButtonConfig(
                 "terminalButton",
                 "终端",
                 "button-bar__icon-btn",
