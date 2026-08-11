@@ -1,6 +1,7 @@
 package cn.bitloom.agentic.tool.command;
 
 import cn.bitloom.agentic.tool.command.shell.ShellExecutor;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -23,20 +24,19 @@ public class PersistentShellRegistry {
 
     private final ConcurrentMap<String, PersistentShellSession> sessions = new ConcurrentHashMap<>();
     private final ShellExecutor shellExecutor;
+    /**
+     * -- GETTER --
+     *  获取全局共享的
+     * （cwd 持久化）。
+     *  <p>供
+     *  等需要读取当前 cwd 的组件复用，确保后台命令与持久会话使用同一份 cwd 状态。
+     */
+    @Getter
     private final ShellSession sharedShellSession;
 
     public PersistentShellRegistry() {
         this.shellExecutor = ShellExecutor.create();
         this.sharedShellSession = new ShellSession();
-    }
-
-    /**
-     * 获取全局共享的 {@link ShellSession}（cwd 持久化）。
-     *
-     * <p>供 {@link CommandExecutor} 等需要读取当前 cwd 的组件复用，确保后台命令与持久会话使用同一份 cwd 状态。
-     */
-    public ShellSession getSharedShellSession() {
-        return sharedShellSession;
     }
 
     /**

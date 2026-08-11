@@ -16,17 +16,15 @@
 
 package cn.bitloom.agentic.session;
 
+import cn.bitloom.agentic.event.AbstractEvent;
+import cn.bitloom.agentic.event.MessageEvent;
+import org.jspecify.annotations.Nullable;
+import org.springframework.ai.chat.messages.MessageType;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-
-import org.jspecify.annotations.Nullable;
-
-import org.springframework.ai.chat.messages.MessageType;
-
-import cn.bitloom.agentic.event.AbstractEvent;
-import cn.bitloom.agentic.event.MessageEvent;
 
 /**
  * Criteria for filtering {@link MessageEvent}s when retrieving session history.
@@ -296,9 +294,7 @@ public record EventFilter(@Nullable Instant from, @Nullable Instant to, @Nullabl
 		String eventBranch = me.getBranch();
 		if (this.branch == null) {
 			// 主智能体: 仅可见 root 事件（branch == null），排除所有子智能体事件
-			if (eventBranch != null) {
-				return false;
-			}
+            return eventBranch == null;
 		}
 		else {
 			// 子智能体: 不共享主智能体历史，完全排除 root 事件；
@@ -306,13 +302,9 @@ public record EventFilter(@Nullable Instant from, @Nullable Instant to, @Nullabl
 			if (eventBranch == null) {
 				return false;
 			}
-			boolean visible = this.branch.equals(eventBranch) || this.branch.startsWith(eventBranch + ".");
-			if (!visible) {
-				return false;
-			}
+            return this.branch.equals(eventBranch) || this.branch.startsWith(eventBranch + ".");
 		}
-		return true;
-	}
+    }
 
 	/**
 	 * Builder for {@link EventFilter}. All fields default to {@code null} /

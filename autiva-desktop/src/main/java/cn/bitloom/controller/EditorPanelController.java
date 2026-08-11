@@ -1,7 +1,6 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.tool.file.FileDiff;
-import cn.bitloom.project.ProjectInfo;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -29,17 +28,19 @@ import java.util.ResourceBundle;
  * 编辑器面板通用基类。
  * <p>
  * 仅包含 TOOL_CALLS / TODO 两个通用视图，供 work 模式使用。
- * coder 模式由 {@link CoderEditorPanelController} 继承本类，扩展 TERMINAL / PROJECT / DIFF 视图。
+ * coder 模式由 {@link CoderEditorPanelController} 继承本类，扩展 TERMINAL / DIFF 视图。
  * <p>
- * coder 专有方法（setCurrentProject / showFileContent / openTerminal / showDiffInProjectView）
+ * coder 专有方法（openTerminal / showDiffInProjectView）
  * 在此声明为空实现，子类 override 注入实际逻辑。IndexController 通过基类引用统一调度。
+ * <p>
+ * 项目目录树已迁移至 SideBarController 中展示，本面板不再包含 PROJECT 视图。
  */
 @Slf4j
 @Component
 @Primary
 public class EditorPanelController implements Initializable {
 
-    public enum ViewType { TERMINAL, PROJECT, DIFF, TOOL_CALLS, TODO }
+    public enum ViewType { TERMINAL, FILE, DIFF, TOOL_CALLS, TODO }
 
     @FXML
     @Getter
@@ -219,17 +220,17 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 显示项目视图（通用基类空实现，coder 模式 override）
-     */
-    public void showProjectView() {
-        // work 模式不支持项目视图
-    }
-
-    /**
      * 显示 Diff 视图（通用基类空实现，coder 模式 override）
      */
     public void showDiffView() {
         // work 模式不支持 diff 视图
+    }
+
+    /**
+     * 显示文件内容视图（通用基类空实现，coder 模式 override）
+     */
+    public void showFileView() {
+        // work 模式不支持文件内容视图
     }
 
     /**
@@ -287,20 +288,6 @@ public class EditorPanelController implements Initializable {
     // ===== coder 专有方法（通用基类空实现，coder 模式 override） =====
 
     /**
-     * 设置当前项目（通用基类空实现，coder 模式 override 构建目录树）
-     */
-    public void setCurrentProject(ProjectInfo project) {
-        // work 模式不支持项目管理
-    }
-
-    /**
-     * 在编辑器面板显示文件内容（通用基类空实现，coder 模式 override）
-     */
-    public void showFileContent(Path filePath) {
-        // work 模式不支持文件内容显示
-    }
-
-    /**
      * 打开终端（通用基类空实现，coder 模式 override）
      */
     public void openTerminal(Path workingDir) {
@@ -312,6 +299,13 @@ public class EditorPanelController implements Initializable {
      */
     public void closeTerminal() {
         // work 模式不支持终端
+    }
+
+    /**
+     * 在编辑器面板显示文件内容（通用基类空实现，coder 模式 override）
+     */
+    public void showFileContent(Path filePath) {
+        // work 模式不支持文件内容显示
     }
 
     /**

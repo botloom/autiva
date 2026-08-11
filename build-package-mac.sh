@@ -83,6 +83,9 @@ jpackage \
   --runtime-image "$JLINK_OUTPUT" \
   --java-options "-Xms128m" \
   --java-options "-Xmx1024m" \
+  --java-options "-Dprism.order=es2,sw" \
+  --java-options "-Dprism.maxvram=200M" \
+  --java-options "-Dprism.forceGPU=false" \
   --dest autiva-desktop/target/jpackage-output \
   --app-version 1.0.0 \
   --vendor "Bitloom" \

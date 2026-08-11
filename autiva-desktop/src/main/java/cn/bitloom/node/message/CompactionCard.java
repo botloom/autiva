@@ -1,6 +1,6 @@
 package cn.bitloom.node.message;
 
-import cn.bitloom.agentic.event.MessageEvent;
+import org.springframework.ai.chat.messages.MessageType;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 
@@ -19,9 +19,9 @@ public class CompactionCard extends MessageCard {
     }
 
     @Override
-    public MessageEvent.Type getMessageType() {
+    public MessageType getMessageType() {
         // 系统提示，视觉上居中
-        return MessageEvent.Type.ASSISTANT;
+        return MessageType.ASSISTANT;
     }
 
     @Override

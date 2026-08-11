@@ -1,8 +1,8 @@
 .sidebar {
     -fx-background-color: #ffffff;
-    -fx-pref-width: 200;
-    -fx-min-width: 200;
-    -fx-max-width: 200;
+    -fx-pref-width: 300;
+    -fx-min-width: 300;
+    -fx-max-width: 300;
     -fx-border-color: rgba(0, 0, 0, 0.08);
     -fx-border-width: 0 1px 0 0;
     -fx-background-radius: 0;
@@ -241,7 +241,7 @@
     -fx-border-color: transparent;
     -fx-border-width: 0;
     -fx-cursor: hand;
-    -fx-pref-width: 90;
+    -fx-pref-width: 150;
     -fx-pref-height: 32;
     -fx-font-size: 12px;
     -fx-font-weight: 500;
@@ -268,3 +268,174 @@
 .sidebar__mode-btn:selected .sidebar__mode-icon {
     -fx-fill: #0071e3;
 }
+
+/* ===== 侧边栏目录树视图 ===== */
+
+.sidebar__tree-container {
+    -fx-spacing: 0;
+    -fx-padding: 0;
+}
+
+.sidebar__tree-header {
+    -fx-background-color: transparent;
+    -fx-padding: 6 8 6 4;
+    -fx-spacing: 4;
+    -fx-alignment: center-left;
+    -fx-min-height: 32;
+    -fx-pref-height: 32;
+}
+
+.sidebar__tree-back-btn {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6;
+    -fx-padding: 0;
+    -fx-pref-width: 22;
+    -fx-pref-height: 22;
+    -fx-min-width: 22;
+    -fx-min-height: 22;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-cursor: hand;
+    -fx-alignment: CENTER;
+    -fx-content-display: GRAPHIC_ONLY;
+    -fx-opacity: 0.6;
+}
+
+.sidebar__tree-back-btn:hover {
+    -fx-opacity: 1;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar__tree-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+}
+
+/* 目录树本体 */
+.sidebar__tree-container .tree-view {
+    -fx-background-color: transparent;
+    -fx-padding: 2 4 2 4;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-fixed-cell-size: 28px;
+}
+
+.sidebar__tree-container .tree-view .tree-cell {
+    -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-background-insets: 1 0 1 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0 8 0 8;
+    -fx-graphic-text-gap: 6px;
+    -fx-alignment: center-left;
+    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+    -fx-cursor: hand;
+}
+
+.sidebar__tree-container .tree-view .tree-cell:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar__tree-container .tree-view .tree-cell:selected {
+    -fx-background-color: rgba(0, 113, 227, 0.1);
+    -fx-text-fill: #0071e3;
+}
+
+.sidebar__tree-container .tree-view .tree-cell:filled:selected:focused {
+    -fx-background-color: rgba(0, 113, 227, 0.1);
+    -fx-text-fill: #0071e3;
+}
+
+/* 折叠箭头 - Apple 风格 chevron（与文字基线对齐） */
+.sidebar__tree-container .tree-view .tree-cell .arrow {
+    -fx-background-color: #86868b;
+    -fx-background-insets: 0;
+    -fx-padding: 3;
+    -fx-min-width: 12;
+    -fx-pref-width: 12;
+    -fx-max-width: 12;
+    -fx-min-height: 12;
+    -fx-pref-height: 12;
+    -fx-max-height: 12;
+    -fx-translate-y: 5;
+    -fx-shape: "M2,0 L6,4 L2,8 L0,6 L4,4 L0,2 Z";
+}
+
+.sidebar__tree-container .tree-view .tree-cell:expanded .arrow {
+    -fx-rotate: 90;
+    -fx-background-color: #1d1d1f;
+}
+
+.sidebar__tree-container .tree-view .tree-cell:hover .arrow {
+    -fx-background-color: #1d1d1f;
+}
+
+.sidebar__tree-container .tree-view .tree-cell:selected .arrow {
+    -fx-background-color: #0071e3;
+}
+
+/* 目录树垂直滚动条 */
+.sidebar__tree-container .tree-view .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6;
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(0, 0, 0, 0.2);
+    -fx-background-radius: 3;
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:vertical .increment-button,
+.sidebar__tree-container .tree-view .scroll-bar:vertical .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:vertical .increment-arrow,
+.sidebar__tree-container .tree-view .scroll-bar:vertical .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+/* 目录树水平滚动条 - 隐藏以保持简洁 */
+.sidebar__tree-container .tree-view .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
+    -fx-opacity: 0;
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:horizontal .thumb,
+.sidebar__tree-container .tree-view .scroll-bar:horizontal .track {
+    -fx-background-color: transparent;
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:horizontal .increment-button,
+.sidebar__tree-container .tree-view .scroll-bar:horizontal .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+    -fx-pref-width: 0;
+    -fx-max-width: 0;
+}
+
+.sidebar__tree-container .tree-view .scroll-bar:horizontal .increment-arrow,
+.sidebar__tree-container .tree-view .scroll-bar:horizontal .decrement-arrow {
+    -fx-background-color: transparent;
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+

@@ -29,13 +29,6 @@ import java.util.UUID;
 public final class MessageEvent extends AbstractEvent {
 
     public static final String METADATA_SYNTHETIC = "synthetic";
-    public static final String METADATA_COMPACTION_SOURCE = "compactionSource";
-
-    public enum Type {
-        USER,
-        ASSISTANT,
-        TOOL
-    }
 
     @Builder.Default
     private EventTypeEnum eventType = EventTypeEnum.MESSAGE;
@@ -117,132 +110,59 @@ public final class MessageEvent extends AbstractEvent {
         return v != null ? v.toString() : null;
     }
 
-    public void setMessageId(String messageId) {
-        this.metadata.put("messageId", messageId);
-    }
-
-    @JsonIgnore
-    public boolean isPersist() {
-        Object v = metadata.get("persist");
-        return v instanceof Boolean b && b;
-    }
-
-    public void setPersist(boolean persist) {
-        this.metadata.put("persist", persist);
-    }
-
     @JsonIgnore
     public String getFinishReason() {
-        Object v = metadata.get("finishReason");
-        return v != null ? v.toString() : null;
-    }
-
-    public void setFinishReason(String finishReason) {
-        this.metadata.put("finishReason", finishReason);
+        if (message instanceof AssistantMessage am) {
+            Object v = am.getMetadata().get("finishReason");
+            return v != null ? v.toString() : null;
+        }
+        return null;
     }
 
     @JsonIgnore
-    @SuppressWarnings("unchecked")
     public List<ToolCallInfo> getToolCalls() {
-        Object v = metadata.get("toolCalls");
-        return v instanceof List<?> l ? (List<ToolCallInfo>) l : null;
-    }
-
-    public void setToolCalls(List<ToolCallInfo> toolCalls) {
-        this.metadata.put("toolCalls", toolCalls);
+        if (message instanceof AssistantMessage am && am.hasToolCalls()) {
+            return am.getToolCalls().stream()
+                    .map(tc -> new ToolCallInfo(tc.id(), tc.name(), tc.arguments()))
+                    .toList();
+        }
+        return null;
     }
 
     @JsonIgnore
-    @SuppressWarnings("unchecked")
     public List<ToolResponseInfo> getResponses() {
-        Object v = metadata.get("responses");
-        return v instanceof List<?> l ? (List<ToolResponseInfo>) l : null;
-    }
-
-    public void setResponses(List<ToolResponseInfo> responses) {
-        this.metadata.put("responses", responses);
-    }
-
-    @JsonIgnore
-    @SuppressWarnings("unchecked")
-    public List<String> getAttachments() {
-        Object v = metadata.get("attachments");
-        return v instanceof List<?> l ? (List<String>) l : null;
-    }
-
-    public void setAttachments(List<String> attachments) {
-        this.metadata.put("attachments", attachments);
+        if (message instanceof ToolResponseMessage trm) {
+            return trm.getResponses().stream()
+                    .map(r -> new ToolResponseInfo(r.id(), r.name(), r.responseData()))
+                    .toList();
+        }
+        return null;
     }
 
     public static MessageEvent userMessage(String sessionId, String text) {
         return MessageEvent.builder()
                 .sessionId(sessionId)
                 .message(UserMessage.builder().text(text).build())
-                .metadata(Map.of("persist", true))
-                .build();
-    }
-
-    public static MessageEvent userMessage(String messageId, String sessionId, String text) {
-        Map<String, Object> md = new HashMap<>();
-        md.put("persist", true);
-        md.put("messageId", messageId);
-        return MessageEvent.builder()
-                .sessionId(sessionId)
-                .message(UserMessage.builder().text(text).build())
-                .metadata(md)
-                .build();
-    }
-
-    public static MessageEvent assistantStream(String sessionId, String text) {
-        Map<String, Object> md = new HashMap<>();
-        md.put("persist", false);
-        return MessageEvent.builder()
-                .sessionId(sessionId)
-                .message(AssistantMessage.builder().content(text).build())
-                .metadata(md)
                 .build();
     }
 
     public static MessageEvent assistantStop(String sessionId, String text) {
-        Map<String, Object> md = new HashMap<>();
-        md.put("persist", true);
-        md.put("finishReason", "STOP");
-        return MessageEvent.builder()
-                .sessionId(sessionId)
-                .message(AssistantMessage.builder().content(text).properties(Map.of("finishReason", "STOP")).build())
-                .metadata(md)
-                .build();
-    }
-
-    public static MessageEvent assistantToolCalls(String sessionId, List<ToolCallInfo> toolCalls) {
-        Map<String, Object> md = new HashMap<>();
-        md.put("persist", true);
-        md.put("finishReason", "TOOL_CALLS");
-        md.put("toolCalls", toolCalls);
-        List<AssistantMessage.ToolCall> tcList = toolCalls.stream()
-                .map(tc -> new AssistantMessage.ToolCall(tc.id(), "function", tc.name(), tc.arguments()))
-                .toList();
         return MessageEvent.builder()
                 .sessionId(sessionId)
                 .message(AssistantMessage.builder()
-                        .toolCalls(tcList)
-                        .properties(Map.of("finishReason", "TOOL_CALLS"))
+                        .content(text)
+                        .properties(Map.of("finishReason", "STOP"))
                         .build())
-                .metadata(md)
                 .build();
     }
 
     public static MessageEvent toolResponse(String sessionId, List<ToolResponseInfo> responses) {
-        Map<String, Object> md = new HashMap<>();
-        md.put("persist", true);
-        md.put("responses", responses);
         List<ToolResponseMessage.ToolResponse> trList = responses.stream()
                 .map(r -> new ToolResponseMessage.ToolResponse(r.id(), r.name(), r.responseData()))
                 .toList();
         return MessageEvent.builder()
                 .sessionId(sessionId)
                 .message(ToolResponseMessage.builder().responses(trList).build())
-                .metadata(md)
                 .build();
     }
 

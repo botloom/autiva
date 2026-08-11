@@ -21,6 +21,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -99,6 +100,7 @@ public class CanvasDialogController implements WindowManager.StageAware, DialogH
     private CanvasView canvasView;
 
     // 发送到聊天的回调
+    @Setter
     private Consumer<String> onSendToChat;
 
     // 标记是否正在从 ViewModel 更新 UI（防止循环触发）
@@ -831,10 +833,6 @@ public class CanvasDialogController implements WindowManager.StageAware, DialogH
     }
 
     // ---- Send to Chat ----
-
-    public void setOnSendToChat(Consumer<String> callback) {
-        this.onSendToChat = callback;
-    }
 
     private void handleSendToChat() {
         String content = serializeCanvasContent();

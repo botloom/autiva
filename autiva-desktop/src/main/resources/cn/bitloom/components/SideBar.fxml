@@ -8,58 +8,54 @@
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.SideBarController"
       stylesheets="@../style/side-bar.css"
 >
+    <fx:define>
+        <ToggleGroup fx:id="agentSelect"/>
+    </fx:define>
 
     <VBox styleClass="sidebar__content" VBox.vgrow="ALWAYS">
-        <HBox fx:id="modeSwitcher" styleClass="sidebar__mode-switcher" alignment="CENTER">
-            <ToggleButton fx:id="defaultModeBtn" styleClass="sidebar__mode-btn" text="Work" selected="true">
+        <HBox  styleClass="sidebar__mode-switcher" alignment="CENTER">
+            <ToggleButton fx:id="workModeBtn" styleClass="sidebar__mode-btn" text="Work" selected="true" toggleGroup="${agentSelect}">
                 <graphic>
-                    <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14"
-                                  svgPath="/cn/bitloom/images/work.svg"/>
+                    <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/work.svg"/>
                 </graphic>
             </ToggleButton>
-            <ToggleButton fx:id="coderModeBtn" styleClass="sidebar__mode-btn" text="Code">
+            <ToggleButton fx:id="coderModeBtn" styleClass="sidebar__mode-btn" text="Code" toggleGroup="${agentSelect}">
                 <graphic>
-                    <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14"
-                                  svgPath="/cn/bitloom/images/code.svg"/>
+                    <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/code.svg"/>
                 </graphic>
             </ToggleButton>
         </HBox>
 
         <HBox fx:id="homeOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
-            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/chat-new.svg"/>
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/chat-new.svg"/>
             <Label text="新对话" styleClass="sidebar__label"/>
         </HBox>
 
         <HBox fx:id="agentOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
-            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/robot.svg"/>
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/robot.svg"/>
             <Label text="智能体" styleClass="sidebar__label"/>
         </HBox>
 
         <HBox fx:id="skillOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
-            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/lightning.svg"/>
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/lightning.svg"/>
             <Label text="技能" styleClass="sidebar__label"/>
         </HBox>
 
         <HBox fx:id="taskOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
-            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/task.svg"/>
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/task.svg"/>
             <Label text="任务" styleClass="sidebar__label"/>
         </HBox>
 
         <Region styleClass="sidebar__divider"/>
 
-        <ScrollPane fx:id="historyScrollPane" styleClass="sidebar__history-scroll"
+        <ScrollPane fx:id="historyScroll" styleClass="sidebar__history-scroll"
                     fitToWidth="true" VBox.vgrow="ALWAYS"
                     hbarPolicy="NEVER">
             <VBox fx:id="historyList" styleClass="sidebar__history-list"/>
         </ScrollPane>
 
         <HBox fx:id="settingsOption" styleClass="sidebar__option" alignment="CENTER_LEFT">
-            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20"
-                          svgPath="/cn/bitloom/images/setting.svg"/>
+            <SvgImageView styleClass="sidebar__icon" fitWidth="20" fitHeight="20" svgPath="/cn/bitloom/images/setting.svg"/>
             <Label text="设置" styleClass="sidebar__label"/>
         </HBox>
 

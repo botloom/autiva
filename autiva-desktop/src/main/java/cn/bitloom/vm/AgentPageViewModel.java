@@ -35,7 +35,7 @@ public class AgentPageViewModel {
 
     public void loadAgents() {
         mainAgents.setAll(definitionManager.getMainAgentIds().stream()
-                .map(id -> definitionManager.getOrLoadMainDefinition(id))
+                .map(definitionManager::getOrLoadMainDefinition)
                 .filter(d -> d != null && d.kind() == AgentKind.MAIN)
                 .toList());
     }
@@ -45,14 +45,16 @@ public class AgentPageViewModel {
             @Override
             protected List<AgentDefinition> call() {
                 return definitionManager.getMainAgentIds().stream()
-                        .map(id -> definitionManager.getOrLoadMainDefinition(id))
+                        .map(definitionManager::getOrLoadMainDefinition)
                         .filter(d -> d != null && d.kind() == AgentKind.MAIN)
                         .toList();
             }
         };
-        task.setOnSucceeded(e -> {
+        task.setOnSucceeded(_ -> {
             mainAgents.setAll(task.getValue());
-            if (onLoaded != null) onLoaded.run();
+            if (onLoaded != null) {
+                onLoaded.run();
+            }
         });
         task.setOnFailed(e -> log.error("加载智能体列表失败", task.getException()));
         ExecutorManager.getPlatformTaskExecutor().execute(task);

@@ -78,3 +78,4 @@ playwright_data/
 settings.properties
 .autiva/
 /autiva-web/node_modules/
+/.claude/

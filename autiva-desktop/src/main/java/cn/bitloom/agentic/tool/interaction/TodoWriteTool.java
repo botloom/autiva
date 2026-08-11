@@ -3,6 +3,7 @@ package cn.bitloom.agentic.tool.interaction;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -58,7 +59,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 	}
 
 	@Override
-	public ToolResult execute(Input input, ToolContext context) {
+	public @NonNull ToolResult execute(Input input, ToolContext context) {
 		List<TodoItem> todos = input.todos();
 
 		// 包装为 Todos record

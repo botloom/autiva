@@ -49,7 +49,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
     public void initialize(URL location, ResourceBundle resources) {
         agentListView.setFocusTraversable(false);
         agentListView.setItems(viewModel.getMainAgents());
-        agentListView.setCellFactory(list -> new AgentListCell());
+        agentListView.setCellFactory(_ -> new AgentListCell());
         renderAgents();
     }
 
@@ -87,7 +87,7 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
 
         header.getChildren().addAll(nameLabel, spacer, openDirBtn, copyBtn, deleteBtn);
 
-        String description = agent.description() != null ? agent.description() : "";
+        String description = agent.description();
         Label descLabel = new Label(description);
         descLabel.getStyleClass().add("agent-page__card-description");
         descLabel.setWrapText(true);

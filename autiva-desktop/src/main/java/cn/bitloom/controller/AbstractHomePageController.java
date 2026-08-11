@@ -1,6 +1,5 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.holder.ButtonBarHolder;
@@ -18,12 +17,12 @@ import cn.bitloom.vm.AbstractHomePageViewModel;
 import cn.bitloom.window.WindowManager;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
+import org.springframework.ai.chat.messages.MessageType;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.ListChangeListener;
-import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
@@ -149,13 +148,14 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             this.stopButton.setManaged(streaming && !paused);
         });
 
-        // 初始化消息 ListView：用 FilteredList 过滤掉 TOOL 类型（已路由到 EditorPanel），
-        // 避免 0 高度 cell 干扰 ListView 的滚动条 thumb 大小估算
+        // 初始化消息 ListView：直接使用原始 ObservableList，
+        // TOOL 类型卡片通过 toolCardHandler 回调直接路由到 EditorPanel，不进入 messages 列表
         this.chatListView.setFocusTraversable(false);
-        FilteredList<MessageCard> visibleMessages = this.getViewModel().getMessages()
-                .filtered(card -> card.getMessageType() != MessageEvent.Type.TOOL);
-        this.chatListView.setItems(visibleMessages);
+        this.chatListView.setItems(this.getViewModel().getMessages());
         this.chatListView.setCellFactory(list -> new MessageListCell());
+
+        // 注入工具卡片路由回调：ToolMessageCard 直接发送到 EditorPanel，不进 messages 列表
+        this.getViewModel().setToolCardHandler(this::addToolToEditorPanel);
 
         // 配置 stick-to-bottom 跟随模式
         setupStickToBottom();
@@ -184,12 +184,6 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.getViewModel().getMessages().addListener((ListChangeListener<MessageCard>) change -> {
             while (change.next()) {
                 if (change.wasAdded()) {
-                    for (MessageCard card : change.getAddedSubList()) {
-                        if (card instanceof ToolMessageCard toolCard) {
-                            addToolToEditorPanel(toolCard, toolCard.getToolName());
-                        }
-                    }
-                    // 只在有新增消息时滚动到底部
                     scrollToBottom();
                 }
             }
@@ -274,7 +268,11 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
         if (card instanceof AssistantMessageCard assistantCard) {
             assistantCard.setActionBar(actionBar);
-            assistantCard.setOnContentChanged(c -> scrollToBottom());
+            assistantCard.setOnContentChanged(c -> {
+                // 标记 ListView 需要重新布局，使 scrollToBottom 中的 layout() 能基于最新 cell 高度计算滚动条范围
+                chatListView.requestLayout();
+                scrollToBottom();
+            });
         }
 
         return createMessageRow(messageWrapper, card.getMessageType());
@@ -283,7 +281,6 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     /**
      * 消息列表 cell：根据卡片类型渲染。
      * - NodeMessageCard：直接 setGraphic(node)，左对齐
-     * - TOOL 类型：不显示（已由 ListChangeListener 路由到工具区），高度置 0
      * - USER/ASSISTANT：组装 messageWrapper + actionBar + row
      */
     private class MessageListCell extends ListCell<MessageCard> {
@@ -296,9 +293,6 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             } else if (card instanceof NodeMessageCard nmc) {
                 setGraphic(nmc.getNode());
                 setStyle(null);
-            } else if (card.getMessageType() == MessageEvent.Type.TOOL) {
-                setGraphic(null);
-                setStyle("-fx-padding: 0; -fx-min-height: 0; -fx-pref-height: 0; -fx-max-height: 0;");
             } else {
                 setGraphic(buildMessageRow(card));
                 setStyle(null);
@@ -306,7 +300,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         }
     }
 
-    private void addToolToEditorPanel(Node toolCard, String toolName) {
+    private void addToolToEditorPanel(ToolMessageCard toolCard) {
         if (indexController == null || indexController.getEditorPanelController() == null) return;
         indexController.getEditorPanelController().addToolCallCard(toolCard);
     }
@@ -333,12 +327,12 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.getViewModel().getMessages().add(new NodeMessageCard(node));
     }
 
-    private HBox createMessageRow(Node card, MessageEvent.Type type) {
+    private HBox createMessageRow(Node card, MessageType type) {
         HBox row = new HBox();
         row.getStyleClass().add("chat-row");
         row.setMaxWidth(Double.MAX_VALUE);
 
-        if (type == MessageEvent.Type.USER) {
+        if (type == MessageType.USER) {
             row.setAlignment(Pos.CENTER_RIGHT);
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -354,7 +348,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     private HBox createActionBar(MessageCard card) {
         HBox actionBar = new HBox();
         actionBar.getStyleClass().add("chat-message__actions");
-        if (card.getMessageType() == MessageEvent.Type.USER) {
+        if (card.getMessageType() == MessageType.USER) {
             actionBar.getStyleClass().add("chat-message__actions--user");
         }
 
@@ -581,16 +575,13 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     private void scrollToBottom() {
         if (!stickToBottom) return;
         Platform.runLater(() -> {
-            Node bar = chatListView.lookup(".scroll-bar:vertical");
-            if (bar instanceof ScrollBar scrollBar) {
-                scrollBar.setValue(scrollBar.getMax());
-            } else {
-                // fallback：找不到滚动条时用 scrollTo
-                int size = chatListView.getItems().size();
-                if (size > 0) {
-                    chatListView.scrollTo(size - 1);
-                }
-            }
+            int size = chatListView.getItems().size();
+            if (size <= 0) return;
+            // 先 layout 让 VirtualFlow 基于最新 cell 内容重新计算高度与滚动条 max
+            chatListView.layout();
+            // scrollTo 是 ListView 官方滚动 API，会触发 VirtualFlow 内部测量与滚动，
+            // 比 scrollBar.setValue(getMax()) 更可靠（后者在 cell 高度变化后 max 可能仍是旧值）
+            chatListView.scrollTo(size - 1);
         });
     }
 

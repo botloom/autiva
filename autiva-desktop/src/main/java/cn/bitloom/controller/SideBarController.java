@@ -2,16 +2,20 @@ package cn.bitloom.controller;
 
 import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.constant.AgentMode;
 import cn.bitloom.agentic.session.EventFilter;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
+import cn.bitloom.agentic.session.Session;
+import cn.bitloom.constant.AgentMode;
 import cn.bitloom.holder.PageHolder;
+import cn.bitloom.node.project.FileTreeCell;
 import cn.bitloom.node.svg.SvgImageView;
+import cn.bitloom.project.FileTreeService;
 import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.project.ProjectRegistry;
 import cn.bitloom.router.RouteConfig;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.AbstractHomePageViewModel;
+import cn.bitloom.vm.CodeHomePageViewModel;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -24,21 +28,19 @@ import javafx.scene.layout.VBox;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ResourceBundle;
+import java.util.*;
 
-import cn.bitloom.agentic.session.Session;
-
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class SideBarController implements Initializable, PageHolder {
@@ -48,13 +50,12 @@ public class SideBarController implements Initializable, PageHolder {
 
     private final FileSystemSessionManager fileSystemSessionManager;
     private final ProjectRegistry projectRegistry;
+    private final FileTreeService fileTreeService;
 
     @FXML
     private VBox sideBar;
     @FXML
-    private HBox modeSwitcher;
-    @FXML
-    private ToggleButton defaultModeBtn;
+    private ToggleButton workModeBtn;
     @FXML
     private ToggleButton coderModeBtn;
     @FXML
@@ -68,9 +69,9 @@ public class SideBarController implements Initializable, PageHolder {
     @FXML
     private HBox taskOption;
     @FXML
-    private ScrollPane historyScrollPane;
-    @FXML
     private VBox historyList;
+    @FXML
+    private ScrollPane historyScroll;
 
     @Getter
     @Setter
@@ -84,44 +85,28 @@ public class SideBarController implements Initializable, PageHolder {
     public void initialize(URL location, ResourceBundle resources) {
         this.hide();
 
-        // ===== 智能体模式分段切换按钮 =====
-        ToggleGroup modeGroup = new ToggleGroup();
-        this.defaultModeBtn.setToggleGroup(modeGroup);
-        this.coderModeBtn.setToggleGroup(modeGroup);
-        // 初始选中态：根据 Store.currentAgent 决定
-        if (AgentMode.CODER.matches(Store.currentAgent.get())) {
+        if (AgentMode.CODE.matches(Store.currentAgent.get())) {
             this.coderModeBtn.setSelected(true);
         } else {
-            this.defaultModeBtn.setSelected(true);
+            this.workModeBtn.setSelected(true);
         }
-        // 点击切换：work 段 → switchAgent("work")；code 段 → switchAgent("code")
-        // 同时重置 UI 并导航到首页（与"新聊天"按钮行为一致）
-        this.defaultModeBtn.setOnAction(e -> {
-            AbstractHomePageViewModel vm = currentViewModel();
-            if (vm != null) vm.switchAgent("work");
-            resetChatUI();
-            if (this.indexController != null) {
-                this.indexController.navigate(RouteConfig.Path.HOME);
-            }
-        });
-        this.coderModeBtn.setOnAction(e -> {
-            AbstractHomePageViewModel vm = currentViewModel();
-            if (vm != null) vm.switchAgent("code");
-            resetChatUI();
-            if (this.indexController != null) {
-                this.indexController.navigate(RouteConfig.Path.HOME);
-            }
-        });
-        // 监听 Store.currentAgent 变化，同步选中态（切换历史会话时触发）
-        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
-            Platform.runLater(() -> {
-                if (AgentMode.CODER.matches(newVal)) {
-                    if (!coderModeBtn.isSelected()) coderModeBtn.setSelected(true);
-                } else {
-                    if (!defaultModeBtn.isSelected()) defaultModeBtn.setSelected(true);
+
+        this.workModeBtn.setOnAction(_ -> switchAgentMode(AgentMode.WORK));
+        this.coderModeBtn.setOnAction(_ -> switchAgentMode(AgentMode.CODE));
+
+        // 监听智能体切换：同步模式按钮选中状态并刷新历史列表（按 agentId 过滤）
+        Store.currentAgent.addListener((_, _, newVal) -> Platform.runLater(() -> {
+            if (AgentMode.CODE.matches(newVal)) {
+                if (!coderModeBtn.isSelected()) {
+                    coderModeBtn.setSelected(true);
                 }
-            });
-        });
+            } else {
+                if (!workModeBtn.isSelected()) {
+                    workModeBtn.setSelected(true);
+                }
+            }
+            refreshHistoryList();
+        }));
 
         this.routeOptionMap = new LinkedHashMap<>();
         this.routeOptionMap.put(RouteConfig.Path.HOME, this.homeOption);
@@ -131,18 +116,22 @@ public class SideBarController implements Initializable, PageHolder {
         this.routeOptionMap.put(RouteConfig.Path.SETTINGS, this.settingsOption);
 
         this.routeOptionMap.forEach((path, option) -> {
-            option.setOnMouseClicked(event -> {
+            if (option == this.homeOption) {
+                return;
+            }
+            option.setOnMouseClicked(_ -> {
                 if (this.indexController != null) {
                     this.indexController.navigate(path);
                 }
             });
         });
 
-        // "新聊天"按钮：切换到初始态并导航到首页
-        this.homeOption.setOnMouseClicked(event -> {
-            AbstractHomePageViewModel vm = currentViewModel();
-            if (vm != null) vm.createNewSession();
-            resetChatUI();
+        this.homeOption.setOnMouseClicked(_ -> {
+            AbstractHomePageViewModel vm = this.currentViewModel();
+            if (vm != null) {
+                vm.createNewSession();
+            }
+            this.resetChatUI();
             if (this.indexController != null) {
                 this.indexController.navigate(RouteConfig.Path.HOME);
             }
@@ -152,11 +141,6 @@ public class SideBarController implements Initializable, PageHolder {
 
         // 监听 session 切换，刷新历史列表
         Store.currentSessionId.addListener((obs, oldVal, newVal) -> {
-            Platform.runLater(this::refreshHistoryList);
-        });
-
-        // 监听智能体切换，刷新历史列表（按 agentId 过滤）
-        Store.currentAgent.addListener((obs, oldVal, newVal) -> {
             Platform.runLater(this::refreshHistoryList);
         });
 
@@ -186,9 +170,24 @@ public class SideBarController implements Initializable, PageHolder {
         return null;
     }
 
+    /**
+     * 切换智能体模式：切换 agent、重置聊天 UI 并导航回首页。
+     */
+    private void switchAgentMode(AgentMode mode) {
+        showHistoryList();   // 切换模式时恢复会话列表视图
+        AbstractHomePageViewModel vm = this.currentViewModel();
+        if (vm != null) {
+            vm.switchAgent(mode.agentId());
+        }
+        this.resetChatUI();
+        if (this.indexController != null) {
+            this.indexController.navigate(RouteConfig.Path.HOME);
+        }
+    }
+
     public void refreshHistoryList() {
         String currentAgent = Store.currentAgent.get();
-        boolean isCoder = AgentMode.CODER.matches(currentAgent);
+        boolean isCoder = AgentMode.CODE.matches(currentAgent);
         String prefix = isCoder ? "code-" : "work-";
         List<Session> sessions = fileSystemSessionManager.findByUserId(Store.userId.get()).stream()
                 .filter(s -> s.id().startsWith(prefix))
@@ -294,7 +293,7 @@ public class SideBarController implements Initializable, PageHolder {
         newChatBtn.setOnAction(e -> {
             e.consume();
             AbstractHomePageViewModel vm = currentViewModel();
-            if (vm instanceof cn.bitloom.vm.CoderHomePageViewModel coderVm) {
+            if (vm instanceof CodeHomePageViewModel coderVm) {
                 coderVm.setCurrentProject(project);
             }
             if (vm != null) vm.createNewSession();
@@ -304,10 +303,24 @@ public class SideBarController implements Initializable, PageHolder {
             }
         });
 
-        header.getChildren().addAll(folderIcon, nameLabel, spacer, newChatBtn);
+        // 目录按钮：点击后会话区切换为该项目的目录树（默认隐藏，悬浮显示）
+        Button treeBtn = new Button();
+        treeBtn.getStyleClass().add("sidebar__history-delete-btn");
+        SvgImageView treeIcon = new SvgImageView();
+        treeIcon.setFitWidth(14);
+        treeIcon.setFitHeight(14);
+        treeIcon.setSvgPath("/cn/bitloom/images/file-tree.svg");
+        treeBtn.setGraphic(treeIcon);
+        treeBtn.setVisible(false);
+        treeBtn.setOnAction(e -> {
+            e.consume();
+            showProjectTree(project);
+        });
 
-        header.setOnMouseEntered(e -> newChatBtn.setVisible(true));
-        header.setOnMouseExited(e -> newChatBtn.setVisible(false));
+        header.getChildren().addAll(folderIcon, nameLabel, spacer, treeBtn, newChatBtn);
+
+        header.setOnMouseEntered(e -> { newChatBtn.setVisible(true); treeBtn.setVisible(true); });
+        header.setOnMouseExited(e -> { newChatBtn.setVisible(false); treeBtn.setVisible(false); });
 
         // session 列表容器（默认展开）
         VBox sessionList = new VBox();
@@ -323,7 +336,8 @@ public class SideBarController implements Initializable, PageHolder {
 
         // 点击项目名展开/折叠（按钮点击不触发）
         header.setOnMouseClicked(e -> {
-            if (e.getTarget() == newChatBtn || e.getTarget() == newChatIcon) {
+            if (e.getTarget() == newChatBtn || e.getTarget() == newChatIcon
+                    || e.getTarget() == treeBtn || e.getTarget() == treeIcon) {
                 return;
             }
             boolean expanded = sessionList.isVisible();
@@ -333,6 +347,68 @@ public class SideBarController implements Initializable, PageHolder {
 
         card.getChildren().addAll(header, sessionList);
         return card;
+    }
+
+    /**
+     * 将会话记录区域切换为项目目录树。
+     * 复用 FileTreeService 构建懒加载目录树，顶部提供返回按钮切回会话列表。
+     */
+    private void showProjectTree(ProjectInfo project) {
+        TreeView<Path> treeView = new TreeView<>();
+        treeView.setCellFactory(t -> new FileTreeCell());
+        treeView.setShowRoot(false);
+        // 双击文件在右侧编辑器面板展示内容
+        treeView.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                TreeItem<Path> selected = treeView.getSelectionModel().getSelectedItem();
+                if (selected != null && Files.isRegularFile(selected.getValue())
+                        && indexController != null) {
+                    indexController.showFileInPanel(selected.getValue());
+                }
+            }
+        });
+        try {
+            Path projectPath = Paths.get(project.path());
+            TreeItem<Path> root = fileTreeService.buildFileTree(projectPath);
+            treeView.setRoot(root);
+        } catch (Exception e) {
+            log.error("构建侧边栏目录树失败: {}", project.path(), e);
+        }
+
+        // 顶部返回栏：返回箭头 + 项目名
+        Button backBtn = new Button();
+        backBtn.getStyleClass().addAll("sidebar__history-delete-btn", "sidebar__tree-back-btn");
+        SvgImageView backIcon = new SvgImageView();
+        backIcon.setFitWidth(14);
+        backIcon.setFitHeight(14);
+        backIcon.setSvgPath("/cn/bitloom/images/left.svg");
+        backBtn.setGraphic(backIcon);
+
+        Label titleLabel = new Label(project.name());
+        titleLabel.getStyleClass().add("sidebar__tree-title");
+
+        HBox treeHeader = new HBox(backBtn, titleLabel);
+        treeHeader.getStyleClass().add("sidebar__tree-header");
+        treeHeader.setAlignment(Pos.CENTER_LEFT);
+        treeHeader.setSpacing(8);
+
+        VBox treeContainer = new VBox(treeHeader, treeView);
+        treeContainer.getStyleClass().add("sidebar__tree-container");
+        VBox.setVgrow(treeView, Priority.ALWAYS);
+
+        backBtn.setOnAction(e -> showHistoryList());
+
+        // 目录树视图需要撑满 ScrollPane 高度
+        historyScroll.setFitToHeight(true);
+        historyScroll.setContent(treeContainer);
+    }
+
+    /**
+     * 恢复会话记录区域为会话列表。
+     */
+    private void showHistoryList() {
+        historyScroll.setFitToHeight(false);
+        historyScroll.setContent(historyList);
     }
 
     /**
@@ -357,7 +433,6 @@ public class SideBarController implements Initializable, PageHolder {
                         .id(session.id())
                         .userId(session.userId())
                         .createdAt(session.createdAt())
-                        .expiresAt(session.expiresAt())
                         .metadata(md)
                         .build();
                 fileSystemSessionManager.persistSession(updated);

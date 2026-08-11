@@ -2,14 +2,13 @@ package cn.bitloom.controller;
 
 import cn.bitloom.agentic.tool.file.DiffService;
 import cn.bitloom.agentic.tool.file.FileDiff;
-import cn.bitloom.agentic.event.DiffEvent;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.constant.AgentMode;
 import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.AbstractHomePageViewModel;
-import cn.bitloom.vm.CoderHomePageViewModel;
+import cn.bitloom.vm.CodeHomePageViewModel;
 import cn.bitloom.window.WindowManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -33,11 +32,11 @@ import java.util.List;
  * 在通用对话逻辑基础上增加：
  * - Diff 审查条（文件卡片列表 + 全部撤销/全部保留）
  * - 项目选择菜单 + 分支显示按钮
- * - 终端/项目按钮配置
+ * - 终端按钮配置
  */
 @Slf4j
 @Component
-public class CoderHomePageController extends AbstractHomePageController {
+public class CodeHomePageController extends AbstractHomePageController {
 
     @FXML
     private VBox diffReviewBar;
@@ -60,15 +59,15 @@ public class CoderHomePageController extends AbstractHomePageController {
     @FXML
     private Button branchDisplayButton;
 
-    private final CoderHomePageViewModel viewModel;
+    private final CodeHomePageViewModel viewModel;
     private final DiffService diffService;
 
     private boolean diffReviewExpanded = false;
 
-    public CoderHomePageController(ToolUIBridge toolUIBridge,
-                                   WindowManager windowManager,
-                                   CoderHomePageViewModel viewModel,
-                                   DiffService diffService) {
+    public CodeHomePageController(ToolUIBridge toolUIBridge,
+                                  WindowManager windowManager,
+                                  CodeHomePageViewModel viewModel,
+                                  DiffService diffService) {
         super(toolUIBridge, windowManager);
         this.viewModel = viewModel;
         this.diffService = diffService;
@@ -95,9 +94,6 @@ public class CoderHomePageController extends AbstractHomePageController {
                 .addListener((obs, oldVal, newVal) -> {
                     refreshBranchDisplay(newVal);
                     refreshProjectMenuText(newVal);
-                    if (indexController != null) {
-                        indexController.updateCurrentProject(newVal);
-                    }
                 });
 
         // 向 viewModel 注入 diffHandler，DiffEvent 通过 agent 事件流传入
@@ -297,7 +293,7 @@ public class CoderHomePageController extends AbstractHomePageController {
     // ===== 项目菜单与分支显示 =====
 
     private void updateProjectButtonBarVisibility(String agentId) {
-        boolean show = AgentMode.CODER.matches(agentId);
+        boolean show = AgentMode.CODE.matches(agentId);
         projectSelectButton.setVisible(show);
         projectSelectButton.setManaged(show);
         branchDisplayButton.setVisible(show);
@@ -371,7 +367,7 @@ public class CoderHomePageController extends AbstractHomePageController {
     @Override
     public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
         List<ButtonBarHolder.ButtonConfig> configs = new ArrayList<>(createCommonButtons());
-        // 在通用按钮之后插入 coder 专有的终端/项目按钮（插入到 tool 按钮之前）
+        // 在通用按钮之后插入 coder 专有的终端按钮（插入到 tool 按钮之前）
         int insertIndex = 1; // 在 newChat 之后插入
         configs.add(insertIndex, new ButtonBarHolder.ButtonConfig(
                 "terminalButton",
@@ -382,17 +378,6 @@ public class CoderHomePageController extends AbstractHomePageController {
                 _ -> {
                     if (indexController != null) {
                         indexController.toggleTerminalPanel();
-                    }
-                }));
-        configs.add(insertIndex + 1, new ButtonBarHolder.ButtonConfig(
-                "projectButton",
-                "项目",
-                "button-bar__icon-btn",
-                "/cn/bitloom/images/folder.svg",
-                ButtonBarHolder.Alignment.RIGHT,
-                _ -> {
-                    if (indexController != null) {
-                        indexController.toggleProjectPanel();
                     }
                 }));
         return configs;

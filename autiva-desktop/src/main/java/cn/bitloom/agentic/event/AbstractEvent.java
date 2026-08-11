@@ -20,6 +20,5 @@ import lombok.experimental.SuperBuilder;
 })
 public non-sealed abstract class AbstractEvent implements IEvent {
     private String sessionId;
-
     public abstract EventTypeEnum getEventType();
 }

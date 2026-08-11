@@ -6,7 +6,7 @@ package cn.bitloom.constant;
  */
 public enum AgentMode {
     WORK("work"),
-    CODER("code");
+    CODE("code");
 
     private final String agentId;
 
@@ -19,8 +19,8 @@ public enum AgentMode {
     }
 
     public static AgentMode fromAgentId(String agentId) {
-        if (CODER.agentId.equals(agentId)) {
-            return CODER;
+        if (CODE.agentId.equals(agentId)) {
+            return CODE;
         }
         return WORK;
     }

@@ -147,6 +147,9 @@ Remove-Item -Recurse -Force autiva-desktop\target\jpackage-output -ErrorAction S
   --java-options "-XX:+UseCompressedClassPointers" `
   --java-options "-XX:+UseStringDeduplication" `
   --java-options "-XX:+UseCompactObjectHeaders" `
+  --java-options "-Dprism.order=d3d,sw" `
+  --java-options "-Dprism.maxvram=200M" `
+  --java-options "-Dprism.forceGPU=false" `
   --dest autiva-desktop\target\jpackage-output `
   --app-version 1.0.1 `
   --vendor "Bitloom" `

@@ -692,19 +692,6 @@
     -fx-text-fill: #333;
 }
 
-/* 状态变体下的内容区背景 */
-.chat-message--tool-success .chat-message__tool-content {
-    -fx-background-color: #f0fff4;
-}
-
-.chat-message--tool-error .chat-message__tool-content {
-    -fx-background-color: #fef2f2;
-}
-
-.chat-message--tool-warning .chat-message__tool-content {
-    -fx-background-color: #fffbeb;
-}
-
 .chat-message__content {
     -fx-font-size: 15px;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -783,7 +770,6 @@
     -fx-padding: 8 12;
     -fx-border-color: rgba(0, 0, 0, 0.1);
     -fx-border-width: 0 0 1 0;
-    -fx-cursor: hand;
 }
 
 .chat-message__tool-name {
@@ -794,18 +780,59 @@
 
 .chat-message__tool-content {
     -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
+    -fx-padding: 8 12 10 12;
+}
+
+/* 请求参数 chip 样式 */
+.chat-message__tool-params {
+    -fx-padding: 0;
+}
+
+.chat-message__tool-param-chip {
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8;
+    -fx-padding: 2 8 2 8;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.chat-message__tool-param-key {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #86868b;
     -fx-font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
-    -fx-text-fill: #333;
-    -fx-padding: 12;
-    -fx-background-radius: 6;
 }
 
-.chat-message--tool-request .chat-message__tool-content {
-    -fx-background-color: #f0f7ff;
+.chat-message__tool-param-sep {
+    -fx-font-size: 11px;
+    -fx-text-fill: #86868b;
+    -fx-font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
 }
 
-.chat-message--tool-response .chat-message__tool-content {
-    -fx-background-color: #f0fff4;
+.chat-message__tool-param-value {
+    -fx-font-size: 11px;
+    -fx-text-fill: #1d1d1f;
+    -fx-font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+}
+
+.chat-message__tool-param-empty {
+    -fx-font-size: 11px;
+    -fx-text-fill: #86868b;
+    -fx-font-style: italic;
+}
+
+/* 状态变体下的 chip 背景色 */
+.chat-message--tool-success .chat-message__tool-param-chip {
+    -fx-background-color: rgba(34, 197, 94, 0.12);
+}
+
+.chat-message--tool-error .chat-message__tool-param-chip {
+    -fx-background-color: rgba(239, 68, 68, 0.12);
+}
+
+.chat-message--tool-warning .chat-message__tool-param-chip {
+    -fx-background-color: rgba(245, 158, 11, 0.12);
 }
 
 /* 工具分组卡片已废弃（ToolGroupCard 删除） */

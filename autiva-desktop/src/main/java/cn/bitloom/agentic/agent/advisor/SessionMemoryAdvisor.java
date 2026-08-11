@@ -16,18 +16,15 @@
 
 package cn.bitloom.agentic.agent.advisor;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-
+import cn.bitloom.agentic.event.AbstractEvent;
+import cn.bitloom.agentic.event.MessageEvent;
+import cn.bitloom.agentic.session.*;
+import cn.bitloom.agentic.session.compaction.CompactionStrategy;
+import cn.bitloom.agentic.session.compaction.CompactionTrigger;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
-
 import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -38,19 +35,16 @@ import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
-import cn.bitloom.agentic.session.CreateSessionRequest;
-import cn.bitloom.agentic.session.EventFilter;
-import cn.bitloom.agentic.session.MessageFilter;
-import cn.bitloom.agentic.session.Session;
-import cn.bitloom.agentic.session.ISessionManager;
-import cn.bitloom.agentic.session.SessionEventRequestIdGenerator;
-import cn.bitloom.agentic.session.SessionEventResponseIdGenerator;
-import cn.bitloom.agentic.event.AbstractEvent;
-import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.session.compaction.CompactionStrategy;
-import cn.bitloom.agentic.session.compaction.CompactionTrigger;
 import org.springframework.core.Ordered;
 import org.springframework.util.Assert;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * 会话记忆 Advisor，使用 {@link ISessionManager} 管理对话历史，支持可选的上下文压缩。
@@ -156,12 +150,12 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 	}
 
 	@Override
-	public Scheduler getScheduler() {
+	public @NonNull Scheduler getScheduler() {
 		return this.scheduler;
 	}
 
 	@Override
-	public ChatClientRequest before(ChatClientRequest request, AdvisorChain advisorChain) {
+	public @NonNull ChatClientRequest before(ChatClientRequest request, @NonNull AdvisorChain advisorChain) {
 
 		// 0. 解析 session ID — 必须存在于请求上下文中
 		String sessionId = getSessionId(request.context());
@@ -223,7 +217,7 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 		// 4. 将当前用户消息追加到会话，受配置的消息过滤器约束。
 		// 跳过仅影响持久化 — 输出提示词不受影响
 		Message userMessage = request.prompt().getLastUserOrToolResponseMessage();
-		if (userMessage != null && shouldPersist(userMessage, sessionId)) {
+		if (shouldPersist(userMessage, sessionId)) {
 			String branch = getBranch(request.context());
 			MessageEvent.MessageEventBuilder eventBuilder = MessageEvent.builder()
 				.id(this.requestEventIdGenerator.generate(request, userMessage))
@@ -239,7 +233,7 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 	}
 
 	@Override
-	public ChatClientResponse after(ChatClientResponse response, AdvisorChain advisorChain) {
+	public @NonNull ChatClientResponse after(ChatClientResponse response, @NonNull AdvisorChain advisorChain) {
 		String sessionId = getSessionId(response.context());
 		String branch = getBranch(response.context());
 
@@ -273,7 +267,7 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 	}
 
 	@Override
-	public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
+	public @NonNull Flux<ChatClientResponse> adviseStream(@NonNull ChatClientRequest request, StreamAdvisorChain chain) {
 		return Mono.just(request)
 			.publishOn(this.scheduler)
 			.map(r -> this.before(r, chain))

@@ -4,7 +4,7 @@ import cn.bitloom.constant.AgentMode;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.controller.AbstractHomePageController;
 import cn.bitloom.controller.CoderEditorPanelController;
-import cn.bitloom.controller.CoderHomePageController;
+import cn.bitloom.controller.CodeHomePageController;
 import cn.bitloom.controller.EditorPanelController;
 import cn.bitloom.controller.IndexController;
 import cn.bitloom.controller.WorkHomePageController;
@@ -48,7 +48,7 @@ public class HomePageRouter {
     private VBox coderEditorRoot;
     private VBox workEditorRoot;
 
-    private CoderHomePageController coderHomeController;
+    private CodeHomePageController coderHomeController;
     private WorkHomePageController workHomeController;
     private CoderEditorPanelController coderEditorController;
     private EditorPanelController workEditorController;
@@ -89,7 +89,7 @@ public class HomePageRouter {
      */
     private void preloadAll(IndexController indexController) throws Exception {
         coderHomeRoot = loadFxml("cn/bitloom/view/CoderHomePage.fxml");
-        coderHomeController = (CoderHomePageController) getUserDataController(coderHomeRoot);
+        coderHomeController = (CodeHomePageController) getUserDataController(coderHomeRoot);
         coderHomeController.setIndexController(indexController);
 
         workHomeRoot = loadFxml("cn/bitloom/view/WorkHomePage.fxml");
@@ -142,7 +142,7 @@ public class HomePageRouter {
             activeHomeController.hide();
         }
 
-        if (mode == AgentMode.CODER) {
+        if (mode == AgentMode.CODE) {
             activeHomeController = coderHomeController;
             activeEditorController = coderEditorController;
             homePageSlot.getChildren().setAll(coderHomeRoot);

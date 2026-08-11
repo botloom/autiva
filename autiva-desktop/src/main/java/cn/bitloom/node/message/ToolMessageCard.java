@@ -1,11 +1,12 @@
 package cn.bitloom.node.message;
 
-import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.agentic.tool.ToolResult;
+import org.springframework.ai.chat.messages.MessageType;
 import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.databind.JsonNode;
-import javafx.geometry.Insets;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -17,13 +18,12 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import lombok.Getter;
 
-import java.util.Map;
-
 /**
- * 工具调用卡片（请求 + 响应合并）。
+ * 工具调用卡片。
  * <p>
  * 通过 toolCallId 关联同一个工具调用的请求参数和响应结果。
- * 默认只显示 header（工具名 + 状态点），点击展开显示请求参数和响应结果两个区块。
+ * 直接显示工具名、状态点和请求参数（key-value 标签形式）；
+ * 接收到响应后仅更新状态点，不展示执行结果。
  */
 @Getter
 public class ToolMessageCard extends MessageCard {
@@ -38,7 +38,6 @@ public class ToolMessageCard extends MessageCard {
     private final Circle statusDot;
     private final VBox contentBox;
     private final VBox requestBox;
-    private VBox responseBox;
 
     public ToolMessageCard(String toolCallId, String toolName, String arguments) {
         this.toolCallId = toolCallId;
@@ -49,6 +48,8 @@ public class ToolMessageCard extends MessageCard {
         this.getStyleClass().add("chat-message--tool");
         this.getStyleClass().add("chat-message--tool-request");
         setFocusTraversable(false);
+        // 卡片宽度跟随 ListView cell，不基于内容自然宽度撑大
+        setMaxWidth(Double.MAX_VALUE);
 
         // 状态点：初始 pending（灰色）
         statusDot = new Circle(4);
@@ -57,31 +58,27 @@ public class ToolMessageCard extends MessageCard {
 
         // header
         HBox header = buildHeader(toolName, statusDot, null);
+        header.setMaxWidth(Double.MAX_VALUE);
         this.getChildren().add(header);
 
-        // 折叠内容容器（默认折叠）
-        contentBox = new VBox(8);
+        // 内容容器（默认显示请求参数）
+        contentBox = new VBox(6);
         contentBox.getStyleClass().add("chat-message__tool-content");
-        contentBox.setVisible(false);
-        contentBox.setManaged(false);
+        contentBox.setMaxWidth(Double.MAX_VALUE);
 
-        // 请求参数区块
+        // 请求参数区块：直接以 key-value 标签形式展示，无标题
         requestBox = new VBox(4);
         requestBox.getStyleClass().add("chat-message__tool-request-box");
-        Label requestLabel = new Label("请求参数");
-        requestLabel.getStyleClass().add("chat-message__tool-section-label");
-        requestBox.getChildren().add(requestLabel);
-        TextFlow requestFlow = buildJsonContent(arguments);
-        requestBox.getChildren().add(requestFlow);
+        requestBox.setMaxWidth(Double.MAX_VALUE);
+        Node paramsNode = buildParamsView(arguments);
+        requestBox.getChildren().add(paramsNode);
         contentBox.getChildren().add(requestBox);
 
         this.getChildren().add(contentBox);
-
-        header.setOnMouseClicked(e -> toggleContent(contentBox));
     }
 
     /**
-     * 追加响应结果，更新状态点。
+     * 接收响应结果，仅更新状态点（不再展示执行结果）。
      */
     public void setResponse(String responseData) {
         if (responseReceived) {
@@ -105,88 +102,11 @@ public class ToolMessageCard extends MessageCard {
         } else {
             statusDot.getStyleClass().add("chat-message__tool-status-dot--success");
         }
-
-        // 构建响应区块
-        responseBox = new VBox(4);
-        responseBox.getStyleClass().add("chat-message__tool-response-box");
-        Label responseLabel = new Label("执行结果");
-        responseLabel.getStyleClass().add("chat-message__tool-section-label");
-        responseBox.getChildren().add(responseLabel);
-
-        if (toolResult != null) {
-            buildStructuredResponse(responseBox, toolResult);
-        } else {
-            TextFlow responseFlow = new TextFlow();
-            responseFlow.getStyleClass().add("chat-message__tool-output");
-            Text text = new Text(formatJSON(responseData));
-            text.setFont(Font.font("\"SF Mono\", Monaco, \"Cascadia Code\", monospace", 12));
-            responseFlow.getChildren().add(text);
-            responseBox.getChildren().add(responseFlow);
-        }
-
-        contentBox.getChildren().add(responseBox);
-    }
-
-    private void buildStructuredResponse(VBox responseBox, ToolResult toolResult) {
-        if (toolResult.getMessage() != null && !toolResult.getMessage().isEmpty()) {
-            Label summaryLabel = new Label(toolResult.getMessage());
-            summaryLabel.getStyleClass().add("chat-message__tool-summary");
-            responseBox.getChildren().add(summaryLabel);
-        }
-
-        if (toolResult.getData() != null && !toolResult.getData().isEmpty()) {
-            FlowPane dataPane = new FlowPane();
-            dataPane.getStyleClass().add("chat-message__tool-data");
-            dataPane.setHgap(6);
-            dataPane.setVgap(6);
-            dataPane.setPadding(new Insets(0, 0, 4, 0));
-
-            for (Map.Entry<String, Object> entry : toolResult.getData().entrySet()) {
-                HBox dataItem = new HBox(4);
-                dataItem.getStyleClass().add("chat-message__tool-data-item");
-                dataItem.setAlignment(Pos.CENTER_LEFT);
-
-                Label keyLabel = new Label(entry.getKey());
-                keyLabel.getStyleClass().add("chat-message__tool-data-key");
-
-                Label valueLabel = new Label(String.valueOf(entry.getValue()));
-                valueLabel.getStyleClass().add("chat-message__tool-data-value");
-
-                dataItem.getChildren().addAll(keyLabel, valueLabel);
-                dataPane.getChildren().add(dataItem);
-            }
-            responseBox.getChildren().add(dataPane);
-        }
-
-        if (toolResult.getRawOutput() != null && !toolResult.getRawOutput().isEmpty()) {
-            if (!responseBox.getChildren().isEmpty()) {
-                Region divider = new Region();
-                divider.getStyleClass().add("chat-message__tool-output-divider");
-                responseBox.getChildren().add(divider);
-            }
-
-            TextFlow outputFlow = new TextFlow();
-            outputFlow.getStyleClass().add("chat-message__tool-output");
-            Text outputText = new Text(toolResult.getRawOutput());
-            outputText.setFont(Font.font("\"SF Mono\", Monaco, \"Cascadia Code\", monospace", 12));
-            outputFlow.getChildren().add(outputText);
-            responseBox.getChildren().add(outputFlow);
-        }
-
-        if (responseBox.getChildren().size() == 1 && toolResult.getMessage() != null) {
-            // 只有标题，没有其他内容时，用 message 填充
-            TextFlow msgFlow = new TextFlow();
-            msgFlow.getStyleClass().add("chat-message__tool-output");
-            Text msgText = new Text(toolResult.getMessage());
-            msgText.setFont(Font.font("\"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif", 13));
-            msgFlow.getChildren().add(msgText);
-            responseBox.getChildren().add(msgFlow);
-        }
     }
 
     @Override
-    public MessageEvent.Type getMessageType() {
-        return MessageEvent.Type.TOOL;
+    public MessageType getMessageType() {
+        return MessageType.TOOL;
     }
 
     @Override
@@ -216,50 +136,106 @@ public class ToolMessageCard extends MessageCard {
         return header;
     }
 
-    private TextFlow buildJsonContent(String arguments) {
-        TextFlow contentFlow = new TextFlow();
-        contentFlow.getStyleClass().add("chat-message__tool-output");
-
-        String formattedJson = formatJSON(arguments);
-        Text jsonText = new Text(formattedJson);
-        jsonText.setFont(Font.font("\"SF Mono\", Monaco, \"Cascadia Code\", monospace", 12));
-        contentFlow.getChildren().add(jsonText);
-        return contentFlow;
-    }
-
-    private void toggleContent(javafx.scene.Node content) {
-        boolean expanded = content.isVisible();
-        content.setVisible(!expanded);
-        content.setManaged(!expanded);
-
-        // cell 高度变化后保持当前 cell 可见，避免 ListView 滚动位置跳动
-        javafx.application.Platform.runLater(() -> {
-            javafx.scene.Node parent = getParent();
-            Object target = this;
-            // TaskCard 中 ToolMessageCard 被 HBox 包装，需要以 HBox 作为查找目标
-            if (parent instanceof HBox hbox) {
-                target = hbox;
-                parent = hbox.getParent();
-            }
-            while (parent != null) {
-                if (parent instanceof javafx.scene.control.ListView<?> lv) {
-                    int index = lv.getItems().indexOf(target);
-                    if (index >= 0) {
-                        lv.scrollTo(index);
-                    }
-                    break;
-                }
-                parent = parent.getParent();
-            }
-        });
-    }
-
-    private String formatJSON(String jsonString) {
-        try {
-            JsonNode obj = JsonUtils.parse(jsonString);
-            return JsonUtils.toPrettyJson(obj);
-        } catch (Exception e) {
-            return jsonString;
+    /**
+     * 以 key-value 标签形式展示请求参数。
+     * <p>
+     * 解析 JSON 参数，每个字段渲染为一个 chip：[key: value]。
+     * value 过长时截断显示；非字符串类型（数组/对象/数字/布尔）用 JSON 字符串表示。
+     * 解析失败时回退为纯文本展示原始 arguments。
+     */
+    private Node buildParamsView(String arguments) {
+        if (arguments == null || arguments.isBlank()) {
+            Label empty = new Label("（无参数）");
+            empty.getStyleClass().add("chat-message__tool-param-empty");
+            return empty;
         }
+
+        JsonNode params;
+        try {
+            params = JsonUtils.parse(arguments);
+        } catch (Exception e) {
+            // 非 JSON 字符串，直接展示文本
+            TextFlow rawFlow = new TextFlow();
+            rawFlow.getStyleClass().add("chat-message__tool-output");
+            rawFlow.setPrefWidth(0);
+            rawFlow.setMaxWidth(Double.MAX_VALUE);
+            Text rawText = new Text(arguments);
+            rawText.setFont(Font.font("\"SF Mono\", Monaco, \"Cascadia Code\", monospace", 12));
+            rawFlow.getChildren().add(rawText);
+            return rawFlow;
+        }
+
+        // 非 object 类型（数组/原始值），直接展示格式化 JSON
+        if (!params.isObject()) {
+            TextFlow rawFlow = new TextFlow();
+            rawFlow.getStyleClass().add("chat-message__tool-output");
+            rawFlow.setPrefWidth(0);
+            rawFlow.setMaxWidth(Double.MAX_VALUE);
+            Text rawText = new Text(JsonUtils.toPrettyJson(params));
+            rawText.setFont(Font.font("\"SF Mono\", Monaco, \"Cascadia Code\", monospace", 12));
+            rawFlow.getChildren().add(rawText);
+            return rawFlow;
+        }
+
+        // object 类型：每个字段渲染为 chip
+        FlowPane chipPane = new FlowPane();
+        chipPane.getStyleClass().add("chat-message__tool-params");
+        chipPane.setHgap(6);
+        chipPane.setVgap(6);
+        chipPane.setMaxWidth(Double.MAX_VALUE);
+        chipPane.setPrefWidth(Region.USE_COMPUTED_SIZE);
+
+        ObjectNode obj = (ObjectNode) params;
+        obj.fields().forEachRemaining(entry -> {
+            String key = entry.getKey();
+            String value = formatParamValue(entry.getValue());
+            chipPane.getChildren().add(buildParamChip(key, value));
+        });
+
+        return chipPane;
+    }
+
+    private HBox buildParamChip(String key, String value) {
+        HBox chip = new HBox(4);
+        chip.getStyleClass().add("chat-message__tool-param-chip");
+        chip.setAlignment(Pos.CENTER_LEFT);
+
+        Label keyLabel = new Label(key);
+        keyLabel.getStyleClass().add("chat-message__tool-param-key");
+
+        Label sepLabel = new Label(":");
+        sepLabel.getStyleClass().add("chat-message__tool-param-sep");
+
+        Label valueLabel = new Label(value);
+        valueLabel.getStyleClass().add("chat-message__tool-param-value");
+        // 限制 value 最大宽度，过长截断为省略号
+        valueLabel.setMaxWidth(220);
+        valueLabel.setEllipsisString("…");
+
+        chip.getChildren().addAll(keyLabel, sepLabel, valueLabel);
+        return chip;
+    }
+
+    private String formatParamValue(JsonNode value) {
+        if (value == null || value.isNull()) {
+            return "null";
+        }
+        if (value.isTextual()) {
+            return value.asText();
+        }
+        if (value.isNumber() || value.isBoolean()) {
+            return value.asText();
+        }
+        if (value.isArray()) {
+            int size = value.size();
+            if (size == 0) return "[]";
+            // 数组只取首项预览，避免过长
+            return "[" + formatParamValue(value.get(0)) + (size > 1 ? ", …" : "") + "]";
+        }
+        if (value.isObject()) {
+            int size = value.size();
+            return "{…" + (size > 0 ? "(" + size + ")" : "") + "}";
+        }
+        return value.toString();
     }
 }

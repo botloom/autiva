@@ -2,11 +2,8 @@ package cn.bitloom.controller;
 
 import cn.bitloom.agentic.tool.file.DiffService;
 import cn.bitloom.agentic.tool.file.FileDiff;
-import cn.bitloom.project.FileTreeService;
-import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighter;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighterFactory;
-import cn.bitloom.node.project.FileTreeCell;
 import cn.bitloom.node.terminal.JediTerminalView;
 import cn.bitloom.node.terminal.PtySession;
 import cn.bitloom.node.terminal.PtyTerminalService;
@@ -39,10 +36,12 @@ import java.util.ResourceBundle;
  * Coder 模式编辑器面板控制器。
  * <p>
  * 继承通用 {@link EditorPanelController}（TOOL_CALLS / TODO 视图），
- * 扩展 coder 专有的 TERMINAL / PROJECT / DIFF 视图。
+ * 扩展 coder 专有的 TERMINAL / DIFF 视图。
  * <p>
  * DIFF 视图为独立的左右对比 diff 看板，左侧文件列表 + 右侧 IDEA 风格双栏对比，
  * 支持差异导航（上一个/下一个）和多文件切换。
+ * <p>
+ * 项目目录树已迁移至 SideBarController 中展示，本面板不再包含 PROJECT 视图。
  */
 @Slf4j
 @Component
@@ -51,13 +50,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
     @FXML
     private VBox terminalView;
     @FXML
-    private SplitPane projectSplit;
-    @FXML
-    private TreeView<Path> fileTree;
-    @FXML
-    private VBox fileContentPanel;
-    @FXML
-    private Label fileContentPlaceholder;
+    private VBox fileView;
 
     // ===== Diff 视图字段 =====
     @FXML
@@ -73,14 +66,12 @@ public class CoderEditorPanelController extends EditorPanelController implements
     @FXML
     private StackPane diffContentStack;
 
-    private final FileTreeService fileTreeService;
     private final PtyTerminalService ptyTerminalService;
     private final DiffService diffService;
 
     private JediTerminalView terminalWidget;
     private PtySession terminalSession;
     private Path lastTerminalWorkingDir;
-    private ProjectInfo currentProject;
 
     // Diff 视图运行时状态
     private final ObservableList<FileDiff> diffFileList = FXCollections.observableArrayList();
@@ -88,10 +79,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
     private CodeArea currentLeftArea;
     private CodeArea currentRightArea;
 
-    public CoderEditorPanelController(FileTreeService fileTreeService,
-                                      PtyTerminalService ptyTerminalService,
+    public CoderEditorPanelController(PtyTerminalService ptyTerminalService,
                                       DiffService diffService) {
-        this.fileTreeService = fileTreeService;
         this.ptyTerminalService = ptyTerminalService;
         this.diffService = diffService;
     }
@@ -99,22 +88,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         super.initialize(location, resources);
-        setupFileTree();
         setupDiffFileListView();
         setupDiffToolbarButtons();
-    }
-
-    private void setupFileTree() {
-        fileTree.setCellFactory(tree -> new FileTreeCell());
-        fileTree.setOnMouseClicked(event -> {
-            if (event.getClickCount() == 1) {
-                TreeItem<Path> selected = fileTree.getSelectionModel().getSelectedItem();
-                if (selected != null && Files.isRegularFile(selected.getValue())) {
-                    showFileContent(selected.getValue());
-                }
-                // 目录展开/折叠由 JavaFX 箭头默认行为处理
-            }
-        });
     }
 
     // ===== 视图切换扩展 =====
@@ -124,8 +99,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
         super.hideAllViews();
         terminalView.setVisible(false);
         terminalView.setManaged(false);
-        projectSplit.setVisible(false);
-        projectSplit.setManaged(false);
+        fileView.setVisible(false);
+        fileView.setManaged(false);
         diffView.setVisible(false);
         diffView.setManaged(false);
     }
@@ -139,14 +114,6 @@ public class CoderEditorPanelController extends EditorPanelController implements
     }
 
     @Override
-    public void showProjectView() {
-        hideAllViews();
-        projectSplit.setVisible(true);
-        projectSplit.setManaged(true);
-        currentViewType = ViewType.PROJECT;
-    }
-
-    @Override
     public void showDiffView() {
         hideAllViews();
         diffView.setVisible(true);
@@ -154,32 +121,24 @@ public class CoderEditorPanelController extends EditorPanelController implements
         currentViewType = ViewType.DIFF;
     }
 
-    // ===== 项目与文件树 =====
-
     @Override
-    public void setCurrentProject(ProjectInfo project) {
-        this.currentProject = project;
-        if (project != null) {
-            Platform.runLater(() -> buildFileTree(project));
-        } else {
-            fileTree.setRoot(null);
-        }
+    public void showFileView() {
+        hideAllViews();
+        fileView.setVisible(true);
+        fileView.setManaged(true);
+        currentViewType = ViewType.FILE;
     }
 
-    private void buildFileTree(ProjectInfo project) {
-        try {
-            Path projectPath = Paths.get(project.path());
-            TreeItem<Path> root = fileTreeService.buildFileTree(projectPath);
-            fileTree.setRoot(root);
-        } catch (Exception e) {
-            log.error("构建文件树失败: {}", project.path(), e);
-        }
-    }
+    // ===== 文件内容视图 =====
 
+    /**
+     * 在右侧面板显示文件内容（支持语法高亮、行号、Ctrl+S 保存）。
+     * 由侧边栏目录树双击文件触发。
+     */
     @Override
     public void showFileContent(Path filePath) {
         show();
-        showProjectView();
+        showFileView();
 
         try {
             String content = Files.readString(filePath);
@@ -204,16 +163,17 @@ public class CoderEditorPanelController extends EditorPanelController implements
             VirtualizedScrollPane<CodeArea> scrollPane = new VirtualizedScrollPane<>(codeArea);
             scrollPane.getStyleClass().add("editor-panel__code-scroll");
 
-            fileContentPanel.getChildren().setAll(scrollPane);
+            fileView.getChildren().setAll(scrollPane);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
             Platform.runLater(codeArea::requestFocus);
-
             setupCodeAreaContextMenu(codeArea);
         } catch (IOException e) {
             log.warn("读取文件失败: {}", filePath, e);
+            fileView.getChildren().setAll(createErrorContent("读取文件失败: " + e.getMessage(), null));
         } catch (Exception e) {
             log.error("显示文件内容失败: {}", filePath, e);
+            fileView.getChildren().setAll(createErrorContent("显示文件内容失败: " + e.getMessage(), null));
         }
     }
 
@@ -522,13 +482,13 @@ public class CoderEditorPanelController extends EditorPanelController implements
         leftArea.estimatedScrollYProperty().addListener((obs, old, val) -> {
             if (syncing[0]) return;
             syncing[0] = true;
-            rightArea.estimatedScrollYProperty().setValue(val.doubleValue());
+            rightArea.estimatedScrollYProperty().setValue(val);
             syncing[0] = false;
         });
         rightArea.estimatedScrollYProperty().addListener((obs, old, val) -> {
             if (syncing[0]) return;
             syncing[0] = true;
-            leftArea.estimatedScrollYProperty().setValue(val.doubleValue());
+            leftArea.estimatedScrollYProperty().setValue(val);
             syncing[0] = false;
         });
 

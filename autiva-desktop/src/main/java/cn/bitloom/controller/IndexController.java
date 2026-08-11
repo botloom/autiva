@@ -8,7 +8,7 @@ import cn.bitloom.router.HomePageRouter;
 import cn.bitloom.router.Router;
 import cn.bitloom.store.Store;
 import cn.bitloom.util.MarkdownFxRenderer;
-import cn.bitloom.vm.CoderHomePageViewModel;
+import cn.bitloom.vm.CodeHomePageViewModel;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -85,9 +85,7 @@ public class IndexController implements Initializable {
         homePageRouter.bind(this, homePageSlot, editorPanelSlot);
 
         // 编辑器面板初始从 SplitPane 移除（默认隐藏）
-        if (mainSplit.getItems().contains(editorPanelSlot)) {
-            mainSplit.getItems().remove(editorPanelSlot);
-        }
+        mainSplit.getItems().remove(editorPanelSlot);
 
         this.initializeButtonBar();
 
@@ -98,9 +96,9 @@ public class IndexController implements Initializable {
             }
             EditorPanelController editor = getEditorPanelController();
             if (editor != null && editor.isVisible()
-                    && AgentMode.fromAgentId(newVal) != AgentMode.CODER) {
+                    && AgentMode.fromAgentId(newVal) != AgentMode.CODE) {
                 ViewType vt = editor.getCurrentViewType();
-                if (vt == ViewType.TERMINAL || vt == ViewType.PROJECT) {
+                if (vt == ViewType.TERMINAL) {
                     closeEditorPanel();
                 }
             }
@@ -178,20 +176,6 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 切换项目面板（toggle）：相同视图再次点击则关闭
-     */
-    public void toggleProjectPanel() {
-        EditorPanelController editor = getEditorPanelController();
-        if (editor == null) return;
-        if (editor.isVisible() && editor.getCurrentViewType() == ViewType.PROJECT) {
-            closeEditorPanel();
-            return;
-        }
-        ensureEditorVisible();
-        editor.showProjectView();
-    }
-
-    /**
      * 切换工具调用面板（toggle）：相同视图再次点击则关闭
      */
     public void toggleToolCallsPanel() {
@@ -226,7 +210,7 @@ public class IndexController implements Initializable {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
         if (mainSplit.getItems().contains(editorPanelSlot)) {
-            if (mainSplit.getDividers().size() > 0) {
+            if (!mainSplit.getDividers().isEmpty()) {
                 savedDividerPos = mainSplit.getDividerPositions()[0];
             }
             mainSplit.getItems().remove(editorPanelSlot);
@@ -261,17 +245,7 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 在编辑器面板显示文件内容
-     */
-    public void showFileInPanel(Path file) {
-        EditorPanelController editor = getEditorPanelController();
-        if (editor == null) return;
-        ensureEditorVisible();
-        editor.showFileContent(file);
-    }
-
-    /**
-     * Markdown 链接处理器：file:// 链接在项目视图中打开，返回 true 表示已处理。
+     * Markdown 链接处理器：file:// 链接在右侧编辑器面板中打开，返回 true 表示已处理。
      * 非 file:// 链接返回 false，回退到默认浏览器打开。
      */
     private boolean handleMarkdownLink(String dest) {
@@ -291,6 +265,16 @@ public class IndexController implements Initializable {
     }
 
     /**
+     * 在编辑器面板显示文件内容（侧边栏目录树双击文件时调用）
+     */
+    public void showFileInPanel(Path file) {
+        EditorPanelController editor = getEditorPanelController();
+        if (editor == null) return;
+        ensureEditorVisible();
+        editor.showFileContent(file);
+    }
+
+    /**
      * 在项目视图中显示指定文件的 diff（点击对话框上方的 diff 文件卡片时调用）
      */
     public void showDiffInProjectView(FileDiff diff) {
@@ -307,16 +291,6 @@ public class IndexController implements Initializable {
         AbstractHomePageController home = getHomePageController();
         if (home != null) {
             home.refreshDiffReviewBarFromService();
-        }
-    }
-
-    /**
-     * 更新当前项目（通知编辑器面板构建目录树）
-     */
-    public void updateCurrentProject(ProjectInfo project) {
-        EditorPanelController editor = getEditorPanelController();
-        if (editor != null) {
-            editor.setCurrentProject(project);
         }
     }
 
@@ -345,7 +319,7 @@ public class IndexController implements Initializable {
      */
     private Path resolveWorkingDir() {
         AbstractHomePageController home = getHomePageController();
-        if (home != null && home.getViewModel() instanceof CoderHomePageViewModel coderVm) {
+        if (home != null && home.getViewModel() instanceof CodeHomePageViewModel coderVm) {
             ProjectInfo project = coderVm.getCurrentProject();
             if (project != null) {
                 return Path.of(project.path());

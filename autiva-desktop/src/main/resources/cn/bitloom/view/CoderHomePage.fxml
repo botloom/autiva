@@ -7,7 +7,7 @@
 <?import cn.bitloom.node.AutoResizeTextArea?>
 
 <VBox fx:id="homePage" styleClass="home-page" xmlns="http://javafx.com/javafx"
-      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.CoderHomePageController"
+      xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.CodeHomePageController"
       alignment="CENTER"
       VBox.vgrow="ALWAYS"
       spacing="20"

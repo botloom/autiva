@@ -29,18 +29,18 @@ import java.util.List;
  */
 @Slf4j
 @Component
-public class CoderHomePageViewModel extends AbstractHomePageViewModel {
+public class CodeHomePageViewModel extends AbstractHomePageViewModel {
 
     private final ProjectRegistry projectRegistry;
     private final ObjectProperty<ProjectInfo> currentProject = new SimpleObjectProperty<>();
 
-    public CoderHomePageViewModel(FileSystemSessionManager fileSystemSessionManager,
-                                  AgentDefinitionManager definitionManager,
-                                  ModelFactory modelFactory,
-                                  Toolkit toolkit,
-                                  cn.bitloom.agentic.skill.SkillManager skillManager,
-                                  cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher,
-                                  ProjectRegistry projectRegistry) {
+    public CodeHomePageViewModel(FileSystemSessionManager fileSystemSessionManager,
+                                 AgentDefinitionManager definitionManager,
+                                 ModelFactory modelFactory,
+                                 Toolkit toolkit,
+                                 cn.bitloom.agentic.skill.SkillManager skillManager,
+                                 cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher,
+                                 ProjectRegistry projectRegistry) {
         super(fileSystemSessionManager, definitionManager, modelFactory, toolkit, skillManager, evolveEnricher);
         this.projectRegistry = projectRegistry;
     }
@@ -96,7 +96,7 @@ public class CoderHomePageViewModel extends AbstractHomePageViewModel {
 
     @Override
     protected void onSwitchAgent(String agentId) {
-        if (AgentMode.fromAgentId(agentId) != AgentMode.CODER) {
+        if (AgentMode.fromAgentId(agentId) != AgentMode.CODE) {
             currentProject.set(null);
         }
     }

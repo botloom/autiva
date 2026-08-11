@@ -1,7 +1,7 @@
 package cn.bitloom.node.message;
 
-import cn.bitloom.agentic.event.MessageEvent;
 import cn.bitloom.util.MarkdownFxRenderer;
+import org.springframework.ai.chat.messages.MessageType;
 import javafx.beans.property.*;
 import javafx.scene.Node;
 import javafx.scene.layout.HBox;
@@ -46,13 +46,18 @@ public class AssistantMessageCard extends MessageCard {
         this.getStyleClass().add("chat-message");
         this.getStyleClass().add("chat-message--assistant");
 
+        // 预初始化流式容器，确保 card 在被加入 ListView 时有非零 prefHeight。
+        // 避免 VirtualFlow 缓存 0 高度导致后续 cell 渲染与滚动范围计算异常。
+        initStreamingContainer();
+
         // 监听 contentProperty，根据 streaming 状态决定渲染方式
         content.addListener((obs, oldVal, newVal) -> {
             if (isStreaming()) {
+                // 流式期间同步更新 streamingText，让 cell 高度随内容增长
                 appendStreamingText(newVal);
-            }
-            if (onContentChanged != null && newVal != null) {
-                onContentChanged.accept(newVal);
+                if (onContentChanged != null) {
+                    onContentChanged.accept(newVal);
+                }
             }
         });
 
@@ -86,8 +91,8 @@ public class AssistantMessageCard extends MessageCard {
     // ===== MessageCard 接口实现 =====
 
     @Override
-    public MessageEvent.Type getMessageType() {
-        return MessageEvent.Type.ASSISTANT;
+    public MessageType getMessageType() {
+        return MessageType.ASSISTANT;
     }
 
     @Override
@@ -167,21 +172,24 @@ public class AssistantMessageCard extends MessageCard {
     // ===== 渲染逻辑 =====
 
     private void appendStreamingText(String content) {
-        if (streamingContainer == null) {
-            startStreamingContainer(content);
+        if (streamingText == null) {
+            initStreamingContainer();
             updateActionBarVisibility(false);
-        } else {
-            streamingText.setText(content);
         }
+        streamingText.setText(content != null ? content : "");
     }
 
-    private void startStreamingContainer(String content) {
+    /**
+     * 预初始化流式容器（空内容），确保 card 拥有非零 prefHeight。
+     * 在构造函数中调用，避免被加入 ListView 时 VirtualFlow 缓存 0 高度。
+     */
+    private void initStreamingContainer() {
         streamingContainer = new TextFlow();
         streamingContainer.getStyleClass().add("md-paragraph");
         streamingContainer.getStyleClass().add("chat-message__content");
         streamingContainer.setMaxWidth(Double.MAX_VALUE);
 
-        streamingText = new Text(content);
+        streamingText = new Text("");
         streamingText.setFont(Font.font(FONT_FAMILY, 15));
         streamingContainer.getChildren().add(streamingText);
 

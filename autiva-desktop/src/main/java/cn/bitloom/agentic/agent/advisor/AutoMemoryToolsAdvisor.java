@@ -1,22 +1,9 @@
 package cn.bitloom.agentic.agent.advisor;
 
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.BiPredicate;
-
 import cn.bitloom.agentic.memory.AgentMemoryStore;
 import cn.bitloom.agentic.memory.FileSystemAgentMemoryStore;
-import cn.bitloom.agentic.tool.memory.MemoryViewTool;
-import cn.bitloom.agentic.tool.memory.MemoryCreateTool;
-import cn.bitloom.agentic.tool.memory.MemoryStrReplaceTool;
-import cn.bitloom.agentic.tool.memory.MemoryInsertTool;
-import cn.bitloom.agentic.tool.memory.MemoryDeleteTool;
-import cn.bitloom.agentic.tool.memory.MemoryRenameTool;
-
+import cn.bitloom.agentic.tool.memory.*;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -26,6 +13,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.util.Assert;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.function.BiPredicate;
 
 /**
  * 自动记忆工具 Advisor，为智能体提供长期记忆管理能力。
@@ -202,7 +193,7 @@ public class AutoMemoryToolsAdvisor implements BaseChatMemoryAdvisor {
 	}
 
 	@Override
-	public ChatClientRequest before(ChatClientRequest chatClientRequest, AdvisorChain advisorChain) {
+	public @NonNull ChatClientRequest before(ChatClientRequest chatClientRequest, @NonNull AdvisorChain advisorChain) {
 
 		if (chatClientRequest.prompt().getOptions() instanceof ToolCallingChatOptions toolOptions) {
 
@@ -239,7 +230,7 @@ public class AutoMemoryToolsAdvisor implements BaseChatMemoryAdvisor {
 	}
 
 	@Override
-	public ChatClientResponse after(ChatClientResponse chatClientResponse, AdvisorChain advisorChain) {
+	public @NonNull ChatClientResponse after(@NonNull ChatClientResponse chatClientResponse, @NonNull AdvisorChain advisorChain) {
 		return chatClientResponse;
 	}
 

@@ -10,16 +10,10 @@ import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListCell;
-import javafx.scene.control.ListView;
-import javafx.scene.control.ScrollBar;
-import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -43,20 +37,15 @@ public class TaskCard extends VBox {
 
     private final Label statusLabel;
     private final VBox body;
+    private final VBox messagesBox;
     private Timeline pulseTimeline;
     private final Circle pulseDot;
 
-    private final ListView<Node> messageListView;
-    private final ObservableList<Node> messageNodes = FXCollections.observableArrayList();
     private final StringBuilder streamBuffer = new StringBuilder();
     private VBox currentStreamBox = null;
     private final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
 
     private boolean userCollapsed = false;
-
-    // ===== stick-to-bottom 跟随模式 =====
-    private boolean stickToBottom = true;
-    private boolean scrollBarBound = false;
 
     @Setter
     private Consumer<String> onContentChanged;
@@ -107,13 +96,9 @@ public class TaskCard extends VBox {
         body.setVisible(false);
         body.setManaged(false);
 
-        messageListView = new ListView<>();
-        messageListView.getStyleClass().add("chat-message__task-messages");
-        messageListView.setFocusTraversable(false);
-        messageListView.setItems(messageNodes);
-        messageListView.setCellFactory(list -> new TaskMessageListCell());
-        setupStickToBottom();
-        body.getChildren().add(messageListView);
+        messagesBox = new VBox(4);
+        messagesBox.getStyleClass().add("chat-message__task-messages");
+        body.getChildren().add(messagesBox);
 
         this.getChildren().add(body);
 
@@ -122,7 +107,7 @@ public class TaskCard extends VBox {
 
     public void addTodoCard(TodoCard card) {
         Platform.runLater(() -> {
-            messageNodes.add(card);
+            addMessageNode(card);
             ensureBodyVisible();
             notifyContentChanged();
         });
@@ -130,7 +115,7 @@ public class TaskCard extends VBox {
 
     public void addQuestionCard(QuestionCard card) {
         Platform.runLater(() -> {
-            messageNodes.add(card);
+            addMessageNode(card);
             ensureBodyVisible();
             notifyContentChanged();
         });
@@ -138,7 +123,7 @@ public class TaskCard extends VBox {
 
     public void addApprovalCard(ApprovalCard card) {
         Platform.runLater(() -> {
-            messageNodes.add(card);
+            addMessageNode(card);
             ensureBodyVisible();
             notifyContentChanged();
         });
@@ -172,7 +157,7 @@ public class TaskCard extends VBox {
             if (currentStreamBox == null) {
                 currentStreamBox = new VBox(4);
                 currentStreamBox.getStyleClass().add("chat-message__task-assistant");
-                messageNodes.add(currentStreamBox);
+                addMessageNode(currentStreamBox);
             }
             renderLightweightStream(currentStreamBox, accumulated);
         } else if ("STOP".equals(finishReason)) {
@@ -181,7 +166,7 @@ public class TaskCard extends VBox {
                 if (!content.isBlank()) {
                     renderStreamContent(currentStreamBox, content);
                 } else {
-                    messageNodes.remove(currentStreamBox);
+                    messagesBox.getChildren().remove(currentStreamBox);
                 }
                 currentStreamBox = null;
             } else if (text != null && !text.isBlank()) {
@@ -194,7 +179,7 @@ public class TaskCard extends VBox {
                 if (!content.isBlank()) {
                     renderStreamContent(currentStreamBox, content);
                 } else {
-                    messageNodes.remove(currentStreamBox);
+                    messagesBox.getChildren().remove(currentStreamBox);
                 }
                 currentStreamBox = null;
             }
@@ -260,15 +245,13 @@ public class TaskCard extends VBox {
         VBox mdBox = new VBox(4);
         mdBox.getStyleClass().add("chat-message__task-assistant");
         renderStreamContent(mdBox, content);
-        messageNodes.add(mdBox);
+        addMessageNode(mdBox);
     }
 
     private void appendToolCallCard(String toolCallId, String toolName, String arguments) {
         ToolMessageCard card = new ToolMessageCard(toolCallId, toolName, arguments);
         pendingToolCards.put(toolCallId, card);
-        HBox wrapper = new HBox(card);
-        wrapper.setAlignment(Pos.CENTER_LEFT);
-        messageNodes.add(wrapper);
+        addMessageNode(card);
     }
 
     private void appendToolResponseCard(String toolCallId, String toolName, String responseData) {
@@ -276,6 +259,16 @@ public class TaskCard extends VBox {
         if (card != null) {
             card.setResponse(responseData);
         }
+    }
+
+    /**
+     * 添加消息节点到 messagesBox，并确保节点宽度跟随容器宽度（避免内容溢出）。
+     */
+    private void addMessageNode(Node node) {
+        if (node instanceof Region region) {
+            region.setMaxWidth(Double.MAX_VALUE);
+        }
+        messagesBox.getChildren().add(node);
     }
 
     private void ensureBodyVisible() {
@@ -351,49 +344,6 @@ public class TaskCard extends VBox {
         if (onContentChanged != null) {
             onContentChanged.accept(streamBuffer.toString());
         }
-        scrollToBottom();
-    }
-
-    // ===== stick-to-bottom 跟随模式 =====
-    private void setupStickToBottom() {
-        messageListView.addEventFilter(ScrollEvent.SCROLL, e -> {
-            if (e.getDeltaY() > 0) {
-                stickToBottom = false;
-            }
-        });
-        messageListView.skinProperty().addListener((obs, oldSkin, newSkin) -> {
-            if (newSkin != null && !scrollBarBound) {
-                Platform.runLater(this::bindVerticalScrollBar);
-            }
-        });
-    }
-
-    private void bindVerticalScrollBar() {
-        if (scrollBarBound) return;
-        Node bar = messageListView.lookup(".scroll-bar:vertical");
-        if (bar instanceof ScrollBar scrollBar) {
-            scrollBar.valueProperty().addListener((o, ov, nv) -> {
-                if (nv.doubleValue() >= 0.95) {
-                    stickToBottom = true;
-                }
-            });
-            scrollBarBound = true;
-        }
-    }
-
-    private void scrollToBottom() {
-        if (!stickToBottom) return;
-        Platform.runLater(() -> {
-            Node bar = messageListView.lookup(".scroll-bar:vertical");
-            if (bar instanceof ScrollBar scrollBar) {
-                scrollBar.setValue(scrollBar.getMax());
-            } else {
-                int size = messageNodes.size();
-                if (size > 0) {
-                    messageListView.scrollTo(size - 1);
-                }
-            }
-        });
     }
 
     private JsonNode parseTask(String taskJson) {
@@ -419,23 +369,5 @@ public class TaskCard extends VBox {
             case "a2a" -> "A2A";
             default -> subagentType;
         };
-    }
-
-    /**
-     * 子智能体消息列表 cell：直接 setGraphic(node)，Region 撑满宽度
-     */
-    private static class TaskMessageListCell extends ListCell<Node> {
-        @Override
-        protected void updateItem(Node node, boolean empty) {
-            super.updateItem(node, empty);
-            if (empty || node == null) {
-                setGraphic(null);
-            } else {
-                if (node instanceof Region region) {
-                    region.setMaxWidth(Double.MAX_VALUE);
-                }
-                setGraphic(node);
-            }
-        }
     }
 }

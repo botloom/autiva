@@ -17,7 +17,6 @@
 package cn.bitloom.agentic.session;
 
 import org.jspecify.annotations.Nullable;
-import org.springframework.util.Assert;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -39,8 +38,7 @@ public final class CreateSessionRequest {
 
 	private final Map<String, Object> metadata;
 
-	private CreateSessionRequest(String id, String userId, Duration timeToLive, Map<String, Object> metadata) {
-		Assert.hasText(userId, "userId must not be null or empty");
+	private CreateSessionRequest(@Nullable String id, String userId, @Nullable Duration timeToLive, Map<String, Object> metadata) {
 		this.id = id;
 		this.userId = userId;
 		this.timeToLive = timeToLive;
@@ -79,7 +77,7 @@ public final class CreateSessionRequest {
 
 		@Nullable private Duration timeToLive;
 
-		private Map<String, Object> metadata = new HashMap<>();
+		private final Map<String, Object> metadata = new HashMap<>();
 
 		/**
 		 * Sets an explicit session ID. If omitted, the service generates a UUID.

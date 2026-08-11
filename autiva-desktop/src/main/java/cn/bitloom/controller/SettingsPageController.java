@@ -3,7 +3,6 @@ package cn.bitloom.controller;
 import cn.bitloom.bridge.wechat.WechatILinkClient;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.store.Store;
 import cn.bitloom.vm.SettingsPageViewModel;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;

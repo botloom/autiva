@@ -8,32 +8,25 @@ import cn.bitloom.agentic.agent.advisor.AutoMemoryToolsAdvisor;
 import cn.bitloom.agentic.agent.advisor.SessionMemoryAdvisor;
 import cn.bitloom.agentic.agent.advisor.SkillContextAdvisor;
 import cn.bitloom.agentic.agent.advisor.SubagentContextAdvisor;
-import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.CompactionEvent;
 import cn.bitloom.agentic.event.DiffEvent;
 import cn.bitloom.agentic.event.MessageEvent;
+import cn.bitloom.agentic.evolve.EvolveAgentEnricher;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
-import cn.bitloom.agentic.session.CreateSessionRequest;
-import cn.bitloom.agentic.session.FileSystemSessionManager;
-import cn.bitloom.agentic.session.MessageFilter;
-import cn.bitloom.agentic.session.Session;
-import cn.bitloom.agentic.session.SessionTypeEnum;
+import cn.bitloom.agentic.session.*;
 import cn.bitloom.agentic.session.compaction.RecursiveSummarizationCompactionStrategy;
 import cn.bitloom.agentic.session.compaction.TokenCountTrigger;
+import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.agentic.tool.command.ShellSession;
 import cn.bitloom.agentic.tool.session.ConversationSearchTool;
 import cn.bitloom.agentic.tool.session.CrossSessionSearchTool;
-import cn.bitloom.constant.AppConstants;
 import cn.bitloom.constant.AgentMode;
+import cn.bitloom.constant.AppConstants;
+import cn.bitloom.node.message.*;
 import cn.bitloom.project.ProjectInfo;
-import cn.bitloom.node.message.AssistantMessageCard;
-import cn.bitloom.node.message.CompactionCard;
-import cn.bitloom.node.message.MessageCard;
-import cn.bitloom.node.message.ToolMessageCard;
-import cn.bitloom.node.message.UserMessageCard;
 import cn.bitloom.store.Store;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
@@ -79,7 +72,7 @@ public abstract class AbstractHomePageViewModel {
     protected final ModelFactory modelFactory;
     protected final Toolkit toolkit;
     protected final SkillManager skillManager;
-    protected final cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher;
+    protected final EvolveAgentEnricher evolveEnricher;
 
     @Getter
     private final ObservableList<MessageCard> messages = FXCollections.observableArrayList();
@@ -105,15 +98,18 @@ public abstract class AbstractHomePageViewModel {
         return historyLoading;
     }
 
-    public boolean isHistoryLoading() {
-        return historyLoading.get();
-    }
-
     /**
      * 待响应的工具调用卡片，按 toolCallId 索引。
      * TOOL_CALLS 事件创建卡片并缓存，tool response 事件按 id 取出并追加结果。
      */
     private final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
+
+    /**
+     * 工具卡片路由回调：TOOL_CALLS 事件创建的 ToolMessageCard 直接通过此回调路由到 EditorPanel，
+     * 不再进入 messages 列表（消除"加入消息列表再过滤"反模式）。
+     */
+    @Setter
+    private Consumer<ToolMessageCard> toolCardHandler = _ -> {};
 
     protected AbstractHomePageViewModel(FileSystemSessionManager sessionManager,
                                         AgentDefinitionManager definitionManager,
@@ -245,7 +241,7 @@ public abstract class AbstractHomePageViewModel {
      */
     protected String buildSessionId(String agentId) {
         AgentMode mode = AgentMode.fromAgentId(agentId);
-        if (mode == AgentMode.CODER) {
+        if (mode == AgentMode.CODE) {
             ProjectInfo project = getCurrentProject();
             if (project == null) {
                 throw new IllegalStateException("code 模式必须先选择项目");
@@ -260,7 +256,7 @@ public abstract class AbstractHomePageViewModel {
      */
     protected String buildSystemPrompt(String agentId, AgentDefinition definition) {
         String systemPrompt = definition.content();
-        if (AgentMode.fromAgentId(agentId) != AgentMode.CODER) {
+        if (AgentMode.fromAgentId(agentId) != AgentMode.CODE) {
             return systemPrompt + ShellSession.envBlock();
         }
         try {
@@ -352,7 +348,7 @@ public abstract class AbstractHomePageViewModel {
             String sessionId = buildSessionId(agentId);
             CreateSessionRequest.Builder builder = CreateSessionRequest.builder()
                     .id(sessionId)
-                    .userId(Store.userId.get() != null ? Store.userId.get() : "default-user");
+                    .userId(Store.userId.get());
             ProjectInfo project = getCurrentProject();
             if (project != null) {
                 builder.metadata("projectId", project.id());
@@ -491,12 +487,12 @@ public abstract class AbstractHomePageViewModel {
                 currentAssistantCard = null;
             }
 
-            // 创建工具调用卡片
+            // 创建工具调用卡片，直接路由到 EditorPanel（不进 messages 列表）
             if (e.getToolCalls() != null) {
                 for (MessageEvent.ToolCallInfo tc : e.getToolCalls()) {
                     ToolMessageCard card = new ToolMessageCard(tc.id(), tc.name(), tc.arguments());
                     pendingToolCards.put(tc.id(), card);
-                    messages.add(card);
+                    toolCardHandler.accept(card);
                 }
             }
         }

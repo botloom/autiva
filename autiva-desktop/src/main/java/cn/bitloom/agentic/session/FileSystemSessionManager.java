@@ -54,9 +54,6 @@ public class FileSystemSessionManager implements ISessionManager {
     public Session create(CreateSessionRequest request) {
         String id = request.id() != null ? request.id() : UUID.randomUUID().toString();
         Instant createdAt = Instant.now();
-        Instant expiresAt = request.timeToLive() != null
-                ? createdAt.plus(request.timeToLive())
-                : Instant.ofEpochMilli(Long.MAX_VALUE);
 
         Map<String, Object> metadata = new HashMap<>(request.metadata());
         if (!metadata.containsKey("title")) metadata.put("title", "新对话");
@@ -67,7 +64,6 @@ public class FileSystemSessionManager implements ISessionManager {
                 .id(id)
                 .userId(request.userId())
                 .createdAt(createdAt)
-                .expiresAt(expiresAt)
                 .metadata(metadata)
                 .build();
 
@@ -120,26 +116,6 @@ public class FileSystemSessionManager implements ISessionManager {
         }
     }
 
-    @Override
-    public int deleteExpiredSessions(Instant before) {
-        List<String> expiredIds = new ArrayList<>();
-        for (Session session : scanAllSessions()) {
-            if (session.createdAt() != null && session.createdAt().isBefore(before)) {
-                expiredIds.add(session.id());
-            }
-        }
-        int count = 0;
-        for (String id : expiredIds) {
-            try {
-                remove(id);
-                count++;
-            } catch (Exception e) {
-                log.warn("删除过期会话失败: {}", id, e);
-            }
-        }
-        return count;
-    }
-
     /** code 目录下的保留名（非项目），扫描时跳过 */
     private static final java.util.Set<String> CODE_RESERVED_NAMES = java.util.Set.of("sessions", "memory");
 
@@ -149,9 +125,8 @@ public class FileSystemSessionManager implements ISessionManager {
      * - workspace/code/{project}/sessions/（跳过 sessions/memory 等保留名）
      */
     private List<Session> scanAllSessions() {
-        List<Session> result = new ArrayList<>();
         // work 模式
-        result.addAll(scanSessionDir(AppConstants.Base.WORKSPACE_DIR.resolve("work/sessions")));
+        List<Session> result = new ArrayList<>(scanSessionDir(AppConstants.Base.WORKSPACE_DIR.resolve("work/sessions")));
         // code 模式（每个项目一个目录，跳过保留名）
         Path codeDir = AppConstants.Base.WORKSPACE_DIR.resolve("code");
         if (Files.exists(codeDir)) {

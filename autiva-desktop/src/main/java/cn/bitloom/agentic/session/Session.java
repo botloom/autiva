@@ -16,132 +16,105 @@
 
 package cn.bitloom.agentic.session;
 
-import java.time.Duration;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.jspecify.annotations.Nullable;
-
-import org.springframework.util.Assert;
-
-/**
- * Immutable metadata container for a single, continuous conversation between a user and
- * an agent. Holds only identity and lifecycle fields — the event log is stored separately
- * in {@link SessionRepository} and retrieved on demand via {@link SessionService}.
- *
- * <p>
- * Mutations return new instances; the original is never modified.
- *
- * @author Christian Tzolov
- * @since 2.0.0
- */
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY,
         getterVisibility = JsonAutoDetect.Visibility.NONE,
         isGetterVisibility = JsonAutoDetect.Visibility.NONE)
 public final class Session {
 
-	private final String id;
+    private final String id;
 
-	private final String userId;
+    private final String userId;
 
-	private final Instant createdAt;
+    private final Instant createdAt;
 
-	private final Instant expiresAt;
+    private final Map<String, Object> metadata;
 
-	private final Map<String, Object> metadata;
+    @JsonCreator
+    private Session(
+            @JsonProperty("id") String id,
+            @JsonProperty("userId") String userId,
+            @JsonProperty("createdAt") Instant createdAt,
+            @JsonProperty("metadata") Map<String, Object> metadata) {
+        this.id = id;
+        this.userId = userId;
+        this.createdAt = createdAt;
+        this.metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+    }
 
-	@JsonCreator
-	private Session(
-			@JsonProperty("id") String id,
-			@JsonProperty("userId") String userId,
-			@JsonProperty("createdAt") Instant createdAt,
-			@JsonProperty("expiresAt") Instant expiresAt,
-			@JsonProperty("metadata") Map<String, Object> metadata) {
-		this.id = id;
-		this.userId = userId;
-		this.createdAt = createdAt;
-		this.expiresAt = expiresAt;
-		this.metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
-	}
+    /**
+     * Unique identifier for this session.
+     */
+    public String id() {
+        return this.id;
+    }
 
-	/** Unique identifier for this session. */
-	public String id() {
-		return this.id;
-	}
+    /**
+     * The actor (user or agent) who owns this session. Critical for isolation.
+     */
+    public String userId() {
+        return this.userId;
+    }
 
-	/** The actor (user or agent) who owns this session. Critical for isolation. */
-	public String userId() {
-		return this.userId;
-	}
+    /**
+     * When this session was created.
+     */
+    public Instant createdAt() {
+        return this.createdAt;
+    }
 
-	/** When this session was created. */
-	public Instant createdAt() {
-		return this.createdAt;
-	}
+    /**
+     * Arbitrary metadata: model info, tags, agent type, etc.
+     */
+    public Map<String, Object> metadata() {
+        return this.metadata;
+    }
 
-	/**
-	 * When this session expires (TTL-based lifecycle). {@code null} means no expiry.
-	 */
-	@Nullable public Instant expiresAt() {
-		return this.expiresAt;
-	}
+    public static Builder builder() {
+        return new Builder();
+    }
 
-	/** Arbitrary metadata: model info, tags, agent type, etc. */
-	public Map<String, Object> metadata() {
-		return this.metadata;
-	}
+    public static final class Builder {
 
-	public static Builder builder() {
-		return new Builder();
-	}
+        private String id = "";
 
-	public static final class Builder {
+        private String userId = "";
 
-		private String id = "";
+        private Instant createdAt = Instant.now();
 
-		private String userId = "";
+        private Map<String, Object> metadata = new HashMap<>();
 
-		private Instant createdAt = Instant.now();
+        public Builder id(String id) {
+            this.id = id;
+            return this;
+        }
 
-		private Instant expiresAt = Instant.now().plus(Duration.ofDays(60));
+        public Builder userId(String userId) {
+            this.userId = userId;
+            return this;
+        }
 
-		private Map<String, Object> metadata = new HashMap<>();
+        public Builder createdAt(Instant createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
 
-		public Builder id(String id) {
-			this.id = id;
-			return this;
-		}
+        public Builder metadata(Map<String, Object> metadata) {
+            this.metadata = new HashMap<>(metadata);
+            return this;
+        }
 
-		public Builder userId(String userId) {
-			this.userId = userId;
-			return this;
-		}
+        public Session build() {
+            return new Session(this.id, this.userId, this.createdAt, this.metadata);
+        }
 
-		public Builder createdAt(Instant createdAt) {
-			this.createdAt = createdAt;
-			return this;
-		}
-
-		public Builder expiresAt(Instant expiresAt) {
-			this.expiresAt = expiresAt;
-			return this;
-		}
-
-		public Builder metadata(Map<String, Object> metadata) {
-			this.metadata = new HashMap<>(metadata);
-			return this;
-		}
-
-		public Session build() {
-			Assert.hasText(this.id, "id must not be null or empty");
-			Assert.hasText(this.userId, "userId must not be null or empty");
-			return new Session(this.id, this.userId, this.createdAt, this.expiresAt, this.metadata);
-		}
-
-	}
+    }
 
 }

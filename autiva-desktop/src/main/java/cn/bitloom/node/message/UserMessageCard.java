@@ -1,6 +1,6 @@
 package cn.bitloom.node.message;
 
-import cn.bitloom.agentic.event.MessageEvent;
+import org.springframework.ai.chat.messages.MessageType;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
@@ -26,7 +26,7 @@ public class UserMessageCard extends MessageCard {
     }
 
     @Override
-    public MessageEvent.Type getMessageType() {
-        return MessageEvent.Type.USER;
+    public MessageType getMessageType() {
+        return MessageType.USER;
     }
 }
