@@ -82,6 +82,9 @@ public class SideBarController implements Initializable, PageHolder {
     private HBox activeHistoryItem = null;
     private final Map<String, HBox> historyItemMap = new LinkedHashMap<>();
 
+    // 当前展开的目录树所属项目（用于二次点击目录树按钮切换回会话列表）
+    private ProjectInfo activeTreeProject = null;
+
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         this.hide();
@@ -187,6 +190,9 @@ public class SideBarController implements Initializable, PageHolder {
     }
 
     public void refreshHistoryList() {
+        // 卡片重建会生成新的 header/treeBtn 实例，重置目录树切换状态
+        this.activeTreeProject = null;
+
         String currentAgent = Store.currentAgent.get();
         boolean isCoder = AgentMode.CODE.matches(currentAgent);
         String prefix = isCoder ? "code-" : "work-";
@@ -315,7 +321,13 @@ public class SideBarController implements Initializable, PageHolder {
         treeBtn.setVisible(false);
         treeBtn.setOnAction(e -> {
             e.consume();
-            showProjectTree(project);
+            // 二次点击同一项目：退出目录树，返回会话列表
+            if (activeTreeProject != null && activeTreeProject.id().equals(project.id())) {
+                showHistoryList();
+            } else {
+                activeTreeProject = project;
+                showProjectTree(project);
+            }
         });
 
         header.getChildren().addAll(folderIcon, nameLabel, spacer, treeBtn, newChatBtn);
@@ -352,7 +364,9 @@ public class SideBarController implements Initializable, PageHolder {
 
     /**
      * 将会话记录区域切换为项目目录树。
-     * 复用 FileTreeService 构建懒加载目录树，顶部提供返回按钮切回会话列表。
+     * 顶部复用项目卡片头部同款样式与按钮（文件夹图标 + 项目名 + 目录树/新建按钮），
+     * 复用 FileTreeService 构建懒加载目录树。
+     * 无单独返回按钮：再次点击头部目录树按钮（激活态）即可切回会话列表。
      */
     private void showProjectTree(ProjectInfo project) {
         TreeView<Path> treeView = new TreeView<>();
@@ -376,28 +390,13 @@ public class SideBarController implements Initializable, PageHolder {
             log.error("构建侧边栏目录树失败: {}", project.path(), e);
         }
 
-        // 顶部返回栏：返回箭头 + 项目名
-        Button backBtn = new Button();
-        backBtn.getStyleClass().addAll("sidebar__history-delete-btn", "sidebar__tree-back-btn");
-        SvgImageView backIcon = new SvgImageView();
-        backIcon.setFitWidth(14);
-        backIcon.setFitHeight(14);
-        backIcon.setSvgPath("/cn/bitloom/images/left.svg");
-        backBtn.setGraphic(backIcon);
+        // 顶部头部：与项目卡片 header 样式完全一致（文件夹图标 + 项目名 + 悬浮按钮）
+        HBox treeHeader = createProjectHeader(project, true);
 
-        Label titleLabel = new Label(project.name());
-        titleLabel.getStyleClass().add("sidebar__tree-title");
-
-        HBox treeHeader = new HBox(backBtn, titleLabel);
-        treeHeader.getStyleClass().add("sidebar__tree-header");
-        treeHeader.setAlignment(Pos.CENTER_LEFT);
-        treeHeader.setSpacing(8);
-
+        // 目录树容器：顶部头部 + 下方目录树
         VBox treeContainer = new VBox(treeHeader, treeView);
         treeContainer.getStyleClass().add("sidebar__tree-container");
         VBox.setVgrow(treeView, Priority.ALWAYS);
-
-        backBtn.setOnAction(e -> showHistoryList());
 
         // 目录树视图需要撑满 ScrollPane 高度
         historyScroll.setFitToHeight(true);
@@ -405,9 +404,89 @@ public class SideBarController implements Initializable, PageHolder {
     }
 
     /**
+     * 构建与项目卡片 header 完全一致样式的头部。
+     *
+     * @param treeActive 当前是否处于目录树视图；true 时目录树按钮呈激活态（点击返回会话列表），
+     *                   否则与卡片一致（点击进入目录树）
+     */
+    private HBox createProjectHeader(ProjectInfo project, boolean treeActive) {
+        HBox header = new HBox();
+        header.getStyleClass().add("sidebar__project-header");
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.setSpacing(8);
+
+        // 文件夹图标（与卡片一致）
+        SvgImageView folderIcon = new SvgImageView();
+        folderIcon.setFitWidth(16);
+        folderIcon.setFitHeight(16);
+        folderIcon.setSvgPath("/cn/bitloom/images/folder.svg");
+        folderIcon.getStyleClass().add("sidebar__project-icon");
+
+        Label nameLabel = new Label(project.name());
+        nameLabel.getStyleClass().add("sidebar__project-name");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        // 目录树按钮（激活态时点击返回会话列表；否则点击进入目录树）
+        Button treeBtn = new Button();
+        treeBtn.getStyleClass().add("sidebar__history-delete-btn");
+        SvgImageView treeIcon = new SvgImageView();
+        treeIcon.setFitWidth(14);
+        treeIcon.setFitHeight(14);
+        treeIcon.setSvgPath("/cn/bitloom/images/file-tree.svg");
+        treeBtn.setGraphic(treeIcon);
+        treeBtn.setVisible(false);
+        if (treeActive) {
+            // 仅切换行为为返回会话列表，不保持选中高亮态
+            treeBtn.setOnAction(e -> showHistoryList());
+        } else {
+            treeBtn.setOnAction(e -> {
+                e.consume();
+                activeTreeProject = project;
+                showProjectTree(project);
+            });
+        }
+
+        // 新建对话按钮（悬浮显示，行为与卡片一致）
+        Button newChatBtn = new Button();
+        newChatBtn.getStyleClass().add("sidebar__history-delete-btn");
+        SvgImageView newChatIcon = new SvgImageView();
+        newChatIcon.setFitWidth(14);
+        newChatIcon.setFitHeight(14);
+        newChatIcon.setSvgPath("/cn/bitloom/images/chat-new.svg");
+        newChatBtn.setGraphic(newChatIcon);
+        newChatBtn.setVisible(false);
+        newChatBtn.setOnAction(e -> {
+            e.consume();
+            AbstractHomePageViewModel vm = currentViewModel();
+            if (vm instanceof CodeHomePageViewModel coderVm) {
+                coderVm.setCurrentProject(project);
+            }
+            if (vm != null) vm.createNewSession();
+            resetChatUI();
+            if (this.indexController != null) {
+                this.indexController.navigate(RouteConfig.Path.HOME);
+            }
+        });
+
+        header.getChildren().addAll(folderIcon, nameLabel, spacer, treeBtn, newChatBtn);
+
+        header.setOnMouseEntered(e -> { newChatBtn.setVisible(true); treeBtn.setVisible(true); });
+        header.setOnMouseExited(e -> {
+            newChatBtn.setVisible(false);
+            treeBtn.setVisible(false);
+        });
+
+        return header;
+    }
+
+    /**
      * 恢复会话记录区域为会话列表。
      */
     private void showHistoryList() {
+        activeTreeProject = null;
+
         historyScroll.setFitToHeight(false);
         historyScroll.setContent(historyList);
     }

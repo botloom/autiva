@@ -276,43 +276,6 @@
     -fx-padding: 0;
 }
 
-.sidebar__tree-header {
-    -fx-background-color: transparent;
-    -fx-padding: 6 8 6 4;
-    -fx-spacing: 4;
-    -fx-alignment: center-left;
-    -fx-min-height: 32;
-    -fx-pref-height: 32;
-}
-
-.sidebar__tree-back-btn {
-    -fx-background-color: transparent;
-    -fx-background-radius: 6;
-    -fx-padding: 0;
-    -fx-pref-width: 22;
-    -fx-pref-height: 22;
-    -fx-min-width: 22;
-    -fx-min-height: 22;
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-    -fx-cursor: hand;
-    -fx-alignment: CENTER;
-    -fx-content-display: GRAPHIC_ONLY;
-    -fx-opacity: 0.6;
-}
-
-.sidebar__tree-back-btn:hover {
-    -fx-opacity: 1;
-    -fx-background-color: rgba(0, 0, 0, 0.05);
-}
-
-.sidebar__tree-title {
-    -fx-font-size: 13px;
-    -fx-font-weight: 600;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    -fx-text-fill: #1d1d1f;
-}
-
 /* 目录树本体 */
 .sidebar__tree-container .tree-view {
     -fx-background-color: transparent;
@@ -379,21 +342,15 @@
     -fx-background-color: #0071e3;
 }
 
-/* 目录树垂直滚动条 */
+/* 目录树垂直滚动条 - 隐藏以保持简洁（由外层 ScrollPane 滚动） */
 .sidebar__tree-container .tree-view .scroll-bar:vertical {
     -fx-background-color: transparent;
-    -fx-pref-width: 6;
+    -fx-pref-width: 0;
+    -fx-max-width: 0;
+    -fx-opacity: 0;
 }
 
-.sidebar__tree-container .tree-view .scroll-bar:vertical .thumb {
-    -fx-background-color: rgba(0, 0, 0, 0.2);
-    -fx-background-radius: 3;
-}
-
-.sidebar__tree-container .tree-view .scroll-bar:vertical .thumb:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.35);
-}
-
+.sidebar__tree-container .tree-view .scroll-bar:vertical .thumb,
 .sidebar__tree-container .tree-view .scroll-bar:vertical .track {
     -fx-background-color: transparent;
 }
@@ -437,5 +394,36 @@
     -fx-background-color: transparent;
     -fx-shape: "";
     -fx-padding: 0;
+}
+
+/* ===== 目录树文件/文件夹类型修饰 ===== */
+
+.sidebar__tree-container .tree-view .tree-cell.file-tree__folder {
+    -fx-font-weight: 500;
+}
+
+.sidebar__tree-container .tree-view .tree-cell.file-tree__folder:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.08);
+}
+
+/* 文件类型文字颜色衬点亮色图标，形成清晰的类型区分 */
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--code {
+    -fx-text-fill: #1d1d1f;
+}
+
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--data {
+    -fx-text-fill: #1d1d1f;
+}
+
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--md {
+    -fx-text-fill: #1d1d1f;
+}
+
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--text {
+    -fx-text-fill: #6e6e73;
+}
+
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--image {
+    -fx-text-fill: #1d1d1f;
 }
 

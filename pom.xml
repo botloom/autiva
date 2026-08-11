@@ -10,7 +10,6 @@
 
     <modules>
         <module>autiva-desktop</module>
-        <module>autiva-kbs</module>
     </modules>
 
     <properties>
