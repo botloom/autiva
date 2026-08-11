@@ -24,7 +24,7 @@ public class JediTerminalView extends BorderPane {
     private PtySession session;
 
     public JediTerminalView() {
-        this(new DarkSettingsProvider());
+        this(new LightSettingsProvider());
     }
 
     public JediTerminalView(SettingsProvider settingsProvider) {

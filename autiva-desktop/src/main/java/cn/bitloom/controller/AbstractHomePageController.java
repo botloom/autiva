@@ -619,30 +619,19 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     /**
-     * 创建通用按钮配置（tool/todo），子类可在此基础上扩展。
+     * 创建通用按钮配置：右侧边栏 toggle 按钮。
      */
     protected List<ButtonBarHolder.ButtonConfig> createCommonButtons() {
         List<ButtonBarHolder.ButtonConfig> configs = new ArrayList<>();
         configs.add(new ButtonBarHolder.ButtonConfig(
-                "toolCallsButton",
-                "工具",
+                "rightPanelButton",
+                "右侧边栏",
                 "button-bar__icon-btn",
-                "/cn/bitloom/images/plug.svg",
+                "/cn/bitloom/images/panel-right.svg",
                 ButtonBarHolder.Alignment.RIGHT,
                 _ -> {
                     if (indexController != null) {
-                        indexController.toggleToolCallsPanel();
-                    }
-                }));
-        configs.add(new ButtonBarHolder.ButtonConfig(
-                "todoButton",
-                "待办",
-                "button-bar__icon-btn",
-                "/cn/bitloom/images/list.svg",
-                ButtonBarHolder.Alignment.RIGHT,
-                _ -> {
-                    if (indexController != null) {
-                        indexController.toggleTodoPanel();
+                        indexController.toggleEditorPanel();
                     }
                 }));
         return configs;

@@ -1,9 +1,9 @@
-/* 终端样式 - 深色主题，PowerShell 风格 */
+/* 终端样式 - 浅色主题 */
 
 /* JediTerminalView 外层容器 - 圆角卡片底部 */
 .jedi-terminal-view {
-    -fx-background-color: #0c0c0c;  /* PowerShell 深黑背景 */
-    -fx-background-radius: 0 0 12 12;  /* 只有底部圆角 */
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 0 0 12 12;
 }
 
 /* 终端内容包装器 */
@@ -15,29 +15,29 @@
 .jedi-terminal-view .canvas-pane,
 .jedi-terminal-view CanvasPane,
 .jedi-terminal-view Canvas {
-    -fx-background-color: #0c0c0c;
+    -fx-background-color: #ffffff;
 }
 
-/* 光标样式 - 浅灰色 */
+/* 光标样式 - 深色 */
 .jedi-terminal-view .cursor,
 .jedi-terminal-view Cursor {
-    -fx-fill: #cccccc;
-    -fx-stroke: #cccccc;
+    -fx-fill: #1d1d1f;
+    -fx-stroke: #1d1d1f;
 }
 
-/* 滚动条样式 - PowerShell 风格 */
+/* 滚动条样式 - 浅色主题 */
 .jedi-terminal-view .scroll-bar {
     -fx-background-color: transparent;
 }
 
 .jedi-terminal-view .scroll-bar:vertical .thumb {
-    -fx-background-color: #4d4d4d;
+    -fx-background-color: rgba(0, 0, 0, 0.2);
     -fx-background-radius: 4px;
     -fx-cursor: hand;
 }
 
 .jedi-terminal-view .scroll-bar:vertical .thumb:hover {
-    -fx-background-color: #6d6d6d;
+    -fx-background-color: rgba(0, 0, 0, 0.35);
 }
 
 .jedi-terminal-view .scroll-bar:vertical .track {

@@ -3,7 +3,6 @@ package cn.bitloom.controller;
 import cn.bitloom.agentic.tool.file.FileDiff;
 import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.constant.AgentMode;
-import cn.bitloom.controller.EditorPanelController.ViewType;
 import cn.bitloom.router.HomePageRouter;
 import cn.bitloom.router.Router;
 import cn.bitloom.store.Store;
@@ -97,10 +96,7 @@ public class IndexController implements Initializable {
             EditorPanelController editor = getEditorPanelController();
             if (editor != null && editor.isVisible()
                     && AgentMode.fromAgentId(newVal) != AgentMode.CODE) {
-                ViewType vt = editor.getCurrentViewType();
-                if (vt == ViewType.TERMINAL) {
-                    closeEditorPanel();
-                }
+                editor.closeTerminal();
             }
         }));
     }
@@ -143,6 +139,19 @@ public class IndexController implements Initializable {
         }
     }
 
+    /**
+     * Toggle 右侧编辑器面板
+     */
+    public void toggleEditorPanel() {
+        EditorPanelController editor = getEditorPanelController();
+        if (editor == null) return;
+        if (editor.isVisible()) {
+            closeEditorPanel();
+        } else {
+            ensureEditorVisible();
+        }
+    }
+
     // ===== 动态引用（由 HomePageRouter 维护） =====
 
     /**
@@ -162,43 +171,31 @@ public class IndexController implements Initializable {
     // ===== 编辑器面板管理 =====
 
     /**
-     * 切换终端面板（toggle）：相同视图再次点击则关闭
+     * 打开终端面板
      */
     public void toggleTerminalPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        if (editor.isVisible() && editor.getCurrentViewType() == ViewType.TERMINAL) {
-            closeEditorPanel();
-            return;
-        }
         ensureEditorVisible();
         editor.openTerminal(resolveWorkingDir());
     }
 
     /**
-     * 切换工具调用面板（toggle）：相同视图再次点击则关闭
+     * 打开工具调用面板
      */
     public void toggleToolCallsPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        if (editor.isVisible() && editor.getCurrentViewType() == ViewType.TOOL_CALLS) {
-            closeEditorPanel();
-            return;
-        }
         ensureEditorVisible();
         editor.showToolCallsView();
     }
 
     /**
-     * 切换待办面板（toggle）：相同视图再次点击则关闭
+     * 打开待办面板
      */
     public void toggleTodoPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        if (editor.isVisible() && editor.getCurrentViewType() == ViewType.TODO) {
-            closeEditorPanel();
-            return;
-        }
         ensureEditorVisible();
         editor.showTodoView();
     }

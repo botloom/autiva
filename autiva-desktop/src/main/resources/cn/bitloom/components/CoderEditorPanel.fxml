@@ -2,6 +2,7 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import cn.bitloom.node.svg.SvgImageView?>
 
 <VBox fx:id="editorPanel"
       styleClass="editor-panel"
@@ -12,28 +13,14 @@
       visible="false" managed="false"
       minWidth="480" prefWidth="640"
 >
+    <HBox fx:id="tabBar" styleClass="editor-panel__tab-bar" alignment="CENTER_LEFT" spacing="4">
+        <Button fx:id="addTabButton" styleClass="editor-panel__tab-add">
+            <graphic>
+                <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/tab-add.svg"/>
+            </graphic>
+        </Button>
+    </HBox>
     <StackPane fx:id="viewContainer" styleClass="editor-panel__views" VBox.vgrow="ALWAYS">
-        <VBox fx:id="terminalView" styleClass="editor-panel__view"
-              visible="false" managed="false" VBox.vgrow="ALWAYS"/>
-        <VBox fx:id="fileView" styleClass="editor-panel__view"
-              visible="false" managed="false" VBox.vgrow="ALWAYS"/>
-        <SplitPane fx:id="diffView" styleClass="editor-panel__diff-view"
-                   visible="false" managed="false" VBox.vgrow="ALWAYS"
-                   dividerPositions="0.22">
-            <VBox styleClass="editor-panel__diff-file-list-panel" minWidth="160" prefWidth="220">
-                <Label text="变更文件" styleClass="editor-panel__diff-file-list-header"/>
-                <ListView fx:id="diffFileListView" styleClass="editor-panel__diff-file-list" VBox.vgrow="ALWAYS"/>
-            </VBox>
-            <VBox fx:id="diffContentPanel" styleClass="editor-panel__diff-content-panel" minWidth="300">
-                <HBox fx:id="diffToolbar" styleClass="editor-panel__diff-toolbar" alignment="CENTER_LEFT">
-                    <Label fx:id="diffToolbarPath" styleClass="editor-panel__diff-toolbar-path" text=""/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button fx:id="diffRejectBtn" styleClass="editor-panel__diff-toolbar-btn,editor-panel__diff-toolbar-btn--reject" text="撤销"/>
-                    <Button fx:id="diffApproveBtn" styleClass="editor-panel__diff-toolbar-btn,editor-panel__diff-toolbar-btn--approve" text="保留"/>
-                </HBox>
-                <StackPane fx:id="diffContentStack" styleClass="editor-panel__diff-content-stack" VBox.vgrow="ALWAYS"/>
-            </VBox>
-        </SplitPane>
         <VBox fx:id="toolCallsView" styleClass="editor-panel__view"
               visible="false" managed="false" VBox.vgrow="ALWAYS">
             <ListView fx:id="toolCallsListView" styleClass="editor-panel__card-list" VBox.vgrow="ALWAYS"/>

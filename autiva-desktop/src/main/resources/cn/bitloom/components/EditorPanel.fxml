@@ -2,6 +2,7 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import cn.bitloom.node.svg.SvgImageView?>
 
 <VBox fx:id="editorPanel"
       styleClass="editor-panel"
@@ -12,6 +13,13 @@
       visible="false" managed="false"
       minWidth="480" prefWidth="640"
 >
+    <HBox fx:id="tabBar" styleClass="editor-panel__tab-bar" alignment="CENTER_LEFT" spacing="4">
+        <Button fx:id="addTabButton" styleClass="editor-panel__tab-add">
+            <graphic>
+                <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/tab-add.svg"/>
+            </graphic>
+        </Button>
+    </HBox>
     <StackPane fx:id="viewContainer" styleClass="editor-panel__views" VBox.vgrow="ALWAYS">
         <VBox fx:id="toolCallsView" styleClass="editor-panel__view"
               visible="false" managed="false" VBox.vgrow="ALWAYS">
