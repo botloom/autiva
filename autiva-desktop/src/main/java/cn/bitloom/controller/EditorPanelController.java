@@ -102,11 +102,15 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 关闭指定类型的单例视图（工具/Todo 视图 tab 栏的关闭按钮）。
+     * 关闭指定类型的视图（tab 栏关闭按钮）。
+     * 工具/Todo 为单例复用型：关闭仅隐藏，保留内容下次复用；其余类型销毁。
      */
     protected void closeViewByType(ViewType type) {
         EditorTab tab = findTabByType(type);
-        if (tab != null) {
+        if (tab == null) return;
+        if (isSingletonType(type)) {
+            hideSingletonTab(tab);
+        } else {
             closeTab(tab);
         }
     }
@@ -205,9 +209,21 @@ public class EditorPanelController implements Initializable {
     // ===== 视图管理核心方法 =====
 
     /**
-     * 打开单例视图（工具/Todo）：若已存在则激活，否则创建卡片
+     * 单例视图类型：工具/Todo 卡片复用，关闭仅隐藏不销毁（避免重建闪烁、保留内容）。
      */
-    protected void openSingleTab(ViewType type, Node content) {
+    private static boolean isSingletonType(ViewType type) {
+        return type == ViewType.TOOL_CALLS || type == ViewType.TODO;
+    }
+
+    /**
+     * 打开单例视图（工具/Todo）：若已存在则激活复用，否则创建卡片。
+     * 不销毁只复用，保证切换不闪烁、内容不重建。同时确保面板在 SplitPane 中可见
+     * （上次关闭可能已收起面板）。
+     */
+    protected void openSingletonTab(ViewType type, Node content) {
+        if (indexController != null) {
+            indexController.ensureEditorVisible();
+        }
         EditorTab existing = findTabByType(type);
         if (existing != null) {
             selectTab(existing);
@@ -216,6 +232,47 @@ public class EditorPanelController implements Initializable {
         EditorTab tab = createTab(type, content);
         addTab(tab);
         selectTab(tab);
+    }
+
+    /**
+     * 隐藏单例视图：仅隐藏不销毁，保留内容与 tab 结构以便下次切换复用。
+     * 所有视图都关闭后收起面板。
+     */
+    protected void hideSingletonTab(EditorTab tab) {
+        tab.card.setVisible(false);
+        tab.card.setManaged(false);
+        if (activeTab == tab) {
+            activeTab = null;
+            currentViewType = null;
+        }
+        if (tabs.stream().noneMatch(t -> t.card.isVisible())) {
+            if (indexController != null) {
+                indexController.closeEditorPanel();
+            } else {
+                hide();
+            }
+        }
+    }
+
+    /**
+     * 切换单例视图：当前若不是该视图则打开，是则关闭（隐藏），实现右上角按钮开/关切换。
+     */
+    protected void toggleSingletonView(ViewType type, Node content) {
+        if (isCurrentView(type)) {
+            EditorTab tab = findTabByType(type);
+            if (tab != null) {
+                hideSingletonTab(tab);
+            }
+        } else {
+            openSingletonTab(type, content);
+        }
+    }
+
+    /**
+     * 当前展示的视图是否是指定类型。
+     */
+    public boolean isCurrentView(ViewType type) {
+        return currentViewType == type;
     }
 
     /**
@@ -301,17 +358,6 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 关闭全部已打开的视图（用于右上角按钮切换时先清空旧视图）。
-     * 关闭最后一个 tab 时会收起面板，调用方如需继续打开新视图需自行保证面板可见。
-     */
-    protected void closeAllTabs() {
-        var snapshot = new java.util.ArrayList<>(tabs);
-        for (EditorTab tab : snapshot) {
-            closeTab(tab);
-        }
-    }
-
-    /**
      * 子类 hook：视图关闭时清理资源
      */
     protected void onTabClosed(EditorTab tab) {
@@ -337,12 +383,26 @@ public class EditorPanelController implements Initializable {
 
     public void showToolCallsView() {
         show();
-        openSingleTab(ViewType.TOOL_CALLS, toolCallsView);
+        openSingletonTab(ViewType.TOOL_CALLS, toolCallsView);
     }
 
     public void showTodoView() {
         show();
-        openSingleTab(ViewType.TODO, todoView);
+        openSingletonTab(ViewType.TODO, todoView);
+    }
+
+    /**
+     * 右上角工具按钮：当前工具视图开/关切换（打开时复用，关闭仅隐藏不重建）。
+     */
+    public void toggleToolCallsView() {
+        toggleSingletonView(ViewType.TOOL_CALLS, toolCallsView);
+    }
+
+    /**
+     * 右上角待办按钮：当前待办视图开/关切换（打开时复用，关闭仅隐藏不重建）。
+     */
+    public void toggleTodoView() {
+        toggleSingletonView(ViewType.TODO, todoView);
     }
 
     public void showTerminalView() {
@@ -376,7 +436,7 @@ public class EditorPanelController implements Initializable {
             indexController.ensureEditorVisible();
         }
         show();
-        openSingleTab(ViewType.TODO, todoView);
+        openSingletonTab(ViewType.TODO, todoView);
         scrollToBottom(todoListView, todoListStickToBottom);
     }
 

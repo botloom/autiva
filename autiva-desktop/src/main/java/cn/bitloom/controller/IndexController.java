@@ -1,6 +1,7 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.tool.file.FileDiff;
+import cn.bitloom.controller.EditorPanelController.ViewType;
 import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.constant.AgentMode;
 import cn.bitloom.router.HomePageRouter;
@@ -194,36 +195,35 @@ public class IndexController implements Initializable {
     // ===== 编辑器面板管理 =====
 
     /**
-     * 打开终端面板
+     * 切换终端面板：当前若显示终端则关闭，否则打开（开/关切换语义）。
      */
     public void toggleTerminalPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        editor.closeAllTabs();
-        ensureEditorVisible();
-        editor.openTerminal(resolveWorkingDir());
+        if (editor.isCurrentView(ViewType.TERMINAL)) {
+            editor.closeTerminal();
+        } else {
+            ensureEditorVisible();
+            editor.openTerminal(resolveWorkingDir());
+        }
     }
 
     /**
-     * 打开工具调用面板
+     * 切换工具调用面板：单例视图，开/关切换，关闭仅隐藏不重建。
      */
     public void toggleToolCallsPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        editor.closeAllTabs();
-        ensureEditorVisible();
-        editor.showToolCallsView();
+        editor.toggleToolCallsView();
     }
 
     /**
-     * 打开待办面板
+     * 切换待办面板：单例视图，开/关切换，关闭仅隐藏不重建。
      */
     public void toggleTodoPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        editor.closeAllTabs();
-        ensureEditorVisible();
-        editor.showTodoView();
+        editor.toggleTodoView();
     }
 
     /**
