@@ -70,6 +70,8 @@ public class EditorPanelController implements Initializable {
     protected final ObservableList<EditorTab> tabs = FXCollections.observableArrayList();
     @Getter
     protected EditorTab activeTab = null;
+    /** 进入当前视图之前的活跃视图（关闭当前视图时用于回落，避免总是跳到列表末尾） */
+    private EditorTab previousActiveTab = null;
     private int tabIdCounter = 0;
 
     // ===== stick-to-bottom 跟随模式 =====
@@ -341,6 +343,10 @@ public class EditorPanelController implements Initializable {
      * 切换到指定视图
      */
     protected void selectTab(EditorTab tab) {
+        // 记录进入当前视图前的活跃视图，用于关闭当前视图后回落
+        if (activeTab != tab) {
+            previousActiveTab = activeTab;
+        }
         for (EditorTab t : tabs) {
             boolean active = (t == tab);
             t.card.setVisible(active);
@@ -369,8 +375,19 @@ public class EditorPanelController implements Initializable {
                 } else {
                     hide();
                 }
+            } else if (previousActiveTab != null && tabs.contains(previousActiveTab)) {
+                // 回落至关闭前活跃的视图，避免总是跳到列表末尾（如常驻的 todo/tool 单例）
+                selectTab(previousActiveTab);
             } else {
-                selectTab(tabs.get(tabs.size() - 1));
+                // 此前无活跃视图，收起面板而非强行激活列表末尾的视图
+                activeTab = null;
+                currentViewType = null;
+                notifyViewTypeChanged();
+                if (indexController != null) {
+                    indexController.closeEditorPanel();
+                } else {
+                    hide();
+                }
             }
         }
     }
