@@ -114,7 +114,48 @@ public class ButtonBarController implements Initializable {
             if (button != null) {
                 button.setVisible(this.viewButtonsVisible);
                 button.setManaged(this.viewButtonsVisible);
+                // 隐藏时不再保持激活色，避免残留
+                if (!this.viewButtonsVisible) {
+                    button.getStyleClass().remove(ACTIVE_STYLE_CLASS);
+                }
             }
+        }
+    }
+
+    /** 激活态样式类：视图打开时按钮呈蓝色高亮 */
+    private static final String ACTIVE_STYLE_CLASS = "button-bar__icon-btn--active";
+
+    /**
+     * 设置视图按钮的激活状态：true 时按钮呈蓝色高亮，false 时恢复默认。
+     *
+     * @param buttonId 按钮 id（如 terminalButton / toolCallsButton / todoButton）
+     * @param active   true 激活（蓝色高亮）
+     */
+    public void setViewActive(String buttonId, boolean active) {
+        Button button = this.buttonMap.get(buttonId);
+        if (button == null) return;
+        if (active) {
+            if (!button.getStyleClass().contains(ACTIVE_STYLE_CLASS)) {
+                button.getStyleClass().add(ACTIVE_STYLE_CLASS);
+            }
+        } else {
+            button.getStyleClass().remove(ACTIVE_STYLE_CLASS);
+        }
+    }
+
+    /**
+     * 设置左侧侧边栏抽屉按钮的激活状态：抽屉打开时蓝色高亮，关闭时恢复默认。
+     *
+     * @param active true 激活（蓝色高亮，侧边栏抽屉展开中）
+     */
+    public void setSidebarActive(boolean active) {
+        if (sidebarButton == null) return;
+        if (active) {
+            if (!sidebarButton.getStyleClass().contains(ACTIVE_STYLE_CLASS)) {
+                sidebarButton.getStyleClass().add(ACTIVE_STYLE_CLASS);
+            }
+        } else {
+            sidebarButton.getStyleClass().remove(ACTIVE_STYLE_CLASS);
         }
     }
 }

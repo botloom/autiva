@@ -93,7 +93,31 @@ public class IndexController implements Initializable {
                     && AgentMode.fromAgentId(newVal) != AgentMode.CODE) {
                 editor.closeTerminal();
             }
+            // 模式切换后重新绑定右上角按钮激活态（active editor 可能已更换）
+            bindEditorViewTypeSync();
         }));
+
+        // 初始化完成后绑定右上角按钮激活态联动（异步确保 editor/按钮已就绪）
+        Platform.runLater(this::bindEditorViewTypeSync);
+    }
+
+    /**
+     * 将当前 active 编辑器的视图类型变化同步到右侧 ViewButtonBar 按钮的蓝色激活态：
+     * 视图打开时对应按钮蓝色高亮，全部关闭时清除高亮。
+     */
+    private void bindEditorViewTypeSync() {
+        EditorPanelController editor = getEditorPanelController();
+        if (editor == null) return;
+        editor.setOnViewTypeChanged(this::applyViewButtonState);
+        applyViewButtonState(editor.getCurrentViewType());
+    }
+
+    /** 根据当前视图类型设置按钮激活态（null 表示无激活视图，清除全部高亮） */
+    private void applyViewButtonState(ViewType type) {
+        if (buttonBarController == null) return;
+        buttonBarController.setViewActive("terminalButton", type == ViewType.TERMINAL);
+        buttonBarController.setViewActive("toolCallsButton", type == ViewType.TOOL_CALLS);
+        buttonBarController.setViewActive("todoButton", type == ViewType.TODO);
     }
 
     private void initializeButtonBar() {
@@ -137,8 +161,12 @@ public class IndexController implements Initializable {
             }
             mainSplit.getItems().remove(sideBar);
             sideBarController.hide();
+            // 关闭后清除左侧侧边栏按钮激活态
+            buttonBarController.setSidebarActive(false);
         } else {
             ensureSidebarVisible();
+            // 展开后点亮左侧侧边栏按钮激活态
+            buttonBarController.setSidebarActive(true);
         }
     }
 
@@ -150,17 +178,24 @@ public class IndexController implements Initializable {
             return;
         }
         var sideBar = sideBarController.getSideBar();
+        // 先恢复可见性，保证 add 时以正常托管状态参与一次性布局，不产生闪烁帧
+        sideBarController.show();
         if (!mainSplit.getItems().contains(sideBar)) {
             mainSplit.getItems().add(0, sideBar);
-            // 按像素宽度放置分隔线（前提：容器已布局且有宽度）
-            Platform.runLater(() -> {
-                double total = mainSplit.getWidth();
-                if (total > 0) {
-                    mainSplit.setDividerPosition(0, Math.min(savedSidebarWidth / total, 0.9));
-                }
-            });
+            // 同步设置 divider 位置，避免先按默认比例布局一次再跳回造成闪烁；
+            // 宽度尚未布局时为 0，此时才延迟到宽度可用后设置。
+            double total = mainSplit.getWidth();
+            if (total > 0) {
+                mainSplit.setDividerPosition(0, Math.min(savedSidebarWidth / total, 0.9));
+            } else {
+                Platform.runLater(() -> {
+                    double w = mainSplit.getWidth();
+                    if (w > 0) {
+                        mainSplit.setDividerPosition(0, Math.min(savedSidebarWidth / w, 0.9));
+                    }
+                });
+            }
         }
-        sideBarController.show();
     }
 
     /**

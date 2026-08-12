@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.function.Consumer;
 
 /**
  * 编辑器面板通用基类。
@@ -83,6 +84,20 @@ public class EditorPanelController implements Initializable {
 
     @Getter
     protected ViewType currentViewType = null;
+
+    /**
+     * 当前视图类型变化时的回调（用于同步右上角按钮的蓝色激活态）。
+     * 参数为变化后的当前视图类型，null 表示已无激活视图。
+     */
+    @Setter
+    protected Consumer<ViewType> onViewTypeChanged;
+
+    /** 视图类型变化后触发回调 */
+    private void notifyViewTypeChanged() {
+        if (onViewTypeChanged != null) {
+            onViewTypeChanged.accept(currentViewType);
+        }
+    }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -244,6 +259,7 @@ public class EditorPanelController implements Initializable {
         if (activeTab == tab) {
             activeTab = null;
             currentViewType = null;
+            notifyViewTypeChanged();
         }
         if (tabs.stream().noneMatch(t -> t.card.isVisible())) {
             if (indexController != null) {
@@ -332,6 +348,7 @@ public class EditorPanelController implements Initializable {
         }
         activeTab = tab;
         currentViewType = tab.viewType;
+        notifyViewTypeChanged();
     }
 
     /**
@@ -345,6 +362,7 @@ public class EditorPanelController implements Initializable {
             if (tabs.isEmpty()) {
                 activeTab = null;
                 currentViewType = null;
+                notifyViewTypeChanged();
                 // 所有视图关闭后，从 SplitPane 移除面板，收回空间
                 if (indexController != null) {
                     indexController.closeEditorPanel();

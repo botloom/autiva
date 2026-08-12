@@ -106,3 +106,16 @@
 .button-bar__icon-btn:pressed {
     -fx-background-color: rgba(0, 0, 0, 0.15);
 }
+
+/* 视图按钮激活态（对应视图打开时）：将原来的灰色阴影换成蓝色高亮 */
+.button-bar__icon-btn--active {
+    -fx-background-color: rgba(0, 122, 255, 0.15);
+}
+
+.button-bar__icon-btn--active:hover {
+    -fx-background-color: rgba(0, 122, 255, 0.22);
+}
+
+.button-bar__icon-btn--active:pressed {
+    -fx-background-color: rgba(0, 122, 255, 0.30);
+}
