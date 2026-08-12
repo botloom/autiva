@@ -48,8 +48,8 @@ public class FileTreeCell extends TreeCell<Path> {
 
         refreshStyleClasses(item, fileName);
 
-        // 仅文件可拖拽到对话框（目录无意义）
-        if (Files.isRegularFile(item)) {
+        // 文件与文件夹均可拖拽到对话框
+        if (Files.exists(item)) {
             setOnDragDetected(event -> {
                 Dragboard db = startDragAndDrop(TransferMode.COPY);
                 ClipboardContent content = new ClipboardContent();

@@ -325,7 +325,7 @@
     -fx-pref-height: 7;
     -fx-max-height: 7;
     -fx-translate-y: 7;
-    -fx-shape: "M0.4,0 L5,4 L0.4,8 L0,7 L3.4,4 L0,1 Z";
+    -fx-shape: "M0,0 L6,3.2 L0,6.4 L0,6 L3.6,3.2 L0,0.4 Z";
 }
 
 .sidebar__tree-container .tree-view .tree-cell:expanded .arrow {
