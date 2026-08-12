@@ -54,6 +54,7 @@ public class SideBarController implements Initializable, PageHolder {
     private final FileTreeService fileTreeService;
 
     @FXML
+    @Getter
     private VBox sideBar;
     @FXML
     private ToggleButton workModeBtn;
@@ -77,7 +78,6 @@ public class SideBarController implements Initializable, PageHolder {
     @Getter
     @Setter
     private IndexController indexController;
-
     private Map<String, HBox> routeOptionMap;
     private HBox activeHistoryItem = null;
     private final Map<String, HBox> historyItemMap = new LinkedHashMap<>();

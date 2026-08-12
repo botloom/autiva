@@ -300,11 +300,12 @@ public class FileSystemSessionManager implements ISessionManager {
 
         CompactionResult result = strategy.compact(request);
 
-        // 压缩策略把旧事件摘要成纯文本 synthetic assistant（没有 toolCalls），
-        // 但 activeWindow 开头可能残留 ToolResponseMessage（对应的 assistant(toolCalls)
-        // 被归档/摘要了），导致历史不成对，违反 LLM API 的成对约束。
-        // 统一过滤掉孤儿 toolResponse，所有策略都受益。
-        List<MessageEvent> finalActive = CompactionUtils.dropOrphanToolResponses(result.compactedEvents());
+        // 压缩按 token 截断时，cut 点可能落在同一轮 tool 交互的 assistant(toolCalls) 与
+        // ToolResponseMessage 之间，导致两种孤儿：孤儿 ToolResponse（assistant 被归档）或
+        // 孤儿 assistant(toolCalls)（ToolResponse 被归档）。统一用 reconcileToolPairs 修复，
+        // 所有策略都受益。
+        List<MessageEvent> finalActive = CompactionUtils.reconcileToolPairs(
+                result.compactedEvents(), result.archivedEvents());
 
         // 归档事件标记为 archived=true 保留在文件中（而不是物理删除）。
         // 架构设计了 archived 标记机制：

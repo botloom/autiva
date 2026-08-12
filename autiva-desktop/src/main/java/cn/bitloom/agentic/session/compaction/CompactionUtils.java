@@ -17,8 +17,11 @@
 package cn.bitloom.agentic.session.compaction;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -109,36 +112,91 @@ public final class CompactionUtils {
 	}
 
 	/**
-	 * 移除压缩后 compacted 列表中没有对应 assistant(toolCalls) 的孤儿 ToolResponseMessage。
+	 * 保证压缩后事件列表中 assistant(toolCalls) 与 ToolResponseMessage 成对出现。
 	 *
 	 * <p>
-	 * 压缩策略把旧事件摘要成纯文本 synthetic assistant（没有 toolCalls），但如果
-	 * activeWindow 开头残留了 ToolResponseMessage（对应的 assistant(toolCalls) 被归档/摘要了），
-	 * 历史会出现不成对的 (纯文本 assistant) + (孤儿 toolResponse)，违反 LLM API 的
-	 * 成对约束导致 400 报错。
+	 * 压缩按 token 截断时，cut 点可能落在同一轮 tool 交互的 assistant(toolCalls) 与
+	 * ToolResponseMessage 之间，导致两种孤儿：
+	 * <ol>
+	 * <li><strong>孤儿 ToolResponseMessage</strong>：对应的 assistant(toolCalls) 被归档/摘要，
+	 * 违反 LLM API 成对约束。处理方式：丢弃孤儿 responses（完全孤儿则丢弃整个事件）。</li>
+	 * <li><strong>孤儿 assistant(toolCalls)</strong>：对应的 ToolResponseMessage 被归档。
+	 * 处理方式：从 {@code archived} 中拉回对应的 ToolResponseMessage，紧插在 assistant 之后；
+	 * 若 archived 中也没有（open tool call，ToolResponse 尚未产生），则保留 assistant 不动，
+	 * 后续 ToolResponse 产生追加后自然成对。</li>
+	 * </ol>
 	 *
-	 * <p>
-	 * 本方法线性扫描 compacted 列表，跟踪已见 assistant(toolCalls) 的 toolCall id，
-	 * 遇到 ToolResponseMessage 时检查其 responses 的 id 是否都已被见过。
-	 * 完全孤儿的 ToolResponseMessage 被移除；部分孤儿时只保留已见 id 对应的 responses。
-	 *
-	 * @param compacted 压缩后的事件列表（可能含孤儿 toolResponse）
-	 * @return 过滤后的新列表，保证 ToolResponseMessage 都有对应 assistant(toolCalls)
+	 * @param compacted 压缩后的事件列表（可能含孤儿 toolCall 或 toolResponse）
+	 * @param archived 被归档的事件列表（用于拉回孤儿 assistant(toolCalls) 对应的 ToolResponse）
+	 * @return 过滤后的新列表，尽量保证 toolCall/toolResponse 成对
 	 */
-	public static List<MessageEvent> dropOrphanToolResponses(List<MessageEvent> compacted) {
+	public static List<MessageEvent> reconcileToolPairs(List<MessageEvent> compacted, List<MessageEvent> archived) {
+		// 1. 收集 compacted 里的 toolCall ids 与 response ids
 		Set<String> seenToolCallIds = new HashSet<>();
-		List<MessageEvent> filtered = new ArrayList<>(compacted.size());
+		Set<String> seenResponseIds = new HashSet<>();
 		for (MessageEvent event : compacted) {
 			if (event.getMessage() instanceof AssistantMessage am && am.hasToolCalls()) {
 				am.getToolCalls().forEach(tc -> seenToolCallIds.add(tc.id()));
-				filtered.add(event);
 			}
 			else if (event.getMessage() instanceof ToolResponseMessage trm) {
-				List<ToolResponseMessage.ToolResponse> valid = trm.getResponses().stream()
+				trm.getResponses().forEach(r -> seenResponseIds.add(r.id()));
+			}
+		}
+
+		// 2. 找出孤儿 toolCall ids：assistant(toolCalls) 在 compacted 但对应 ToolResponse 不在
+		Set<String> orphanToolCallIds = new HashSet<>();
+		for (String id : seenToolCallIds) {
+			if (!seenResponseIds.contains(id)) {
+				orphanToolCallIds.add(id);
+			}
+		}
+
+		// 3. 从 archived 拉回孤儿 assistant(toolCalls) 对应的 ToolResponse
+		Map<String, ToolResponseMessage.ToolResponse> reclaimedById = new HashMap<>();
+		if (!orphanToolCallIds.isEmpty()) {
+			for (MessageEvent event : archived) {
+				if (event.getMessage() instanceof ToolResponseMessage trm) {
+					for (ToolResponseMessage.ToolResponse r : trm.getResponses()) {
+						if (orphanToolCallIds.contains(r.id())) {
+							reclaimedById.put(r.id(), r);
+						}
+					}
+				}
+			}
+		}
+
+		// 4. 重建 compacted：遇到孤儿 assistant(toolCalls) 后插入拉回的 ToolResponse；
+		//    遇到孤儿 ToolResponse 则丢弃或重建
+		List<MessageEvent> filtered = new ArrayList<>(compacted.size() + reclaimedById.size());
+		for (MessageEvent event : compacted) {
+			if (event.getMessage() instanceof AssistantMessage am && am.hasToolCalls()) {
+				filtered.add(event);
+				// 检查是否有需要从 archived 拉回的 ToolResponse
+				List<ToolResponseMessage.ToolResponse> toReclaim = am.getToolCalls()
+					.stream()
+					.map(tc -> reclaimedById.get(tc.id()))
+					.filter(Objects::nonNull)
+					.collect(Collectors.toList());
+				if (!toReclaim.isEmpty()) {
+					// 紧插在 assistant(toolCalls) 之后，保证成对顺序
+					filtered.add(MessageEvent.builder()
+						.sessionId(event.getSessionId())
+						.timestamp(event.getTimestamp())
+						.branch(event.getBranch())
+						.message(ToolResponseMessage.builder().responses(toReclaim).build())
+						.metadata(event.getMetadata())
+						.build());
+				}
+				// open tool call（archived 也没有对应 ToolResponse）：保留 assistant 不动，
+				// 后续 ToolResponse 产生追加后自然成对
+			}
+			else if (event.getMessage() instanceof ToolResponseMessage trm) {
+				List<ToolResponseMessage.ToolResponse> valid = trm.getResponses()
+					.stream()
 					.filter(r -> seenToolCallIds.contains(r.id()))
 					.collect(Collectors.toList());
 				if (valid.isEmpty()) {
-					// 孤儿 toolResponse：对应的 assistant(toolCalls) 已被摘要/归档，丢弃
+					// 孤儿 toolResponse：对应的 assistant(toolCalls) 已被归档/摘要，丢弃
 					continue;
 				}
 				if (valid.size() < trm.getResponses().size()) {

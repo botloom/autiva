@@ -14,9 +14,9 @@
 >
     <center>
         <SplitPane fx:id="mainSplit" styleClass="index__split" dividerPositions="0.72">
-            <HBox styleClass="index__content-area" SplitPane.resizableWithParent="true">
+            <SplitPane fx:id="leftSplit" orientation="HORIZONTAL" styleClass="index__split index__content-area" SplitPane.resizableWithParent="true">
                 <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
-                <VBox HBox.hgrow="ALWAYS" styleClass="index__main-content" minWidth="480">
+                <VBox styleClass="index__main-content" minWidth="480" SplitPane.resizableWithParent="true">
                     <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
                     <VBox fx:id="homePageSlot" VBox.vgrow="ALWAYS"/>
                     <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
@@ -24,7 +24,7 @@
                     <fx:include source="view/SkillPage.fxml" fx:id="skillPage"/>
                     <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
                 </VBox>
-            </HBox>
+            </SplitPane>
             <VBox fx:id="editorPanelSlot" minWidth="480" prefWidth="640" visible="false" managed="false"/>
         </SplitPane>
     </center>

@@ -32,20 +32,19 @@
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.08), 20, 0, 0, 4);
 }
 
+/* TextArea 输入框：透明背景，Apple 风格排版 */
 .home-page__send-field {
     -fx-font-size: 14px;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-text-fill: #1d1d1f;
     -fx-background-color: transparent;
     -fx-background-radius: 20px;
     -fx-background-insets: 0;
     -fx-border-color: transparent;
     -fx-border-width: 0;
-    -fx-prompt-text-fill: #86868b;
-    -fx-text-fill: #333;
     -fx-padding: 8 60 0 16;
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
-    -fx-wrap-text: true;
 }
 
 .home-page__send-field .content {
@@ -55,10 +54,6 @@
     -fx-border-color: transparent;
     -fx-border-width: 0;
     -fx-padding: 0;
-}
-
-.home-page__send-field:focused {
-    -fx-background-color: transparent;
 }
 
 .home-page__send-field .scroll-pane {
@@ -343,76 +338,6 @@
     -fx-background-color: transparent;
     -fx-shape: none;
     -fx-padding: 0;
-}
-
-.home-page__file-tags-scroll {
-    -fx-background-color: transparent;
-    -fx-background-insets: 0;
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-    -fx-padding: 6 16 0 16;
-    -fx-max-height: 96;
-    -fx-pref-width: 600;
-    -fx-max-width: 1000;
-    -fx-min-width: 300;
-}
-
-.home-page__file-tags-scroll .viewport {
-    -fx-background-color: transparent;
-}
-
-.home-page__file-tags {
-    -fx-padding: 0;
-    -fx-hgap: 6;
-    -fx-vgap: 4;
-    -fx-pref-width: 568;
-}
-
-.home-page__file-tag {
-    -fx-background-color: #e8e8ed;
-    -fx-background-radius: 12;
-    -fx-padding: 3 4 3 8;
-    -fx-alignment: CENTER_LEFT;
-    -fx-spacing: 2;
-    -fx-cursor: default;
-}
-
-.home-page__file-tag:hover {
-    -fx-background-color: #dcdce3;
-}
-
-.home-page__file-tag-icon {
-    -fx-fit-width: 12;
-    -fx-fit-height: 12;
-}
-
-.home-page__file-tag-name {
-    -fx-font-size: 12px;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    -fx-text-fill: #333;
-    -fx-max-width: 180;
-}
-
-.home-page__file-tag-close {
-    -fx-background-color: transparent;
-    -fx-background-radius: 50%;
-    -fx-pref-width: 18;
-    -fx-pref-height: 18;
-    -fx-min-width: 18;
-    -fx-min-height: 18;
-    -fx-padding: 0;
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-    -fx-cursor: hand;
-    -fx-alignment: CENTER;
-    -fx-font-size: 11px;
-    -fx-text-fill: #86868b;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-.home-page__file-tag-close:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.1);
-    -fx-text-fill: #333;
 }
 
 .home-page__resize-handle {

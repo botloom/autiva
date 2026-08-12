@@ -5,10 +5,11 @@ import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.message.AssistantMessageCard;
+import cn.bitloom.node.AutoResizeTextArea;
+import cn.bitloom.node.message.InputTag;
 import cn.bitloom.node.message.MessageCard;
 import cn.bitloom.node.message.NodeMessageCard;
 import cn.bitloom.node.message.ToolMessageCard;
-import cn.bitloom.node.AutoResizeTextArea;
 import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.node.tool.TaskCard;
 import cn.bitloom.node.tool.TodoCard;
@@ -32,8 +33,7 @@ import javafx.scene.control.*;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
+import javafx.scene.input.Dragboard;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
@@ -45,9 +45,14 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.WeakHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 首页控制器抽象基类。
@@ -73,15 +78,22 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     @FXML
     protected Button canvasButton;
     @FXML
-    protected FlowPane fileTagsPane;
-    @FXML
-    protected ScrollPane fileTagsScroll;
-    @FXML
     protected VBox icon;
     @FXML
     protected ListView<MessageCard> chatListView;
 
-    protected final List<File> attachedFiles = new ArrayList<>();
+    /**
+     * 输入框中 tag 的文字标记格式：⟦📄展示文本⟧
+     * 用 Unicode 数学白方括号包裹，用户正常输入不会用到。
+     * 发送时用正则匹配标记，按顺序替换为 {@link #tags} 中对应的 value。
+     */
+    private static final String TAG_OPEN = "⟦";
+    private static final String TAG_CLOSE = "⟧";
+    private static final Pattern TAG_PATTERN = Pattern.compile("⟦[^⟧]*⟧");
+
+    /** 输入框中所有 tag 的实际值，顺序与文本中标记出现顺序一致 */
+    private final List<InputTag> tags = new ArrayList<>();
+
     /**
      * 历史消息加载提示卡片（包装为 NodeMessageCard 加入 messages 列表）
      */
@@ -95,6 +107,13 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     @Getter
     @Setter
     protected IndexController indexController;
+
+    /**
+     * 消息行缓存：每个 MessageCard 只构建一次行视图（wrapper + actionBar + row）。
+     * ListView 会高频调用 updateItem（滚动/布局/数据变更），若每次都重建会导致闪烁。
+     * 用 WeakHashMap 防内存泄漏：卡片从 messages 移除后即可被回收。
+     */
+    private final Map<MessageCard, HBox> messageRowCache = new WeakHashMap<>();
 
     protected AbstractHomePageController(ToolUIBridge toolUIBridge, WindowManager windowManager) {
         this.toolUIBridge = toolUIBridge;
@@ -114,10 +133,11 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.sendButton.setOnAction(event -> this.handleSendMessage());
         this.stopButton.setOnAction(event -> this.getViewModel().pauseGeneration());
 
-        // Ctrl+Enter 发送消息，Enter 换行
-        this.sendField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
-            if (event.getCode() == KeyCode.ENTER && !event.isShiftDown() && !event.isControlDown()) {
-                event.consume();
+        // Enter 发送消息（Shift+Enter 换行）
+        this.sendField.setPromptText("给呆芽发消息...");
+        this.sendField.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER && !e.isShiftDown()) {
+                e.consume();
                 this.handleSendMessage();
             }
         });
@@ -195,7 +215,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             this.getViewModel().prepareHistoricalMessages();
         }
 
-        // 注册对话框为拖拽目标（接收来自文件树/Diff 列表的文件拖拽）
+        // 注册对话框为拖拽目标（接收来自文件树/Diff 列表/文件编辑器的拖拽）
         this.setupDragDrop();
     }
 
@@ -232,7 +252,12 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     private void handleDragOver(DragEvent event) {
-        if (event.getGestureSource() != sendBox && event.getDragboard().hasFiles()) {
+        if (event.getGestureSource() == sendBox) {
+            event.consume();
+            return;
+        }
+        Dragboard db = event.getDragboard();
+        if (db.hasFiles() || db.hasString() || db.hasContent(InputTag.FILE_REF_FORMAT)) {
             event.acceptTransferModes(TransferMode.COPY);
         }
         event.consume();
@@ -240,11 +265,28 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
     private void handleDragDropped(DragEvent event) {
         boolean success = false;
-        if (event.getDragboard().hasFiles()) {
-            for (File file : event.getDragboard().getFiles()) {
-                addAttachedFile(file);
+        Dragboard db = event.getDragboard();
+        // 优先识别文件引用（来自文件编辑器选区拖拽），再识别文件，最后识别纯文本
+        if (db.hasContent(InputTag.FILE_REF_FORMAT)) {
+            Object raw = db.getContent(InputTag.FILE_REF_FORMAT);
+            if (raw instanceof String encoded) {
+                InputTag tag = InputTag.decodeFileRef(encoded);
+                if (tag != null) {
+                    insertTag(tag);
+                    success = true;
+                }
+            }
+        } else if (db.hasFiles()) {
+            for (File file : db.getFiles()) {
+                insertTag(InputTag.forFile(file));
             }
             success = true;
+        } else if (db.hasString()) {
+            String text = db.getString();
+            if (text != null && !text.isBlank()) {
+                insertTextAtCaret(text);
+                success = true;
+            }
         }
         event.setDropCompleted(success);
         event.consume();
@@ -252,9 +294,15 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
     /**
      * 为消息卡片组装行视图（card + actionBar + row 对齐）。
+     * 行视图按 card 缓存，避免 ListView 高频调用 updateItem 时反复重建导致闪烁。
      * 由 MessageListCell 在 updateItem 中调用。
      */
     private HBox buildMessageRow(MessageCard card) {
+        HBox cached = messageRowCache.get(card);
+        if (cached != null) {
+            return cached;
+        }
+
         card.maxWidthProperty().bind(
                 Bindings.max(100, chatListView.widthProperty().subtract(32).multiply(0.75))
         );
@@ -268,14 +316,22 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
         if (card instanceof AssistantMessageCard assistantCard) {
             assistantCard.setActionBar(actionBar);
-            assistantCard.setOnContentChanged(c -> {
-                // 标记 ListView 需要重新布局，使 scrollToBottom 中的 layout() 能基于最新 cell 高度计算滚动条范围
-                chatListView.requestLayout();
-                scrollToBottom();
-            });
+            assistantCard.setOnContentChanged(c -> onCardContentChanged());
         }
 
-        return createMessageRow(messageWrapper, card.getMessageType());
+        HBox row = createMessageRow(messageWrapper, card.getMessageType());
+        messageRowCache.put(card, row);
+        return row;
+    }
+
+    /**
+     * 卡片内容高度变化（流式增长 / 结束渲染 MD / 子智能体卡片展开）时统一触发重排：
+     * - requestLayout 让 VirtualFlow 重算 cell 偏移，避免下方卡片重叠；
+     * - 合并滚动到底部，避免每个 chunk 都做同步 layout 造成性能与闪烁。
+     */
+    private void onCardContentChanged() {
+        chatListView.requestLayout();
+        scrollToBottom();
     }
 
     /**
@@ -322,7 +378,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             );
         }
         if (node instanceof TaskCard taskCard) {
-            taskCard.setOnContentChanged(c -> scrollToBottom());
+            taskCard.setOnContentChanged(c -> onCardContentChanged());
         }
         this.getViewModel().getMessages().add(new NodeMessageCard(node));
     }
@@ -412,57 +468,106 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     protected void handleSendMessage() {
-        if (this.sendField.getText().isBlank() && this.attachedFiles.isEmpty()) {
+        String message = buildMessage();
+        if (message.isBlank()) {
             return;
         }
-        String text = this.sendField.getText();
         if (!this.chatListView.isVisible()) {
             this.animateToChatState();
         }
-        List<String> filePaths = this.attachedFiles.stream()
-                .map(File::getAbsolutePath)
-                .toList();
 
-        StringBuilder messageBuilder = new StringBuilder();
-        if (!filePaths.isEmpty()) {
-            for (String path : filePaths) {
-                messageBuilder.append("- ").append(path).append("\n");
-            }
-            messageBuilder.append("\n");
-        }
-        if (!text.isBlank()) {
-            messageBuilder.append(text);
-        }
-
-        this.getViewModel().addUserMessage(text);
-        this.getViewModel().sendMessage(messageBuilder.toString());
+        this.getViewModel().addUserMessage(message);
+        this.getViewModel().sendMessage(message);
         this.sendField.clear();
-        this.clearAttachedFiles();
+        this.tags.clear();
     }
 
     private void handleAddFile() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("选择文件");
         File selectedFile = fileChooser.showOpenDialog(this.sendBox.getScene().getWindow());
-        if (selectedFile != null && !this.attachedFiles.contains(selectedFile)) {
-            this.attachedFiles.add(selectedFile);
-            this.addFileTag(selectedFile);
-            this.updateFileTagsPaneVisibility();
+        if (selectedFile != null) {
+            appendFileToChat(selectedFile);
         }
     }
 
+    /**
+     * 将选中文本插入到输入框当前光标位置（编辑器面板右键"添加到对话框"调用）。
+     */
     public void appendTextToChat(String text) {
         if (text == null || text.isBlank()) {
             return;
         }
-        String current = sendField.getText();
-        if (current != null && !current.isEmpty()) {
-            sendField.setText(current + "\n" + text);
-        } else {
-            sendField.setText(text);
+        insertTextAtCaret(text);
+    }
+
+    /**
+     * 将文件以文字标记形式插入到输入框当前光标位置（拖拽文件或 + 按钮选文件）。
+     */
+    public void appendFileToChat(File file) {
+        if (file == null) {
+            return;
         }
+        insertTag(InputTag.forFile(file));
+    }
+
+    /**
+     * 将文件选中片段以文字标记形式插入到输入框当前光标位置（文件编辑器右键"添加到对话框"调用）。
+     */
+    public void appendFileRefToChat(Path filePath, int startLine, int endLine) {
+        if (filePath == null) {
+            return;
+        }
+        insertTag(InputTag.forFileRef(filePath, startLine, endLine));
+    }
+
+    /**
+     * 在光标位置插入 tag 文字标记：⟦📄展示文本⟧ + 空格。
+     * 同时记录到 {@link #tags} 列表，发送时按顺序替换为 value。
+     */
+    private void insertTag(InputTag tag) {
+        String marker = TAG_OPEN + "\uD83D\uDCC1" + tag.display() + TAG_CLOSE + " ";
+        int pos = sendField.getCaretPosition();
+        sendField.insertText(pos, marker);
+        sendField.positionCaret(pos + marker.length());
         sendField.requestFocus();
-        sendField.end();
+        tags.add(tag);
+    }
+
+    /**
+     * 在光标位置插入纯文本。
+     */
+    private void insertTextAtCaret(String text) {
+        int pos = sendField.getCaretPosition();
+        sendField.insertText(pos, text);
+        sendField.positionCaret(pos + text.length());
+        sendField.requestFocus();
+    }
+
+    /**
+     * 构建发送消息：把输入框中的 ⟦...⟧ 标记按顺序替换为 {@link #tags} 中对应的 value。
+     * 如果标记数量与 tags 不匹配，未匹配的标记保留原样。
+     */
+    private String buildMessage() {
+        String text = sendField.getText();
+        if (tags.isEmpty()) {
+            return text;
+        }
+        Matcher matcher = TAG_PATTERN.matcher(text);
+        StringBuilder sb = new StringBuilder();
+        int tagIdx = 0;
+        int last = 0;
+        while (matcher.find()) {
+            sb.append(text, last, matcher.start());
+            if (tagIdx < tags.size()) {
+                sb.append(tags.get(tagIdx++).value());
+            } else {
+                sb.append(matcher.group());
+            }
+            last = matcher.end();
+        }
+        sb.append(text, last, text.length());
+        return sb.toString();
     }
 
     /**
@@ -471,14 +576,6 @@ public abstract class AbstractHomePageController implements Initializable, Butto
      */
     public void refreshDiffReviewBarFromService() {
         // work 模式不支持 diff 审查条
-    }
-
-    public void addAttachedFile(File file) {
-        if (file != null && !this.attachedFiles.contains(file)) {
-            this.attachedFiles.add(file);
-            this.addFileTag(file);
-            this.updateFileTagsPaneVisibility();
-        }
     }
 
     private void handleOpenCanvas() {
@@ -497,50 +594,13 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.getViewModel().sendMessage(canvasContent);
     }
 
-    private void addFileTag(File file) {
-        HBox tag = new HBox();
-        tag.getStyleClass().add("home-page__file-tag");
-        tag.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        tag.setSpacing(2);
-
-        SvgImageView fileIcon = new SvgImageView();
-        fileIcon.setFitWidth(12);
-        fileIcon.setFitHeight(12);
-        fileIcon.setSvgPath("/cn/bitloom/images/file.svg");
-        fileIcon.getStyleClass().add("home-page__file-tag-icon");
-
-        Label nameLabel = new Label(file.getName());
-        nameLabel.getStyleClass().add("home-page__file-tag-name");
-
-        Button closeBtn = new Button("×");
-        closeBtn.getStyleClass().add("home-page__file-tag-close");
-        closeBtn.setOnAction(event -> {
-            this.attachedFiles.remove(file);
-            this.fileTagsPane.getChildren().remove(tag);
-            this.updateFileTagsPaneVisibility();
-        });
-
-        tag.getChildren().addAll(fileIcon, nameLabel, closeBtn);
-        this.fileTagsPane.getChildren().add(tag);
-    }
-
-    private void clearAttachedFiles() {
-        this.attachedFiles.clear();
-        this.fileTagsPane.getChildren().clear();
-        this.updateFileTagsPaneVisibility();
-    }
-
-    private void updateFileTagsPaneVisibility() {
-        boolean hasFiles = !this.attachedFiles.isEmpty();
-        this.fileTagsScroll.setVisible(hasFiles);
-        this.fileTagsScroll.setManaged(hasFiles);
-    }
-
     // ===== stick-to-bottom 跟随模式 =====
     // 用户向上滚动时停止自动跟随，滚回底部时恢复跟随。
     // 流式内容增加导致 vvalue 下降不会误判（只响应鼠标滚轮）。
     private boolean stickToBottom = true;
     private boolean scrollBarBound = false;
+    /** 合并滚动标志：同一 FX 脉冲内多次触发只执行一次 layout+scrollTo，避免逐 chunk 同步布局 */
+    private boolean scrollScheduled = false;
 
     private void setupStickToBottom() {
         // 鼠标滚轮向上滚动 → 停止跟随
@@ -574,7 +634,11 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
     private void scrollToBottom() {
         if (!stickToBottom) return;
+        // 同一脉冲内多次内容更新只调度一次，避免逐 chunk 同步 layout 造成卡顿/闪烁
+        if (scrollScheduled) return;
+        scrollScheduled = true;
         Platform.runLater(() -> {
+            scrollScheduled = false;
             int size = chatListView.getItems().size();
             if (size <= 0) return;
             // 先 layout 让 VirtualFlow 基于最新 cell 内容重新计算高度与滚动条 max
@@ -641,8 +705,8 @@ public abstract class AbstractHomePageController implements Initializable, Butto
      * 重置为新会话状态（通用逻辑 + 子类专有逻辑）
      */
     public void resetForNewSession() {
-        this.sendField.setText("");
-        this.clearAttachedFiles();
+        this.sendField.clear();
+        this.tags.clear();
         this.getViewModel().getMessages().clear();
         toolUIBridge.resetTodoCard();
         if (indexController != null && indexController.getEditorPanelController() != null) {

@@ -19,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
@@ -34,6 +33,8 @@ public class IndexController implements Initializable {
     private BorderPane rootContainer;
     @FXML
     private SplitPane mainSplit;
+    @FXML
+    private SplitPane leftSplit;
     @FXML
     @Getter
     private ButtonBarController buttonBarController;
@@ -62,6 +63,10 @@ public class IndexController implements Initializable {
     private final HomePageRouter homePageRouter;
 
     private double savedDividerPos = 0.72;
+    /** 侧边栏期望的像素宽度（窗口缩放时保持不变，仅拖拽改动） */
+    private double sidebarPixels = 250;
+    private boolean sidebarWidthListenerInstalled = false;
+    private javafx.scene.control.SplitPane.Divider trackedDivider = null;
 
     public IndexController(@Lazy Router router, HomePageRouter homePageRouter) {
         this.router = router;
@@ -85,6 +90,11 @@ public class IndexController implements Initializable {
 
         // 编辑器面板初始从 SplitPane 移除（默认隐藏）
         mainSplit.getItems().remove(editorPanelSlot);
+
+        // 侧边栏初始从内部 SplitPane 移除（配合 SideBarController 默认隐藏）
+        if (sideBarController != null && sideBarController.getSideBar() != null) {
+            leftSplit.getItems().remove(sideBarController.getSideBar());
+        }
 
         this.initializeButtonBar();
 
@@ -130,12 +140,89 @@ public class IndexController implements Initializable {
     }
 
     public void toggleSidebar() {
-        if (sideBarController != null) {
-            if (sideBarController.isSidebarVisible()) {
-                sideBarController.hide();
-            } else {
-                sideBarController.show();
+        if (sideBarController == null || sideBarController.getSideBar() == null) {
+            return;
+        }
+        var sideBar = sideBarController.getSideBar();
+        if (sideBarController.isSidebarVisible()) {
+            // 折叠：记录当前侧边栏像素宽度并从内部 SplitPane 移除
+            syncSidebarPixels();
+            leftSplit.getItems().remove(sideBar);
+            sideBarController.hide();
+        } else {
+            ensureSidebarVisible();
+        }
+    }
+
+    /**
+     * 确保侧边栏在内部 SplitPane 中可见，并按其像素宽度定位分隔线。
+     */
+    private void ensureSidebarVisible() {
+        if (sideBarController == null || sideBarController.getSideBar() == null) {
+            return;
+        }
+        var sideBar = sideBarController.getSideBar();
+        installSidebarListeners();
+        if (!leftSplit.getItems().contains(sideBar)) {
+            leftSplit.getItems().add(0, sideBar);
+            Platform.runLater(this::applySidebarPixels);
+        }
+        sideBarController.show();
+    }
+
+    /**
+     * 安装监听：容器宽度变化时维持侧边栏固定像素宽度；分隔线位置变化时记录用户拖拽后的像素宽度。
+     */
+    private void installSidebarListeners() {
+        if (!sidebarWidthListenerInstalled) {
+            sidebarWidthListenerInstalled = true;
+            leftSplit.widthProperty().addListener((obs, o, w) -> {
+                if (w != null && w.doubleValue() > 0 && leftSplit.getItems().size() >= 2) {
+                    applySidebarPixels();
+                }
+            });
+        }
+        trackSidebarDivider();
+    }
+
+    /**
+     * 跟随当前 divider 位置的绝对值变化，记录为侧边栏像素宽度。
+     */
+    private void trackSidebarDivider() {
+        if (leftSplit.getDividers().isEmpty()) {
+            return;
+        }
+        var divider = leftSplit.getDividers().get(0);
+        divider.positionProperty().addListener((obs, o, n) -> {
+            double w = leftSplit.getWidth();
+            if (w > 0 && n != null) {
+                sidebarPixels = n.doubleValue() * w;
             }
+        });
+    }
+
+    /**
+     * 按当前侧边栏期望像素宽度设置分隔线位置（使窗口缩放时侧边栏宽度不变）。
+     */
+    private void applySidebarPixels() {
+        if (leftSplit.getItems().size() < 2 || leftSplit.getDividers().isEmpty()) {
+            return;
+        }
+        double w = leftSplit.getWidth();
+        if (w <= 0) {
+            return;
+        }
+        double d = Math.min(0.95, sidebarPixels / w);
+        leftSplit.setDividerPosition(0, d);
+    }
+
+    /**
+     * 将当前分隔线位置同步为侧边栏像素宽度。
+     */
+    private void syncSidebarPixels() {
+        double w = leftSplit.getWidth();
+        if (!leftSplit.getDividers().isEmpty() && w > 0) {
+            sidebarPixels = leftSplit.getDividerPositions()[0] * w;
         }
     }
 
@@ -295,7 +382,7 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 将选中文本追加到对话框输入框（编辑器面板 → 对话框联动）
+     * 将选中文本以 tag 形式加入对话框输入框（编辑器面板 → 对话框联动）
      */
     public void addTextToChat(String text) {
         AbstractHomePageController home = getHomePageController();
@@ -305,12 +392,12 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 将文件添加到对话框附件（编辑器面板拖拽 → 对话框联动）
+     * 将文件选中片段以 tag 形式加入对话框输入框（文件编辑器 → 对话框联动）
      */
-    public void addFileToChat(File file) {
+    public void addFileRefToChat(Path filePath, int startLine, int endLine) {
         AbstractHomePageController home = getHomePageController();
         if (home != null) {
-            home.addAttachedFile(file);
+            home.appendFileRefToChat(filePath, startLine, endLine);
         }
     }
 

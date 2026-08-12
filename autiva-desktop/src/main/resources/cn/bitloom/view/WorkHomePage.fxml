@@ -30,14 +30,9 @@
           alignment="TOP_CENTER"
           prefWidth="600" maxWidth="1000" minWidth="300"
     >
-        <ScrollPane fx:id="fileTagsScroll" styleClass="home-page__file-tags-scroll"
-                    prefWidth="600" maxWidth="1000" minWidth="300"
-                    fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="NEVER"
-                    visible="false" managed="false">
-            <FlowPane fx:id="fileTagsPane" styleClass="home-page__file-tags"/>
-        </ScrollPane>
-        <AutoResizeTextArea fx:id="sendField" promptText="给呆芽发消息..." styleClass="home-page__send-field"
-                            maxWidth="1000" minWidth="300" prefWidth="600" wrapText="true"
+        <AutoResizeTextArea fx:id="sendField" styleClass="home-page__send-field"
+                            maxWidth="1000" minWidth="300" prefWidth="600"
+                            promptText="给呆芽发消息..."
                             VBox.vgrow="ALWAYS"/>
         <HBox alignment="BOTTOM_RIGHT" spacing="8" VBox.vgrow="NEVER">
             <Button fx:id="canvasButton" styleClass="home-page__icon-btn" prefWidth="37" prefHeight="37">

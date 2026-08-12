@@ -66,6 +66,10 @@ public class AssistantMessageCard extends MessageCard {
             if (!newVal && getContent() != null) {
                 renderMarkdown(getContent());
                 updateActionBarVisibility(true);
+                // MD 渲染后卡片高度可能变化，通知外部重排，避免与下方卡片重叠
+                if (onContentChanged != null) {
+                    onContentChanged.accept(getContent());
+                }
             }
         });
     }

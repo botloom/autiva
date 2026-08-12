@@ -10,7 +10,7 @@
 
 /* 主内容区域（ButtonBar + 页面） */
 .index__main-content {
-    -fx-background-color: transparent;
+    -fx-background-color: #ffffff;
     -fx-padding: 0;
 }
 

@@ -4,6 +4,7 @@ import cn.bitloom.agentic.tool.file.DiffService;
 import cn.bitloom.agentic.tool.file.FileDiff;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighter;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighterFactory;
+import cn.bitloom.node.message.InputTag;
 import cn.bitloom.node.terminal.JediTerminalView;
 import cn.bitloom.node.terminal.PtySession;
 import cn.bitloom.node.terminal.PtyTerminalService;
@@ -13,6 +14,9 @@ import javafx.application.Platform;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.flowless.VirtualizedScrollPane;
@@ -204,7 +208,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
             Platform.runLater(codeArea::requestFocus);
-            setupCodeAreaContextMenu(codeArea);
+            setupCodeAreaContextMenu(codeArea, filePath);
         } catch (IOException e) {
             log.warn("读取文件失败: {}", filePath, e);
             fileContent.getChildren().setAll(createErrorContent("读取文件失败: " + e.getMessage(), null));
@@ -370,8 +374,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
 
         container.getChildren().addAll(toolbar, splitPane);
 
-        setupCodeAreaContextMenu(leftArea);
-        setupCodeAreaContextMenu(rightArea);
+        setupCodeAreaContextMenu(leftArea, null);
+        setupCodeAreaContextMenu(rightArea, null);
     }
 
     private CodeArea buildDiffCodeArea(String text, List<Integer> lineNumbers, List<String> paragraphStyles, String filePath) {
@@ -467,16 +471,104 @@ public class CoderEditorPanelController extends EditorPanelController implements
         });
     }
 
-    private void setupCodeAreaContextMenu(CodeArea codeArea) {
+    private void setupCodeAreaContextMenu(CodeArea codeArea, Path filePath) {
         ContextMenu menu = new ContextMenu();
         MenuItem addToChatItem = new MenuItem("添加到对话框");
         addToChatItem.setOnAction(e -> {
             String selected = codeArea.getSelectedText();
-            if (selected != null && !selected.isBlank() && indexController != null) {
+            if (selected == null || selected.isBlank() || indexController == null) {
+                return;
+            }
+            if (filePath != null) {
+                // 文件编辑器选中内容 → 以文件引用 tag 加入对话框
+                int[] range = selectedLineRange(codeArea);
+                indexController.addFileRefToChat(filePath, range[0], range[1]);
+            } else {
+                // 终端/diff 等无从定位的选区 → 以文本片段 tag 加入对话框
                 indexController.addTextToChat(selected);
             }
         });
         menu.getItems().add(addToChatItem);
         codeArea.setContextMenu(menu);
+        // 同时为 CodeArea 注册拖拽源：选中后拖拽到对话框输入框生成 tag
+        setupCodeAreaDragSource(codeArea, filePath);
+    }
+
+    /**
+     * 为 CodeArea 注册拖拽源，支持将选中文本拖拽到对话框输入框。
+     * <ul>
+     *   <li>文件编辑器（filePath != null）：携带文件引用自定义 MIME</li>
+     *   <li>终端/diff（filePath == null）：携带纯文本</li>
+     * </ul>
+     *
+     * <p>交互保护：通过 addEventFilter 在鼠标按下时记录已有选区（IndexRange），
+     * 只在按下时已有选区的情形下启动 DnD，避免破坏"拖拽新建选择"的常规体验。
+     * 选区文本与行号均基于按下时记录的 IndexRange 计算，避免 CodeArea 内部
+     * 在鼠标按下后清空选区导致取值丢失。
+     */
+    private void setupCodeAreaDragSource(CodeArea codeArea, Path filePath) {
+        final IndexRange[] selectionOnPress = {null};
+        codeArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+            IndexRange sel = codeArea.getSelection();
+            selectionOnPress[0] = (sel != null && sel.getLength() > 0) ? sel : null;
+        });
+        codeArea.setOnDragDetected(event -> {
+            IndexRange sel = selectionOnPress[0];
+            if (sel == null) {
+                return;
+            }
+            String text = codeArea.getText();
+            int start = Math.min(sel.getStart(), text.length());
+            int end = Math.min(sel.getEnd(), text.length());
+            String selected = text.substring(start, end);
+            if (selected.isBlank()) {
+                return;
+            }
+            int[] range = lineRangeFor(text, start, end);
+            Dragboard db = codeArea.startDragAndDrop(TransferMode.COPY);
+            ClipboardContent content = new ClipboardContent();
+            if (filePath != null) {
+                content.put(InputTag.FILE_REF_FORMAT,
+                        InputTag.encodeFileRef(filePath, range[0], range[1]));
+                content.putString(selected);
+            } else {
+                content.putString(selected);
+            }
+            db.setContent(content);
+            event.consume();
+        });
+    }
+
+    /**
+     * 计算 CodeArea 当前选区对应的起始/结束行号（1-based）。
+     */
+    private int[] selectedLineRange(CodeArea codeArea) {
+        IndexRange selection = codeArea.getSelection();
+        return lineRangeFor(codeArea.getText(), selection.getStart(), selection.getEnd());
+    }
+
+    /**
+     * 根据文本和起止字符偏移计算行号（1-based）。
+     * 选区末尾若落在换行符上，忽略该换行符，避免结束行号多报 1。
+     */
+    private int[] lineRangeFor(String text, int rawStart, int rawEnd) {
+        int start = Math.min(rawStart, text.length());
+        int end = Math.min(rawEnd, text.length());
+        if (end > 0 && end <= text.length() && text.charAt(end - 1) == '\n') {
+            end--;
+        }
+        int startLine = charIndexToLine(text, start);
+        int endLine = charIndexToLine(text, end);
+        return new int[]{startLine, endLine};
+    }
+
+    private int charIndexToLine(String text, int pos) {
+        int line = 1;
+        for (int i = 0; i < pos; i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
     }
 }

@@ -1,6 +1,7 @@
 package cn.bitloom.node.diff;
 
 import cn.bitloom.agentic.tool.file.FileDiff;
+import cn.bitloom.node.FileIconResolver;
 import cn.bitloom.node.svg.SvgImageView;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Label;
@@ -19,7 +20,7 @@ import java.util.List;
  * 变更文件列表单元格。
  *
  * <p>富 ListCell 渲染：文件类型图标 + 文件名 + 相对目录 + 变更类型徽章（A/M/D）+ 行数统计（+N -M）。
- * 按扩展名显示对应类型的文件图标，与 FileTreeCell 中的图标解析逻辑保持一致。
+ * 图标解析委托 {@link FileIconResolver}，与 FileTreeCell 保持一致。
  *
  * <p>样式类：
  * <ul>
@@ -84,7 +85,7 @@ public class DiffListCell extends ListCell<FileDiff> {
         SvgImageView icon = new SvgImageView();
         icon.setFitWidth(ICON_SIZE);
         icon.setFitHeight(ICON_SIZE);
-        icon.setSvgPath(resolveIconPath(fileName));
+        icon.setSvgPath(FileIconResolver.resolveIconPath(fileName));
         icon.getStyleClass().add("diff-list-cell__icon");
 
         Label nameLabel = new Label(fileName);
@@ -112,29 +113,6 @@ public class DiffListCell extends ListCell<FileDiff> {
         HBox root = new HBox(icon, textBox, spacer, statsBox);
         root.getStyleClass().add("diff-list-cell");
         return root;
-    }
-
-    private String resolveIconPath(String fileName) {
-        String ext = extensionOf(fileName);
-        if (ext == null) {
-            return "/cn/bitloom/images/file.svg";
-        }
-        if (CODE_EXTS.contains(ext)) {
-            return "/cn/bitloom/images/file-code.svg";
-        }
-        if (DATA_EXTS.contains(ext)) {
-            return "/cn/bitloom/images/file-data.svg";
-        }
-        if (MD_EXTS.contains(ext)) {
-            return "/cn/bitloom/images/file-md.svg";
-        }
-        if (TEXT_EXTS.contains(ext)) {
-            return "/cn/bitloom/images/file-text.svg";
-        }
-        if (IMAGE_EXTS.contains(ext)) {
-            return "/cn/bitloom/images/file-image.svg";
-        }
-        return "/cn/bitloom/images/file.svg";
     }
 
     private static int[] computeStats(FileDiff diff) {
@@ -167,34 +145,4 @@ public class DiffListCell extends ListCell<FileDiff> {
         int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
         return slash >= 0 ? path.substring(0, slash) : "";
     }
-
-    private static String extensionOf(String fileName) {
-        int dot = fileName.lastIndexOf('.');
-        if (dot <= 0 || dot == fileName.length() - 1) {
-            return null;
-        }
-        return fileName.substring(dot + 1).toLowerCase();
-    }
-
-    // 与 FileTreeCell 保持一致的扩展名集合，供图标解析使用
-    private static final java.util.Set<String> CODE_EXTS = java.util.Set.of(
-            "java", "kt", "kts", "scala", "groovy", "gradle",
-            "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts",
-            "py", "pyw", "pyi",
-            "c", "cpp", "cc", "h", "hpp", "go", "rs", "rb", "php",
-            "swift", "m", "mm",
-            "sh", "bash", "zsh", "bat", "cmd", "ps1"
-    );
-    private static final java.util.Set<String> DATA_EXTS = java.util.Set.of(
-            "json", "json5", "geojson", "tsbuildinfo",
-            "xml", "fxml", "html", "htm", "xhtml", "svg",
-            "xsd", "xsl", "xslt", "dtd", "tld", "plist",
-            "yml", "yaml",
-            "properties", "ini", "conf", "cfg", "config", "env", "toml"
-    );
-    private static final java.util.Set<String> MD_EXTS = java.util.Set.of("md", "markdown", "mdx");
-    private static final java.util.Set<String> TEXT_EXTS = java.util.Set.of("txt", "log", "csv", "tsv");
-    private static final java.util.Set<String> IMAGE_EXTS = java.util.Set.of(
-            "png", "jpg", "jpeg", "gif", "bmp", "webp", "ico", "icns", "tiff", "tif"
-    );
 }
