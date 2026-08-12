@@ -47,8 +47,7 @@ public class AssistantMessageCard extends MessageCard {
         this.getStyleClass().add("chat-message");
         this.getStyleClass().add("chat-message--assistant");
 
-        // 预初始化流式容器，确保 card 在被加入 ListView 时有非零 prefHeight。
-        // 避免 VirtualFlow 缓存 0 高度导致后续 cell 渲染与滚动范围计算异常。
+        // 预初始化流式容器，确保 card 有非零 prefHeight。
         initStreamingContainer();
 
         // contentProperty 监听：流式期间由 flushStreamingText 直接管理，不经过此 listener。
@@ -197,8 +196,6 @@ public class AssistantMessageCard extends MessageCard {
             initStreamingContainer();
         }
         streamingText.setText(full);
-        // 请求卡片自身重布局（高度可能变化），确保 VirtualFlow 在下一 pulse 重算 cell 偏移
-        this.requestLayout();
         if (onContentChanged != null) {
             onContentChanged.accept(full);
         }
@@ -206,7 +203,7 @@ public class AssistantMessageCard extends MessageCard {
 
     /**
      * 预初始化流式容器（空内容），确保 card 拥有非零 prefHeight。
-     * 在构造函数中调用，避免被加入 ListView 时 VirtualFlow 缓存 0 高度。
+     * 在构造函数中调用，确保 card 有初始高度。
      */
     private void initStreamingContainer() {
         streamingContainer = new TextFlow();

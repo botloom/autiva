@@ -2,6 +2,8 @@ package cn.bitloom.node.project;
 
 import cn.bitloom.node.FileIconResolver;
 import cn.bitloom.node.svg.SvgImageView;
+import cn.bitloom.project.git.GitFileStatus;
+import cn.bitloom.project.git.ProjectStatusStore;
 import javafx.scene.Node;
 import javafx.scene.control.TreeCell;
 import javafx.scene.input.ClipboardContent;
@@ -20,11 +22,22 @@ import java.util.List;
  * 使用 SvgImageView 加载 SVG 图标，符合 Apple 设计规范。
  *
  * <p>图标解析委托 {@link FileIconResolver}，样式修饰类仍由本类根据扩展名添加。
+ * <p>Git 状态着色依赖外部设置的 {@link ProjectStatusStore}（全局共享状态），无则忽略。
  */
 @Slf4j
 public class FileTreeCell extends TreeCell<Path> {
 
     private static final double ICON_SIZE = 16;
+
+    /** 全局共享的 Git 状态存储，由 SideBarController 设置 */
+    private static ProjectStatusStore statusStore;
+
+    /**
+     * 设置全局 Git 状态存储（SideBarController 打开项目时注入）。
+     */
+    public static void setStatusStore(ProjectStatusStore store) {
+        statusStore = store;
+    }
 
     @Override
     protected void updateItem(Path item, boolean empty) {
@@ -36,7 +49,9 @@ public class FileTreeCell extends TreeCell<Path> {
             getStyleClass().removeAll(
                     "file-tree__folder", "file-tree__file",
                     "file-tree__file--code", "file-tree__file--data",
-                    "file-tree__file--md", "file-tree__file--text", "file-tree__file--image"
+                    "file-tree__file--md", "file-tree__file--text", "file-tree__file--image",
+                    "file-tree__file--git-added", "file-tree__file--git-modified",
+                    "file-tree__file--git-untracked", "file-tree__folder--git-changed"
             );
             setOnDragDetected(null);
             return;
@@ -81,10 +96,15 @@ public class FileTreeCell extends TreeCell<Path> {
         getStyleClass().removeAll(
                 "file-tree__folder", "file-tree__file",
                 "file-tree__file--code", "file-tree__file--data",
-                "file-tree__file--md", "file-tree__file--text", "file-tree__file--image"
+                "file-tree__file--md", "file-tree__file--text", "file-tree__file--image",
+                "file-tree__file--git-added", "file-tree__file--git-modified",
+                "file-tree__file--git-untracked", "file-tree__folder--git-changed"
         );
         if (Files.isDirectory(item)) {
             getStyleClass().add("file-tree__folder");
+            if (statusStore != null && statusStore.isDirChanged(item)) {
+                getStyleClass().add("file-tree__folder--git-changed");
+            }
             return;
         }
         getStyleClass().add("file-tree__file");
@@ -99,6 +119,16 @@ public class FileTreeCell extends TreeCell<Path> {
             getStyleClass().add("file-tree__file--text");
         } else if (iconPath.endsWith("file-image.svg")) {
             getStyleClass().add("file-tree__file--image");
+        }
+        if (statusStore != null) {
+            GitFileStatus st = statusStore.statusOf(item);
+            if (st != null) {
+                getStyleClass().add(switch (st) {
+                    case ADDED -> "file-tree__file--git-added";
+                    case MODIFIED -> "file-tree__file--git-modified";
+                    case UNTRACKED -> "file-tree__file--git-untracked";
+                });
+            }
         }
     }
 }

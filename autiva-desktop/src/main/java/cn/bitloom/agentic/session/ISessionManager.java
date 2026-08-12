@@ -22,9 +22,18 @@ public interface ISessionManager {
     List<AbstractEvent> getEvents(String sessionId, EventFilter filter);
 
     /**
-     * 善后被中断的 toolCalls：检查 events.jsonl 末尾，若最后一条事件是
-     * 含 toolCalls 的 assistant 消息（缺少对应 ToolResponseMessage），
-     * 为每个 toolCall 补一条虚拟 ToolResponse（content 标记被用户中断）。
+     * 将缓冲中的待处理事件刷盘到 events.jsonl。
+     * 刷盘前会为孤儿 assistant(toolCalls) 补虚拟 ToolResponse。
+     * 在每轮对话结束（appendEvent 检测到 finishReason=STOP 的 assistant）时自动调用，
+     * 也会在 pause/中断时由 finalizeInterruptedToolCalls 调用。
+     *
+     * @param sessionId 会话 ID
+     */
+    void flushPendingEvents(String sessionId);
+
+    /**
+     * 善后被中断的 toolCalls：将缓冲中的事件刷盘，刷盘前为孤儿 assistant(toolCalls)
+     * 补虚拟 ToolResponse（content 标记被用户中断）。
      * <p>
      * 这样保持历史成对完整，LLM 在下次调用时能感知"工具被用户中断"并自然续接，
      * 不会因不成对的 toolCalls 触发 400 报错。

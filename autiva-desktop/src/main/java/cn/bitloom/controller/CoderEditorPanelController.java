@@ -9,10 +9,14 @@ import cn.bitloom.node.terminal.JediTerminalView;
 import cn.bitloom.node.terminal.PtySession;
 import cn.bitloom.node.terminal.PtyTerminalService;
 import cn.bitloom.project.ProjectInfo;
+import cn.bitloom.project.git.GitFileStatus;
+import cn.bitloom.project.git.GitStatusService;
+import cn.bitloom.project.git.ProjectStatusStore;
 import cn.bitloom.vm.CodeHomePageViewModel;
 import javafx.application.Platform;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
@@ -22,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.Caret;
 import org.fxmisc.richtext.CodeArea;
-import org.fxmisc.richtext.LineNumberFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -32,7 +35,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.IntFunction;
 
 /**
  * Coder 模式编辑器面板控制器。
@@ -46,11 +52,18 @@ public class CoderEditorPanelController extends EditorPanelController implements
 
     private final PtyTerminalService ptyTerminalService;
     private final DiffService diffService;
+    private final ProjectStatusStore projectStatusStore;
+    private final GitStatusService gitStatusService;
+    private boolean refreshSubscribed = false;
 
     public CoderEditorPanelController(PtyTerminalService ptyTerminalService,
-                                      DiffService diffService) {
+                                      DiffService diffService,
+                                      ProjectStatusStore projectStatusStore,
+                                      GitStatusService gitStatusService) {
         this.ptyTerminalService = ptyTerminalService;
         this.diffService = diffService;
+        this.projectStatusStore = projectStatusStore;
+        this.gitStatusService = gitStatusService;
     }
 
     @Override
@@ -187,8 +200,16 @@ public class CoderEditorPanelController extends EditorPanelController implements
             CodeArea codeArea = new CodeArea();
             codeArea.setEditable(true);
             codeArea.setShowCaret(Caret.CaretVisibility.ON);
-            codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
+            // 行号处按 Git 改动着色：存入可变行状态引用，外部刷新时仅换引用并重绘
+            AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef =
+                    new AtomicReference<>(computeLineStatus(filePath));
+            tab.userData.put("lineStatus", lineStatusRef);
+            applyGitGutter(codeArea, lineStatusRef);
             codeArea.replaceText(content);
+            // 记录是否有未保存改动，外部变化时避免覆盖用户编辑
+            tab.userData.put("dirty", false);
+            codeArea.textProperty().addListener((obs, oldText, newText) ->
+                    tab.userData.put("dirty", !content.equals(newText)));
             codeArea.getStyleClass().add("editor-panel__code-area");
             SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(filePath);
             highlighter.apply(codeArea, content);
@@ -198,6 +219,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
                 if (e.isControlDown() && e.getCode() == javafx.scene.input.KeyCode.S) {
                     e.consume();
                     saveFileContent(filePath, codeArea.getText());
+                    tab.userData.put("dirty", false);
                 }
             });
 
@@ -207,8 +229,12 @@ public class CoderEditorPanelController extends EditorPanelController implements
             fileContent.getChildren().setAll(scrollPane);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
+            // 依据项目 Git 状态着色（tab 标题 + 代码区状态色）
+            applyGitStyleToTab(tab, filePath);
+
             Platform.runLater(codeArea::requestFocus);
             setupCodeAreaContextMenu(codeArea, filePath);
+            subscribeStatusRefresh();
         } catch (IOException e) {
             log.warn("读取文件失败: {}", filePath, e);
             fileContent.getChildren().setAll(createErrorContent("读取文件失败: " + e.getMessage(), null));
@@ -216,6 +242,113 @@ public class CoderEditorPanelController extends EditorPanelController implements
             log.error("显示文件内容失败: {}", filePath, e);
             fileContent.getChildren().setAll(createErrorContent("显示文件内容失败: " + e.getMessage(), null));
         }
+    }
+
+    /**
+     * 计算文件相对 HEAD 的行级改动映射（0-based 行号 → Git 状态），供行号处着色。
+     * 项目根取自共享状态存储（可能为 null/非 Git，此时返回空 map，图标不标色）。
+     */
+    private Map<Integer, GitFileStatus> computeLineStatus(Path filePath) {
+        Path root = projectStatusStore.getProjectRoot();
+        if (root == null) {
+            return Map.of();
+        }
+        Map<Integer, GitFileStatus> map = gitStatusService.diffLineStatus(root, filePath);
+        return map.isEmpty() ? Map.of() : map;
+    }
+
+    /**
+     * 设置代码区行号工厂：在标准行号基础上，为 Git 改动行追加状态修饰类。
+     * 行状态引用可被外部替换后通过重设工厂刷新（RichTextFX 重设工厂会重建可见行图形）。
+     */
+    private void applyGitGutter(CodeArea codeArea, AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef) {
+        IntFunction<Node> factory = idx -> {
+            Label label = new Label(String.valueOf(idx + 1));
+            label.getStyleClass().addAll("lineno", "git-lineno");
+            GitFileStatus st = lineStatusRef.get().get(idx);
+            // 新增/未跟踪行 → 绿色；修改行 → 蓝色；删除做锚定的行 → 蓝色
+            if (st == GitFileStatus.ADDED) {
+                label.getStyleClass().add("git-lineno--added");
+            } else if (st == GitFileStatus.MODIFIED) {
+                label.getStyleClass().add("git-lineno--modified");
+            }
+            label.setAlignment(Pos.CENTER_RIGHT);
+            return label;
+        };
+        codeArea.setParagraphGraphicFactory(factory);
+    }
+
+    /**
+     * 根据项目 Git 状态为已打开的文件 tab 标题着色，并在状态变化时同步刷新。
+     * 代码区改为按行（行号处）着色，由 {@link #applyGitGutter} 处理。
+     */
+    private void applyGitStyleToTab(EditorTab tab, Path filePath) {
+        if (tab == null || tab.viewType != ViewType.FILE) {
+            return;
+        }
+        GitFileStatus st = projectStatusStore.statusOf(filePath);
+        // 状态样式类名与变色（仅标题）
+        String gitClass = switch (st == null ? null : st) {
+            case ADDED -> "editor-panel__tab--git-added";
+            case MODIFIED -> "editor-panel__tab--git-modified";
+            case UNTRACKED -> "editor-panel__tab--git-untracked";
+            default -> null;
+        };
+        tab.header.getStyleClass().removeAll(
+                "editor-panel__tab--git-added", "editor-panel__tab--git-modified", "editor-panel__tab--git-untracked");
+        if (gitClass != null) {
+            tab.header.getStyleClass().add(gitClass);
+        }
+    }
+
+    /**
+     * 订阅 Git 状态刷新信号：对已打开文件 tab 重新着色（并重读无未保存改动的文件内容）。
+     */
+    private void subscribeStatusRefresh() {
+        if (refreshSubscribed) {
+            return;
+        }
+        refreshSubscribed = true;
+        projectStatusStore.refreshSignal.addListener((obs, oldVal, newVal) ->
+                Platform.runLater(() -> {
+                    List<EditorTab> fileTabs = tabs.stream()
+                            .filter(t -> t.viewType == ViewType.FILE && t.userData.get("path") != null)
+                            .toList();
+                    for (EditorTab tab : fileTabs) {
+                        Path p = Path.of((String) tab.userData.get("path"));
+                        // 无未保存改动时重读文件内容，确保随外部变化更新
+                        if (Boolean.FALSE.equals(tab.userData.get("dirty")) && Files.isRegularFile(p)) {
+                            // 重新计算行级改动并更新行号着色引用
+                            if (tab.userData.get("lineStatus") instanceof AtomicReference<?> ref) {
+                                @SuppressWarnings("unchecked")
+                                AtomicReference<Map<Integer, GitFileStatus>> lineRef =
+                                        (AtomicReference<Map<Integer, GitFileStatus>>) ref;
+                                lineRef.set(computeLineStatus(p));
+                            }
+                            try {
+                                String fresh = Files.readString(p);
+                                if (tab.content instanceof VBox vbox) {
+                                    vbox.lookupAll(".editor-panel__code-area").forEach(n -> {
+                                        if (n instanceof CodeArea ca) {
+                                            if (tab.userData.get("lineStatus") instanceof AtomicReference<?> lineRef) {
+                                                @SuppressWarnings("unchecked")
+                                                AtomicReference<Map<Integer, GitFileStatus>> lr =
+                                                        (AtomicReference<Map<Integer, GitFileStatus>>) lineRef;
+                                                applyGitGutter(ca, lr);
+                                            }
+                                            if (!ca.getText().equals(fresh)) {
+                                                ca.replaceText(fresh);
+                                            }
+                                        }
+                                    });
+                                }
+                            } catch (IOException e) {
+                                log.warn("重新读取文件失败: {}", p, e);
+                            }
+                        }
+                        applyGitStyleToTab(tab, p);
+                    }
+                }));
     }
 
     private void saveFileContent(Path filePath, String content) {

@@ -426,3 +426,47 @@
     -fx-text-fill: #1d1d1f;
 }
 
+/* ===== 目录树 Git 状态着色（须置于文件类型类之后以覆盖字色） ===== */
+
+/* 新增文件 - 绿色 */
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--git-added {
+    -fx-text-fill: #1a9e4b;
+}
+
+/* 修改文件 - 蓝色 */
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--git-modified {
+    -fx-text-fill: #0071e3;
+}
+
+/* 未跟踪文件 - 红色 */
+.sidebar__tree-container .tree-view .tree-cell.file-tree__file--git-untracked {
+    -fx-text-fill: #ff3b30;
+}
+
+/* 含改动的目录 - 橙色强调 */
+.sidebar__tree-container .tree-view .tree-cell.file-tree__folder--git-changed {
+    -fx-text-fill: #ff9500;
+    -fx-font-weight: 600;
+}
+
+/* ===== 选中时保留 Git 状态着色（覆盖 :selected 的蓝字字色） ===== */
+.sidebar__tree-container .tree-view .tree-cell:selected.file-tree__file--git-added {
+    -fx-text-fill: #1a9e4b;
+}
+.sidebar__tree-container .tree-view .tree-cell:selected.file-tree__file--git-modified {
+    -fx-text-fill: #0071e3;
+}
+.sidebar__tree-container .tree-view .tree-cell:selected.file-tree__file--git-untracked {
+    -fx-text-fill: #ff3b30;
+}
+.sidebar__tree-container .tree-view .tree-cell:selected.file-tree__folder--git-changed {
+    -fx-text-fill: #ff9500;
+    -fx-font-weight: 600;
+}
+
+/* 选中时普通文件夹保留默认深色（覆盖 :selected 的蓝字字色） */
+.sidebar__tree-container .tree-view .tree-cell:selected.file-tree__folder {
+    -fx-text-fill: #1d1d1f;
+    -fx-font-weight: 600;
+}
+

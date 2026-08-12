@@ -12,6 +12,9 @@ import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.project.FileTreeService;
 import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.project.ProjectRegistry;
+import cn.bitloom.project.git.GitStatusService;
+import cn.bitloom.project.git.ProjectFileWatcherService;
+import cn.bitloom.project.git.ProjectStatusStore;
 import cn.bitloom.router.RouteConfig;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.AbstractHomePageViewModel;
@@ -52,6 +55,14 @@ public class SideBarController implements Initializable, PageHolder {
     private final FileSystemSessionManager fileSystemSessionManager;
     private final ProjectRegistry projectRegistry;
     private final FileTreeService fileTreeService;
+    private final ProjectStatusStore projectStatusStore;
+    private final GitStatusService gitStatusService;
+    private final ProjectFileWatcherService projectFileWatcherService;
+    private Path watchedProjectPath = null;
+    private TreeView<Path> currentTreeView = null;
+    /** 已构建的目录树缓存（切回会话列表后再次进入时复用，保留展开/选中状态） */
+    private TreeView<Path> cachedTreeView = null;
+    private String cachedTreeProjectId = null;
 
     @FXML
     @Getter
@@ -367,7 +378,42 @@ public class SideBarController implements Initializable, PageHolder {
      * 无单独返回按钮：再次点击头部目录树按钮（激活态）即可切回会话列表。
      */
     private void showProjectTree(ProjectInfo project) {
+        Path projectPath = Paths.get(project.path());
+        this.watchedProjectPath = projectPath.toAbsolutePath().normalize();
+
+        TreeView<Path> treeView;
+        if (cachedTreeView != null && cachedTreeProjectId != null && cachedTreeProjectId.equals(project.id())) {
+            // 复用已构建的目录树，保留之前展开/选中的节点状态
+            treeView = cachedTreeView;
+        } else {
+            treeView = buildNewTreeView();
+            cachedTreeView = treeView;
+            cachedTreeProjectId = project.id();
+        }
+        this.currentTreeView = treeView;
+
+        // 启动文件监听，文件变化时自动刷新 Git 状态与目录树/文件视图
+        projectFileWatcherService.watch(projectPath);
+        // 刷新 Git 状态并注入树着色
+        projectStatusStore.update(projectPath, gitStatusService.queryStatusMap(projectPath));
+
+        // 顶部头部：与项目卡片 header 样式完全一致（文件夹图标 + 项目名 + 悬浮按钮）
+        HBox treeHeader = createProjectHeader(project, true);
+
+        // 目录树容器：顶部头部 + 下方目录树
+        VBox treeContainer = new VBox(treeHeader, treeView);
+        treeContainer.getStyleClass().add("sidebar__tree-container");
+        VBox.setVgrow(treeView, Priority.ALWAYS);
+
+        // 目录树视图需要撑满 ScrollPane 高度
+        historyScroll.setFitToHeight(true);
+        historyScroll.setContent(treeContainer);
+    }
+
+    /** 新建一棵懒加载目录树并挂接 Git 刷新信号监听。 */
+    private TreeView<Path> buildNewTreeView() {
         TreeView<Path> treeView = new TreeView<>();
+        FileTreeCell.setStatusStore(projectStatusStore);
         treeView.setCellFactory(t -> new FileTreeCell());
         treeView.setShowRoot(false);
         // 双击文件在右侧编辑器面板展示内容
@@ -381,24 +427,107 @@ public class SideBarController implements Initializable, PageHolder {
             }
         });
         try {
-            Path projectPath = Paths.get(project.path());
-            TreeItem<Path> root = fileTreeService.buildFileTree(projectPath);
+            TreeItem<Path> root = fileTreeService.buildFileTree(watchedProjectPath);
             treeView.setRoot(root);
         } catch (Exception e) {
-            log.error("构建侧边栏目录树失败: {}", project.path(), e);
+            log.error("构建侧边栏目录树失败: {}", watchedProjectPath, e);
         }
+        // 监听 Git 状态刷新信号：重建目录树以反映新增/删除/修改（仅在树可见时）
+        projectStatusStore.refreshSignal.addListener((obs, oldVal, newVal) -> {
+            if (watchedProjectPath == null || currentTreeView == null) {
+                return;
+            }
+            Platform.runLater(this::refreshProjectTree);
+        });
+        return treeView;
+    }
 
-        // 顶部头部：与项目卡片 header 样式完全一致（文件夹图标 + 项目名 + 悬浮按钮）
-        HBox treeHeader = createProjectHeader(project, true);
+    /**
+     * 依据当前 Git 状态重建目录树，使新增/删除/修改的文件立即反映并正确着色。
+     */
+    private void refreshProjectTree() {
+        if (watchedProjectPath == null || currentTreeView == null) {
+            return;
+        }
+        try {
+            // 记录刷新前已展开节点的绝对路径，重建后恢复展开状态
+            Set<Path> expandedPaths = new HashSet<>();
+            collectExpandedPaths(currentTreeView.getRoot(), expandedPaths);
 
-        // 目录树容器：顶部头部 + 下方目录树
-        VBox treeContainer = new VBox(treeHeader, treeView);
-        treeContainer.getStyleClass().add("sidebar__tree-container");
-        VBox.setVgrow(treeView, Priority.ALWAYS);
+            Path selectedValue = null;
+            TreeItem<Path> selected = currentTreeView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                selectedValue = selected.getValue();
+            }
+            TreeItem<Path> newRoot = fileTreeService.buildFileTree(watchedProjectPath);
+            currentTreeView.setRoot(newRoot);
+            // 恢复展开状态（懒加载节点 setExpanded(true) 会触发逐层加载）
+            expandPaths(newRoot, expandedPaths);
+            // 恢复选中：在已加载的树节点中查找对应路径
+            if (selectedValue != null) {
+                TreeItem<Path> target = findTreeItem(newRoot, selectedValue.toAbsolutePath().normalize());
+                if (target != null) {
+                    currentTreeView.getSelectionModel().select(target);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("刷新目录树失败: {}", watchedProjectPath, e);
+        }
+    }
 
-        // 目录树视图需要撑满 ScrollPane 高度
-        historyScroll.setFitToHeight(true);
-        historyScroll.setContent(treeContainer);
+    /** 递归收集当前树中所有已展开节点的绝对路径。 */
+    private void collectExpandedPaths(TreeItem<Path> node, Set<Path> acc) {
+        if (node == null || node.getValue() == null) {
+            return;
+        }
+        if (node.isExpanded()) {
+            acc.add(node.getValue().toAbsolutePath().normalize());
+        }
+        for (TreeItem<Path> child : node.getChildren()) {
+            collectExpandedPaths(child, acc);
+        }
+    }
+
+    /**
+     * 在重建后的树中逐层恢复展开状态。
+     * 惰性加载节点须沿路径逐级定位并 setExpanded(true)（触发子层加载），
+     * 以保证深层节点也能被重新展开。
+     */
+    private void expandPaths(TreeItem<Path> node, Set<Path> allExpanded) {
+        if (node == null || node.getValue() == null) {
+            return;
+        }
+        Path abs = node.getValue().toAbsolutePath().normalize();
+        if (allExpanded.contains(abs)) {
+            node.setExpanded(true);
+        }
+        for (TreeItem<Path> child : node.getChildren()) {
+            expandPaths(child, allExpanded);
+        }
+    }
+
+    /** 在树节点中递归查找指定绝对路径的 TreeItem（仅覆盖已加载节点）。 */
+    private TreeItem<Path> findTreeItem(TreeItem<Path> node, Path absTarget) {
+        if (node == null || node.getValue() == null) {
+            return null;
+        }
+        if (node.getValue().toAbsolutePath().normalize().equals(absTarget)) {
+            return node;
+        }
+        for (TreeItem<Path> child : node.getChildren()) {
+            TreeItem<Path> hit = findTreeItem(child, absTarget);
+            if (hit != null) {
+                return hit;
+            }
+        }
+        return null;
+    }
+
+    /** 取消当前 Git 状态监听与已展开目录树（切回会话列表时调用） */
+    private void detachProjectTree() {
+        projectFileWatcherService.stop();
+        currentTreeView = null;
+        watchedProjectPath = null;
     }
 
     /**
@@ -484,7 +613,7 @@ public class SideBarController implements Initializable, PageHolder {
      */
     private void showHistoryList() {
         activeTreeProject = null;
-
+        detachProjectTree();
         historyScroll.setFitToHeight(false);
         historyScroll.setContent(historyList);
     }

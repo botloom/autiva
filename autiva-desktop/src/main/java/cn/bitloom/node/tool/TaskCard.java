@@ -254,7 +254,6 @@ public class TaskCard extends VBox {
         textUpdateScheduled = false;
         String full = streamBuffer.toString();
         streamingText.setText(full);
-        this.requestLayout();
         notifyContentChanged();
     }
 
@@ -328,6 +327,7 @@ public class TaskCard extends VBox {
         }
         body.setVisible(!expanded);
         body.setManaged(!expanded);
+        notifyContentChanged();
     }
 
     private void startPulseAnimation() {

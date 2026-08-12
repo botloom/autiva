@@ -18,7 +18,7 @@
         <SvgImageView fitWidth="120" fitHeight="120" svgPath="/cn/bitloom/images/icon.svg"/>
     </VBox>
 
-    <ListView fx:id="chatListView"
+    <VBox fx:id="chatListContainer"
               visible="false" managed="false"
               maxWidth="1000" prefWidth="600" minWidth="300"
               VBox.vgrow="ALWAYS"

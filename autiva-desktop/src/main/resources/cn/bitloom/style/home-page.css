@@ -7,12 +7,6 @@
     -fx-alignment: center;
 }
 
-.home-page__chat-scroll-pane {
-    -fx-background-color: #ffffff;
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-}
-
 .home-page__send-box {
     -fx-background-color: #f5f5f7;
     -fx-background-radius: 25px;
@@ -353,55 +347,7 @@
     -fx-background-radius: 3;
 }
 
-.chat-scroll-pane {
-    -fx-background-color: #ffffff;
-    -fx-padding: 0;
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-}
-
-.chat-scroll-pane > .viewport {
-    -fx-background-color: #ffffff;
-}
-
-.chat-scroll-pane > .scroll-bar:vertical {
-    -fx-background-color: transparent;
-    -fx-pref-width: 6;
-}
-
-.chat-scroll-pane > .scroll-bar:vertical .thumb {
-    -fx-background-color: rgba(0, 0, 0, 0.2);
-    -fx-background-radius: 3;
-}
-
-.chat-scroll-pane > .scroll-bar:vertical .thumb:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.35);
-}
-
-.chat-scroll-pane > .scroll-bar:vertical .track {
-    -fx-background-color: transparent;
-}
-
-.chat-scroll-pane > .scroll-bar:vertical .increment-button,
-.chat-scroll-pane > .scroll-bar:vertical .decrement-button {
-    -fx-background-color: transparent;
-    -fx-padding: 0;
-}
-
-.chat-scroll-pane > .scroll-bar:vertical .increment-arrow,
-.chat-scroll-pane > .scroll-bar:vertical .decrement-arrow {
-    -fx-background-color: transparent;
-    -fx-shape: "";
-    -fx-padding: 0;
-}
-
-.chat-container {
-    -fx-padding: 16;
-    -fx-spacing: 12;
-    -fx-background-color: #ffffff;
-}
-
-/* ===== 消息区 ListView（替代 ScrollPane + VBox） ===== */
+/* ===== 消息区（Flowless VirtualizedScrollPane） ===== */
 .chat-list-view {
     -fx-background-color: #ffffff;
     -fx-padding: 0;
@@ -409,51 +355,45 @@
     -fx-border-width: 0;
 }
 
-.chat-list-view > .virtual-flow > .scroll-bar:vertical {
+/* Flowless cell 容器：提供消息间间距 */
+.chat-list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 6 16;
+}
+
+/* Flowless 的 ScrollBar 是 VirtualizedScrollPane 的直接子节点，用后代选择器 */
+.chat-list-view .scroll-bar:vertical {
     -fx-background-color: transparent;
     -fx-pref-width: 6;
 }
 
-.chat-list-view > .virtual-flow > .scroll-bar:vertical .thumb {
+.chat-list-view .scroll-bar:vertical .thumb {
     -fx-background-color: rgba(0, 0, 0, 0.2);
     -fx-background-radius: 3;
 }
 
-.chat-list-view > .virtual-flow > .scroll-bar:vertical .thumb:hover {
+.chat-list-view .scroll-bar:vertical .thumb:hover {
     -fx-background-color: rgba(0, 0, 0, 0.35);
 }
 
-.chat-list-view > .virtual-flow > .scroll-bar:vertical .track {
+.chat-list-view .scroll-bar:vertical .track {
     -fx-background-color: transparent;
 }
 
-.chat-list-view > .virtual-flow > .scroll-bar:vertical .increment-button,
-.chat-list-view > .virtual-flow > .scroll-bar:vertical .decrement-button {
+.chat-list-view .scroll-bar:vertical .increment-button,
+.chat-list-view .scroll-bar:vertical .decrement-button {
     -fx-background-color: transparent;
     -fx-padding: 0;
 }
 
-.chat-list-view > .virtual-flow > .scroll-bar:vertical .increment-arrow,
-.chat-list-view > .virtual-flow > .scroll-bar:vertical .decrement-arrow {
+.chat-list-view .scroll-bar:vertical .increment-arrow,
+.chat-list-view .scroll-bar:vertical .decrement-arrow {
     -fx-background-color: transparent;
     -fx-shape: "";
     -fx-padding: 0;
 }
 
-.chat-list-view .list-cell {
-    -fx-background-color: transparent;
-    -fx-padding: 6 16;
-    -fx-spacing: 0;
-}
-
-.chat-list-view .list-cell:empty {
-    -fx-padding: 0;
-    -fx-min-height: 0;
-    -fx-pref-height: 0;
-}
-
 .chat-row {
-    -fx-alignment: center-left;
     -fx-padding: 0;
     -fx-spacing: 0;
 }

@@ -12,7 +12,6 @@ import cn.bitloom.agentic.session.compaction.CompactionRequest;
 import cn.bitloom.agentic.session.compaction.CompactionResult;
 import cn.bitloom.agentic.session.compaction.CompactionStrategy;
 import cn.bitloom.agentic.session.compaction.CompactionTrigger;
-import cn.bitloom.agentic.session.compaction.CompactionUtils;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -23,11 +22,13 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -38,6 +39,9 @@ public class FileSystemSessionManager implements ISessionManager {
 
     /** per-session 可重入锁，保证同一 session 的事件串行处理 */
     private final ConcurrentHashMap<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
+
+    /** 每轮消息缓冲：sessionId → 待刷盘的事件列表 */
+    private final Map<String, CopyOnWriteArrayList<AbstractEvent>> pendingEvents = new ConcurrentHashMap<>();
 
     @Override
     public <T> T withLock(String sessionId, Supplier<T> action) {
@@ -162,76 +166,90 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
-     * 直接将事件以一行 JSON 追加到 events.jsonl 文件。
-     * 无内存缓冲：写入即落盘，进程崩溃不丢数据，中断时无需 flush 善后。
+     * 将事件写入内存缓冲，而非直接落盘。
+     * 当检测到本轮对话结束（追加了 finishReason=STOP 的 assistant 消息）时自动刷盘。
+     * 这样保证文件中的 turn 都是完整的，压缩不会遇到孤儿 toolCall。
      */
     @Override
     public void appendEvent(AbstractEvent event) {
         String sessionId = event.getSessionId();
-        try {
-            Path eventsFile = AppConstants.Session.eventsFile(sessionId);
-            Files.createDirectories(eventsFile.getParent());
-            String line = JsonUtils.toJson(event) + "\n";
-            Files.writeString(eventsFile, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            log.error("追加事件失败: sessionId={}, eventType={}", sessionId, event.getEventType(), e);
-            throw StorageException.writeError("events-append-" + sessionId, e);
+        if (sessionId == null) return;
+
+        CopyOnWriteArrayList<AbstractEvent> buffer = pendingEvents
+                .computeIfAbsent(sessionId, k -> new CopyOnWriteArrayList<>());
+        buffer.add(event);
+
+        // 自动刷盘：追加了 finishReason=STOP 的 assistant 消息 → 本轮对话结束
+        // synthetic 消息不触发（由 compact 直接写文件，不经过 appendEvent 产生 synthetic）
+        if (event instanceof MessageEvent me
+                && me.isAssistantMessage()
+                && "STOP".equals(me.getFinishReason())
+                && !me.isSynthetic()) {
+            flushPendingEvents(sessionId);
         }
     }
 
     /**
-     * 善后被中断的 toolCalls：检查 events.jsonl 末尾，若最后一条事件是
-     * 含 toolCalls 的 assistant 消息（缺少对应 ToolResponseMessage），
-     * 为每个 toolCall 补一条虚拟 ToolResponse（content 标记被用户中断）。
+     * 将缓冲中的待处理事件刷盘到 events.jsonl。
+     * 刷盘前调用 fixOrphanToolCalls 为孤儿 assistant(toolCalls) 补虚拟 ToolResponse。
+     */
+    @Override
+    public void flushPendingEvents(String sessionId) {
+        List<AbstractEvent> snapshot = pendingEvents.remove(sessionId);
+        if (snapshot == null || snapshot.isEmpty()) return;
+
+        // 孤儿 toolCall 修复：为缺少 ToolResponse 的 assistant(toolCalls) 补虚拟响应
+        List<AbstractEvent> toWrite = fixOrphanToolCalls(sessionId, snapshot);
+
+        Path eventsFile = AppConstants.Session.eventsFile(sessionId);
+        try {
+            Files.createDirectories(eventsFile.getParent());
+            StringBuilder sb = new StringBuilder();
+            for (AbstractEvent e : toWrite) {
+                sb.append(JsonUtils.toJson(e)).append("\n");
+            }
+            Files.writeString(eventsFile, sb.toString(),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            log.error("刷盘待处理事件失败: sessionId={}", sessionId, e);
+        }
+    }
+
+    /**
+     * 孤儿 toolCall 修复：为缓冲中缺少对应 ToolResponse 的 assistant(toolCalls) 补虚拟 ToolResponse。
+     * 所有孤儿处理逻辑收敛在此方法，CompactionUtils 不再包含任何孤儿处理。
+     */
+    private List<AbstractEvent> fixOrphanToolCalls(String sessionId, List<AbstractEvent> events) {
+        Set<String> respondedIds = new HashSet<>();
+        for (AbstractEvent e : events) {
+            if (e instanceof MessageEvent me && me.isToolResponse()) {
+                me.getResponses().forEach(r -> respondedIds.add(r.id()));
+            }
+        }
+        List<AbstractEvent> result = new ArrayList<>(events.size());
+        for (AbstractEvent e : events) {
+            result.add(e);
+            if (e instanceof MessageEvent me && me.isAssistantMessage() && me.hasToolCalls()) {
+                List<MessageEvent.ToolResponseInfo> orphans = me.getToolCalls().stream()
+                        .filter(tc -> !respondedIds.contains(tc.id()))
+                        .map(tc -> new MessageEvent.ToolResponseInfo(
+                                tc.id(), tc.name(), "[Tool execution interrupted by user]"))
+                        .toList();
+                if (!orphans.isEmpty()) {
+                    result.add(MessageEvent.toolResponse(sessionId, orphans));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 善后被中断的 toolCalls：将缓冲中的事件刷盘，
+     * 刷盘前由 fixOrphanToolCalls 为孤儿 assistant(toolCalls) 补虚拟 ToolResponse。
      */
     @Override
     public void finalizeInterruptedToolCalls(String sessionId) {
-        Path eventsFile = AppConstants.Session.eventsFile(sessionId);
-        if (!Files.exists(eventsFile)) return;
-
-        List<String> lines;
-        try {
-            lines = Files.readAllLines(eventsFile);
-        } catch (IOException e) {
-            log.error("读取事件文件失败: sessionId={}", sessionId, e);
-            return;
-        }
-
-        // 从末尾往前找最后一条非空行
-        int last = -1;
-        for (int i = lines.size() - 1; i >= 0; i--) {
-            if (!lines.get(i).isBlank()) {
-                last = i;
-                break;
-            }
-        }
-        if (last < 0) return;
-
-        AbstractEvent lastEvent = deserializeEvent(lines.get(last));
-        if (!(lastEvent instanceof MessageEvent me)) return;
-        if (!(me.isAssistantMessage() && me.hasToolCalls())) return;
-
-        // 为每个 toolCall 补一条虚拟 ToolResponse，标记为被用户中断
-        // 参考 Claude Code 的做法：保持历史成对完整，LLM 能感知中断自然续接
-        List<MessageEvent.ToolCallInfo> toolCalls = me.getToolCalls();
-        if (toolCalls == null || toolCalls.isEmpty()) return;
-
-        List<MessageEvent.ToolResponseInfo> virtualResponses = toolCalls.stream()
-                .map(tc -> new MessageEvent.ToolResponseInfo(
-                        tc.id(),
-                        tc.name(),
-                        "[Tool execution interrupted by user]"))
-                .toList();
-        MessageEvent toolResponseEvent = MessageEvent.toolResponse(sessionId, virtualResponses);
-
-        try {
-            String line = JsonUtils.toJson(toolResponseEvent) + "\n";
-            Files.writeString(eventsFile, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            log.info("补虚拟 ToolResponse 善后被中断的 toolCalls: sessionId={}, toolCount={}",
-                    sessionId, toolCalls.size());
-        } catch (IOException e) {
-            log.error("补虚拟 ToolResponse 失败: sessionId={}", sessionId, e);
-        }
+        flushPendingEvents(sessionId);
     }
 
     @Override
@@ -254,6 +272,12 @@ public class FileSystemSessionManager implements ISessionManager {
             }
         } catch (IOException e) {
             log.error("加载事件失败: {}", sessionId, e);
+        }
+
+        // 合并内存缓冲中的待处理事件
+        CopyOnWriteArrayList<AbstractEvent> buffer = pendingEvents.get(sessionId);
+        if (buffer != null && !buffer.isEmpty()) {
+            allEvents.addAll(buffer);
         }
 
         List<AbstractEvent> matched = allEvents.stream()
@@ -284,6 +308,13 @@ public class FileSystemSessionManager implements ISessionManager {
 
     @Override
     public CompactionResult compact(String sessionId, CompactionTrigger trigger, CompactionStrategy strategy) {
+        // 本轮对话未结束（缓冲非空）时不压缩，只压缩文件中已存在的记录
+        CopyOnWriteArrayList<AbstractEvent> buffer = pendingEvents.get(sessionId);
+        if (buffer != null && !buffer.isEmpty()) {
+            log.debug("跳过压缩：本轮对话未结束，sessionId={}", sessionId);
+            return new CompactionResult(List.of(), List.of(), 0);
+        }
+
         Session session = getById(sessionId);
         if (session == null) return new CompactionResult(List.of(), List.of(), 0);
 
@@ -298,23 +329,11 @@ public class FileSystemSessionManager implements ISessionManager {
             return new CompactionResult(events, List.of(), 0);
         }
 
-        // 检测 open tool call：压缩在 after() 中触发，模型返回 toolCalls 时
-        // assistant(toolCalls) 刚追加但 ToolResponse 尚未产生（工具还在执行中）。
-        // 若此时压缩，assistant(toolCalls) 被归档/摘要，随后追加的 ToolResponse 会成为孤儿，
-        // 违反 LLM API 成对约束。跳过本次压缩，等 tool call 完成后的下一次 after() 再压缩。
-        if (CompactionUtils.hasOpenToolCall(events)) {
-            log.debug("跳过压缩：存在未完成的 tool call, sessionId={}", sessionId);
-            return new CompactionResult(events, List.of(), 0);
-        }
-
         CompactionResult result = strategy.compact(request);
 
-        // 压缩按 token 截断时，cut 点可能落在同一轮 tool 交互的 assistant(toolCalls) 与
-        // ToolResponseMessage 之间，导致两种孤儿：孤儿 ToolResponse（assistant 被归档）或
-        // 孤儿 assistant(toolCalls)（ToolResponse 被归档）。统一用 reconcileToolPairs 修复，
-        // 所有策略都受益。
-        List<MessageEvent> finalActive = CompactionUtils.reconcileToolPairs(
-                result.compactedEvents(), result.archivedEvents());
+        // 孤儿处理已收敛到 flushPendingEvents/fixOrphanToolCalls，
+        // 缓冲层保证文件中的 turn 都是完整的，compact 不再做任何孤儿处理
+        List<MessageEvent> finalActive = result.compactedEvents();
 
         // 归档事件标记为 archived=true 保留在文件中（而不是物理删除）。
         // 架构设计了 archived 标记机制：

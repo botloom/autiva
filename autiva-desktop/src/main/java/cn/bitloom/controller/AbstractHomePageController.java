@@ -4,12 +4,8 @@ import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
-import cn.bitloom.node.message.AssistantMessageCard;
 import cn.bitloom.node.AutoResizeTextArea;
-import cn.bitloom.node.message.InputTag;
-import cn.bitloom.node.message.MessageCard;
-import cn.bitloom.node.message.NodeMessageCard;
-import cn.bitloom.node.message.ToolMessageCard;
+import cn.bitloom.node.message.*;
 import cn.bitloom.node.tool.TaskCard;
 import cn.bitloom.node.tool.TodoCard;
 import cn.bitloom.store.Store;
@@ -17,10 +13,8 @@ import cn.bitloom.vm.AbstractHomePageViewModel;
 import cn.bitloom.window.WindowManager;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
-import org.springframework.ai.chat.messages.MessageType;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
-import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
@@ -28,26 +22,29 @@ import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
-import javafx.scene.layout.*;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.util.Duration;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.fxmisc.flowless.Cell;
+import org.fxmisc.flowless.VirtualFlow;
+import org.fxmisc.flowless.VirtualizedScrollPane;
+import org.springframework.ai.chat.messages.MessageType;
 
 import java.io.File;
 import java.net.URL;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.ResourceBundle;
-import java.util.WeakHashMap;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -77,7 +74,9 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     @FXML
     protected VBox icon;
     @FXML
-    protected ListView<MessageCard> chatListView;
+    protected VBox chatListContainer;
+    protected VirtualizedScrollPane<VirtualFlow<MessageCard, MessageFlowCell>> chatScrollPane;
+    protected VirtualFlow<MessageCard, MessageFlowCell> chatFlow;
 
     /**
      * 输入框中 tag 的文字标记格式：⟦📄展示文本⟧
@@ -104,13 +103,6 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     @Getter
     @Setter
     protected IndexController indexController;
-
-    /**
-     * 消息行缓存：每个 MessageCard 只构建一次行视图（wrapper + row）。
-     * ListView 会高频调用 updateItem（滚动/布局/数据变更），若每次都重建会导致闪烁。
-     * 用 WeakHashMap 防内存泄漏：卡片从 messages 移除后即可被回收。
-     */
-    private final Map<MessageCard, HBox> messageRowCache = new WeakHashMap<>();
 
     protected AbstractHomePageController(ToolUIBridge toolUIBridge, WindowManager windowManager) {
         this.toolUIBridge = toolUIBridge;
@@ -165,11 +157,11 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             this.stopButton.setManaged(streaming && !paused);
         });
 
-        // 初始化消息 ListView：直接使用原始 ObservableList，
-        // TOOL 类型卡片通过 toolCardHandler 回调直接路由到 EditorPanel，不进入 messages 列表
-        this.chatListView.setFocusTraversable(false);
-        this.chatListView.setItems(this.getViewModel().getMessages());
-        this.chatListView.setCellFactory(list -> new MessageListCell());
+        // 使用 Flowless VirtualFlow 替代 ListView，彻底解决变高 cell 重叠/闪烁问题
+        this.chatFlow = VirtualFlow.createVertical(this.getViewModel().getMessages(), MessageFlowCell::new);
+        this.chatScrollPane = new VirtualizedScrollPane<>(this.chatFlow);
+        VBox.setVgrow(this.chatScrollPane, Priority.ALWAYS);
+        this.chatListContainer.getChildren().add(this.chatScrollPane);
 
         // 注入工具卡片路由回调：ToolMessageCard 直接发送到 EditorPanel，不进 messages 列表
         this.getViewModel().setToolCardHandler(this::addToolToEditorPanel);
@@ -291,17 +283,10 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
     /**
      * 为消息卡片组装行视图（card + row 对齐）。
-     * 行视图按 card 缓存，避免 ListView 高频调用 updateItem 时反复重建导致闪烁。
-     * 由 MessageListCell 在 updateItem 中调用。
      */
     private HBox buildMessageRow(MessageCard card) {
-        HBox cached = messageRowCache.get(card);
-        if (cached != null) {
-            return cached;
-        }
-
         card.maxWidthProperty().bind(
-                Bindings.max(100, chatListView.widthProperty().subtract(32).multiply(0.75))
+                Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.75))
         );
 
         VBox messageWrapper = new VBox();
@@ -312,40 +297,49 @@ public abstract class AbstractHomePageController implements Initializable, Butto
             assistantCard.setOnContentChanged(c -> onCardContentChanged());
         }
 
-        HBox row = createMessageRow(messageWrapper, card.getMessageType());
-        messageRowCache.put(card, row);
-        return row;
+        return createMessageRow(messageWrapper, card.getMessageType());
     }
 
     /**
-     * 卡片内容高度变化（流式增长 / 结束渲染 MD / 子智能体卡片展开）时统一触发重排：
-     * - requestLayout 让 VirtualFlow 重算 cell 偏移，避免下方卡片重叠；
-     * - scrollToBottom 同步设置滚动目标，与 setText 在同一脉冲的 layout pass 中统一处理。
+     * Flowless Cell 实现：包装消息卡片行视图。
+     * 容器使用 VBox（fillWidth 默认为 true），使内部行 HBox 能撑满宽度，
+     * 从而让 createMessageRow 的 CENTER_RIGHT / CENTER_LEFT 对齐生效。
      */
-    private void onCardContentChanged() {
-        chatListView.requestLayout();
-        scrollToBottom();
-    }
+    public class MessageFlowCell implements Cell<MessageCard, Node> {
+        private final VBox container = new VBox();
 
-    /**
-     * 消息列表 cell：根据卡片类型渲染。
-     * - NodeMessageCard：直接 setGraphic(node)，左对齐
-     * - USER/ASSISTANT：组装 messageWrapper + row
-     */
-    private class MessageListCell extends ListCell<MessageCard> {
+        public MessageFlowCell(MessageCard card) {
+            container.getStyleClass().add("chat-list-cell");
+            updateItem(card);
+        }
+
         @Override
-        protected void updateItem(MessageCard card, boolean empty) {
-            super.updateItem(card, empty);
-            if (empty || card == null) {
-                setGraphic(null);
-                setStyle(null);
-            } else if (card instanceof NodeMessageCard nmc) {
-                setGraphic(nmc.getNode());
-                setStyle(null);
-            } else {
-                setGraphic(buildMessageRow(card));
-                setStyle(null);
+        public void updateItem(MessageCard card) {
+            container.getChildren().clear();
+            if (card == null) {
+                return;
             }
+            if (card instanceof NodeMessageCard nmc) {
+                Node node = nmc.getNode();
+                if (node instanceof Region region) {
+                    region.maxWidthProperty().bind(
+                            Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.85))
+                    );
+                }
+                container.getChildren().add(node);
+            } else {
+                container.getChildren().add(buildMessageRow(card));
+            }
+        }
+
+        @Override
+        public Node getNode() {
+            return container;
+        }
+
+        @Override
+        public boolean isReusable() {
+            return true;
         }
     }
 
@@ -367,7 +361,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         }
         if (node instanceof Region region) {
             region.maxWidthProperty().bind(
-                    Bindings.max(100, chatListView.widthProperty().subtract(32).multiply(0.85))
+                    Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.85))
             );
         }
         if (node instanceof TaskCard taskCard) {
@@ -399,7 +393,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         if (message.isBlank()) {
             return;
         }
-        if (!this.chatListView.isVisible()) {
+        if (!this.chatListContainer.isVisible()) {
             this.animateToChatState();
         }
 
@@ -514,7 +508,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     private void handleCanvasContent(String canvasContent) {
-        if (!this.chatListView.isVisible()) {
+        if (!this.chatListContainer.isVisible()) {
             this.animateToChatState();
         }
         this.getViewModel().addUserMessage(canvasContent);
@@ -522,52 +516,38 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     // ===== stick-to-bottom 跟随模式 =====
-    // 用户向上滚动时停止自动跟随，滚回底部时恢复跟随。
-    // 流式内容增加导致 vvalue 下降不会误判（只响应鼠标滚轮）。
     private boolean stickToBottom = true;
-    private boolean scrollBarBound = false;
 
     private void setupStickToBottom() {
         // 鼠标滚轮向上滚动 → 停止跟随
-        chatListView.addEventFilter(ScrollEvent.SCROLL, e -> {
+        chatScrollPane.addEventFilter(ScrollEvent.SCROLL, e -> {
             if (e.getDeltaY() > 0) {
                 stickToBottom = false;
             }
         });
-
-        // skin 加载后绑定垂直滚动条，监听是否滚回底部
-        chatListView.skinProperty().addListener((obs, oldSkin, newSkin) -> {
-            if (newSkin != null && !scrollBarBound) {
-                Platform.runLater(this::bindVerticalScrollBar);
+        // 滚回底部 → 恢复跟随
+        chatScrollPane.estimatedScrollYProperty().addListener((obs, old, y) -> {
+            double total = chatScrollPane.getTotalHeightEstimate();
+            double viewport = chatScrollPane.getHeight();
+            if (total - y.doubleValue() <= viewport + 10) {
+                stickToBottom = true;
             }
         });
     }
 
-    private void bindVerticalScrollBar() {
-        if (scrollBarBound) return;
-        Node bar = chatListView.lookup(".scroll-bar:vertical");
-        if (bar instanceof ScrollBar scrollBar) {
-            scrollBar.valueProperty().addListener((o, ov, nv) -> {
-                // 滚动条到底部附近 → 恢复跟随
-                if (nv.doubleValue() >= 0.95) {
-                    stickToBottom = true;
-                }
-            });
-            scrollBarBound = true;
-        }
-    }
-
     /**
-     * 滚动到底部。所有调用方均在 FX 线程（flushStreamingText 的 runLater 或 ListChangeListener），
-     * 因此直接同步调用 scrollTo，与 setText 在同一脉冲执行。
-     * layout pass 会同时处理 cell 高度重算和 scrollTo target，确保渲染时看到正确的最终位置，
-     * 不会出现"先旧位置再调整"的一帧延迟。
+     * 滚动到底部。Flowless 正确处理变高 cell，无需手动 layout()。
      */
     private void scrollToBottom() {
         if (!stickToBottom) return;
-        int size = chatListView.getItems().size();
-        if (size <= 0) return;
-        chatListView.scrollTo(size - 1);
+        chatScrollPane.scrollYToPixel(Double.MAX_VALUE);
+    }
+
+    /**
+     * 卡片内容高度变化时触发。Flowless 自动处理 cell 重定位，只需滚动到底部。
+     */
+    private void onCardContentChanged() {
+        scrollToBottom();
     }
 
     protected void animateToChatState() {
@@ -584,8 +564,8 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
             this.homePage.setAlignment(Pos.BOTTOM_CENTER);
 
-            this.chatListView.setVisible(true);
-            this.chatListView.setManaged(true);
+            this.chatListContainer.setVisible(true);
+            this.chatListContainer.setManaged(true);
         });
 
         timeline.play();
@@ -637,8 +617,8 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
         this.homePage.setAlignment(Pos.CENTER);
         VBox.setMargin(this.sendBox, new Insets(0, 0, 0, 0));
-        this.chatListView.setVisible(false);
-        this.chatListView.setManaged(false);
+        this.chatListContainer.setVisible(false);
+        this.chatListContainer.setManaged(false);
 
         this.icon.setVisible(true);
         this.icon.setManaged(true);

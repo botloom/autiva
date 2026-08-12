@@ -153,6 +153,17 @@
     -fx-text-fill: -autiva-blue;
 }
 
+/* 文件 tab 的 Git 状态着色 */
+.editor-panel__tab--git-added.editor-panel__tab .editor-panel__tab-title {
+    -fx-text-fill: -autiva-green;
+}
+.editor-panel__tab--git-modified.editor-panel__tab .editor-panel__tab-title {
+    -fx-text-fill: -autiva-blue;
+}
+.editor-panel__tab--git-untracked.editor-panel__tab .editor-panel__tab-title {
+    -fx-text-fill: -autiva-red;
+}
+
 /* ===== 视图容器 ===== */
 
 .editor-panel__views {
@@ -290,6 +301,21 @@
 .tree-cell:selected .file-tree__file--text,
 .tree-cell:selected .file-tree__file--image {
     -fx-text-fill: #ffffff;
+}
+
+/* Git 状态着色（置于类型类之后以覆盖字色；选中态由上方统一白字接管） */
+.file-tree__file--git-added {
+    -fx-text-fill: -autiva-green;
+}
+.file-tree__file--git-modified {
+    -fx-text-fill: -autiva-blue;
+}
+.file-tree__file--git-untracked {
+    -fx-text-fill: -autiva-red;
+}
+.file-tree__folder--git-changed {
+    -fx-text-fill: -autiva-orange;
+    -fx-font-weight: 600;
 }
 
 /* ===== 内容面板 ===== */
@@ -471,6 +497,28 @@
     -fx-padding: 0 12 0 12;
     -fx-border-width: 0 1 0 0;
     -fx-border-color: transparent -autiva-separator transparent transparent;
+}
+
+/* 文件代码区 Git 状态已改为按行（行号处）着色，见下方 .git-lineno 修饰类 */
+
+/* 行号处 Git 改动标记：左侧 3px 色条 + 行号文字对应着色 */
+.editor-panel__code-area .lineno.git-lineno {
+    -fx-padding: 0 8 0 3;
+    -fx-background-insets: 0;
+}
+
+.editor-panel__code-area .lineno.git-lineno--added {
+    -fx-border-width: 0 1 0 3;
+    -fx-border-color: transparent -autiva-separator transparent -autiva-green;
+    -fx-text-fill: -autiva-green;
+    -fx-font-weight: bold;
+}
+
+.editor-panel__code-area .lineno.git-lineno--modified {
+    -fx-border-width: 0 1 0 3;
+    -fx-border-color: transparent -autiva-separator transparent -autiva-blue;
+    -fx-text-fill: -autiva-blue;
+    -fx-font-weight: bold;
 }
 
 /* ===== 语法高亮 Token（参考 Xcode 浅色主题） ===== */
