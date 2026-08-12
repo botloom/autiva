@@ -45,12 +45,16 @@ public record CompactionRequest(Session session, List<MessageEvent> events, int 
 		Assert.notNull(session, "session must not be null");
 		Assert.notNull(events, "events must not be null");
 		int eventCount = events.size();
-		// Count only non-synthetic, root-level (branch == null) USER messages.
+		// Count only non-synthetic, non-archived, root-level (branch == null) USER messages.
 		// Sub-agents in multi-agent sessions write USER messages attributed to their own
 		// branch; counting those would inflate the turn count and cause premature
 		// compaction of the root conversation.
+		// Archived events are excluded because they represent history already compacted but
+		// retained in the file for UI/search; counting them would keep the turn count
+		// permanently above the threshold and re-trigger compaction on every turn.
 		int turnCount = (int) events.stream()
 			.filter(e -> !e.isSynthetic())
+			.filter(e -> !e.isArchived())
 			.filter(e -> e.getMessageType() == MessageType.USER)
 			.filter(MessageEvent::isRootEvent)
 			.count();

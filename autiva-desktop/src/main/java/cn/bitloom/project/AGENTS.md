@@ -87,7 +87,7 @@ Git 服务（Spring `@Component`），仅查询 Git 信息，不支持修改操�
 基于 jgit（非 CLI）查询工作区状态。
 - `Map<Path,GitFileStatus> queryStatusMap(Path root)`: 返回文件「绝对规范化路径 → 状态」映射；非 Git 仓库返回空 map。状态优先级 ADDED>MODIFIED>UNTRACKED。
 - `Set<Path> collectChangedDirs(Map)`: 推导含改动的目录绝对路径集合。
-- `Map<Integer,GitFileStatus> diffLineStatus(Path root, Path filePath)`: 计算单文件工作区相对 HEAD 的行级改动（键：工作区 0-based 行号 → 状态）。INSERT→ADDED，REPLACE→MODIFIED，DELETE→删除锚定到紧随其后的行（MODIFIED）；未跟踪新文件视为全部新增。供编辑器行号处按行着色。
+- `Map<Integer,GitFileStatus> diffLineStatus(Path root, Path filePath)`: 计算单文件工作区相对 HEAD 的行级改动（键：工作区 0-based 行号 → 状态）。INSERT→ADDED，REPLACE→MODIFIED，DELETE→删除锚定到紧随其后的行（MODIFIED）；未跟踪新文件视为全部新增。供编辑器行号处按行着色。内部先统一两侧换行符为 LF，避免 autocrlf 下工作区 CRLF 与 HEAD LF 差异导致整文件误判为改动。
 - `Set<Path> collectWatchDirs(Path root)`: 递归列出需监听的子目录（过滤忽略目录）。
 - `boolean isIgnoredPath(Path)`: 判断是否应忽略的路径（监听事件过滤用）。
 - 内置 `IGNORED_DIR_NAMES`：`.git`、`node_modules`、`target`、`build` 等。

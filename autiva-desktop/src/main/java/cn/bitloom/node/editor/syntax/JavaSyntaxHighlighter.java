@@ -21,8 +21,8 @@ public final class JavaSyntaxHighlighter extends AbstractRegexHighlighter {
 
     private static final String BLOCK_COMMENT = "/\\*[\\s\\S]*?\\*/";
     private static final String LINE_COMMENT = "//[^\\n]*";
-    private static final String STRING = "\"(?:\\\\.|[^\"\\\\])*\"";
-    private static final String CHAR = "'(?:\\\\.|[^'\\\\])'";
+    private static final String STRING = "\"(?:\\\\.|[^\"\\\\])*+\"";
+    private static final String CHAR = "'(?:\\\\.|[^'\\\\])*+'";
     private static final String NUMBER = "\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?[fFdDlL]?\\b";
     private static final String ANNOTATION = "@[A-Za-z_]\\w*";
     private static final String TYPE_NAME = "\\b[A-Z][A-Za-z0-9_]*\\b";

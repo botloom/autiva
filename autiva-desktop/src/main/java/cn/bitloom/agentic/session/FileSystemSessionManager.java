@@ -166,36 +166,64 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     /**
+     * 缓冲 key：root 事件用 sessionId，子智能体事件用 sessionId@branch。
+     * 这样主智能体和子智能体的缓冲隔离，各自的 STOP 只刷自己的缓冲，
+     * 不会把对方未完成的 turn 提前刷盘。
+     */
+    private String bufferKey(String sessionId, String branch) {
+        return branch == null ? sessionId : sessionId + "@" + branch;
+    }
+
+    /**
      * 将事件写入内存缓冲，而非直接落盘。
-     * 当检测到本轮对话结束（追加了 finishReason=STOP 的 assistant 消息）时自动刷盘。
-     * 这样保证文件中的 turn 都是完整的，压缩不会遇到孤儿 toolCall。
+     * 按 branch 隔离缓冲：主智能体（branch=null）和子智能体（branch!=null）各自独立缓冲。
+     * 当检测到该 branch 本轮对话结束（追加了 finishReason=STOP 的 assistant 消息）时自动刷盘。
      */
     @Override
     public void appendEvent(AbstractEvent event) {
         String sessionId = event.getSessionId();
         if (sessionId == null) return;
 
+        String branch = (event instanceof MessageEvent me) ? me.getBranch() : null;
+        String key = bufferKey(sessionId, branch);
+
         CopyOnWriteArrayList<AbstractEvent> buffer = pendingEvents
-                .computeIfAbsent(sessionId, k -> new CopyOnWriteArrayList<>());
+                .computeIfAbsent(key, k -> new CopyOnWriteArrayList<>());
         buffer.add(event);
 
-        // 自动刷盘：追加了 finishReason=STOP 的 assistant 消息 → 本轮对话结束
-        // synthetic 消息不触发（由 compact 直接写文件，不经过 appendEvent 产生 synthetic）
+        // 自动刷盘：该 branch 追加了 finishReason=STOP 的 assistant 消息 → 本轮结束
+        // 只刷该 branch 的缓冲，不影响其他 branch
         if (event instanceof MessageEvent me
                 && me.isAssistantMessage()
                 && "STOP".equals(me.getFinishReason())
                 && !me.isSynthetic()) {
-            flushPendingEvents(sessionId);
+            flushPendingEvents(sessionId, branch);
         }
     }
 
     /**
-     * 将缓冲中的待处理事件刷盘到 events.jsonl。
-     * 刷盘前调用 fixOrphanToolCalls 为孤儿 assistant(toolCalls) 补虚拟 ToolResponse。
+     * 将该 session 所有 branch 的缓冲刷盘到 events.jsonl。
+     * 在 pause/中断时调用，确保所有未完成的事件都落盘。
      */
     @Override
     public void flushPendingEvents(String sessionId) {
-        List<AbstractEvent> snapshot = pendingEvents.remove(sessionId);
+        // 找到所有该 session 的缓冲 key（root + 所有 branch）
+        List<String> keysToFlush = pendingEvents.keySet().stream()
+                .filter(k -> k.equals(sessionId) || k.startsWith(sessionId + "@"))
+                .toList();
+        for (String key : keysToFlush) {
+            String branch = key.equals(sessionId) ? null : key.substring(sessionId.length() + 1);
+            flushPendingEvents(sessionId, branch);
+        }
+    }
+
+    /**
+     * 将指定 branch 的缓冲刷盘到 events.jsonl。
+     * 刷盘前调用 fixOrphanToolCalls 为孤儿 assistant(toolCalls) 补虚拟 ToolResponse。
+     */
+    private void flushPendingEvents(String sessionId, String branch) {
+        String key = bufferKey(sessionId, branch);
+        List<AbstractEvent> snapshot = pendingEvents.remove(key);
         if (snapshot == null || snapshot.isEmpty()) return;
 
         // 孤儿 toolCall 修复：为缺少 ToolResponse 的 assistant(toolCalls) 补虚拟响应
@@ -274,11 +302,14 @@ public class FileSystemSessionManager implements ISessionManager {
             log.error("加载事件失败: {}", sessionId, e);
         }
 
-        // 合并内存缓冲中的待处理事件
-        CopyOnWriteArrayList<AbstractEvent> buffer = pendingEvents.get(sessionId);
-        if (buffer != null && !buffer.isEmpty()) {
-            allEvents.addAll(buffer);
-        }
+        // 合并内存缓冲中的待处理事件（root + 所有 branch）
+        pendingEvents.forEach((key, buffer) -> {
+            if (key.equals(sessionId) || key.startsWith(sessionId + "@")) {
+                if (!buffer.isEmpty()) {
+                    allEvents.addAll(buffer);
+                }
+            }
+        });
 
         List<AbstractEvent> matched = allEvents.stream()
                 .filter(filter::matches)
@@ -308,9 +339,11 @@ public class FileSystemSessionManager implements ISessionManager {
 
     @Override
     public CompactionResult compact(String sessionId, CompactionTrigger trigger, CompactionStrategy strategy) {
-        // 本轮对话未结束（缓冲非空）时不压缩，只压缩文件中已存在的记录
-        CopyOnWriteArrayList<AbstractEvent> buffer = pendingEvents.get(sessionId);
-        if (buffer != null && !buffer.isEmpty()) {
+        // 本轮对话未结束（任何 branch 缓冲非空）时不压缩，只压缩文件中已存在的记录
+        boolean hasPending = pendingEvents.keySet().stream()
+                .anyMatch(k -> (k.equals(sessionId) || k.startsWith(sessionId + "@"))
+                        && !pendingEvents.get(k).isEmpty());
+        if (hasPending) {
             log.debug("跳过压缩：本轮对话未结束，sessionId={}", sessionId);
             return new CompactionResult(List.of(), List.of(), 0);
         }
@@ -319,9 +352,14 @@ public class FileSystemSessionManager implements ISessionManager {
         if (session == null) return new CompactionResult(List.of(), List.of(), 0);
 
         List<AbstractEvent> allEvents = getEvents(sessionId, EventFilter.all());
+        // 传给 trigger / strategy 的事件应排除 archived：压缩后旧事件会标记 archived 但
+        // 仍保留在文件中（供 UI / 搜索查看）。若不过滤，这些归档事件仍会占用 maxTurns /
+        // maxEventsToKeep 计数，导致每次对话结束后 turnCount / rootEventCount 永不下降，
+        // 压缩只触发一次之后会话就会被"一直压缩"。
         List<MessageEvent> events = allEvents.stream()
                 .filter(e -> e instanceof MessageEvent)
                 .map(e -> (MessageEvent) e)
+                .filter(e -> !e.isArchived())
                 .toList();
         CompactionRequest request = CompactionRequest.of(session, events);
 

@@ -120,8 +120,8 @@ public class GitStatusService {
         try (Git git = Git.open(absRoot.toFile())) {
             Repository repo = git.getRepository();
             ObjectId head = repo.resolve("HEAD");
-            String headContent = readHeadContent(repo, head, relPath);
-            String curContent = Files.readString(absFile, StandardCharsets.UTF_8);
+            String headContent = normalizeLineEndings(readHeadContent(repo, head, relPath));
+            String curContent = normalizeLineEndings(Files.readString(absFile, StandardCharsets.UTF_8));
             RawText a = new RawText(headContent.getBytes(StandardCharsets.UTF_8));
             RawText b = new RawText(curContent.getBytes(StandardCharsets.UTF_8));
             DiffAlgorithm algo = new HistogramDiff();
@@ -154,6 +154,14 @@ public class GitStatusService {
             log.warn("计算行级 diff 失败: {}", absFile, e);
         }
         return result;
+    }
+
+    /**
+     * 统一换行符为 LF，避免因工作区（autocrlf 下为 CRLF）与 HEAD（LF）行尾差异
+     * 导致 diff 将每一行都判定为改动。
+     */
+    private static String normalizeLineEndings(String content) {
+        return content == null ? "" : content.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     /**

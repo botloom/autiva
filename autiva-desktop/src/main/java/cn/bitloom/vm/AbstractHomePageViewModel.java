@@ -188,8 +188,11 @@ public abstract class AbstractHomePageViewModel {
                 if (!(event instanceof MessageEvent me)) {
                     continue;
                 }
-                // 跳过已归档事件（已被摘要替代，不重复显示）
-                if (me.isArchived()) {
+                // 跳过合成事件（压缩产生的 shadow-prompt 用户消息 + 摘要助手消息）：
+                // 它们是框架生成的伪消息，不是用户真实对话。归档的旧历史中可能也残留
+                // 多次压缩产生的旧合成消息，因此这里不区分 archived —— 只要 synthetic 一律跳过。
+                // 压缩的提示由 CompactionEvent → CompactionCard 负责渲染。
+                if (me.isSynthetic()) {
                     continue;
                 }
                 if (me.isUserMessage()) {

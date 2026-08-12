@@ -288,12 +288,14 @@ public class CoderEditorPanelController extends EditorPanelController implements
         }
         GitFileStatus st = projectStatusStore.statusOf(filePath);
         // 状态样式类名与变色（仅标题）
-        String gitClass = switch (st == null ? null : st) {
-            case ADDED -> "editor-panel__tab--git-added";
-            case MODIFIED -> "editor-panel__tab--git-modified";
-            case UNTRACKED -> "editor-panel__tab--git-untracked";
-            default -> null;
-        };
+        String gitClass = null;
+        if (st != null) {
+            gitClass = switch (st) {
+                case ADDED -> "editor-panel__tab--git-added";
+                case MODIFIED -> "editor-panel__tab--git-modified";
+                case UNTRACKED -> "editor-panel__tab--git-untracked";
+            };
+        }
         tab.header.getStyleClass().removeAll(
                 "editor-panel__tab--git-added", "editor-panel__tab--git-modified", "editor-panel__tab--git-untracked");
         if (gitClass != null) {
