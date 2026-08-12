@@ -34,8 +34,6 @@ public class IndexController implements Initializable {
     @FXML
     private SplitPane mainSplit;
     @FXML
-    private SplitPane leftSplit;
-    @FXML
     @Getter
     private ButtonBarController buttonBarController;
     @FXML
@@ -63,10 +61,8 @@ public class IndexController implements Initializable {
     private final HomePageRouter homePageRouter;
 
     private double savedDividerPos = 0.72;
-    /** 侧边栏期望的像素宽度（窗口缩放时保持不变，仅拖拽改动） */
-    private double sidebarPixels = 250;
-    private boolean sidebarWidthListenerInstalled = false;
-    private javafx.scene.control.SplitPane.Divider trackedDivider = null;
+    /** 侧边栏展开时的宽度（像素，默认 260，拖拽或折叠后更新；展开时按此宽度放置分隔线） */
+    private double savedSidebarWidth = 260.0;
 
     public IndexController(@Lazy Router router, HomePageRouter homePageRouter) {
         this.router = router;
@@ -91,9 +87,9 @@ public class IndexController implements Initializable {
         // 编辑器面板初始从 SplitPane 移除（默认隐藏）
         mainSplit.getItems().remove(editorPanelSlot);
 
-        // 侧边栏初始从内部 SplitPane 移除（配合 SideBarController 默认隐藏）
+        // 侧边栏初始从 SplitPane 移除（配合 SideBarController 默认隐藏）
         if (sideBarController != null && sideBarController.getSideBar() != null) {
-            leftSplit.getItems().remove(sideBarController.getSideBar());
+            mainSplit.getItems().remove(sideBarController.getSideBar());
         }
 
         this.initializeButtonBar();
@@ -145,9 +141,12 @@ public class IndexController implements Initializable {
         }
         var sideBar = sideBarController.getSideBar();
         if (sideBarController.isSidebarVisible()) {
-            // 折叠：记录当前侧边栏像素宽度并从内部 SplitPane 移除
-            syncSidebarPixels();
-            leftSplit.getItems().remove(sideBar);
+            // 折叠：记录当前像素宽度（可能存在尚未布局宽度为 0 的情况，忽略之）
+            double w = sideBar.getWidth();
+            if (w > 0) {
+                savedSidebarWidth = w;
+            }
+            mainSplit.getItems().remove(sideBar);
             sideBarController.hide();
         } else {
             ensureSidebarVisible();
@@ -155,75 +154,24 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 确保侧边栏在内部 SplitPane 中可见，并按其像素宽度定位分隔线。
+     * 确保侧边栏在 SplitPane 中可见。
      */
     private void ensureSidebarVisible() {
         if (sideBarController == null || sideBarController.getSideBar() == null) {
             return;
         }
         var sideBar = sideBarController.getSideBar();
-        installSidebarListeners();
-        if (!leftSplit.getItems().contains(sideBar)) {
-            leftSplit.getItems().add(0, sideBar);
-            Platform.runLater(this::applySidebarPixels);
-        }
-        sideBarController.show();
-    }
-
-    /**
-     * 安装监听：容器宽度变化时维持侧边栏固定像素宽度；分隔线位置变化时记录用户拖拽后的像素宽度。
-     */
-    private void installSidebarListeners() {
-        if (!sidebarWidthListenerInstalled) {
-            sidebarWidthListenerInstalled = true;
-            leftSplit.widthProperty().addListener((obs, o, w) -> {
-                if (w != null && w.doubleValue() > 0 && leftSplit.getItems().size() >= 2) {
-                    applySidebarPixels();
+        if (!mainSplit.getItems().contains(sideBar)) {
+            mainSplit.getItems().add(0, sideBar);
+            // 按像素宽度放置分隔线（前提：容器已布局且有宽度）
+            Platform.runLater(() -> {
+                double total = mainSplit.getWidth();
+                if (total > 0) {
+                    mainSplit.setDividerPosition(0, Math.min(savedSidebarWidth / total, 0.9));
                 }
             });
         }
-        trackSidebarDivider();
-    }
-
-    /**
-     * 跟随当前 divider 位置的绝对值变化，记录为侧边栏像素宽度。
-     */
-    private void trackSidebarDivider() {
-        if (leftSplit.getDividers().isEmpty()) {
-            return;
-        }
-        var divider = leftSplit.getDividers().get(0);
-        divider.positionProperty().addListener((obs, o, n) -> {
-            double w = leftSplit.getWidth();
-            if (w > 0 && n != null) {
-                sidebarPixels = n.doubleValue() * w;
-            }
-        });
-    }
-
-    /**
-     * 按当前侧边栏期望像素宽度设置分隔线位置（使窗口缩放时侧边栏宽度不变）。
-     */
-    private void applySidebarPixels() {
-        if (leftSplit.getItems().size() < 2 || leftSplit.getDividers().isEmpty()) {
-            return;
-        }
-        double w = leftSplit.getWidth();
-        if (w <= 0) {
-            return;
-        }
-        double d = Math.min(0.95, sidebarPixels / w);
-        leftSplit.setDividerPosition(0, d);
-    }
-
-    /**
-     * 将当前分隔线位置同步为侧边栏像素宽度。
-     */
-    private void syncSidebarPixels() {
-        double w = leftSplit.getWidth();
-        if (!leftSplit.getDividers().isEmpty() && w > 0) {
-            sidebarPixels = leftSplit.getDividerPositions()[0] * w;
-        }
+        sideBarController.show();
     }
 
     /**
@@ -293,9 +241,12 @@ public class IndexController implements Initializable {
     public void closeEditorPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        if (mainSplit.getItems().contains(editorPanelSlot)) {
-            if (!mainSplit.getDividers().isEmpty()) {
-                savedDividerPos = mainSplit.getDividerPositions()[0];
+        int editorIndex = mainSplit.getItems().indexOf(editorPanelSlot);
+        if (editorIndex >= 0) {
+            // 保存 content/editor 分界（editor 恒为最后一项）
+            int dividerIndex = editorIndex - 1;
+            if (dividerIndex >= 0 && dividerIndex < mainSplit.getDividers().size()) {
+                savedDividerPos = mainSplit.getDividerPositions()[dividerIndex];
             }
             mainSplit.getItems().remove(editorPanelSlot);
         }
@@ -310,7 +261,9 @@ public class IndexController implements Initializable {
         if (editor == null) return;
         if (!mainSplit.getItems().contains(editorPanelSlot)) {
             mainSplit.getItems().add(editorPanelSlot);
-            Platform.runLater(() -> mainSplit.setDividerPosition(0, savedDividerPos));
+            // editor 恒为最后一项，content/editor 分界即最后一根 divider
+            int dividerIndex = mainSplit.getItems().size() - 2;
+            Platform.runLater(() -> mainSplit.setDividerPosition(dividerIndex, savedDividerPos));
         }
         // editorPanelSlot 在 FXML 中初始 visible=false/managed=false，需要显式恢复
         editorPanelSlot.setVisible(true);

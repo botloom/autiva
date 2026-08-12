@@ -298,6 +298,15 @@ public class FileSystemSessionManager implements ISessionManager {
             return new CompactionResult(events, List.of(), 0);
         }
 
+        // 检测 open tool call：压缩在 after() 中触发，模型返回 toolCalls 时
+        // assistant(toolCalls) 刚追加但 ToolResponse 尚未产生（工具还在执行中）。
+        // 若此时压缩，assistant(toolCalls) 被归档/摘要，随后追加的 ToolResponse 会成为孤儿，
+        // 违反 LLM API 成对约束。跳过本次压缩，等 tool call 完成后的下一次 after() 再压缩。
+        if (CompactionUtils.hasOpenToolCall(events)) {
+            log.debug("跳过压缩：存在未完成的 tool call, sessionId={}", sessionId);
+            return new CompactionResult(events, List.of(), 0);
+        }
+
         CompactionResult result = strategy.compact(request);
 
         // 压缩按 token 截断时，cut 点可能落在同一轮 tool 交互的 assistant(toolCalls) 与

@@ -10,7 +10,6 @@ import cn.bitloom.node.message.InputTag;
 import cn.bitloom.node.message.MessageCard;
 import cn.bitloom.node.message.NodeMessageCard;
 import cn.bitloom.node.message.ToolMessageCard;
-import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.node.tool.TaskCard;
 import cn.bitloom.node.tool.TodoCard;
 import cn.bitloom.store.Store;
@@ -30,8 +29,6 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.input.Clipboard;
-import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.ScrollEvent;
@@ -109,7 +106,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     protected IndexController indexController;
 
     /**
-     * 消息行缓存：每个 MessageCard 只构建一次行视图（wrapper + actionBar + row）。
+     * 消息行缓存：每个 MessageCard 只构建一次行视图（wrapper + row）。
      * ListView 会高频调用 updateItem（滚动/布局/数据变更），若每次都重建会导致闪烁。
      * 用 WeakHashMap 防内存泄漏：卡片从 messages 移除后即可被回收。
      */
@@ -293,7 +290,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     /**
-     * 为消息卡片组装行视图（card + actionBar + row 对齐）。
+     * 为消息卡片组装行视图（card + row 对齐）。
      * 行视图按 card 缓存，避免 ListView 高频调用 updateItem 时反复重建导致闪烁。
      * 由 MessageListCell 在 updateItem 中调用。
      */
@@ -311,11 +308,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         messageWrapper.getStyleClass().add("chat-message-wrapper");
         messageWrapper.getChildren().add(card);
 
-        HBox actionBar = createActionBar(card);
-        messageWrapper.getChildren().add(actionBar);
-
         if (card instanceof AssistantMessageCard assistantCard) {
-            assistantCard.setActionBar(actionBar);
             assistantCard.setOnContentChanged(c -> onCardContentChanged());
         }
 
@@ -327,7 +320,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     /**
      * 卡片内容高度变化（流式增长 / 结束渲染 MD / 子智能体卡片展开）时统一触发重排：
      * - requestLayout 让 VirtualFlow 重算 cell 偏移，避免下方卡片重叠；
-     * - 合并滚动到底部，避免每个 chunk 都做同步 layout 造成性能与闪烁。
+     * - scrollToBottom 同步设置滚动目标，与 setText 在同一脉冲的 layout pass 中统一处理。
      */
     private void onCardContentChanged() {
         chatListView.requestLayout();
@@ -337,7 +330,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     /**
      * 消息列表 cell：根据卡片类型渲染。
      * - NodeMessageCard：直接 setGraphic(node)，左对齐
-     * - USER/ASSISTANT：组装 messageWrapper + actionBar + row
+     * - USER/ASSISTANT：组装 messageWrapper + row
      */
     private class MessageListCell extends ListCell<MessageCard> {
         @Override
@@ -399,72 +392,6 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         }
 
         return row;
-    }
-
-    private HBox createActionBar(MessageCard card) {
-        HBox actionBar = new HBox();
-        actionBar.getStyleClass().add("chat-message__actions");
-        if (card.getMessageType() == MessageType.USER) {
-            actionBar.getStyleClass().add("chat-message__actions--user");
-        }
-
-        Button copyBtn = new Button();
-        copyBtn.getStyleClass().add("chat-message__action-btn");
-        SvgImageView copyIcon = new SvgImageView();
-        copyIcon.setFitWidth(14);
-        copyIcon.setFitHeight(14);
-        copyIcon.setSvgPath("/cn/bitloom/images/copy.svg");
-        copyBtn.setGraphic(copyIcon);
-        copyBtn.setOnAction(e -> {
-            String content = card.getContent();
-            if (content != null && !content.isBlank()) {
-                Clipboard clipboard = Clipboard.getSystemClipboard();
-                ClipboardContent clipboardContent = new ClipboardContent();
-                clipboardContent.putString(content);
-                clipboard.setContent(clipboardContent);
-                copyBtn.getStyleClass().add("chat-message__action-btn--copied");
-                javafx.animation.PauseTransition pause = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(1.5));
-                pause.setOnFinished(ev -> copyBtn.getStyleClass().remove("chat-message__action-btn--copied"));
-                pause.play();
-            }
-        });
-
-        Button likeBtn = new Button();
-        likeBtn.getStyleClass().add("chat-message__action-btn");
-        SvgImageView likeIcon = new SvgImageView();
-        likeIcon.setFitWidth(14);
-        likeIcon.setFitHeight(14);
-        likeIcon.setSvgPath("/cn/bitloom/images/like.svg");
-        likeBtn.setGraphic(likeIcon);
-
-        Button dislikeBtn = new Button();
-        dislikeBtn.getStyleClass().add("chat-message__action-btn");
-        SvgImageView dislikeIcon = new SvgImageView();
-        dislikeIcon.setFitWidth(14);
-        dislikeIcon.setFitHeight(14);
-        dislikeIcon.setSvgPath("/cn/bitloom/images/dislike.svg");
-        dislikeBtn.setGraphic(dislikeIcon);
-
-        likeBtn.setOnAction(e -> {
-            if (likeBtn.getStyleClass().contains("chat-message__action-btn--liked")) {
-                likeBtn.getStyleClass().remove("chat-message__action-btn--liked");
-            } else {
-                likeBtn.getStyleClass().add("chat-message__action-btn--liked");
-                dislikeBtn.getStyleClass().remove("chat-message__action-btn--disliked");
-            }
-        });
-
-        dislikeBtn.setOnAction(e -> {
-            if (dislikeBtn.getStyleClass().contains("chat-message__action-btn--disliked")) {
-                dislikeBtn.getStyleClass().remove("chat-message__action-btn--disliked");
-            } else {
-                dislikeBtn.getStyleClass().add("chat-message__action-btn--disliked");
-                likeBtn.getStyleClass().remove("chat-message__action-btn--liked");
-            }
-        });
-
-        actionBar.getChildren().addAll(copyBtn, likeBtn, dislikeBtn);
-        return actionBar;
     }
 
     protected void handleSendMessage() {
@@ -599,8 +526,6 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     // 流式内容增加导致 vvalue 下降不会误判（只响应鼠标滚轮）。
     private boolean stickToBottom = true;
     private boolean scrollBarBound = false;
-    /** 合并滚动标志：同一 FX 脉冲内多次触发只执行一次 layout+scrollTo，避免逐 chunk 同步布局 */
-    private boolean scrollScheduled = false;
 
     private void setupStickToBottom() {
         // 鼠标滚轮向上滚动 → 停止跟随
@@ -632,21 +557,17 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         }
     }
 
+    /**
+     * 滚动到底部。所有调用方均在 FX 线程（flushStreamingText 的 runLater 或 ListChangeListener），
+     * 因此直接同步调用 scrollTo，与 setText 在同一脉冲执行。
+     * layout pass 会同时处理 cell 高度重算和 scrollTo target，确保渲染时看到正确的最终位置，
+     * 不会出现"先旧位置再调整"的一帧延迟。
+     */
     private void scrollToBottom() {
         if (!stickToBottom) return;
-        // 同一脉冲内多次内容更新只调度一次，避免逐 chunk 同步 layout 造成卡顿/闪烁
-        if (scrollScheduled) return;
-        scrollScheduled = true;
-        Platform.runLater(() -> {
-            scrollScheduled = false;
-            int size = chatListView.getItems().size();
-            if (size <= 0) return;
-            // 先 layout 让 VirtualFlow 基于最新 cell 内容重新计算高度与滚动条 max
-            chatListView.layout();
-            // scrollTo 是 ListView 官方滚动 API，会触发 VirtualFlow 内部测量与滚动，
-            // 比 scrollBar.setValue(getMax()) 更可靠（后者在 cell 高度变化后 max 可能仍是旧值）
-            chatListView.scrollTo(size - 1);
-        });
+        int size = chatListView.getItems().size();
+        if (size <= 0) return;
+        chatListView.scrollTo(size - 1);
     }
 
     protected void animateToChatState() {

@@ -43,6 +43,11 @@ public class TaskCard extends VBox {
 
     private final StringBuilder streamBuffer = new StringBuilder();
     private VBox currentStreamBox = null;
+    /** 流式期间复用的 TextFlow 和 Text（避免每个 chunk 重建） */
+    private TextFlow streamingTextFlow = null;
+    private Text streamingText = null;
+    /** 节流标志：同一 FX 脉冲内多次 chunk 只调度一次 flush */
+    private boolean textUpdateScheduled = false;
     private final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
 
     private boolean userCollapsed = false;
@@ -150,17 +155,18 @@ public class TaskCard extends VBox {
 
         if (finishReason == null || finishReason.isBlank() || "_UNKNOWN".equals(finishReason)) {
             streamBuffer.append(text != null ? text : "");
-            String accumulated = streamBuffer.toString();
-            if (accumulated.isBlank()) {
+            if (streamBuffer.isEmpty()) {
                 return;
             }
             if (currentStreamBox == null) {
                 currentStreamBox = new VBox(4);
                 currentStreamBox.getStyleClass().add("chat-message__task-assistant");
                 addMessageNode(currentStreamBox);
+                initStreamingTextFlow(currentStreamBox);
             }
-            renderLightweightStream(currentStreamBox, accumulated);
+            scheduleFlush();
         } else if ("STOP".equals(finishReason)) {
+            cancelPendingFlush();
             if (currentStreamBox != null) {
                 String content = streamBuffer.toString();
                 if (!content.isBlank()) {
@@ -169,11 +175,14 @@ public class TaskCard extends VBox {
                     messagesBox.getChildren().remove(currentStreamBox);
                 }
                 currentStreamBox = null;
+                streamingTextFlow = null;
+                streamingText = null;
             } else if (text != null && !text.isBlank()) {
                 appendMarkdownNode(text);
             }
             streamBuffer.setLength(0);
         } else if ("TOOL_CALLS".equals(finishReason)) {
+            cancelPendingFlush();
             if (currentStreamBox != null) {
                 String content = streamBuffer.toString();
                 if (!content.isBlank()) {
@@ -182,6 +191,8 @@ public class TaskCard extends VBox {
                     messagesBox.getChildren().remove(currentStreamBox);
                 }
                 currentStreamBox = null;
+                streamingTextFlow = null;
+                streamingText = null;
             }
 
             if (e.getToolCalls() != null) {
@@ -201,18 +212,50 @@ public class TaskCard extends VBox {
         }
     }
 
-    private void renderLightweightStream(VBox container, String content) {
-        container.getChildren().clear();
-        if (content == null || content.isBlank()) return;
+    /**
+     * 初始化复用的 TextFlow 和 Text 节点，加入 container。
+     * 后续 chunk 通过 flushStreamingText 更新 streamingText.setText，不重建节点。
+     */
+    private void initStreamingTextFlow(VBox container) {
+        streamingTextFlow = new TextFlow();
+        streamingTextFlow.getStyleClass().add("md-paragraph");
+        streamingTextFlow.getStyleClass().add("chat-message__task-md-content");
+        streamingTextFlow.setMaxWidth(Double.MAX_VALUE);
+        streamingText = new Text("");
+        streamingText.setFont(Font.font(FONT_FAMILY, 13));
+        streamingTextFlow.getChildren().add(streamingText);
+        container.getChildren().add(streamingTextFlow);
+    }
 
-        TextFlow textFlow = new TextFlow();
-        textFlow.getStyleClass().add("md-paragraph");
-        textFlow.getStyleClass().add("chat-message__task-md-content");
-        textFlow.setMaxWidth(Double.MAX_VALUE);
-        Text text = new Text(content);
-        text.setFont(Font.font(FONT_FAMILY, 13));
-        textFlow.getChildren().add(text);
-        container.getChildren().add(textFlow);
+    /**
+     * 调度节流式 UI 更新：同一 FX 脉冲内多次 chunk 只执行一次 flush。
+     */
+    private void scheduleFlush() {
+        if (textUpdateScheduled) return;
+        textUpdateScheduled = true;
+        Platform.runLater(this::flushStreamingText);
+    }
+
+    /**
+     * 取消 pending flush（STOP/TOOL_CALLS 时调用，避免残留 flush 干扰 Markdown 渲染）。
+     */
+    private void cancelPendingFlush() {
+        textUpdateScheduled = false;
+    }
+
+    /**
+     * 执行节流式 UI 更新：更新 streamingText、请求布局、通知外部重排。
+     */
+    private void flushStreamingText() {
+        if (currentStreamBox == null || streamingText == null) {
+            textUpdateScheduled = false;
+            return;
+        }
+        textUpdateScheduled = false;
+        String full = streamBuffer.toString();
+        streamingText.setText(full);
+        this.requestLayout();
+        notifyContentChanged();
     }
 
     private void renderStreamContent(VBox container, String content) {
@@ -327,12 +370,15 @@ public class TaskCard extends VBox {
 
     public void complete(String result) {
         Platform.runLater(() -> {
+            cancelPendingFlush();
             if (result != null && !result.isBlank()) {
                 streamBuffer.append("\n").append(result);
             }
             if (currentStreamBox != null && !streamBuffer.isEmpty()) {
                 renderStreamContent(currentStreamBox, streamBuffer.toString());
                 currentStreamBox = null;
+                streamingTextFlow = null;
+                streamingText = null;
             }
             streamBuffer.setLength(0);
             doSetStatus("completed");

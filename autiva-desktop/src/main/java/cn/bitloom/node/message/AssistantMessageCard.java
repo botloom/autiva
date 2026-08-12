@@ -2,9 +2,9 @@ package cn.bitloom.node.message;
 
 import cn.bitloom.util.MarkdownFxRenderer;
 import org.springframework.ai.chat.messages.MessageType;
+import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.scene.Node;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
@@ -35,12 +35,13 @@ public class AssistantMessageCard extends MessageCard {
 
     @Setter
     private Consumer<String> onContentChanged;
-    @Setter
-    private HBox actionBar;
 
     // 流式期间复用的组件
     private TextFlow streamingContainer = null;
     private Text streamingText = null;
+
+    /** 节流标志：同一 FX 脉冲内多次 chunk 只调度一次 flush，避免逐 chunk 触发 setText+reflow */
+    private boolean textUpdateScheduled = false;
 
     public AssistantMessageCard() {
         this.getStyleClass().add("chat-message");
@@ -50,14 +51,11 @@ public class AssistantMessageCard extends MessageCard {
         // 避免 VirtualFlow 缓存 0 高度导致后续 cell 渲染与滚动范围计算异常。
         initStreamingContainer();
 
-        // 监听 contentProperty，根据 streaming 状态决定渲染方式
+        // contentProperty 监听：流式期间由 flushStreamingText 直接管理，不经过此 listener。
+        // 仅用于非流式场景（如历史消息通过 setContent 设置后触发渲染）。
         content.addListener((obs, oldVal, newVal) -> {
-            if (isStreaming()) {
-                // 流式期间同步更新 streamingText，让 cell 高度随内容增长
-                appendStreamingText(newVal);
-                if (onContentChanged != null) {
-                    onContentChanged.accept(newVal);
-                }
+            if (!isStreaming() && newVal != null && !newVal.isBlank()) {
+                renderMarkdown(newVal);
             }
         });
 
@@ -65,7 +63,6 @@ public class AssistantMessageCard extends MessageCard {
         streaming.addListener((obs, oldVal, newVal) -> {
             if (!newVal && getContent() != null) {
                 renderMarkdown(getContent());
-                updateActionBarVisibility(true);
                 // MD 渲染后卡片高度可能变化，通知外部重排，避免与下方卡片重叠
                 if (onContentChanged != null) {
                     onContentChanged.accept(getContent());
@@ -76,19 +73,15 @@ public class AssistantMessageCard extends MessageCard {
 
     /**
      * 带初始内容构造（用于历史消息）
+     * content.set 触发 contentProperty listener 自动渲染 Markdown。
      */
     public AssistantMessageCard(String initialContent, String finishReason) {
         this();
-        if (initialContent != null) {
-            this.content.set(initialContent);
-        }
         if (finishReason != null) {
             this.finishReason.set(finishReason);
         }
-        // 初始渲染
-        if (initialContent != null && !initialContent.isBlank()) {
-            renderMarkdown(initialContent);
-            updateActionBarVisibility(true);
+        if (initialContent != null) {
+            this.content.set(initialContent); // listener 检测到 !isStreaming() → renderMarkdown + updateActionBarVisibility
         }
     }
 
@@ -141,7 +134,8 @@ public class AssistantMessageCard extends MessageCard {
     // ===== 流式累积方法（原 ChatMessage 的逻辑下沉） =====
 
     /**
-     * 累积流式内容。自动设置 streaming=true，并触发 contentProperty 变化。
+     * 累积流式内容。自动设置 streaming=true，调度节流式 UI 更新。
+     * 不直接调用 content.set / setText，而是通过 scheduleFlush 合并同一 FX 脉冲内的多次 chunk。
      */
     public void appendContent(String chunk) {
         if (!isStreamingActive) {
@@ -149,20 +143,21 @@ public class AssistantMessageCard extends MessageCard {
             streaming.set(true);
         }
         accumulator.append(chunk != null ? chunk : "");
-        content.set(accumulator.toString());
+        scheduleFlush();
     }
 
     /**
-     * 结束流式输出。设置 finishReason 和 streaming=false。
+     * 结束流式输出。取消 pending flush，设置 content，触发 Markdown 渲染。
      * 如果累积内容为空，将 content 设置为 null（供外部判断是否移除）。
      */
     public void complete(String reason) {
-        finishReason.set(reason);
+        // 取消 pending flush — complete() 将通过 streaming listener 触发最终渲染
+        textUpdateScheduled = false;
         isStreamingActive = false;
-        streaming.set(false);
-        if (accumulator.isEmpty()) {
-            content.set(null);
-        }
+        // 设置 content 供 isValid 判断使用
+        content.set(accumulator.isEmpty() ? null : accumulator.toString());
+        finishReason.set(reason);
+        streaming.set(false); // 触发 streaming listener → renderMarkdown
     }
 
     /**
@@ -175,12 +170,38 @@ public class AssistantMessageCard extends MessageCard {
 
     // ===== 渲染逻辑 =====
 
-    private void appendStreamingText(String content) {
+    /**
+     * 调度节流式 UI 更新：同一 FX 脉冲内多次 chunk 只执行一次 flush。
+     * appendContent 在 FX 线程调用（由 ViewModel 的 Platform.runLater 保证），
+     * 此处再提交一个 runLater，会在当前所有 runLater 之后执行，
+     * 从而合并同一脉冲内的多个 chunk 为一次 setText。
+     */
+    private void scheduleFlush() {
+        if (textUpdateScheduled) return;
+        textUpdateScheduled = true;
+        Platform.runLater(this::flushStreamingText);
+    }
+
+    /**
+     * 执行节流式 UI 更新：更新 streamingText、请求布局、通知外部重排。
+     * 若流式已结束（complete 后残留的 pending flush），直接跳过。
+     */
+    private void flushStreamingText() {
+        if (!isStreamingActive) {
+            textUpdateScheduled = false;
+            return;
+        }
+        textUpdateScheduled = false;
+        String full = accumulator.toString();
         if (streamingText == null) {
             initStreamingContainer();
-            updateActionBarVisibility(false);
         }
-        streamingText.setText(content != null ? content : "");
+        streamingText.setText(full);
+        // 请求卡片自身重布局（高度可能变化），确保 VirtualFlow 在下一 pulse 重算 cell 偏移
+        this.requestLayout();
+        if (onContentChanged != null) {
+            onContentChanged.accept(full);
+        }
     }
 
     /**
@@ -232,13 +253,6 @@ public class AssistantMessageCard extends MessageCard {
             text.setFont(Font.font(FONT_FAMILY, 15));
             textFlow.getChildren().add(text);
             this.getChildren().add(textFlow);
-        }
-    }
-
-    private void updateActionBarVisibility(boolean visible) {
-        if (actionBar != null) {
-            actionBar.setVisible(visible);
-            actionBar.setManaged(visible);
         }
     }
 }

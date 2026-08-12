@@ -112,6 +112,44 @@ public final class CompactionUtils {
 	}
 
 	/**
+	 * 检测事件列表中是否存在未完成的 tool call（open tool call）。
+	 *
+	 * <p>
+	 * 压缩在 {@code after()} 中触发：模型返回 toolCalls 时，assistant(toolCalls) 刚追加
+	 * 但对应的 ToolResponse 尚未产生（工具还在执行中，ToolResponse 会在下一轮 {@code before()}
+	 * 追加）。若此时压缩，assistant(toolCalls) 被归档/摘要，随后追加的 ToolResponse 会成为孤儿，
+	 * 违反 LLM API 成对约束。检测到 open tool call 时应跳过本次压缩，等 tool call 完成后再压缩。
+	 *
+	 * <p>
+	 * 检测方式：从末尾向前扫描，找最后一个 {@link AssistantMessage} 且 {@code hasToolCalls()} 的事件，
+	 * 检查其所有 toolCall ids 是否都在其后（扫描时已记录）的 ToolResponseMessage 中出现。
+	 * 只要有一个 toolCall id 没有对应的 response，就判定为 open tool call。
+	 *
+	 * @param events 事件列表（按时间从旧到新排序）
+	 * @return 存在 open tool call 返回 true，否则 false
+	 */
+	public static boolean hasOpenToolCall(List<MessageEvent> events) {
+		Set<String> respondedIds = new HashSet<>();
+		// 从后向前扫描：先遇到的 ToolResponseMessage 记录其 response ids，
+		// 遇到第一个 AssistantMessage(toolCalls) 时检查其 toolCalls 是否都有 response
+		for (int i = events.size() - 1; i >= 0; i--) {
+			MessageEvent event = events.get(i);
+			if (event.getMessage() instanceof ToolResponseMessage trm) {
+				trm.getResponses().forEach(r -> respondedIds.add(r.id()));
+			}
+			else if (event.getMessage() instanceof AssistantMessage am && am.hasToolCalls()) {
+				for (AssistantMessage.ToolCall tc : am.getToolCalls()) {
+					if (!respondedIds.contains(tc.id())) {
+						return true; // 存在没有 response 的 toolCall，是 open tool call
+					}
+				}
+				return false; // 最后一个 assistant(toolCalls) 的所有 call 都有 response
+			}
+		}
+		return false; // 没有 assistant(toolCalls)
+	}
+
+	/**
 	 * 保证压缩后事件列表中 assistant(toolCalls) 与 ToolResponseMessage 成对出现。
 	 *
 	 * <p>

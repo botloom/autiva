@@ -16,7 +16,7 @@ public abstract class MessageCard extends VBox {
     public abstract MessageType getMessageType();
 
     /**
-     * 获取消息内容（用于复制按钮等操作）
+     * 获取消息内容
      */
     public abstract String getContent();
 

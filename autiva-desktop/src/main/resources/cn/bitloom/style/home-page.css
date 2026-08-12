@@ -484,6 +484,10 @@
     -fx-text-fill: #1d1d1f;
 }
 
+.chat-message--streaming {
+    -fx-effect: null;
+}
+
 .chat-message--streaming .chat-message__content {
     -fx-opacity: 0.85;
 }

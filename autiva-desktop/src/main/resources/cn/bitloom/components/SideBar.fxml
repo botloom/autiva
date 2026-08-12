@@ -7,6 +7,7 @@
 <VBox fx:id="sideBar" styleClass="sidebar" xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.SideBarController"
       stylesheets="@../style/side-bar.css"
+      SplitPane.resizableWithParent="false"
 >
     <fx:define>
         <ToggleGroup fx:id="agentSelect"/>
@@ -14,12 +15,12 @@
 
     <VBox styleClass="sidebar__content" VBox.vgrow="ALWAYS">
         <HBox  styleClass="sidebar__mode-switcher" alignment="CENTER">
-            <ToggleButton fx:id="workModeBtn" styleClass="sidebar__mode-btn" text="Work" selected="true" toggleGroup="${agentSelect}">
+            <ToggleButton fx:id="workModeBtn" styleClass="sidebar__mode-btn" text="Work" selected="true" toggleGroup="${agentSelect}" HBox.hgrow="ALWAYS">
                 <graphic>
                     <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/work.svg"/>
                 </graphic>
             </ToggleButton>
-            <ToggleButton fx:id="coderModeBtn" styleClass="sidebar__mode-btn" text="Code" toggleGroup="${agentSelect}">
+            <ToggleButton fx:id="coderModeBtn" styleClass="sidebar__mode-btn" text="Code" toggleGroup="${agentSelect}" HBox.hgrow="ALWAYS">
                 <graphic>
                     <SvgImageView styleClass="sidebar__mode-icon" fitWidth="14" fitHeight="14" svgPath="/cn/bitloom/images/code.svg"/>
                 </graphic>
