@@ -11,6 +11,7 @@ import cn.bitloom.node.tool.TodoCard;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.AbstractHomePageViewModel;
 import cn.bitloom.window.WindowManager;
+import javafx.application.Platform;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
@@ -196,7 +197,9 @@ public abstract class AbstractHomePageController implements Initializable, Butto
                     scrollToBottom();
                 }
             }
-            onMessagesChanged(!this.getViewModel().getMessages().isEmpty());
+            boolean hasMessages = !this.getViewModel().getMessages().isEmpty();
+            onMessagesChanged(hasMessages);
+            updateViewButtonVisibility(hasMessages);
         });
 
         if (this.getViewModel().hasHistoricalMessages()) {
@@ -206,6 +209,10 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
         // 注册对话框为拖拽目标（接收来自文件树/Diff 列表/文件编辑器的拖拽）
         this.setupDragDrop();
+
+        // 初始化完成后同步一次右上角视图按钮可见性（异步确保按钮已由 ButtonBar 创建）
+        boolean initialHasMessages = !this.getViewModel().getMessages().isEmpty();
+        Platform.runLater(() -> updateViewButtonVisibility(initialHasMessages));
     }
 
     /**
@@ -213,6 +220,15 @@ public abstract class AbstractHomePageController implements Initializable, Butto
      */
     protected void onMessagesChanged(boolean hasMessages) {
         // 默认空实现，子类可 override
+    }
+
+    /**
+     * 控制右上角视图按钮（终端/工具/待办）的显示：仅有聊天消息时显示。
+     */
+    private void updateViewButtonVisibility(boolean hasMessages) {
+        if (indexController != null && indexController.getButtonBarController() != null) {
+            indexController.getButtonBarController().setViewButtonsVisible(hasMessages);
+        }
     }
 
     /**
@@ -584,19 +600,30 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     /**
-     * 创建通用按钮配置：右侧边栏 toggle 按钮。
+     * 创建通用按钮配置：工具视图、待办事项（Work 与 Coder 共有，右侧对齐）。
      */
     protected List<ButtonBarHolder.ButtonConfig> createCommonButtons() {
         List<ButtonBarHolder.ButtonConfig> configs = new ArrayList<>();
         configs.add(new ButtonBarHolder.ButtonConfig(
-                "rightPanelButton",
-                "右侧边栏",
+                "toolCallsButton",
+                "工具视图",
                 "button-bar__icon-btn",
-                "/cn/bitloom/images/panel-right.svg",
+                "/cn/bitloom/images/plug.svg",
                 ButtonBarHolder.Alignment.RIGHT,
                 _ -> {
                     if (indexController != null) {
-                        indexController.toggleEditorPanel();
+                        indexController.toggleToolCallsPanel();
+                    }
+                }));
+        configs.add(new ButtonBarHolder.ButtonConfig(
+                "todoButton",
+                "待办事项",
+                "button-bar__icon-btn",
+                "/cn/bitloom/images/list.svg",
+                ButtonBarHolder.Alignment.RIGHT,
+                _ -> {
+                    if (indexController != null) {
+                        indexController.toggleTodoPanel();
                     }
                 }));
         return configs;

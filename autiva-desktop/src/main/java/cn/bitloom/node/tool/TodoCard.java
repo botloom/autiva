@@ -23,6 +23,8 @@ public class TodoCard extends VBox {
         getStyleClass().add("chat-message");
         getStyleClass().add("chat-message--tool");
         getStyleClass().add("chat-message--todo");
+        // 卡片宽度跟随 ListView cell，不基于内容自然宽度撑大（与工具卡片 ToolMessageCard 一致）
+        setMaxWidth(Double.MAX_VALUE);
         rebuild(todosJson);
     }
 
@@ -48,11 +50,13 @@ public class TodoCard extends VBox {
         HBox header = new HBox(10);
         header.getStyleClass().add("chat-message__tool-header");
         header.setAlignment(Pos.CENTER_LEFT);
+        header.setMaxWidth(Double.MAX_VALUE);
 
         StackPane progressRing = createProgressRing(completedCount, totalCount);
         header.getChildren().add(progressRing);
 
         VBox titleBox = new VBox(1);
+        titleBox.setMaxWidth(Double.MAX_VALUE);
         Label nameLabel = new Label("TodoWrite");
         nameLabel.getStyleClass().add("chat-message__tool-name");
         nameLabel.setStyle("-fx-text-fill: #b45309;");
@@ -66,6 +70,7 @@ public class TodoCard extends VBox {
         VBox body = new VBox(4);
         body.getStyleClass().add("chat-message__todo-body");
         body.setPadding(new Insets(6, 0, 0, 0));
+        body.setMaxWidth(Double.MAX_VALUE);
 
         for (JsonNode item : todoItems) {
             String content = getString(item, "content");

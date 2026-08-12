@@ -18,11 +18,23 @@
 }
 
 .index__split .split-pane-divider {
-    -fx-background-color: #e0e0e0;
-    -fx-padding: 0 1 0 0;
+    -fx-background-color: transparent;
+    -fx-padding: 0 5 0 5;
     -fx-cursor: h-resize;
+    /* 默认透明贴片，扩大命中区的同时保持隐形 */
+    -fx-background-radius: 1;
 }
 
+/* hover 仅在中央显示 2px 细条，贴合分隔线本体 */
 .index__split .split-pane-divider:hover {
-    -fx-background-color: #007aff;
+    -fx-background-color: rgba(0, 113, 227, 0.35);
+    -fx-background-insets: 0 4 0 4;
+}
+
+/* 右侧编辑器面板容器（悬浮卡片外层留白，与左侧 sidebar 统一为 8px） */
+.editor-panel-slot {
+    -fx-background-color: transparent;
+    -fx-padding: 8;
+    -fx-min-width: 400;
+    -fx-pref-width: 640;
 }

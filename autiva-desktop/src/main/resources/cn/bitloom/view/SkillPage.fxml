@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox fx:id="skillPage" styleClass="skill-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+<VBox fx:id="skillPage" styleClass="skill-page" maxWidth="800" maxHeight="Infinity"
       xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.SkillPageController"
       stylesheets="@../style/skill-page.css"
 >
+    <HBox styleClass="skill-page__toolbar" maxWidth="700" alignment="CENTER_RIGHT" VBox.vgrow="NEVER">
+        <Button styleClass="skill-page__toolbar-btn" text="导入技能" onAction="#onImportSkill"/>
+    </HBox>
     <ListView fx:id="skillListView" VBox.vgrow="ALWAYS" styleClass="skill-page__list"/>
 </VBox>

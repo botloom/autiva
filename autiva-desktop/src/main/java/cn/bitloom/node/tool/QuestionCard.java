@@ -301,37 +301,18 @@ public class QuestionCard extends VBox {
             }
         }
 
-        optionGroups.forEach(pane -> pane.getChildren().forEach(node -> {
-            if (node instanceof Button btn) {
-                btn.setDisable(true);
-                btn.setOpacity(0.7);
-            }
-        }));
-        otherInputContainers.forEach(container -> container.getChildren().forEach(node -> {
-            if (node instanceof TextField field) {
-                field.setDisable(true);
-                field.setOpacity(0.7);
-            }
-        }));
-        submitButtons.forEach(btn -> {
-            btn.setDisable(true);
-            btn.setVisible(false);
-        });
-
-        VBox answeredBox = new VBox(4);
-        answeredBox.getStyleClass().add("chat-message__question-answered");
-        answers.forEach((question, answer) -> {
-            Label qLabel = new Label(question);
-            qLabel.getStyleClass().add("chat-message__question-answered-label");
-            Label aLabel = new Label(answer);
-            aLabel.getStyleClass().add("chat-message__question-answered-value");
-            aLabel.setWrapText(true);
-            answeredBox.getChildren().addAll(qLabel, aLabel);
-        });
-        this.getChildren().add(answeredBox);
-
         String answersJson = JsonUtils.toJson(answers);
         onAnswered.accept(questionId, answersJson);
+        // 用户作答后卡片自动消失（不占位、不残留交互）
+        dismiss();
+    }
+
+    /**
+     * 作答完成后隐藏自身卡片，使其从消息流中消失。
+     */
+    private void dismiss() {
+        this.setVisible(false);
+        this.setManaged(false);
     }
 
     private List<JsonNode> parseQuestions(String questionsJson) {

@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox fx:id="taskPage" styleClass="task-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+<VBox fx:id="taskPage" styleClass="task-page" maxWidth="800" maxHeight="Infinity"
       xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.TaskPageController"
       stylesheets="@../style/task-page.css"
 >
+    <HBox styleClass="task-page__toolbar" maxWidth="700" alignment="CENTER_RIGHT" VBox.vgrow="NEVER">
+        <Button styleClass="task-page__toolbar-btn" text="刷新" onAction="#onRefreshTasks"/>
+    </HBox>
     <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="task-page__scroll-pane">
         <VBox fx:id="taskListContainer" styleClass="task-page__list"/>
     </ScrollPane>

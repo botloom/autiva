@@ -45,16 +45,7 @@ public class IndexController implements Initializable {
     private VBox editorPanelSlot;
     @FXML
     @Getter
-    private AgentPageController agentPageController;
-    @FXML
-    @Getter
     private SettingsPageController settingsPageController;
-    @FXML
-    @Getter
-    private SkillPageController skillPageController;
-    @FXML
-    @Getter
-    private TaskPageController taskPageController;
 
     @Getter
     private final Router router;
@@ -73,10 +64,7 @@ public class IndexController implements Initializable {
     public void initialize(URL location, ResourceBundle resources) {
         this.buttonBarController.setIndexController(this);
         this.sideBarController.setIndexController(this);
-        this.agentPageController.setIndexController(this);
         this.settingsPageController.setIndexController(this);
-        this.skillPageController.setIndexController(this);
-        this.taskPageController.setIndexController(this);
 
         // 注入 Markdown 链接处理器：file:// 链接在项目视图中打开
         MarkdownFxRenderer.setLinkHandler(this::handleMarkdownLink);
@@ -211,6 +199,7 @@ public class IndexController implements Initializable {
     public void toggleTerminalPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
+        editor.closeAllTabs();
         ensureEditorVisible();
         editor.openTerminal(resolveWorkingDir());
     }
@@ -221,6 +210,7 @@ public class IndexController implements Initializable {
     public void toggleToolCallsPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
+        editor.closeAllTabs();
         ensureEditorVisible();
         editor.showToolCallsView();
     }
@@ -231,6 +221,7 @@ public class IndexController implements Initializable {
     public void toggleTodoPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
+        editor.closeAllTabs();
         ensureEditorVisible();
         editor.showTodoView();
     }

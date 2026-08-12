@@ -71,17 +71,6 @@ public class CoderEditorPanelController extends EditorPanelController implements
         super.initialize(location, resources);
     }
 
-    // ===== "+" 下拉菜单 =====
-
-    @Override
-    protected ContextMenu buildAddTabMenu() {
-        ContextMenu menu = new ContextMenu();
-        menu.getItems().add(createMenuItem("终端", () -> openTerminal(resolveWorkingDir())));
-        menu.getItems().add(createMenuItem("工具视图", () -> openSingleTab(ViewType.TOOL_CALLS, "工具视图", toolCallsView)));
-        menu.getItems().add(createMenuItem("待办事项", () -> openSingleTab(ViewType.TODO, "待办事项", todoView)));
-        return menu;
-    }
-
     /**
      * 解析当前工作目录
      */
@@ -98,30 +87,50 @@ public class CoderEditorPanelController extends EditorPanelController implements
         return null;
     }
 
-    // ===== 终端（多开） =====
+    // ===== 终端（单顶部按钮 + 子 tab 多开） =====
 
     @Override
     public void openTerminal(Path workingDir) {
         show();
+        EditorTab terminalTab = findTabByType(ViewType.TERMINAL);
+        SubTabContainer container;
+        if (terminalTab != null) {
+            container = (SubTabContainer) terminalTab.userData.get("container");
+            selectTab(terminalTab);
+        } else {
+            container = new SubTabContainer(
+                    c -> openTerminal(resolveWorkingDir()),
+                    subTab -> cleanupTerminalSubTab(subTab));
+            final EditorTab newTab = createTab(ViewType.TERMINAL, container.getView());
+            newTab.userData.put("container", container);
+            newTab.userData.put("workingDir", workingDir);
+            container.setOnEmpty(() -> closeTab(newTab));
+            container.setOnCloseView(() -> closeTab(newTab));
+            addTab(newTab);
+            selectTab(newTab);
+            terminalTab = newTab;
+        }
+
+        // 创建新的终端子 tab
         VBox terminalContent = new VBox();
         terminalContent.getStyleClass().add("editor-panel__view");
         VBox.setVgrow(terminalContent, Priority.ALWAYS);
 
-        EditorTab tab = createTab(ViewType.TERMINAL, "终端", terminalContent, true);
-        addTab(tab);
-        selectTab(tab);
+        int index = container.getSubTabs().size() + 1;
+        SubTabContainer.SubTab subTab = container.addSubTab("终端 " + index, terminalContent);
 
         terminalContent.getChildren().setAll(createLoadingContent("正在启动终端..."));
 
+        final Path wd = workingDir != null ? workingDir : resolveWorkingDir();
         new Thread(() -> {
             try {
-                PtySession session = ptyTerminalService.createSession(workingDir);
+                PtySession session = ptyTerminalService.createSession(wd);
                 JediTerminalView view = new JediTerminalView();
                 view.startSession(session);
 
                 Platform.runLater(() -> {
-                    tab.userData.put("session", session);
-                    tab.userData.put("view", view);
+                    subTab.userData.put("session", session);
+                    subTab.userData.put("view", view);
                     terminalContent.getChildren().setAll(view);
                     VBox.setVgrow(view, Priority.ALWAYS);
                     setupTerminalContextMenu(view);
@@ -132,56 +141,81 @@ public class CoderEditorPanelController extends EditorPanelController implements
                 Platform.runLater(() -> terminalContent.getChildren().setAll(
                         createErrorContent("终端启动失败: " + e.getMessage(),
                                 () -> {
-                                    closeTab(tab);
-                                    openTerminal(workingDir);
+                                    container.closeSubTab(subTab);
+                                    openTerminal(wd);
                                 })));
             } catch (Exception e) {
                 log.error("终端初始化异常", e);
                 Platform.runLater(() -> terminalContent.getChildren().setAll(
                         createErrorContent("终端初始化异常: " + e.getMessage(),
                                 () -> {
-                                    closeTab(tab);
-                                    openTerminal(workingDir);
+                                    container.closeSubTab(subTab);
+                                    openTerminal(wd);
                                 })));
             }
         }).start();
     }
 
+    private void cleanupTerminalSubTab(SubTabContainer.SubTab subTab) {
+        JediTerminalView view = (JediTerminalView) subTab.userData.get("view");
+        PtySession session = (PtySession) subTab.userData.get("session");
+        if (view != null) {
+            view.closeSession();
+        }
+        if (session != null) {
+            ptyTerminalService.closeSession(session.getSessionId());
+        }
+    }
+
     @Override
     public void closeTerminal() {
-        List<EditorTab> terminalTabs = tabs.stream()
-                .filter(t -> t.viewType == ViewType.TERMINAL)
-                .toList();
-        for (EditorTab tab : terminalTabs) {
-            closeTab(tab);
+        EditorTab terminalTab = findTabByType(ViewType.TERMINAL);
+        if (terminalTab != null) {
+            closeTab(terminalTab);
         }
     }
 
     @Override
     protected void onTabClosed(EditorTab tab) {
         if (tab.viewType == ViewType.TERMINAL) {
-            JediTerminalView view = (JediTerminalView) tab.userData.get("view");
-            PtySession session = (PtySession) tab.userData.get("session");
-            if (view != null) {
-                view.closeSession();
-            }
-            if (session != null) {
-                ptyTerminalService.closeSession(session.getSessionId());
+            SubTabContainer container = (SubTabContainer) tab.userData.get("container");
+            if (container != null) {
+                for (SubTabContainer.SubTab subTab : container.getSubTabs()) {
+                    cleanupTerminalSubTab(subTab);
+                }
             }
         }
     }
 
-    // ===== 文件内容（多开） =====
+    // ===== 文件内容（单顶部按钮 + 子 tab 多开） =====
 
     @Override
     public void showFileContent(Path filePath) {
         show();
         String pathKey = filePath.toString();
-        for (EditorTab tab : tabs) {
-            if (tab.viewType == ViewType.FILE && pathKey.equals(tab.userData.get("path"))) {
-                selectTab(tab);
+
+        EditorTab fileTab = findTabByType(ViewType.FILE);
+        SubTabContainer container;
+        if (fileTab != null) {
+            container = (SubTabContainer) fileTab.userData.get("container");
+            selectTab(fileTab);
+            // 检查文件是否已打开
+            SubTabContainer.SubTab existing = container.findSubTabByUserData("path", pathKey);
+            if (existing != null) {
+                container.selectSubTab(existing);
                 return;
             }
+        } else {
+            container = new SubTabContainer(
+                    c -> openFileViaDialog(),
+                    subTab -> {});
+            final EditorTab newTab = createTab(ViewType.FILE, container.getView());
+            newTab.userData.put("container", container);
+            container.setOnEmpty(() -> closeTab(newTab));
+            container.setOnCloseView(() -> closeTab(newTab));
+            addTab(newTab);
+            selectTab(newTab);
+            fileTab = newTab;
         }
 
         String fileName = filePath.getFileName().toString();
@@ -189,10 +223,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
         fileContent.getStyleClass().add("editor-panel__view");
         VBox.setVgrow(fileContent, Priority.ALWAYS);
 
-        EditorTab tab = createTab(ViewType.FILE, fileName, fileContent, true);
-        tab.userData.put("path", pathKey);
-        addTab(tab);
-        selectTab(tab);
+        SubTabContainer.SubTab subTab = container.addSubTab(fileName, fileContent);
+        subTab.userData.put("path", pathKey);
 
         try {
             String content = Files.readString(filePath);
@@ -203,13 +235,13 @@ public class CoderEditorPanelController extends EditorPanelController implements
             // 行号处按 Git 改动着色：存入可变行状态引用，外部刷新时仅换引用并重绘
             AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef =
                     new AtomicReference<>(computeLineStatus(filePath));
-            tab.userData.put("lineStatus", lineStatusRef);
+            subTab.userData.put("lineStatus", lineStatusRef);
             applyGitGutter(codeArea, lineStatusRef);
             codeArea.replaceText(content);
             // 记录是否有未保存改动，外部变化时避免覆盖用户编辑
-            tab.userData.put("dirty", false);
+            subTab.userData.put("dirty", false);
             codeArea.textProperty().addListener((obs, oldText, newText) ->
-                    tab.userData.put("dirty", !content.equals(newText)));
+                    subTab.userData.put("dirty", !content.equals(newText)));
             codeArea.getStyleClass().add("editor-panel__code-area");
             SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(filePath);
             highlighter.apply(codeArea, content);
@@ -219,7 +251,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
                 if (e.isControlDown() && e.getCode() == javafx.scene.input.KeyCode.S) {
                     e.consume();
                     saveFileContent(filePath, codeArea.getText());
-                    tab.userData.put("dirty", false);
+                    subTab.userData.put("dirty", false);
                 }
             });
 
@@ -229,8 +261,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
             fileContent.getChildren().setAll(scrollPane);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
-            // 依据项目 Git 状态着色（tab 标题 + 代码区状态色）
-            applyGitStyleToTab(tab, filePath);
+            // 依据项目 Git 状态着色（子 tab 标题 + 代码区状态色）
+            applyGitStyleToSubTab(subTab, filePath);
 
             Platform.runLater(codeArea::requestFocus);
             setupCodeAreaContextMenu(codeArea, filePath);
@@ -241,6 +273,22 @@ public class CoderEditorPanelController extends EditorPanelController implements
         } catch (Exception e) {
             log.error("显示文件内容失败: {}", filePath, e);
             fileContent.getChildren().setAll(createErrorContent("显示文件内容失败: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * "+" 按钮回调：弹出文件选择器打开文件
+     */
+    private void openFileViaDialog() {
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("打开文件");
+        Path wd = resolveWorkingDir();
+        if (wd != null) {
+            chooser.setInitialDirectory(wd.toFile());
+        }
+        java.io.File selected = chooser.showOpenDialog(null);
+        if (selected != null) {
+            showFileContent(selected.toPath());
         }
     }
 
@@ -279,32 +327,32 @@ public class CoderEditorPanelController extends EditorPanelController implements
     }
 
     /**
-     * 根据项目 Git 状态为已打开的文件 tab 标题着色，并在状态变化时同步刷新。
+     * 根据项目 Git 状态为已打开的文件子 tab 标题着色，并在状态变化时同步刷新。
      * 代码区改为按行（行号处）着色，由 {@link #applyGitGutter} 处理。
      */
-    private void applyGitStyleToTab(EditorTab tab, Path filePath) {
-        if (tab == null || tab.viewType != ViewType.FILE) {
+    private void applyGitStyleToSubTab(SubTabContainer.SubTab subTab, Path filePath) {
+        if (subTab == null) {
             return;
         }
         GitFileStatus st = projectStatusStore.statusOf(filePath);
-        // 状态样式类名与变色（仅标题）
+        // 状态样式类名与变色（仅子 tab 标题）
         String gitClass = null;
         if (st != null) {
             gitClass = switch (st) {
-                case ADDED -> "editor-panel__tab--git-added";
-                case MODIFIED -> "editor-panel__tab--git-modified";
-                case UNTRACKED -> "editor-panel__tab--git-untracked";
+                case ADDED -> "editor-panel__sub-tab--git-added";
+                case MODIFIED -> "editor-panel__sub-tab--git-modified";
+                case UNTRACKED -> "editor-panel__sub-tab--git-untracked";
             };
         }
-        tab.header.getStyleClass().removeAll(
-                "editor-panel__tab--git-added", "editor-panel__tab--git-modified", "editor-panel__tab--git-untracked");
+        subTab.header.getStyleClass().removeAll(
+                "editor-panel__sub-tab--git-added", "editor-panel__sub-tab--git-modified", "editor-panel__sub-tab--git-untracked");
         if (gitClass != null) {
-            tab.header.getStyleClass().add(gitClass);
+            subTab.header.getStyleClass().add(gitClass);
         }
     }
 
     /**
-     * 订阅 Git 状态刷新信号：对已打开文件 tab 重新着色（并重读无未保存改动的文件内容）。
+     * 订阅 Git 状态刷新信号：对已打开文件子 tab 重新着色（并重读无未保存改动的文件内容）。
      */
     private void subscribeStatusRefresh() {
         if (refreshSubscribed) {
@@ -313,15 +361,19 @@ public class CoderEditorPanelController extends EditorPanelController implements
         refreshSubscribed = true;
         projectStatusStore.refreshSignal.addListener((obs, oldVal, newVal) ->
                 Platform.runLater(() -> {
-                    List<EditorTab> fileTabs = tabs.stream()
-                            .filter(t -> t.viewType == ViewType.FILE && t.userData.get("path") != null)
-                            .toList();
-                    for (EditorTab tab : fileTabs) {
-                        Path p = Path.of((String) tab.userData.get("path"));
+                    EditorTab fileTab = findTabByType(ViewType.FILE);
+                    if (fileTab == null) return;
+                    SubTabContainer container = (SubTabContainer) fileTab.userData.get("container");
+                    if (container == null) return;
+
+                    for (SubTabContainer.SubTab subTab : container.getSubTabs()) {
+                        String pathStr = (String) subTab.userData.get("path");
+                        if (pathStr == null) continue;
+                        Path p = Path.of(pathStr);
                         // 无未保存改动时重读文件内容，确保随外部变化更新
-                        if (Boolean.FALSE.equals(tab.userData.get("dirty")) && Files.isRegularFile(p)) {
+                        if (Boolean.FALSE.equals(subTab.userData.get("dirty")) && Files.isRegularFile(p)) {
                             // 重新计算行级改动并更新行号着色引用
-                            if (tab.userData.get("lineStatus") instanceof AtomicReference<?> ref) {
+                            if (subTab.userData.get("lineStatus") instanceof AtomicReference<?> ref) {
                                 @SuppressWarnings("unchecked")
                                 AtomicReference<Map<Integer, GitFileStatus>> lineRef =
                                         (AtomicReference<Map<Integer, GitFileStatus>>) ref;
@@ -329,10 +381,10 @@ public class CoderEditorPanelController extends EditorPanelController implements
                             }
                             try {
                                 String fresh = Files.readString(p);
-                                if (tab.content instanceof VBox vbox) {
+                                if (subTab.content instanceof VBox vbox) {
                                     vbox.lookupAll(".editor-panel__code-area").forEach(n -> {
                                         if (n instanceof CodeArea ca) {
-                                            if (tab.userData.get("lineStatus") instanceof AtomicReference<?> lineRef) {
+                                            if (subTab.userData.get("lineStatus") instanceof AtomicReference<?> lineRef) {
                                                 @SuppressWarnings("unchecked")
                                                 AtomicReference<Map<Integer, GitFileStatus>> lr =
                                                         (AtomicReference<Map<Integer, GitFileStatus>>) lineRef;
@@ -348,7 +400,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
                                 log.warn("重新读取文件失败: {}", p, e);
                             }
                         }
-                        applyGitStyleToTab(tab, p);
+                        applyGitStyleToSubTab(subTab, p);
                     }
                 }));
     }
@@ -362,17 +414,28 @@ public class CoderEditorPanelController extends EditorPanelController implements
         }
     }
 
-    // ===== DIFF 视图（单 diff tab） =====
+    // ===== DIFF 视图（单例） =====
 
     @Override
     public void showDiffInProjectView(FileDiff diff) {
         show();
-        String diffId = diff.id();
-        for (EditorTab tab : tabs) {
-            if (tab.viewType == ViewType.DIFF && diffId.equals(tab.userData.get("diffId"))) {
-                selectTab(tab);
+        EditorTab diffTab = findTabByType(ViewType.DIFF);
+        if (diffTab != null) {
+            // 已有 DIFF tab，替换内容
+            String diffId = diff.id();
+            if (diffId.equals(diffTab.userData.get("diffId"))) {
+                selectTab(diffTab);
                 return;
             }
+            // 清理旧内容并重新渲染
+            if (diffTab.content instanceof VBox vbox) {
+                vbox.getChildren().clear();
+            }
+            diffTab.userData.put("diffId", diffId);
+            diffTab.userData.put("diff", diff);
+            renderDiffIntoContent(diff, (VBox) diffTab.content, diffTab);
+            selectTab(diffTab);
+            return;
         }
 
         String fileName = Paths.get(diff.filePath()).getFileName().toString();
@@ -380,8 +443,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
         diffContent.getStyleClass().add("editor-panel__view");
         VBox.setVgrow(diffContent, Priority.ALWAYS);
 
-        EditorTab tab = createTab(ViewType.DIFF, fileName, diffContent, true);
-        tab.userData.put("diffId", diffId);
+        EditorTab tab = createTab(ViewType.DIFF, diffContent);
+        tab.userData.put("diffId", diff.id());
         tab.userData.put("diff", diff);
         addTab(tab);
         selectTab(tab);

@@ -1,8 +1,7 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.agent.AgentDefinition;
-import cn.bitloom.holder.ButtonBarHolder;
-import cn.bitloom.holder.PageHolder;
+import cn.bitloom.holder.DialogHolder;
 import cn.bitloom.vm.AgentPageViewModel;
 import cn.bitloom.window.WindowManager;
 import javafx.fxml.FXML;
@@ -17,21 +16,18 @@ import javafx.scene.control.Separator;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
-import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AgentPageController implements Initializable, ButtonBarHolder, PageHolder {
+public class AgentPageController implements Initializable, DialogHolder {
 
     private final AgentPageViewModel viewModel;
     private final WindowManager windowManager;
@@ -41,9 +37,25 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
     @FXML
     private ListView<AgentDefinition> agentListView;
 
-    @Getter
-    @Setter
-    private IndexController indexController;
+    @Override
+    public double getWidth() {
+        return 800;
+    }
+
+    @Override
+    public double getHeight() {
+        return 650;
+    }
+
+    @Override
+    public boolean isResizable() {
+        return true;
+    }
+
+    /** 弹窗每次打开时刷新数据（showDialog initializer 调用） */
+    public void refresh() {
+        renderAgents();
+    }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -136,7 +148,8 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
         return card;
     }
 
-    private void createAgent() {
+    @FXML
+    private void onCreateAgent() {
         windowManager.showDialog("cn/bitloom/view/AgentInputDialog.fxml",
                 agentPage.getScene().getWindow(),
                 controller -> {
@@ -208,31 +221,6 @@ public class AgentPageController implements Initializable, ButtonBarHolder, Page
                         editorController.init(agentId, fileName, content, viewModel);
                     }
                 });
-    }
-
-    @Override
-    public void show() {
-        this.agentPage.setVisible(true);
-        this.agentPage.setManaged(true);
-        renderAgents();
-    }
-
-    @Override
-    public void hide() {
-        this.agentPage.setVisible(false);
-        this.agentPage.setManaged(false);
-    }
-
-    @Override
-    public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
-        return List.of(
-                new ButtonBarHolder.ButtonConfig(
-                        "createAgentButton",
-                        "新建智能体",
-                        "dynamic-btn",
-                        event -> createAgent()
-                )
-        );
     }
 
     private void showWarning(String message) {

@@ -1,24 +1,19 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.tool.file.FileDiff;
-import cn.bitloom.node.svg.SvgImageView;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.ContextMenu;
-import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollBar;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -37,9 +32,10 @@ import java.util.ResourceBundle;
 /**
  * 编辑器面板通用基类。
  * <p>
- * 采用 Tab 栏管理多视图：面板顶部有 tab 栏，最左侧"+"按钮下拉可添加视图。
- * 工具/Todo 为单例 tab，终端/文件/DIFF（coder 模式）可多开。
- * tab 关闭按钮在左侧。
+ * 每个视图类型（终端/工具/Todo/文件/DIFF）以独立卡片形式展示。
+ * 每个卡片右上角有浮动的关闭按钮。
+ * 终端/文件视图内部使用 {@link SubTabContainer} 管理多实例子 tab。
+ * 多个视图可同时存在，一次只显示一个，通过 ButtonBar 按钮切换。
  */
 @Slf4j
 @Component
@@ -52,12 +48,6 @@ public class EditorPanelController implements Initializable {
     @Getter
     private VBox editorPanel;
     @FXML
-    protected HBox tabBar;
-    @FXML
-    protected ScrollPane tabScroll;
-    @FXML
-    protected Button addTabButton;
-    @FXML
     protected StackPane viewContainer;
     @FXML
     protected VBox toolCallsView;
@@ -67,11 +57,15 @@ public class EditorPanelController implements Initializable {
     protected VBox todoView;
     @FXML
     protected ListView<Node> todoListView;
+    @FXML
+    protected Button toolCallsCloseBtn;
+    @FXML
+    protected Button todoCloseBtn;
 
     private final ObservableList<Node> toolCallNodes = FXCollections.observableArrayList();
     private final ObservableList<Node> todoNodes = FXCollections.observableArrayList();
 
-    // ===== Tab 管理 =====
+    // ===== 视图管理 =====
     protected final ObservableList<EditorTab> tabs = FXCollections.observableArrayList();
     @Getter
     protected EditorTab activeTab = null;
@@ -92,31 +86,29 @@ public class EditorPanelController implements Initializable {
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        // 让 editorPanel 填满 slot 容器
+        editorPanel.setMaxWidth(Double.MAX_VALUE);
+        editorPanel.setMaxHeight(Double.MAX_VALUE);
         setupRoundedClip();
         setupToolCallsListView();
         setupTodoListView();
-        setupAddTabButton();
-        setupTabScroll();
+        // 工具/Todo 视图 tab 栏的关闭视图按钮
+        if (toolCallsCloseBtn != null) {
+            toolCallsCloseBtn.setOnAction(e -> closeViewByType(ViewType.TOOL_CALLS));
+        }
+        if (todoCloseBtn != null) {
+            todoCloseBtn.setOnAction(e -> closeViewByType(ViewType.TODO));
+        }
     }
 
     /**
-     * tab 栏横向滚动：鼠标滚轮控制水平滚动
+     * 关闭指定类型的单例视图（工具/Todo 视图 tab 栏的关闭按钮）。
      */
-    private void setupTabScroll() {
-        tabScroll.setFitToHeight(true);
-        tabScroll.addEventFilter(ScrollEvent.SCROLL, e -> {
-            double delta = (e.getDeltaX() != 0) ? e.getDeltaX() : e.getDeltaY();
-            if (delta == 0) return;
-            double contentWidth = tabScroll.getContent().getLayoutBounds().getWidth();
-            double viewportWidth = tabScroll.getViewportBounds().getWidth();
-            double maxScroll = contentWidth - viewportWidth;
-            if (maxScroll <= 0) return;
-            // delta 是像素，转换为 [0,1] 范围的比例
-            double newH = tabScroll.getHvalue() - delta / maxScroll;
-            newH = Math.max(0, Math.min(1, newH));
-            tabScroll.setHvalue(newH);
-            e.consume();
-        });
+    protected void closeViewByType(ViewType type) {
+        EditorTab tab = findTabByType(type);
+        if (tab != null) {
+            closeTab(tab);
+        }
     }
 
     private void setupToolCallsListView() {
@@ -133,32 +125,6 @@ public class EditorPanelController implements Initializable {
         todoListView.setCellFactory(list -> new ToolListCell());
         setupStickToBottom(todoListView, () -> todoListStickToBottom, v -> todoListStickToBottom = v,
                 () -> todoScrollBarBound, v -> todoScrollBarBound = v);
-    }
-
-    /**
-     * 绑定"+"按钮的下拉菜单
-     */
-    private void setupAddTabButton() {
-        addTabButton.setOnAction(e -> {
-            ContextMenu menu = buildAddTabMenu();
-            menu.show(addTabButton, javafx.geometry.Side.BOTTOM, 0, 0);
-        });
-    }
-
-    /**
-     * 构建"+"下拉菜单，子类可 override 扩展选项
-     */
-    protected ContextMenu buildAddTabMenu() {
-        ContextMenu menu = new ContextMenu();
-        menu.getItems().add(createMenuItem("工具视图", () -> openSingleTab(ViewType.TOOL_CALLS, "工具视图", toolCallsView)));
-        menu.getItems().add(createMenuItem("待办事项", () -> openSingleTab(ViewType.TODO, "待办事项", todoView)));
-        return menu;
-    }
-
-    protected MenuItem createMenuItem(String text, Runnable action) {
-        MenuItem item = new MenuItem(text);
-        item.setOnAction(e -> action.run());
-        return item;
     }
 
     /**
@@ -236,106 +202,98 @@ public class EditorPanelController implements Initializable {
         viewContainer.setClip(clip);
     }
 
-    // ===== Tab 管理核心方法 =====
+    // ===== 视图管理核心方法 =====
 
     /**
-     * 打开单例 Tab（工具/Todo）：若已存在则激活，否则创建
+     * 打开单例视图（工具/Todo）：若已存在则激活，否则创建卡片
      */
-    protected void openSingleTab(ViewType type, String title, Node content) {
+    protected void openSingleTab(ViewType type, Node content) {
         EditorTab existing = findTabByType(type);
         if (existing != null) {
             selectTab(existing);
             return;
         }
-        EditorTab tab = createTab(type, title, content, true);
+        EditorTab tab = createTab(type, content);
         addTab(tab);
         selectTab(tab);
     }
 
     /**
-     * 创建 Tab 对象（header + content）
+     * 创建视图卡片：用 StackPane 包装内容并恢复其可见性。
      */
-    protected EditorTab createTab(ViewType type, String title, Node content, boolean closeable) {
+    protected EditorTab createTab(ViewType type, Node content) {
         String id = type.name().toLowerCase() + "-" + (tabIdCounter++);
-        HBox header = buildTabHeader(title, closeable, id);
-        return new EditorTab(id, type, title, content, header, new HashMap<>());
+        StackPane card = wrapWithCloseButton(content);
+        return new EditorTab(id, type, content, card, new HashMap<>());
     }
 
     /**
-     * 构建 Tab 头部：[关闭按钮] [标题]（关闭按钮在左侧）
+     * 用 StackPane 包装内容。视图的关闭统一由 tab 栏的关闭按钮负责，
+     * 因此这里不再为卡片添加浮动关闭按钮。
      */
-    private HBox buildTabHeader(String title, boolean closeable, String tabId) {
-        HBox header = new HBox(4);
-        header.getStyleClass().add("editor-panel__tab");
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setUserData(tabId);
+    private StackPane wrapWithCloseButton(Node content) {
+        StackPane card = new StackPane();
+        card.getStyleClass().add("editor-panel__card-wrapper");
 
-        if (closeable) {
-            Button closeBtn = new Button();
-            closeBtn.getStyleClass().add("editor-panel__tab-close");
-            SvgImageView closeIcon = new SvgImageView();
-            closeIcon.setFitWidth(12);
-            closeIcon.setFitHeight(12);
-            closeIcon.setSvgPath("/cn/bitloom/images/close.svg");
-            closeBtn.setGraphic(closeIcon);
-            closeBtn.setOnAction(e -> closeTabById(tabId));
-            header.getChildren().add(closeBtn);
+        // 内容填充整个卡片
+        if (content instanceof Region region) {
+            region.setMaxWidth(Double.MAX_VALUE);
+            region.setMaxHeight(Double.MAX_VALUE);
         }
+        // 工具/Todo 视图在 FXML 中声明为 visible=false managed=false，
+        // 重建卡片时必须恢复可见性，否则内容不会显示
+        content.setVisible(true);
+        content.setManaged(true);
+        card.getChildren().add(content);
 
-        Label titleLabel = new Label(title);
-        titleLabel.getStyleClass().add("editor-panel__tab-title");
-        header.getChildren().add(titleLabel);
-
-        header.setOnMouseClicked(e -> {
-            if (e.getClickCount() == 1) {
-                selectTabById(tabId);
-            }
-        });
-        return header;
+        return card;
     }
 
     /**
-     * 添加 Tab 到 tab 栏和视图容器
+     * 添加视图到容器
      */
     protected void addTab(EditorTab tab) {
         tabs.add(tab);
-        tabBar.getChildren().add(tab.header);
-        if (!viewContainer.getChildren().contains(tab.content)) {
-            viewContainer.getChildren().add(tab.content);
+        if (!viewContainer.getChildren().contains(tab.card)) {
+            viewContainer.getChildren().add(tab.card);
         }
-        tab.content.setVisible(false);
-        tab.content.setManaged(false);
+        // 卡片填满 viewContainer
+        tab.card.setMaxWidth(Double.MAX_VALUE);
+        tab.card.setMaxHeight(Double.MAX_VALUE);
+        tab.card.setVisible(false);
+        tab.card.setManaged(false);
     }
 
     /**
-     * 切换到指定 Tab
+     * 切换到指定视图
      */
     protected void selectTab(EditorTab tab) {
         for (EditorTab t : tabs) {
             boolean active = (t == tab);
-            t.content.setVisible(active);
-            t.content.setManaged(active);
-            t.header.getStyleClass().removeAll("editor-panel__tab--active");
-            if (active) {
-                t.header.getStyleClass().add("editor-panel__tab--active");
-            }
+            t.card.setVisible(active);
+            t.card.setManaged(active);
         }
         activeTab = tab;
         currentViewType = tab.viewType;
     }
 
     /**
-     * 关闭 Tab
+     * 关闭视图
      */
     protected void closeTab(EditorTab tab) {
         tabs.remove(tab);
-        tabBar.getChildren().remove(tab.header);
-        viewContainer.getChildren().remove(tab.content);
+        viewContainer.getChildren().remove(tab.card);
         onTabClosed(tab);
         if (activeTab == tab) {
             if (tabs.isEmpty()) {
                 activeTab = null;
                 currentViewType = null;
+                // 所有视图关闭后，从 SplitPane 移除面板，收回空间
+                if (indexController != null) {
+                    indexController.closeEditorPanel();
+                } else {
+                    hide();
+                }
             } else {
                 selectTab(tabs.get(tabs.size() - 1));
             }
@@ -343,7 +301,18 @@ public class EditorPanelController implements Initializable {
     }
 
     /**
-     * 子类 hook：Tab 关闭时清理资源
+     * 关闭全部已打开的视图（用于右上角按钮切换时先清空旧视图）。
+     * 关闭最后一个 tab 时会收起面板，调用方如需继续打开新视图需自行保证面板可见。
+     */
+    protected void closeAllTabs() {
+        var snapshot = new java.util.ArrayList<>(tabs);
+        for (EditorTab tab : snapshot) {
+            closeTab(tab);
+        }
+    }
+
+    /**
+     * 子类 hook：视图关闭时清理资源
      */
     protected void onTabClosed(EditorTab tab) {
         // 基类空实现
@@ -357,13 +326,6 @@ public class EditorPanelController implements Initializable {
         return tabs.stream().filter(t -> t.id.equals(id)).findFirst().orElse(null);
     }
 
-    private void selectTabById(String id) {
-        EditorTab tab = findTabById(id);
-        if (tab != null) {
-            selectTab(tab);
-        }
-    }
-
     private void closeTabById(String id) {
         EditorTab tab = findTabById(id);
         if (tab != null) {
@@ -374,11 +336,13 @@ public class EditorPanelController implements Initializable {
     // ===== 视图切换 =====
 
     public void showToolCallsView() {
-        openSingleTab(ViewType.TOOL_CALLS, "工具", toolCallsView);
+        show();
+        openSingleTab(ViewType.TOOL_CALLS, toolCallsView);
     }
 
     public void showTodoView() {
-        openSingleTab(ViewType.TODO, "Todo", todoView);
+        show();
+        openSingleTab(ViewType.TODO, todoView);
     }
 
     public void showTerminalView() {
@@ -412,7 +376,7 @@ public class EditorPanelController implements Initializable {
             indexController.ensureEditorVisible();
         }
         show();
-        openSingleTab(ViewType.TODO, "Todo", todoView);
+        openSingleTab(ViewType.TODO, todoView);
         scrollToBottom(todoListView, todoListStickToBottom);
     }
 
@@ -458,22 +422,20 @@ public class EditorPanelController implements Initializable {
         // work 模式不支持 diff 显示
     }
 
-    // ===== Tab 数据结构 =====
+    // ===== 视图数据结构 =====
 
     protected static class EditorTab {
         final String id;
         final ViewType viewType;
-        final String title;
         final Node content;
-        final HBox header;
+        final StackPane card;
         final Map<String, Object> userData;
 
-        EditorTab(String id, ViewType viewType, String title, Node content, HBox header, Map<String, Object> userData) {
+        EditorTab(String id, ViewType viewType, Node content, StackPane card, Map<String, Object> userData) {
             this.id = id;
             this.viewType = viewType;
-            this.title = title;
             this.content = content;
-            this.header = header;
+            this.card = card;
             this.userData = userData;
         }
     }

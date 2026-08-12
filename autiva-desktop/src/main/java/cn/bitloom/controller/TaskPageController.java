@@ -1,8 +1,7 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.cron.CronManager.CronTaskInfo;
-import cn.bitloom.holder.ButtonBarHolder;
-import cn.bitloom.holder.PageHolder;
+import cn.bitloom.holder.DialogHolder;
 import cn.bitloom.vm.TaskPageViewModel;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -13,9 +12,7 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -27,18 +24,39 @@ import java.util.ResourceBundle;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TaskPageController implements Initializable, ButtonBarHolder, PageHolder {
+public class TaskPageController implements Initializable, DialogHolder {
 
     @FXML
     private VBox taskPage;
     @FXML
     private VBox taskListContainer;
 
-    @Getter
-    @Setter
-    private IndexController indexController;
-
     private final TaskPageViewModel viewModel;
+
+    @Override
+    public double getWidth() {
+        return 800;
+    }
+
+    @Override
+    public double getHeight() {
+        return 650;
+    }
+
+    @Override
+    public boolean isResizable() {
+        return true;
+    }
+
+    /** 弹窗每次打开时刷新数据（showDialog initializer 调用） */
+    public void refresh() {
+        renderTasks();
+    }
+
+    @FXML
+    private void onRefreshTasks() {
+        renderTasks();
+    }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -137,30 +155,5 @@ public class TaskPageController implements Initializable, ButtonBarHolder, PageH
         card.getChildren().addAll(header, content);
 
         return card;
-    }
-
-    @Override
-    public void show() {
-        this.taskPage.setVisible(true);
-        this.taskPage.setManaged(true);
-        renderTasks();
-    }
-
-    @Override
-    public void hide() {
-        this.taskPage.setVisible(false);
-        this.taskPage.setManaged(false);
-    }
-
-    @Override
-    public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
-        return List.of(
-                new ButtonBarHolder.ButtonConfig(
-                        "refreshTaskButton",
-                        "刷新",
-                        "dynamic-btn",
-                        event -> renderTasks()
-                )
-        );
     }
 }

@@ -29,21 +29,9 @@ public class RouteConfig {
                 ic -> { ic.showHomePageSlot(); safeCall(ic.getHomePageController(), PageHolder::show); },
                 ic -> { safeCall(ic.getHomePageController(), PageHolder::hide); ic.hideHomePageSlot(); });
 
-        registerRoute(Path.AGENT, "智能体", AgentPageController.class,
-                ic -> safeCall(ic.getAgentPageController(), PageHolder::show),
-                ic -> safeCall(ic.getAgentPageController(), PageHolder::hide));
-
         registerRoute(Path.SETTINGS, "设置", SettingsPageController.class,
                 ic -> safeCall(ic.getSettingsPageController(), PageHolder::show),
                 ic -> safeCall(ic.getSettingsPageController(), PageHolder::hide));
-
-        registerRoute(Path.SKILLS, "技能管理", SkillPageController.class,
-                ic -> safeCall(ic.getSkillPageController(), PageHolder::show),
-                ic -> safeCall(ic.getSkillPageController(), PageHolder::hide));
-
-        registerRoute(Path.TASK, "任务", TaskPageController.class,
-                ic -> safeCall(ic.getTaskPageController(), PageHolder::show),
-                ic -> safeCall(ic.getTaskPageController(), PageHolder::hide));
     }
 
     private void safeCall(PageHolder holder, Consumer<PageHolder> action) {

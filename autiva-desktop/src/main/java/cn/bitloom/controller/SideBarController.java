@@ -19,6 +19,7 @@ import cn.bitloom.router.RouteConfig;
 import cn.bitloom.store.Store;
 import cn.bitloom.vm.AbstractHomePageViewModel;
 import cn.bitloom.vm.CodeHomePageViewModel;
+import cn.bitloom.window.WindowManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -28,6 +29,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -58,6 +60,7 @@ public class SideBarController implements Initializable, PageHolder {
     private final ProjectStatusStore projectStatusStore;
     private final GitStatusService gitStatusService;
     private final ProjectFileWatcherService projectFileWatcherService;
+    private final WindowManager windowManager;
     private Path watchedProjectPath = null;
     private TreeView<Path> currentTreeView = null;
     /** 已构建的目录树缓存（切回会话列表后再次进入时复用，保留展开/选中状态） */
@@ -135,8 +138,15 @@ public class SideBarController implements Initializable, PageHolder {
                 return;
             }
             option.setOnMouseClicked(_ -> {
-                if (this.indexController != null) {
-                    this.indexController.navigate(path);
+                switch (path) {
+                    case RouteConfig.Path.AGENT -> openAgentDialog();
+                    case RouteConfig.Path.SKILLS -> openSkillDialog();
+                    case RouteConfig.Path.TASK -> openTaskDialog();
+                    default -> {
+                        if (this.indexController != null) {
+                            this.indexController.navigate(path);
+                        }
+                    }
                 }
             });
         });
@@ -171,6 +181,27 @@ public class SideBarController implements Initializable, PageHolder {
         if (homeController != null) {
             homeController.resetForNewSession();
         }
+    }
+
+    private void openAgentDialog() {
+        showViewDialog("cn/bitloom/view/AgentPage.fxml",
+                c -> { if (c instanceof AgentPageController ctr) ctr.refresh(); });
+    }
+
+    private void openSkillDialog() {
+        showViewDialog("cn/bitloom/view/SkillPage.fxml",
+                c -> { if (c instanceof SkillPageController ctr) ctr.refresh(); });
+    }
+
+    private void openTaskDialog() {
+        showViewDialog("cn/bitloom/view/TaskPage.fxml",
+                c -> { if (c instanceof TaskPageController ctr) ctr.refresh(); });
+    }
+
+    private void showViewDialog(String fxml, java.util.function.Consumer<Object> initializer) {
+        Window owner = this.sideBar != null && this.sideBar.getScene() != null
+                ? this.sideBar.getScene().getWindow() : null;
+        windowManager.showDialog(fxml, owner, initializer);
     }
 
     /**

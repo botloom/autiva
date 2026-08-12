@@ -1,8 +1,7 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.agentic.skill.Skill;
-import cn.bitloom.holder.ButtonBarHolder;
-import cn.bitloom.holder.PageHolder;
+import cn.bitloom.holder.DialogHolder;
 import cn.bitloom.vm.SkillPageViewModel;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -15,22 +14,19 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.net.URL;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.ResourceBundle;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SkillPageController implements Initializable, ButtonBarHolder, PageHolder {
+public class SkillPageController implements Initializable, DialogHolder {
 
     private final SkillPageViewModel viewModel;
 
@@ -39,9 +35,25 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
     @FXML
     private ListView<Skill> skillListView;
 
-    @Getter
-    @Setter
-    private IndexController indexController;
+    @Override
+    public double getWidth() {
+        return 800;
+    }
+
+    @Override
+    public double getHeight() {
+        return 650;
+    }
+
+    @Override
+    public boolean isResizable() {
+        return true;
+    }
+
+    /** 弹窗每次打开时刷新数据（showDialog initializer 调用） */
+    public void refresh() {
+        renderSkills();
+    }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -91,7 +103,8 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
         return card;
     }
 
-    private void importSkillFromZip() {
+    @FXML
+    private void onImportSkill() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("选择技能ZIP包");
         fileChooser.getExtensionFilters().add(
@@ -105,31 +118,6 @@ public class SkillPageController implements Initializable, ButtonBarHolder, Page
 
         Path zipPath = selectedFile.toPath();
         viewModel.importSkillFromZipAsync(zipPath, this::renderSkills);
-    }
-
-    @Override
-    public void show() {
-        this.skillPage.setVisible(true);
-        this.skillPage.setManaged(true);
-        renderSkills();
-    }
-
-    @Override
-    public void hide() {
-        this.skillPage.setVisible(false);
-        this.skillPage.setManaged(false);
-    }
-
-    @Override
-    public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
-        return List.of(
-                new ButtonBarHolder.ButtonConfig(
-                        "importSkillButton",
-                        "导入",
-                        "dynamic-btn",
-                        event -> importSkillFromZip()
-                )
-        );
     }
 
     /**

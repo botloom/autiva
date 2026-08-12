@@ -30,97 +30,88 @@
     -autiva-gray: #8e8e93;
 }
 
-/* ===== 容器（贴边直角，与 sidebar 对称） ===== */
+/* ===== 容器（悬浮卡片，参考 skill-page__card） ===== */
 
 .editor-panel {
-    -fx-background-color: -autiva-bg;
-    -fx-padding: 0;
-    -fx-border-width: 0;
-}
-
-/* ===== Tab 栏（与 side-bar Apple 风格统一） ===== */
-
-.editor-panel__tab-scroll {
-    -fx-background-color: -autiva-bg;
-    -fx-background-radius: 0;
-    -fx-padding: 0;
-    -fx-border-width: 0 0 1 0;
-    -fx-border-color: transparent transparent rgba(0, 0, 0, 0.08) transparent;
-    -fx-fit-to-width: false;
-}
-
-.editor-panel__tab-scroll .viewport {
-    -fx-background-color: -autiva-bg;
-}
-
-.editor-panel__tab-scroll .scroll-bar {
-    -fx-opacity: 0;
-    -fx-pref-width: 0;
-    -fx-pref-height: 0;
-    -fx-max-width: 0;
-    -fx-max-height: 0;
-}
-
-.editor-panel__tab-bar {
-    -fx-background-color: -autiva-bg;
-    -fx-background-radius: 0;
-    -fx-padding: 8 12 8 12;
-    -fx-spacing: 2;
-    -fx-min-height: 50;
-    -fx-pref-height: 50;
-}
-
-.editor-panel__tab-add {
-    -fx-background-color: transparent;
-    -fx-background-radius: 8;
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12;
     -fx-background-insets: 0;
-    -fx-padding: 0 8;
-    -fx-cursor: hand;
-    -fx-min-height: 32;
-    -fx-pref-height: 32;
-    -fx-max-height: 32;
-    -fx-border-color: transparent;
-    -fx-border-width: 0;
-    -fx-content-display: GRAPHIC_ONLY;
-    -fx-alignment: CENTER;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.08), 20, 0, 0, 6);
+    -fx-border-color: rgba(0, 0, 0, 0.08);
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-border-insets: 0;
+    -fx-padding: 0;
+    -fx-spacing: 0;
 }
 
-.editor-panel__tab-add:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.05);
-}
+/* ===== 卡片包装层 ===== */
 
-.editor-panel__tab-add:pressed {
-    -fx-background-color: rgba(0, 0, 0, 0.08);
-}
-
-.editor-panel__tab {
+.editor-panel__card-wrapper {
     -fx-background-color: transparent;
-    -fx-background-radius: 8;
-    -fx-padding: 0 10;
-    -fx-spacing: 6;
+    -fx-padding: 0;
+}
+
+/* ===== 子 Tab 栏（终端/文件视图内部） ===== */
+
+.editor-panel__sub-tab-bar {
+    -fx-background-color: -autiva-bg-elevated;
+    -fx-padding: 4 8 4 8;
+    -fx-spacing: 2;
+    -fx-min-height: 40;
+    -fx-pref-height: 40;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent rgba(0, 0, 0, 0.06) transparent;
+}
+
+/* 可横向滑动的 tab 区（滚动条由代码设为 NEVER 不渲染，溢出靠滚轮驱动横滑） */
+.editor-panel__sub-tab-scroll {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+    -fx-fit-to-height: true;
+}
+
+.editor-panel__sub-tab-scroll .viewport {
+    -fx-background-color: transparent;
+}
+
+.editor-panel__sub-tabs {
+    -fx-padding: 0;
+    -fx-spacing: 2;
+}
+
+/* 子 tab 样式 */
+
+.editor-panel__sub-tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6;
+    -fx-padding: 0 8;
+    -fx-spacing: 4;
     -fx-alignment: CENTER_LEFT;
     -fx-cursor: hand;
-    -fx-min-height: 32;
-    -fx-pref-height: 32;
-    -fx-max-height: 32;
+    -fx-min-height: 28;
+    -fx-pref-height: 28;
+    -fx-max-height: 28;
 }
 
-.editor-panel__tab:hover {
+.editor-panel__sub-tab:hover {
     -fx-background-color: rgba(0, 0, 0, 0.05);
 }
 
-.editor-panel__tab--active {
+.editor-panel__sub-tab--active {
     -fx-background-color: rgba(0, 113, 227, 0.1);
 }
 
-.editor-panel__tab-close {
+.editor-panel__sub-tab-close {
     -fx-background-color: transparent;
-    -fx-background-radius: 6;
+    -fx-background-radius: 4;
     -fx-padding: 2;
-    -fx-min-width: 18;
-    -fx-min-height: 18;
-    -fx-pref-width: 18;
-    -fx-pref-height: 18;
+    -fx-min-width: 14;
+    -fx-min-height: 14;
+    -fx-pref-width: 14;
+    -fx-pref-height: 14;
     -fx-border-color: transparent;
     -fx-border-width: 0;
     -fx-cursor: hand;
@@ -129,46 +120,79 @@
     -fx-opacity: 0;
 }
 
-.editor-panel__tab:hover .editor-panel__tab-close {
+.editor-panel__sub-tab:hover .editor-panel__sub-tab-close {
     -fx-opacity: 0.6;
 }
 
-.editor-panel__tab--active .editor-panel__tab-close {
+.editor-panel__sub-tab--active .editor-panel__sub-tab-close {
     -fx-opacity: 1;
 }
 
-.editor-panel__tab-close:hover {
+.editor-panel__sub-tab-close:hover {
     -fx-background-color: rgba(0, 0, 0, 0.08);
     -fx-opacity: 1;
 }
 
-.editor-panel__tab-title {
+.editor-panel__sub-tab-title {
     -fx-text-fill: -autiva-text-primary;
-    -fx-font-size: 13;
+    -fx-font-size: 12;
     -fx-font-weight: 500;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
 }
 
-.editor-panel__tab--active .editor-panel__tab-title {
+.editor-panel__sub-tab--active .editor-panel__sub-tab-title {
     -fx-text-fill: -autiva-blue;
 }
 
-/* 文件 tab 的 Git 状态着色 */
-.editor-panel__tab--git-added.editor-panel__tab .editor-panel__tab-title {
+.editor-panel__sub-tab-add {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6;
+    -fx-padding: 0;
+    -fx-min-width: 28;
+    -fx-min-height: 28;
+    -fx-pref-width: 28;
+    -fx-pref-height: 28;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-cursor: hand;
+    -fx-alignment: CENTER;
+    -fx-content-display: GRAPHIC_ONLY;
+}
+
+.editor-panel__sub-tab-add:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+}
+
+.editor-panel__sub-tab-container {
+    -fx-background-color: transparent;
+    -fx-spacing: 0;
+}
+
+/* 子 Tab 的 Git 状态着色 */
+.editor-panel__sub-tab--git-added .editor-panel__sub-tab-title {
     -fx-text-fill: -autiva-green;
 }
-.editor-panel__tab--git-modified.editor-panel__tab .editor-panel__tab-title {
+.editor-panel__sub-tab--git-modified .editor-panel__sub-tab-title {
     -fx-text-fill: -autiva-blue;
 }
-.editor-panel__tab--git-untracked.editor-panel__tab .editor-panel__tab-title {
+.editor-panel__sub-tab--git-untracked .editor-panel__sub-tab-title {
     -fx-text-fill: -autiva-red;
 }
 
 /* ===== 视图容器 ===== */
 
 .editor-panel__views {
-    -fx-background-color: -autiva-bg;
-    -fx-background-radius: 0;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0 0 12 12;
+    -fx-padding: 0;
+}
+
+/* 卡片包装层填满整个 viewContainer */
+.editor-panel__card-wrapper {
+    -fx-pref-width: -1;
+    -fx-pref-height: -1;
+    -fx-max-width: Infinity;
+    -fx-max-height: Infinity;
 }
 
 /* ===== 终端视图 ===== */

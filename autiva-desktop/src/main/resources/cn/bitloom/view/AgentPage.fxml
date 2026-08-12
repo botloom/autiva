@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox fx:id="agentPage" styleClass="agent-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+<VBox fx:id="agentPage" styleClass="agent-page" maxWidth="800" maxHeight="Infinity"
       xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.AgentPageController"
       stylesheets="@../style/agent-page.css">
 
+    <HBox styleClass="agent-page__toolbar" maxWidth="700" alignment="CENTER_RIGHT" VBox.vgrow="NEVER">
+        <Button styleClass="agent-page__toolbar-btn" text="新建智能体" onAction="#onCreateAgent"/>
+    </HBox>
     <ListView fx:id="agentListView" VBox.vgrow="ALWAYS" styleClass="agent-page__list"/>
 </VBox>

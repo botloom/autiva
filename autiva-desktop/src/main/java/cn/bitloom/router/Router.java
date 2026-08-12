@@ -28,8 +28,6 @@ public class Router {
         Map<String, Function<IndexController, ButtonBarHolder>> map = new HashMap<>();
         map.put(RouteConfig.Path.HOME, IndexController::getHomePageController);
         map.put(RouteConfig.Path.SETTINGS, IndexController::getSettingsPageController);
-        map.put(RouteConfig.Path.SKILLS, IndexController::getSkillPageController);
-        map.put(RouteConfig.Path.TASK, IndexController::getTaskPageController);
         this.buttonBarHolderMap = map;
     }
 

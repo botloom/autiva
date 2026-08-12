@@ -236,3 +236,32 @@
 .task-page__card-btn:hover {
     -fx-background-color: rgba(0, 122, 255, 0.1);
 }
+
+/* 弹窗顶部工具栏 */
+.task-page__toolbar {
+    -fx-padding: 0 32 12 32;
+    -fx-alignment: center-right;
+}
+
+.task-page__toolbar-btn {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-background-radius: 8px;
+    -fx-background-insets: 0;
+    -fx-text-fill: #0071e3;
+    -fx-cursor: hand;
+    -fx-pref-height: 28;
+    -fx-padding: 4 12;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.task-page__toolbar-btn:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.1);
+}
+
+.task-page__toolbar-btn:pressed {
+    -fx-background-color: rgba(0, 0, 0, 0.15);
+}

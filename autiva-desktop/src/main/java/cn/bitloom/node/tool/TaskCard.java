@@ -330,6 +330,17 @@ public class TaskCard extends VBox {
         notifyContentChanged();
     }
 
+    /**
+     * 折叠卡片正文（仅保留 header）。完成后自动调用，用户可点击 header 重新展开查看。
+     */
+    private void collapseBody() {
+        if (body.isVisible()) {
+            body.setVisible(false);
+            body.setManaged(false);
+            notifyContentChanged();
+        }
+    }
+
     private void startPulseAnimation() {
         pulseTimeline = new Timeline(
                 new KeyFrame(Duration.ZERO, e -> pulseDot.setOpacity(1.0)),
@@ -383,6 +394,8 @@ public class TaskCard extends VBox {
             streamBuffer.setLength(0);
             doSetStatus("completed");
             dispose();
+            // 输出完成后自动折叠卡片，仅保留 header（状态/标题），点击 header 可随时展开查看
+            collapseBody();
         });
     }
 

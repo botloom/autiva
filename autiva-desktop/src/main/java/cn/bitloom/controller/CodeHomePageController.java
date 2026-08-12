@@ -366,7 +366,21 @@ public class CodeHomePageController extends AbstractHomePageController {
 
     @Override
     public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
-        return new ArrayList<>(createCommonButtons());
+        List<ButtonBarHolder.ButtonConfig> configs = new ArrayList<>();
+        // 终端按钮（Coder 模式独有）
+        configs.add(new ButtonBarHolder.ButtonConfig(
+                "terminalButton",
+                "终端",
+                "button-bar__icon-btn",
+                "/cn/bitloom/images/terminal.svg",
+                ButtonBarHolder.Alignment.RIGHT,
+                _ -> {
+                    if (indexController != null) {
+                        indexController.toggleTerminalPanel();
+                    }
+                }));
+        configs.addAll(createCommonButtons());
+        return configs;
     }
 
     @Override

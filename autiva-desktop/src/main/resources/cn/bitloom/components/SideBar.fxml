@@ -13,7 +13,8 @@
         <ToggleGroup fx:id="agentSelect"/>
     </fx:define>
 
-    <VBox styleClass="sidebar__content" VBox.vgrow="ALWAYS">
+    <VBox styleClass="sidebar__card" VBox.vgrow="ALWAYS">
+        <VBox styleClass="sidebar__content" VBox.vgrow="ALWAYS">
         <HBox  styleClass="sidebar__mode-switcher" alignment="CENTER">
             <ToggleButton fx:id="workModeBtn" styleClass="sidebar__mode-btn" text="Work" selected="true" toggleGroup="${agentSelect}" HBox.hgrow="ALWAYS">
                 <graphic>
@@ -60,5 +61,6 @@
             <Label text="设置" styleClass="sidebar__label"/>
         </HBox>
 
+    </VBox>
     </VBox>
 </VBox>

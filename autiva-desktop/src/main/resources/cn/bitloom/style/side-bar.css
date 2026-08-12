@@ -1,10 +1,25 @@
 .sidebar {
-    -fx-background-color: #ffffff;
+    -fx-background-color: transparent;
+    -fx-padding: 8;
     -fx-min-width: 200;
     -fx-pref-width: 260;
-    -fx-border-color: rgba(0, 0, 0, 0.08);
-    -fx-border-width: 0 1px 0 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
     -fx-background-radius: 0;
+}
+
+/* 侧边栏悬浮卡片（与右侧 editor-panel 同款样式） */
+.sidebar__card {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12;
+    -fx-background-insets: 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.08), 20, 0, 0, 6);
+    -fx-border-color: rgba(0, 0, 0, 0.08);
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-border-insets: 0;
+    -fx-padding: 0;
+    -fx-spacing: 0;
 }
 
 .sidebar__content {

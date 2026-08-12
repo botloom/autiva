@@ -18,12 +18,9 @@
             <VBox styleClass="index__main-content" minWidth="480" SplitPane.resizableWithParent="true">
                 <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
                 <VBox fx:id="homePageSlot" VBox.vgrow="ALWAYS"/>
-                <fx:include source="view/AgentPage.fxml" fx:id="agentPage"/>
                 <fx:include source="view/SettingsPage.fxml" fx:id="settingsPage"/>
-                <fx:include source="view/SkillPage.fxml" fx:id="skillPage"/>
-                <fx:include source="view/TaskPage.fxml" fx:id="taskPage"/>
             </VBox>
-            <VBox fx:id="editorPanelSlot" minWidth="480" prefWidth="640" visible="false" managed="false"/>
+            <VBox fx:id="editorPanelSlot" styleClass="editor-panel-slot" minWidth="480" prefWidth="640" visible="false" managed="false"/>
         </SplitPane>
     </center>
 </BorderPane>
