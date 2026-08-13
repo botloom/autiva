@@ -80,6 +80,8 @@ public class TodoCard extends VBox {
             HBox itemRow = new HBox(8);
             itemRow.getStyleClass().add("chat-message__todo-item");
             itemRow.setAlignment(Pos.CENTER_LEFT);
+            // 行宽受限于卡片/容器，避免长内容将 todo 卡片横向撑出面板（与工具卡片 ToolMessageCard 的宽度约束一致）
+            itemRow.setMaxWidth(Double.MAX_VALUE);
 
             Circle statusDot = new Circle(4);
             statusDot.getStyleClass().add("chat-message__todo-status");
@@ -88,6 +90,8 @@ public class TodoCard extends VBox {
 
             Label contentLabel = new Label(content);
             contentLabel.setWrapText(true);
+            // 允许收缩到 0，避免长单词将行宽撑出容器（配合 itemRow setMaxWidth 不横向溢出）
+            contentLabel.setMinWidth(0);
             contentLabel.getStyleClass().add("chat-message__todo-text");
             if ("completed".equals(status)) {
                 contentLabel.getStyleClass().add("chat-message__todo-text--completed");
@@ -98,6 +102,9 @@ public class TodoCard extends VBox {
             if (activeForm != null && !"completed".equals(status)) {
                 Label activeFormLabel = new Label(activeForm);
                 activeFormLabel.getStyleClass().add("chat-message__todo-active-form");
+                // 限制宽度并超长省略号截断，避免将行/卡片横向撑出面板（对齐工具卡片参数值的防溢出处理）
+                activeFormLabel.setMaxWidth(160);
+                activeFormLabel.setEllipsisString("…");
                 itemRow.getChildren().add(activeFormLabel);
             }
 

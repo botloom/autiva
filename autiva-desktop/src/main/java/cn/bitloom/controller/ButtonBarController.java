@@ -144,18 +144,14 @@ public class ButtonBarController implements Initializable {
     }
 
     /**
-     * 设置左侧侧边栏抽屉按钮的激活状态：抽屉打开时蓝色高亮，关闭时恢复默认。
+     * 设置左侧侧边栏抽屉按钮的激活状态。
+     * 侧边栏按钮不启用蓝色高亮激活态（与打开/关闭无关，始终显示默认灰色样式），
+     * 此处仅确保移除共享的激活样式类，避免误加残留。
      *
-     * @param active true 激活（蓝色高亮，侧边栏抽屉展开中）
+     * @param active 保留参数以维持调用约定，但不再作用于按钮外观
      */
     public void setSidebarActive(boolean active) {
         if (sidebarButton == null) return;
-        if (active) {
-            if (!sidebarButton.getStyleClass().contains(ACTIVE_STYLE_CLASS)) {
-                sidebarButton.getStyleClass().add(ACTIVE_STYLE_CLASS);
-            }
-        } else {
-            sidebarButton.getStyleClass().remove(ACTIVE_STYLE_CLASS);
-        }
+        sidebarButton.getStyleClass().remove(ACTIVE_STYLE_CLASS);
     }
 }
