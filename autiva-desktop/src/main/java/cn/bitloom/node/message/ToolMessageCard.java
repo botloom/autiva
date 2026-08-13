@@ -48,8 +48,10 @@ public class ToolMessageCard extends MessageCard {
         this.getStyleClass().add("chat-message--tool");
         this.getStyleClass().add("chat-message--tool-request");
         setFocusTraversable(false);
-        // 卡片宽度跟随 ListView cell，不基于内容自然宽度撑大
+        // 卡片宽度跟随 ListView cell，不基于内容自然宽度撑大（maxWidth 填满 + prefWidth
+        // 用 USE_COMPUTED_SIZE 让宽度由容器计算，不被子内容撑大，与 TodoCard 对齐）
         setMaxWidth(Double.MAX_VALUE);
+        setPrefWidth(Region.USE_COMPUTED_SIZE);
 
         // 状态点：初始 pending（灰色）
         statusDot = new Circle(4);
@@ -59,17 +61,20 @@ public class ToolMessageCard extends MessageCard {
         // header
         HBox header = buildHeader(toolName, statusDot, null);
         header.setMaxWidth(Double.MAX_VALUE);
+        header.setPrefWidth(Region.USE_COMPUTED_SIZE);
         this.getChildren().add(header);
 
         // 内容容器（默认显示请求参数）
         contentBox = new VBox(6);
         contentBox.getStyleClass().add("chat-message__tool-content");
         contentBox.setMaxWidth(Double.MAX_VALUE);
+        contentBox.setPrefWidth(Region.USE_COMPUTED_SIZE);
 
         // 请求参数区块：直接以 key-value 标签形式展示，无标题
         requestBox = new VBox(4);
         requestBox.getStyleClass().add("chat-message__tool-request-box");
         requestBox.setMaxWidth(Double.MAX_VALUE);
+        requestBox.setPrefWidth(Region.USE_COMPUTED_SIZE);
         Node paramsNode = buildParamsView(arguments);
         requestBox.getChildren().add(paramsNode);
         contentBox.getChildren().add(requestBox);
@@ -183,7 +188,12 @@ public class ToolMessageCard extends MessageCard {
         chipPane.setHgap(6);
         chipPane.setVgap(6);
         chipPane.setMaxWidth(Double.MAX_VALUE);
-        chipPane.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        // FlowPane 的 prefWidth 会按子 chip 内容自然宽度环绕计算，导致卡片被横向撑出面板；
+        // prefWidth 固定为 0 让 FlowPane 不被内容撑宽，实际宽度由 ListView cell 提供（对齐
+        // 本文件中非 object 分支 rawFlow.setPrefWidth(0) 的处理，也与 TodoCard 用 VBox 的收缩语义一致）
+        chipPane.setPrefWidth(0);
+        // chip 子节点宽度受限于 FlowPane，避免长内容把卡片横向撑出面板（对齐 TodoCard body 行的可收缩约束）
+        chipPane.setMinWidth(0);
 
         ObjectNode obj = (ObjectNode) params;
         obj.fields().forEachRemaining(entry -> {
@@ -199,6 +209,9 @@ public class ToolMessageCard extends MessageCard {
         HBox chip = new HBox(4);
         chip.getStyleClass().add("chat-message__tool-param-chip");
         chip.setAlignment(Pos.CENTER_LEFT);
+        // chip 可收缩到 0，避免长内容将 FlowPane/卡片横向撑出面板（对齐 TodoCard itemRow 的收缩约束）
+        chip.setMinWidth(0);
+        chip.setMaxWidth(Double.MAX_VALUE);
 
         Label keyLabel = new Label(key);
         keyLabel.getStyleClass().add("chat-message__tool-param-key");

@@ -28,10 +28,6 @@ public class RouteConfig {
         registerRoute(Path.HOME, "主页", AbstractHomePageController.class,
                 ic -> { ic.showHomePageSlot(); safeCall(ic.getHomePageController(), PageHolder::show); },
                 ic -> { safeCall(ic.getHomePageController(), PageHolder::hide); ic.hideHomePageSlot(); });
-
-        registerRoute(Path.SETTINGS, "设置", SettingsPageController.class,
-                ic -> safeCall(ic.getSettingsPageController(), PageHolder::show),
-                ic -> safeCall(ic.getSettingsPageController(), PageHolder::hide));
     }
 
     private void safeCall(PageHolder holder, Consumer<PageHolder> action) {

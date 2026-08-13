@@ -142,6 +142,7 @@ public class SideBarController implements Initializable, PageHolder {
                     case RouteConfig.Path.AGENT -> openAgentDialog();
                     case RouteConfig.Path.SKILLS -> openSkillDialog();
                     case RouteConfig.Path.TASK -> openTaskDialog();
+                    case RouteConfig.Path.SETTINGS -> openSettingsDialog();
                     default -> {
                         if (this.indexController != null) {
                             this.indexController.navigate(path);
@@ -196,6 +197,11 @@ public class SideBarController implements Initializable, PageHolder {
     private void openTaskDialog() {
         showViewDialog("cn/bitloom/view/TaskPage.fxml",
                 c -> { if (c instanceof TaskPageController ctr) ctr.refresh(); });
+    }
+
+    private void openSettingsDialog() {
+        showViewDialog("cn/bitloom/view/SettingsPage.fxml",
+                c -> { if (c instanceof SettingsPageController ctr) ctr.reload(); });
     }
 
     private void showViewDialog(String fxml, java.util.function.Consumer<Object> initializer) {

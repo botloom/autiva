@@ -1,9 +1,9 @@
 package cn.bitloom.controller;
 
 import cn.bitloom.bridge.wechat.WechatILinkClient;
-import cn.bitloom.holder.ButtonBarHolder;
-import cn.bitloom.holder.PageHolder;
+import cn.bitloom.holder.DialogHolder;
 import cn.bitloom.vm.SettingsPageViewModel;
+import cn.bitloom.window.WindowManager;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
@@ -20,21 +20,20 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Button;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
+import javafx.stage.Stage;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
-import java.util.List;
 import java.util.ResourceBundle;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SettingsPageController implements Initializable, ButtonBarHolder, PageHolder {
+public class SettingsPageController implements Initializable, WindowManager.StageAware, DialogHolder {
 
     private final SettingsPageViewModel viewModel;
     private final ApplicationContext applicationContext;
@@ -66,15 +65,50 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
     @FXML
     private TextField deepseekChatModelField;
 
-    @Getter
-    @Setter
-    private IndexController indexController;
-
     private ChangeListener<WechatILinkClient.State> weixinStateListener;
+
+    @Override
+    public double getWidth() {
+        return 700;
+    }
+
+    @Override
+    public double getHeight() {
+        return 620;
+    }
+
+    @Override
+    public boolean isResizable() {
+        return true;
+    }
+
+    @Override
+    public void setStage(Stage stage) {
+        stage.setMinWidth(600);
+        stage.setMinHeight(500);
+    }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         this.bindViewModel();
+    }
+
+    /**
+     * 弹窗打开时刷新：重新加载配置并刷新微信连接状态。
+     */
+    public void reload() {
+        viewModel.loadFromStore();
+        updateWeixinStatus();
+    }
+
+    @FXML
+    private void onSave() {
+        viewModel.save();
+    }
+
+    @FXML
+    private void onReset() {
+        viewModel.reset();
     }
 
     private void bindViewModel() {
@@ -83,20 +117,6 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
         deepseekBaseUrlField.textProperty().bindBidirectional(viewModel.getDeepseekBaseUrl());
         deepseekCompletionsPathField.textProperty().bindBidirectional(viewModel.getDeepseekCompletionsPath());
         deepseekChatModelField.textProperty().bindBidirectional(viewModel.getDeepseekChatModel());
-    }
-
-    @Override
-    public void show() {
-        this.settingsPage.setVisible(true);
-        this.settingsPage.setManaged(true);
-        viewModel.loadFromStore();
-        updateWeixinStatus();
-    }
-
-    @Override
-    public void hide() {
-        this.settingsPage.setVisible(false);
-        this.settingsPage.setManaged(false);
     }
 
     private void updateWeixinStatus() {
@@ -177,24 +197,6 @@ public class SettingsPageController implements Initializable, ButtonBarHolder, P
         } catch (WriterException e) {
             log.error("生成二维码失败", e);
         }
-    }
-
-    @Override
-    public List<ButtonBarHolder.ButtonConfig> getButtonConfigs() {
-        return List.of(
-                new ButtonBarHolder.ButtonConfig(
-                        "saveSettingsButton",
-                        "保存",
-                        "dynamic-btn",
-                        event -> viewModel.save()
-                ),
-                new ButtonBarHolder.ButtonConfig(
-                        "resetSettingsButton",
-                        "重置",
-                        "dynamic-btn",
-                        event -> viewModel.reset()
-                )
-        );
     }
 
 }

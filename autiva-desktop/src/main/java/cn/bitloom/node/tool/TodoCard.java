@@ -6,6 +6,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Circle;
@@ -23,8 +25,10 @@ public class TodoCard extends VBox {
         getStyleClass().add("chat-message");
         getStyleClass().add("chat-message--tool");
         getStyleClass().add("chat-message--todo");
-        // 卡片宽度跟随 ListView cell，不基于内容自然宽度撑大（与工具卡片 ToolMessageCard 一致）
+        // 卡片宽度跟随 ListView cell，不基于内容自然宽度撑大（与工具卡片 ToolMessageCard 一致：
+        // maxWidth 填满，prefWidth 用 USE_COMPUTED_SIZE 让宽度由容器计算而非被内容撑大）
         setMaxWidth(Double.MAX_VALUE);
+        setPrefWidth(Region.USE_COMPUTED_SIZE);
         rebuild(todosJson);
     }
 
@@ -51,12 +55,14 @@ public class TodoCard extends VBox {
         header.getStyleClass().add("chat-message__tool-header");
         header.setAlignment(Pos.CENTER_LEFT);
         header.setMaxWidth(Double.MAX_VALUE);
+        header.setPrefWidth(Region.USE_COMPUTED_SIZE);
 
         StackPane progressRing = createProgressRing(completedCount, totalCount);
         header.getChildren().add(progressRing);
 
         VBox titleBox = new VBox(1);
         titleBox.setMaxWidth(Double.MAX_VALUE);
+        titleBox.setPrefWidth(Region.USE_COMPUTED_SIZE);
         Label nameLabel = new Label("TodoWrite");
         nameLabel.getStyleClass().add("chat-message__tool-name");
         nameLabel.setStyle("-fx-text-fill: #b45309;");
@@ -71,6 +77,7 @@ public class TodoCard extends VBox {
         body.getStyleClass().add("chat-message__todo-body");
         body.setPadding(new Insets(6, 0, 0, 0));
         body.setMaxWidth(Double.MAX_VALUE);
+        body.setPrefWidth(Region.USE_COMPUTED_SIZE);
 
         for (JsonNode item : todoItems) {
             String content = getString(item, "content");
@@ -82,6 +89,7 @@ public class TodoCard extends VBox {
             itemRow.setAlignment(Pos.CENTER_LEFT);
             // 行宽受限于卡片/容器，避免长内容将 todo 卡片横向撑出面板（与工具卡片 ToolMessageCard 的宽度约束一致）
             itemRow.setMaxWidth(Double.MAX_VALUE);
+            itemRow.setPrefWidth(Region.USE_COMPUTED_SIZE);
 
             Circle statusDot = new Circle(4);
             statusDot.getStyleClass().add("chat-message__todo-status");
@@ -92,11 +100,12 @@ public class TodoCard extends VBox {
             contentLabel.setWrapText(true);
             // 允许收缩到 0，避免长单词将行宽撑出容器（配合 itemRow setMaxWidth 不横向溢出）
             contentLabel.setMinWidth(0);
+            contentLabel.setMaxWidth(Double.MAX_VALUE);
             contentLabel.getStyleClass().add("chat-message__todo-text");
             if ("completed".equals(status)) {
                 contentLabel.getStyleClass().add("chat-message__todo-text--completed");
             }
-            HBox.setHgrow(contentLabel, javafx.scene.layout.Priority.ALWAYS);
+            HBox.setHgrow(contentLabel, Priority.ALWAYS);
             itemRow.getChildren().add(contentLabel);
 
             if (activeForm != null && !"completed".equals(status)) {

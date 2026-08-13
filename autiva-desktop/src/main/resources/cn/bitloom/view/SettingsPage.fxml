@@ -5,12 +5,18 @@
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.image.Image?>
 
-<VBox fx:id="settingsPage" styleClass="settings-page" visible="false" managed="false" VBox.vgrow="ALWAYS"
+<VBox fx:id="settingsPage" styleClass="settings-page" VBox.vgrow="ALWAYS"
       xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml" fx:controller="cn.bitloom.controller.SettingsPageController"
       alignment="TOP_CENTER"
-      stylesheets="@../style/settings-page.css"
+      stylesheets="@../style/button-bar.css,@../style/settings-page.css"
+      prefWidth="720" prefHeight="600"
 >
+    <HBox styleClass="button-bar" VBox.vgrow="NEVER">
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button styleClass="dynamic-btn" text="保存" onAction="#onSave"/>
+        <Button styleClass="dynamic-btn" text="重置" onAction="#onReset"/>
+    </HBox>
     <ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="NEVER" VBox.vgrow="ALWAYS"
                 styleClass="settings-page__scroll-pane" prefWidth="600" maxWidth="700">
         <VBox styleClass="settings-page__content">

@@ -27,7 +27,6 @@ public class Router {
 
         Map<String, Function<IndexController, ButtonBarHolder>> map = new HashMap<>();
         map.put(RouteConfig.Path.HOME, IndexController::getHomePageController);
-        map.put(RouteConfig.Path.SETTINGS, IndexController::getSettingsPageController);
         this.buttonBarHolderMap = map;
     }
 

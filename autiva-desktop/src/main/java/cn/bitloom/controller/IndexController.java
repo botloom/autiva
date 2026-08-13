@@ -44,9 +44,6 @@ public class IndexController implements Initializable {
     private VBox homePageSlot;
     @FXML
     private VBox editorPanelSlot;
-    @FXML
-    @Getter
-    private SettingsPageController settingsPageController;
 
     @Getter
     private final Router router;
@@ -65,7 +62,6 @@ public class IndexController implements Initializable {
     public void initialize(URL location, ResourceBundle resources) {
         this.buttonBarController.setIndexController(this);
         this.sideBarController.setIndexController(this);
-        this.settingsPageController.setIndexController(this);
 
         // 注入 Markdown 链接处理器：file:// 链接在项目视图中打开
         MarkdownFxRenderer.setLinkHandler(this::handleMarkdownLink);
@@ -289,7 +285,14 @@ public class IndexController implements Initializable {
             mainSplit.getItems().add(editorPanelSlot);
             // editor 恒为最后一项，content/editor 分界即最后一根 divider
             int dividerIndex = mainSplit.getItems().size() - 2;
-            Platform.runLater(() -> mainSplit.setDividerPosition(dividerIndex, savedDividerPos));
+            // 同步设置 divider 位置，避免新增列先按默认比例布局一帧再跳回造成闪烁；
+            // 宽度尚未布局时为 0，此时才延迟到宽度可用后设置。
+            double total = mainSplit.getWidth();
+            if (total > 0) {
+                mainSplit.setDividerPosition(dividerIndex, savedDividerPos);
+            } else {
+                Platform.runLater(() -> mainSplit.setDividerPosition(dividerIndex, savedDividerPos));
+            }
         }
         // editorPanelSlot 在 FXML 中初始 visible=false/managed=false，需要显式恢复
         editorPanelSlot.setVisible(true);

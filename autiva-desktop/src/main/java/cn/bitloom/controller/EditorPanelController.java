@@ -199,18 +199,26 @@ public class EditorPanelController implements Initializable {
         });
     }
 
+    /**
+     * 工具/Todo 卡片容器 cell。cell 自身填满 ListView 宽度，避免卡片
+     * 按内容自然宽度被横向撑开（导致卡片比工具视图宽）。
+     */
     private static class ToolListCell extends ListCell<Node> {
         @Override
         protected void updateItem(Node node, boolean empty) {
             super.updateItem(node, empty);
             if (empty || node == null) {
                 setGraphic(null);
-            } else {
-                if (node instanceof Region region) {
-                    region.setMaxWidth(Double.MAX_VALUE);
-                }
-                setGraphic(node);
+                return;
             }
+            // cell 填满 ListView 内容宽度，宽度由视图决定而非内容
+            setMaxWidth(Double.MAX_VALUE);
+            if (node instanceof Region region) {
+                // 卡片宽度跟随 cell（卡片内部已声明 prefWidth=USE_COMPUTED_SIZE），
+                // maxWidth 允许伸展到 cell 宽度
+                region.setMaxWidth(Double.MAX_VALUE);
+            }
+            setGraphic(node);
         }
     }
 

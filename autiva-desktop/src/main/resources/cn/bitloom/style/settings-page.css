@@ -1,6 +1,6 @@
 .settings-page {
     -fx-background-color: #ffffff;
-    -fx-padding: 24;
+    -fx-padding: 0;
     -fx-alignment: top-center;
     -fx-vgrow: always;
 }
