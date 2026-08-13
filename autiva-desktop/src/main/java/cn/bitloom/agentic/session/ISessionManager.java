@@ -22,6 +22,15 @@ public interface ISessionManager {
     List<AbstractEvent> getEvents(String sessionId, EventFilter filter);
 
     /**
+     * 撤回对话：从事件历史中删除指定用户消息（以其文本匹配从后往前的最近一条）及之后的所有事件，
+     * 并清空该 session 尚未落盘的内存缓冲。用于"撤回本条消息及之后所有历史对话"。
+     *
+     * @param sessionId        会话 ID
+     * @param userMessageText 触发撤回的用户消息文本
+     */
+    void truncateEventsFrom(String sessionId, String userMessageText);
+
+    /**
      * 将缓冲中的待处理事件刷盘到 events.jsonl。
      * 刷盘前会为孤儿 assistant(toolCalls) 补虚拟 ToolResponse。
      * 在每轮对话结束（appendEvent 检测到 finishReason=STOP 的 assistant）时自动调用，

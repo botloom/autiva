@@ -516,6 +516,31 @@ public abstract class AbstractHomePageViewModel {
         messages.add(new UserMessageCard(text));
     }
 
+    /**
+     * 撤回用户消息：删除该条消息及其之后的所有消息（UI 与持久化事件历史）。
+     *
+     * @param card 触发撤回的用户消息卡片
+     */
+    public void withdrawMessage(UserMessageCard card) {
+        if (card == null) return;
+        int index = messages.indexOf(card);
+        if (index < 0) return;
+
+        // 停止当前流
+        Store.isStreaming.set(false);
+        Store.isPaused.set(false);
+        cancelCurrentSubscription();
+        currentAssistantCard = null;
+
+        // 删除 UI 中的该条 + 之后所有消息
+        messages.remove(index, messages.size());
+
+        // 截断持久化事件历史，确保重启/重新加载后上下文一致
+        if (this.session != null) {
+            sessionManager.truncateEventsFrom(this.session.id(), card.getContent());
+        }
+    }
+
     public void clear() {
         messages.clear();
         currentAssistantCard = null;

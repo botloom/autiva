@@ -281,6 +281,54 @@ public class FileSystemSessionManager implements ISessionManager {
     }
 
     @Override
+    public void truncateEventsFrom(String sessionId, String userMessageText) {
+        if (sessionId == null) return;
+        // 先刷盘，确保流式/缓冲中的事件（包括撤回目标）落盘，文本匹配才可靠
+        flushPendingEvents(sessionId);
+        // 再次清空该 session 所有 branch 的内存缓冲（这些都属于撤回目标之后的内容）
+        pendingEvents.keySet().removeIf(k -> k.equals(sessionId) || k.startsWith(sessionId + "@"));
+
+        Path eventsFile = AppConstants.Session.eventsFile(sessionId);
+        if (!Files.exists(eventsFile)) return;
+
+        try {
+            List<AbstractEvent> all = new ArrayList<>();
+            try (BufferedReader reader = Files.newBufferedReader(eventsFile)) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.isBlank()) continue;
+                    AbstractEvent se = deserializeEvent(line);
+                    if (se != null) all.add(se);
+                }
+            }
+
+            // 从后往前找与目标文本匹配的最近一条用户消息，保留其之前的事件
+            int keepCount = 0;
+            for (int i = all.size() - 1; i >= 0; i--) {
+                AbstractEvent e = all.get(i);
+                if (e instanceof MessageEvent me
+                        && me.isUserMessage()
+                        && userMessageText != null
+                        && userMessageText.equals(me.getText())) {
+                    keepCount = i;
+                    break;
+                }
+            }
+
+            // 无条件重写文件，只保留撤回点之前的事件
+            List<AbstractEvent> kept = all.subList(0, keepCount);
+            StringBuilder sb = new StringBuilder();
+            for (AbstractEvent e : kept) {
+                sb.append(JsonUtils.toJson(e)).append("\n");
+            }
+            Files.writeString(eventsFile, sb.toString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            log.info("撤回对话完成: sessionId={}, 保留事件数={}, 原事件数={}", sessionId, kept.size(), all.size());
+        } catch (IOException e) {
+            log.error("撤回事件失败: sessionId={}", sessionId, e);
+        }
+    }
+
+    @Override
     public List<AbstractEvent> getEvents(String sessionId, EventFilter filter) {
         Session session = getById(sessionId);
         if (session == null) return List.of();

@@ -6,10 +6,15 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import lombok.Getter;
 
+import java.util.function.Consumer;
+
 @Getter
 public class UserMessageCard extends MessageCard {
 
     private final String content;
+
+    /** 撤回回调：由外部（Controller）绑定，触发时撤回本条及之后所有消息 */
+    private Consumer<UserMessageCard> onWithdraw;
 
     public UserMessageCard(String content) {
         this.content = content != null ? content.trim() : "";
@@ -23,6 +28,10 @@ public class UserMessageCard extends MessageCard {
         text.setFont(Font.font("\"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif", 15));
         textFlow.getChildren().add(text);
         this.getChildren().add(textFlow);
+    }
+
+    public void setOnWithdraw(Consumer<UserMessageCard> handler) {
+        this.onWithdraw = handler;
     }
 
     @Override
