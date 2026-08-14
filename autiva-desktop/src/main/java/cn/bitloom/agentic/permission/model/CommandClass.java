@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.tool.command.approval;
+package cn.bitloom.agentic.permission.model;
 
 /**
  * 命令分类 — 用于批准策略判断。

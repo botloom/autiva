@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.tool.command.approval;
+package cn.bitloom.agentic.permission.model;
 
 /**
  * 用户对命令批准请求的选择。

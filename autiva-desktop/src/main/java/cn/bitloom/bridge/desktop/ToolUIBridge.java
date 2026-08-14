@@ -24,6 +24,7 @@ public class ToolUIBridge {
 
     private final Map<String, CompletableFuture<String>> pendingQuestions = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<String>> pendingApprovals = new ConcurrentHashMap<>();
+    private final Map<String, ApprovalCard> approvalCards = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> activeTaskCards = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> sessionTaskCards = new ConcurrentHashMap<>();
     private TodoCard currentTodoCard = null;
@@ -79,7 +80,7 @@ public class ToolUIBridge {
     }
 
     /**
-     * 显示命令批准对话框（供 CommandApprovalService 调用，同步阻塞等待用户选择）。
+     * 显示命令批准对话框（供 ApprovalService 调用，同步阻塞等待用户选择）。
      * 与 showQuestions 类似，但创建的是 ApprovalCard 而非 QuestionCard。
      *
      * @param approvalJson    ApprovalRequest 的 JSON
@@ -89,11 +90,19 @@ public class ToolUIBridge {
     public void showApproval(String approvalJson, CompletableFuture<String> approvalFuture, String sessionId) {
         String approvalId = UUID.randomUUID().toString();
         this.pendingApprovals.put(approvalId, approvalFuture);
-        approvalFuture.whenComplete((result, error) -> this.pendingApprovals.remove(approvalId));
+        approvalFuture.whenComplete((result, error) -> {
+            this.pendingApprovals.remove(approvalId);
+            ApprovalCard card = this.approvalCards.remove(approvalId);
+            if (card != null) {
+                // 审批已结束（用户选择或超时主动完成），移除 UI 卡片，避免残留
+                card.dismiss();
+            }
+        });
 
         Platform.runLater(() -> {
             try {
                 ApprovalCard card = new ApprovalCard(approvalJson, approvalId, this::onApprovalAnswered);
+                this.approvalCards.put(approvalId, card);
                 TaskCard taskCard = sessionId != null ? this.sessionTaskCards.get(sessionId) : null;
                 if (taskCard != null) {
                     // 子智能体场景：批准框加到 TaskCard 内

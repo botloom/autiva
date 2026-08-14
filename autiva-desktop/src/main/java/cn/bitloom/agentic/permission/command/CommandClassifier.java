@@ -1,5 +1,6 @@
-package cn.bitloom.agentic.tool.command.approval;
+package cn.bitloom.agentic.permission.command;
 
+import cn.bitloom.agentic.permission.model.CommandClass;
 import cn.bitloom.agentic.tool.command.CommandSafety;
 
 import java.util.Set;
@@ -233,16 +234,10 @@ public final class CommandClassifier {
 
     /**
      * 简单分词：按空白切分，去除引号。
-     * 不处理复杂 shell 语法（管道、& 连接、续行），仅用于分类决策。
+     * 委托 {@link CommandLineParser#tokenize} 统一逻辑。
      */
     private static String[] tokenize(String command) {
-        // 去除 @echo off & 这种前缀修饰符的 &
-        String trimmed = command.trim().replaceAll("^@\\s*", "");
-        // 按 & / | 分割取第一段（简化处理，主要命令在第一段）
-        String firstSegment = trimmed.split("[&|]")[0].trim();
-        // 去除引号
-        firstSegment = firstSegment.replaceAll("[\"']", "");
-        return firstSegment.split("\\s+");
+        return CommandLineParser.tokenize(command);
     }
 
     /**

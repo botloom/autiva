@@ -165,6 +165,14 @@ public class ApprovalCard extends VBox {
         onAnswered.accept(approvalId, resultJson);
 
         // 从 approvalBar 移除，无内容时隐藏
+        dismiss();
+    }
+
+    /**
+     * 从父容器移除本卡片（用户已选择，或超时被主动取消）。
+     * 父容器无内容时自动隐藏。
+     */
+    public void dismiss() {
         Platform.runLater(() -> {
             if (getParent() instanceof VBox parent) {
                 parent.getChildren().remove(this);

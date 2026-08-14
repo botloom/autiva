@@ -1,5 +1,6 @@
-package cn.bitloom.agentic.tool.command.approval;
+package cn.bitloom.agentic.permission;
 
+import cn.bitloom.agentic.permission.command.CommandLineParser;
 import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
@@ -153,29 +154,9 @@ public class ApprovalStore {
 
     /**
      * 从原始命令提取批准 key（前缀）。
-     * 规则：取前 2 个 token；单 token 命令取 1 个。
      * 例：{@code "git push --force"} → {@code "git push"}，{@code "npm install axios"} → {@code "npm install"}，{@code "mkdir"} → {@code "mkdir"}
      */
     public static String extractPrefix(String command) {
-        if (command == null || command.isBlank()) {
-            return "";
-        }
-        // 去除前导修饰符
-        String trimmed = command.trim().replaceAll("^@\\s*", "");
-        // 去除引号便于分词
-        String clean = trimmed.replaceAll("[\"']", " ");
-        String[] tokens = clean.split("\\s+");
-        // 跳过 sudo
-        int start = 0;
-        if (tokens.length > 0 && tokens[0].equalsIgnoreCase("sudo")) {
-            start = 1;
-        }
-        if (start >= tokens.length) {
-            return "";
-        }
-        if (tokens.length - start >= 2) {
-            return (tokens[start] + " " + tokens[start + 1]).toLowerCase(Locale.ROOT);
-        }
-        return tokens[start].toLowerCase(Locale.ROOT);
+        return CommandLineParser.extractPrefix(command);
     }
 }

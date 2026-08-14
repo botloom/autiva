@@ -1,7 +1,7 @@
-package cn.bitloom.agentic.tool.command.approval;
+package cn.bitloom.agentic.permission.model;
 
 /**
- * 批准检查的最终决策 — CommandTool 据此决定是否继续执行。
+ * 批准检查的最终决策 — 据此决定是否继续执行。
  *
  * @param allowed  是否放行执行
  * @param message  决策说明（拒绝时为原因，放行时为 null）

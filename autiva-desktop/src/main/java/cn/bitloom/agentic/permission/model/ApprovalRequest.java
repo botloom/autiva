@@ -1,12 +1,12 @@
-package cn.bitloom.agentic.tool.command.approval;
+package cn.bitloom.agentic.permission.model;
 
 /**
  * 批准请求 — 传给 UI 层展示给用户。
  *
  * <p>支持两种操作类型：
  * <ul>
- *   <li>{@code COMMAND}：命令执行批准（{@link CommandTool}），使用 {@link #command} + {@link #commandClass}</li>
- *   <li>{@code FILE}：文件写操作批准（WriteTool / EditTool），使用 {@link #toolName} + {@link #filePath} + {@link #action}</li>
+ *   <li>{@code COMMAND}：命令执行批准，使用 {@link #command} + {@link #commandClass}</li>
+ *   <li>{@code FILE}：文件写操作批准，使用 {@link #toolName} + {@link #filePath} + {@link #action}</li>
  * </ul>
  *
  * @param operation    操作类型（COMMAND / FILE）
