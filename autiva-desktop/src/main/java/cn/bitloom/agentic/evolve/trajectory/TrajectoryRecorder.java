@@ -101,7 +101,7 @@ public class TrajectoryRecorder implements IAgentHook {
     }
 
     @Override
-    public void afterModelCall(ChatClientRequest request, ChatClientResponse response) {
+    public void afterModelCall(ChatClientRequest request, ChatClientResponse response, String finishReason) {
         String sessionId = extractSessionId(request);
         TrajectoryBuilder builder = sessionId != null ? builders.get(sessionId) : null;
         if (builder == null || response == null || response.chatResponse() == null) {
@@ -125,7 +125,6 @@ public class TrajectoryRecorder implements IAgentHook {
 
             // 检测边界信号：工具调用请求或完成信号
             boolean hasToolCalls = output.getToolCalls() != null && !output.getToolCalls().isEmpty();
-            String finishReason = extractFinishReason(result);
 
             boolean isBoundary = hasToolCalls
                     || "STOP".equals(finishReason)
@@ -251,17 +250,6 @@ public class TrajectoryRecorder implements IAgentHook {
             }
         } catch (Exception ignored) {
             // 忽略上下文访问异常
-        }
-        return null;
-    }
-
-    private String extractFinishReason(org.springframework.ai.chat.model.Generation result) {
-        try {
-            if (result.getMetadata() != null) {
-                return result.getMetadata().getFinishReason();
-            }
-        } catch (Exception ignored) {
-            // 忽略元数据访问异常
         }
         return null;
     }

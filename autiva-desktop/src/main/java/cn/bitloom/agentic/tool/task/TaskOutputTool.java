@@ -1,7 +1,7 @@
 package cn.bitloom.agentic.tool.task;
 
-import cn.bitloom.agentic.task.repository.BackgroundTask;
-import cn.bitloom.agentic.task.repository.TaskRepository;
+import cn.bitloom.agentic.tool.task.repository.BackgroundTask;
+import cn.bitloom.agentic.tool.task.repository.TaskRepository;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
 import org.jspecify.annotations.NonNull;

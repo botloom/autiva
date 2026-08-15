@@ -4,6 +4,8 @@ import cn.bitloom.agentic.evolve.gene.GeneInjector;
 import cn.bitloom.agentic.evolve.trajectory.TrajectoryRecorder;
 import cn.bitloom.agentic.hook.IAgentHook;
 import cn.bitloom.agentic.hook.PermissionHook;
+import cn.bitloom.agentic.hook.TodoReminderHook;
+import cn.bitloom.agentic.permission.strategy.ToolApprovalStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -27,7 +29,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EvolveAgentEnricher {
 
-    private final PermissionHook permissionHook;
+    private final List<ToolApprovalStrategy> approvalStrategies;
     private final ObjectProvider<TrajectoryRecorder> trajectoryRecorderProvider;
     private final ObjectProvider<GeneInjector> geneInjectorProvider;
 
@@ -53,15 +55,18 @@ public class EvolveAgentEnricher {
     /**
      * 构建 hooks 列表。
      * <p>
-     * PermissionHook 始终注入（权限拦截是基础能力）。
+     * PermissionHook 和 TodoReminderHook 每次都 new 新实例（内部持有 per-session 的可变状态，
+     * 不放入 Spring 容器，避免多智能体共享实例导致状态串扰）。审批策略仍由 Spring 管理。
      * TrajectoryRecorder 仅当进化启用时注入。
      *
      * @return hooks 列表
      */
     public List<IAgentHook> buildHooks() {
         List<IAgentHook> hooks = new ArrayList<>();
-        // 权限 Hook 始终注入
-        hooks.add(permissionHook);
+        // 权限 Hook 始终注入（每次 new，持有审批策略）
+        hooks.add(new PermissionHook(approvalStrategies));
+        // 待办提醒 Hook 始终注入（每次 new，持有 per-session 状态）
+        hooks.add(new TodoReminderHook());
         // 轨迹记录 Hook 仅进化启用时注入
         TrajectoryRecorder recorder = trajectoryRecorderProvider.getIfAvailable();
         if (recorder != null) {

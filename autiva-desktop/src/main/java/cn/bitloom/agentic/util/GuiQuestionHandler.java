@@ -1,7 +1,7 @@
 package cn.bitloom.agentic.util;
 
-import cn.bitloom.agentic.tool.interaction.AskUserQuestionTool.Question;
-import cn.bitloom.agentic.tool.interaction.AskUserQuestionTool.QuestionHandler;
+import cn.bitloom.agentic.tool.askuser.AskUserQuestionTool.Question;
+import cn.bitloom.agentic.tool.askuser.AskUserQuestionTool.QuestionHandler;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.databind.JsonNode;

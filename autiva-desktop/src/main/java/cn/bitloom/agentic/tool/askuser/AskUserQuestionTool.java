@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.tool.interaction;
+package cn.bitloom.agentic.tool.askuser;
 
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;

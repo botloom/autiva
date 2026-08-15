@@ -60,8 +60,13 @@ import java.util.function.Consumer;
  * 包含通用的会话管理、消息发送、agent 直接调用逻辑。
  * 子类（CoderHomePageViewModel / WorkHomePageViewModel）实现模式专有逻辑。
  * <p>
- * 直接调用 Agent.runStream，事件流通过 Flux.create 汇聚，
- * 工具事件通过 EventPublisher 推入同一 sink。
+ * <b>多 session 并发模型</b>：一个 session 与一个 Agent 实例 1:1 绑定（缓存在
+ * {@link #sessionAgents}），同一 session 内的所有消息复用同一 Agent。
+ * 每个 session 拥有独立的 {@link SessionRuntimeState}（订阅、流式状态、消息缓存等），
+ * 切换活动 session 时原 session 的后台任务不被中断，切回可恢复完整进度。
+ * <p>
+ * UI 绑定的 {@link #messages} 是单一稳定引用，切换 session 时通过 setAll 替换内容；
+ * 非 active session 的事件只更新对应 state 的 savedMessages，不污染 UI。
  * per-session 锁保证同一 session 的串行处理。
  */
 @Slf4j
@@ -74,19 +79,27 @@ public abstract class AbstractHomePageViewModel {
     protected final SkillManager skillManager;
     protected final EvolveAgentEnricher evolveEnricher;
 
+    /** UI 绑定的稳定消息列表引用，切换 session 时通过 setAll 替换内容 */
     @Getter
     private final ObservableList<MessageCard> messages = FXCollections.observableArrayList();
 
     protected Session session;
-    protected AssistantMessageCard currentAssistantCard = null;
 
-    /** 当前 agent 流订阅（用于 pause 取消） */
-    protected Disposable currentSubscription;
-    /** 取消信号（用于 pauseGeneration 中断 blockLast） */
-    protected Sinks.Empty<Object> cancelSink;
     /** Diff 事件处理器（Coder 模式注入，Work 模式为 null） */
     @Setter
     protected Consumer<DiffEvent> diffHandler;
+
+    /** per-session Agent 缓存：sessionId → Agent 实例，session 级生命周期，销毁时移除 */
+    private final Map<String, Agent> sessionAgents = new ConcurrentHashMap<>();
+
+    /**
+     * per-session 运行时状态：订阅、流式状态、流式消息卡片、待响应工具卡片、消息缓存。
+     * 切换 session 时仅切换 active 引用，不取消非 active session 的订阅。
+     */
+    private final Map<String, SessionRuntimeState> sessionStates = new ConcurrentHashMap<>();
+
+    /** 当前活动 session 的运行时状态（UI 显示的就是它的 messages） */
+    protected SessionRuntimeState currentState = null;
 
     /**
      * 历史消息加载状态：prepareHistoricalMessages 期间为 true，加载完成自动置 false。
@@ -99,17 +112,36 @@ public abstract class AbstractHomePageViewModel {
     }
 
     /**
-     * 待响应的工具调用卡片，按 toolCallId 索引。
-     * TOOL_CALLS 事件创建卡片并缓存，tool response 事件按 id 取出并追加结果。
-     */
-    private final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
-
-    /**
      * 工具卡片路由回调：TOOL_CALLS 事件创建的 ToolMessageCard 直接通过此回调路由到 EditorPanel，
      * 不再进入 messages 列表（消除"加入消息列表再过滤"反模式）。
+     * 仅 active session 的事件会推送；切换 session 时由 Controller 清空 EditorPanel。
      */
     @Setter
     private Consumer<ToolMessageCard> toolCardHandler = _ -> {};
+
+    /** session 切换回调：通知 Controller 清空 EditorPanel 工具卡片，重置 todo 等 */
+    @Setter
+    private Consumer<String> sessionActivatedHandler = _ -> {};
+
+    /**
+     * per-session 运行时状态。所有可变状态都放在这里，ViewModel 仅持有当前 active 引用。
+     */
+    protected static final class SessionRuntimeState {
+        /** 当前 agent 流订阅（用于 pause 取消） */
+        Disposable subscription;
+        /** 取消信号（用于 pauseGeneration 中断 blockLast） */
+        Sinks.Empty<Object> cancelSink;
+        /** 当前流式 assistant 消息卡片 */
+        AssistantMessageCard currentAssistantCard = null;
+        /** 待响应的工具调用卡片，按 toolCallId 索引 */
+        final Map<String, ToolMessageCard> pendingToolCards = new ConcurrentHashMap<>();
+        /** 是否正在流式生成（per-session） */
+        volatile boolean isStreaming = false;
+        /** 是否暂停（per-session） */
+        volatile boolean isPaused = false;
+        /** 切换走时保存的 messages 副本（同一 MessageCard 引用），切回时整体恢复 */
+        final List<MessageCard> savedMessages = new ArrayList<>();
+    }
 
     protected AbstractHomePageViewModel(FileSystemSessionManager sessionManager,
                                         AgentDefinitionManager definitionManager,
@@ -126,13 +158,18 @@ public abstract class AbstractHomePageViewModel {
     }
 
     public void createNewSession() {
+        // 保存当前 session 的 messages 到 state（不取消订阅，让后台任务继续运行）
+        saveMessagesToCurrentState();
+        // 切换到 null state（新建会话）
+        currentState = null;
         this.session = null;
         Store.currentSessionId.set("");
         messages.clear();
-        currentAssistantCard = null;
+        // 新会话初始为非流式状态
         Store.isStreaming.set(false);
         Store.isPaused.set(false);
-        cancelCurrentSubscription();
+        // 通知 Controller 清空 EditorPanel 工具卡片 / todo
+        sessionActivatedHandler.accept(null);
     }
 
     public void switchToSession(String sessionId) {
@@ -146,19 +183,46 @@ public abstract class AbstractHomePageViewModel {
             return;
         }
 
+        // 保存当前 session 的 messages 到 state（不取消订阅）
+        saveMessagesToCurrentState();
+
         this.session = targetSession;
         Store.currentSessionId.set(sessionId);
 
-        messages.clear();
-        currentAssistantCard = null;
-        Store.isStreaming.set(false);
-        Store.isPaused.set(false);
+        boolean stateExisted = sessionStates.containsKey(sessionId);
+        currentState = sessionStates.computeIfAbsent(sessionId, k -> new SessionRuntimeState());
+
+        if (stateExisted) {
+            // 已有 state：恢复 savedMessages 到 UI，同步流式状态
+            messages.setAll(currentState.savedMessages);
+            Store.isStreaming.set(currentState.isStreaming);
+            Store.isPaused.set(currentState.isPaused);
+        } else {
+            // 首次切换：清空 UI，同步非流式状态，后续 prepareHistoricalMessages 加载历史
+            messages.clear();
+            Store.isStreaming.set(false);
+            Store.isPaused.set(false);
+        }
 
         // 子类恢复模式专有状态（如 coder 从 metadata 恢复 currentProject）
         onSessionSwitched(targetSession);
 
-        if (hasHistoricalMessages()) {
+        // 通知 Controller 清空 EditorPanel 工具卡片 / todo（非 active session 的工具不显示）
+        sessionActivatedHandler.accept(sessionId);
+
+        if (!stateExisted && hasHistoricalMessages()) {
             prepareHistoricalMessages();
+        }
+    }
+
+    /**
+     * 保存当前 messages 内容到 currentState.savedMessages（切换走时调用）。
+     * MessageCard 引用保持不变，切回时可直接 setAll 恢复。
+     */
+    private void saveMessagesToCurrentState() {
+        if (currentState != null) {
+            currentState.savedMessages.clear();
+            currentState.savedMessages.addAll(messages);
         }
     }
 
@@ -182,7 +246,9 @@ public abstract class AbstractHomePageViewModel {
         try {
             for (AbstractEvent event : events) {
                 if (event instanceof CompactionEvent ce) {
-                    messages.add(new CompactionCard(ce.getArchivedCount(), ce.getActiveCount()));
+                    CompactionCard card = new CompactionCard(ce.getArchivedCount(), ce.getActiveCount());
+                    messages.add(card);
+                    if (currentState != null) currentState.savedMessages.add(card);
                     continue;
                 }
                 if (!(event instanceof MessageEvent me)) {
@@ -196,11 +262,15 @@ public abstract class AbstractHomePageViewModel {
                     continue;
                 }
                 if (me.isUserMessage()) {
-                    messages.add(new UserMessageCard(me.getText()));
+                    UserMessageCard card = new UserMessageCard(me.getText());
+                    messages.add(card);
+                    if (currentState != null) currentState.savedMessages.add(card);
                 } else if (me.isAssistantMessage()) {
                     String text = me.getText();
                     if (text != null && !text.isBlank()) {
-                        messages.add(new AssistantMessageCard(text, "STOP"));
+                        AssistantMessageCard card = new AssistantMessageCard(text, "STOP");
+                        messages.add(card);
+                        if (currentState != null) currentState.savedMessages.add(card);
                     }
                 }
                 // TOOL 消息跳过：历史工具调用不显示
@@ -361,52 +431,80 @@ public abstract class AbstractHomePageViewModel {
             Store.currentSessionId.set(this.session.id());
         }
 
+        // 确保 state 存在（首次发消息或切回后首次发消息都会创建）
+        final String sid = this.session.id();
+        boolean stateExisted = sessionStates.containsKey(sid);
+        currentState = sessionStates.computeIfAbsent(sid, k -> new SessionRuntimeState());
+        if (!stateExisted) {
+            // state 是新建的，把当前 UI messages 同步进去（防止切回后丢失已有历史消息）
+            currentState.savedMessages.addAll(messages);
+        }
+
         // 兜底：清理上一轮 pause 后异步 after() 竞态写入的孤儿 toolCalls
         // 此时距上次 pause 已隔用户操作时间，in-flight after 必已完成，能可靠检测
-        sessionManager.finalizeInterruptedToolCalls(this.session.id());
+        sessionManager.finalizeInterruptedToolCalls(sid);
 
+        // per-session 流式状态：写 state，同步到 Store（active session 时驱动 UI）
+        currentState.isStreaming = true;
+        currentState.isPaused = false;
         Store.isStreaming.set(true);
         Store.isPaused.set(false);
-        cancelSink = Sinks.empty();
+        currentState.cancelSink = Sinks.empty();
 
         // 子类实现消息上下文构建（coder 模式附加项目信息）
         String messageText = buildMessageWithContext(text);
-        MessageEvent inputEvent = MessageEvent.userMessage(this.session.id(), messageText);
+        MessageEvent inputEvent = MessageEvent.userMessage(sid, messageText);
         final Session currentSession = this.session;
         final String agentId = Store.currentAgent.get();
+        final SessionRuntimeState stateRef = currentState;
 
         // 在后台线程执行，避免阻塞 FX 线程；per-session 锁保证串行
         CompletableFuture.runAsync(() -> {
-            sessionManager.withLock(currentSession.id(), () -> {
+            sessionManager.withLock(sid, () -> {
                 try {
-                    Agent agent = buildAgent(currentSession, agentId);
+                    // Agent 与 session 1:1 绑定，session 级缓存（首次构建，后续复用）
+                    Agent agent = sessionAgents.computeIfAbsent(sid,
+                            k -> buildAgent(currentSession, agentId));
                     ProjectInfo project = getCurrentProject();
                     RuntimeContext ctx = RuntimeContext.builder()
-                            .sessionId(currentSession.id())
+                            .sessionId(sid)
                             .userId(currentSession.userId())
                             .projectPath(project != null ? project.path() : null)
                             .put("lastUserMessage", messageText)
                             .build();
-                    currentSubscription = agent.runStream(inputEvent, ctx)
-                            .takeUntilOther(cancelSink.asMono())
-                            .doOnNext(event -> Platform.runLater(() -> processEvent(event)))
+                    stateRef.subscription = agent.runStream(inputEvent, ctx)
+                            .takeUntilOther(stateRef.cancelSink.asMono())
+                            .doOnNext(event -> Platform.runLater(() -> processEvent(event, sid)))
                             .doOnComplete(() -> Platform.runLater(() -> {
-                                Store.isStreaming.set(false);
-                                Store.isPaused.set(false);
+                                stateRef.isStreaming = false;
+                                stateRef.isPaused = false;
+                                // 仅当仍是 active session 时同步 Store，避免覆盖其他 session 的 UI 状态
+                                if (currentState == stateRef) {
+                                    Store.isStreaming.set(false);
+                                    Store.isPaused.set(false);
+                                }
                             }))
                             .doOnError(e -> {
                                 log.error("agent run error", e);
                                 Platform.runLater(() -> {
-                                    Store.isStreaming.set(false);
-                                    Store.isPaused.set(false);
+                                    stateRef.isStreaming = false;
+                                    stateRef.isPaused = false;
+                                    if (currentState == stateRef) {
+                                        Store.isStreaming.set(false);
+                                        Store.isPaused.set(false);
+                                    }
                                 });
                             })
                             .subscribe();
                 } catch (Exception e) {
                     log.error("sendMessage error", e);
                     Platform.runLater(() -> {
-                        Store.isStreaming.set(false);
-                        Store.isPaused.set(false);
+                        stateRef.isStreaming = false;
+                        stateRef.isPaused = false;
+                        if (currentState == stateRef) {
+                            Store.isStreaming.set(false);
+                            Store.isPaused.set(false);
+                        }
                     });
                 }
                 return null;
@@ -420,91 +518,117 @@ public abstract class AbstractHomePageViewModel {
     // ===== 事件处理 =====
 
     /**
-     * 处理事件流中的事件（可能是 MessageEvent 或 DiffEvent）。
+     * 处理事件流中的事件（可能是 MessageEvent / CompactionEvent / DiffEvent）。
+     * 按 sessionId 路由到对应 state：active session 同时更新 UI messages 与 savedMessages，
+     * 非 active session 只更新 savedMessages（不污染 UI）。
      */
-    private void processEvent(AbstractEvent event) {
+    private void processEvent(AbstractEvent event, String sessionId) {
+        SessionRuntimeState state = sessionStates.get(sessionId);
+        if (state == null) {
+            log.warn("事件对应的 state 已被移除: sid={}, event={}", sessionId, event.getEventType());
+            return;
+        }
+        boolean isActive = (state == currentState);
+
         if (event instanceof MessageEvent messageEvent) {
-            processMessageEvent(messageEvent);
+            processMessageEvent(messageEvent, state, isActive);
         } else if (event instanceof CompactionEvent ce) {
-            messages.add(new CompactionCard(ce.getArchivedCount(), ce.getActiveCount()));
+            CompactionCard card = new CompactionCard(ce.getArchivedCount(), ce.getActiveCount());
+            if (isActive) messages.add(card);
+            state.savedMessages.add(card);
         } else if (event instanceof DiffEvent diffEvent) {
-            if (diffHandler != null) {
+            // Diff 事件仅在 active session 推送（非 active 丢弃，避免污染 EditorPanel）
+            if (isActive && diffHandler != null) {
                 diffHandler.accept(diffEvent);
             }
         }
     }
 
-    private void processMessageEvent(MessageEvent event) {
+    private void processMessageEvent(MessageEvent event, SessionRuntimeState state, boolean isActive) {
         if (event.isUserMessage()) {
-            processUserEvent(event);
+            processUserEvent(event, state, isActive);
         } else if (event.isAssistantMessage()) {
-            processAssistantEvent(event);
+            processAssistantEvent(event, state, isActive);
         } else if (event.isToolResponse()) {
-            processToolEvent(event);
+            processToolEvent(event, state);
         } else {
             log.warn("未处理的事件类型: {}", event.getEventType());
         }
     }
 
-    private void processUserEvent(MessageEvent e) {
-        currentAssistantCard = null;
-        messages.add(new UserMessageCard(e.getText()));
+    private void processUserEvent(MessageEvent e, SessionRuntimeState state, boolean isActive) {
+        state.currentAssistantCard = null;
+        UserMessageCard card = new UserMessageCard(e.getText());
+        if (isActive) messages.add(card);
+        state.savedMessages.add(card);
     }
 
-    private void processAssistantEvent(MessageEvent e) {
+    private void processAssistantEvent(MessageEvent e, SessionRuntimeState state, boolean isActive) {
         String finishReason = e.getFinishReason();
         String text = e.getText();
 
         if (finishReason == null || finishReason.isBlank() || "_UNKNOWN".equals(finishReason)) {
-            // 流式 chunk：直接累积
-            if (Store.isPaused.get()) {
+            // 流式 chunk：直接累积。per-session isPaused 控制是否累积
+            if (state.isPaused) {
                 return;
             }
-            if (currentAssistantCard == null) {
-                currentAssistantCard = new AssistantMessageCard();
-                messages.add(currentAssistantCard);
+            if (state.currentAssistantCard == null) {
+                state.currentAssistantCard = new AssistantMessageCard();
+                if (isActive) messages.add(state.currentAssistantCard);
+                state.savedMessages.add(state.currentAssistantCard);
             }
-            currentAssistantCard.appendContent(text);
+            state.currentAssistantCard.appendContent(text);
         } else if ("STOP".equals(finishReason)) {
             // 结束流式
-            Store.isStreaming.set(false);
-            Store.isPaused.set(false);
+            state.isStreaming = false;
+            state.isPaused = false;
+            if (isActive) {
+                Store.isStreaming.set(false);
+                Store.isPaused.set(false);
+            }
 
-            if (currentAssistantCard != null) {
-                currentAssistantCard.complete("STOP");
-                if (currentAssistantCard.isValid()) {
-                    messages.remove(currentAssistantCard);
+            if (state.currentAssistantCard != null) {
+                state.currentAssistantCard.complete("STOP");
+                if (state.currentAssistantCard.isValid()) {
+                    if (isActive) messages.remove(state.currentAssistantCard);
+                    state.savedMessages.remove(state.currentAssistantCard);
                 }
-                currentAssistantCard = null;
+                state.currentAssistantCard = null;
             } else if (text != null && !text.isBlank()) {
                 // 非流式消息（历史消息或一次性输出）
-                messages.add(new AssistantMessageCard(text, "STOP"));
+                AssistantMessageCard card = new AssistantMessageCard(text, "STOP");
+                if (isActive) messages.add(card);
+                state.savedMessages.add(card);
             }
         } else if ("TOOL_CALLS".equals(finishReason)) {
             // 工具调用：结束当前流式消息
-            if (currentAssistantCard != null) {
-                currentAssistantCard.complete("TOOL_CALLS");
-                if (currentAssistantCard.isValid()) {
-                    messages.remove(currentAssistantCard);
+            if (state.currentAssistantCard != null) {
+                state.currentAssistantCard.complete("TOOL_CALLS");
+                if (state.currentAssistantCard.isValid()) {
+                    if (isActive) messages.remove(state.currentAssistantCard);
+                    state.savedMessages.remove(state.currentAssistantCard);
                 }
-                currentAssistantCard = null;
+                state.currentAssistantCard = null;
             }
 
-            // 创建工具调用卡片，直接路由到 EditorPanel（不进 messages 列表）
+            // 创建工具调用卡片，缓存到 state.pendingToolCards；
+            // 仅 active session 推送到 EditorPanel（非 active session 的工具不显示）
             if (e.getToolCalls() != null) {
                 for (MessageEvent.ToolCallInfo tc : e.getToolCalls()) {
                     ToolMessageCard card = new ToolMessageCard(tc.id(), tc.name(), tc.arguments());
-                    pendingToolCards.put(tc.id(), card);
-                    toolCardHandler.accept(card);
+                    state.pendingToolCards.put(tc.id(), card);
+                    if (isActive) {
+                        toolCardHandler.accept(card);
+                    }
                 }
             }
         }
     }
 
-    private void processToolEvent(MessageEvent e) {
+    private void processToolEvent(MessageEvent e, SessionRuntimeState state) {
         if (e.getResponses() != null && !e.getResponses().isEmpty()) {
             for (MessageEvent.ToolResponseInfo resp : e.getResponses()) {
-                ToolMessageCard card = pendingToolCards.remove(resp.id());
+                ToolMessageCard card = state.pendingToolCards.remove(resp.id());
                 if (card != null) {
                     card.setResponse(resp.responseData());
                 }
@@ -513,11 +637,28 @@ public abstract class AbstractHomePageViewModel {
     }
 
     public void addUserMessage(String text) {
-        messages.add(new UserMessageCard(text));
+        UserMessageCard card = new UserMessageCard(text);
+        messages.add(card);
+        if (currentState != null) {
+            currentState.savedMessages.add(card);
+        }
+    }
+
+    /**
+     * 向 UI messages 添加节点消息卡片（如 TaskCard），同步到 currentState.savedMessages。
+     * 由 Controller 通过 toolUIBridge 回调调用，确保 active session 的节点消息在切换走时不丢失。
+     */
+    public void addNodeMessage(javafx.scene.Node node) {
+        NodeMessageCard card = new NodeMessageCard(node);
+        messages.add(card);
+        if (currentState != null) {
+            currentState.savedMessages.add(card);
+        }
     }
 
     /**
      * 撤回用户消息：删除该条消息及其之后的所有消息（UI 与持久化事件历史）。
+     * 仅作用于当前 active session。后台 session 的撤回不支持（UI 不可见）。
      *
      * @param card 触发撤回的用户消息卡片
      */
@@ -526,14 +667,26 @@ public abstract class AbstractHomePageViewModel {
         int index = messages.indexOf(card);
         if (index < 0) return;
 
-        // 停止当前流
+        // 停止当前 session 的流（仅 active session，不影响后台 session）
+        if (currentState != null) {
+            currentState.isStreaming = false;
+            currentState.isPaused = false;
+            cancelStateSubscription(currentState);
+            currentState.currentAssistantCard = null;
+        }
         Store.isStreaming.set(false);
         Store.isPaused.set(false);
-        cancelCurrentSubscription();
-        currentAssistantCard = null;
 
         // 删除 UI 中的该条 + 之后所有消息
         messages.remove(index, messages.size());
+
+        // 同步删除 currentState.savedMessages 中对应位置之后的所有消息
+        if (currentState != null) {
+            int savedIndex = currentState.savedMessages.indexOf(card);
+            if (savedIndex >= 0) {
+                currentState.savedMessages.subList(savedIndex, currentState.savedMessages.size()).clear();
+            }
+        }
 
         // 截断持久化事件历史，确保重启/重新加载后上下文一致
         if (this.session != null) {
@@ -542,68 +695,85 @@ public abstract class AbstractHomePageViewModel {
     }
 
     public void clear() {
+        // 清空当前 session 的 UI 与 state
         messages.clear();
-        currentAssistantCard = null;
-        pendingToolCards.clear();
+        if (currentState != null) {
+            currentState.savedMessages.clear();
+            currentState.pendingToolCards.clear();
+            currentState.currentAssistantCard = null;
+        }
         Store.isStreaming.set(false);
         Store.isPaused.set(false);
         if (this.session != null) {
+            // 取消该 session 的订阅并移除缓存（session 整体销毁）
+            SessionRuntimeState state = sessionStates.remove(this.session.id());
+            if (state != null) cancelStateSubscription(state);
+            sessionAgents.remove(this.session.id());
+            currentState = null;
             sessionManager.remove(this.session.id());
             sessionManager.persistSession(this.session);
         }
     }
 
     public void pauseGeneration() {
-        if (Store.isStreaming.get() && !Store.isPaused.get()) {
-            Store.isStreaming.set(false);
-            Store.isPaused.set(true);
-            cancelCurrentSubscription();
+        // 仅暂停当前 active session（用户点 stop 按钮）
+        if (currentState == null) return;
+        if (!currentState.isStreaming || currentState.isPaused) return;
 
-            // 中途停止时善后事件文件，避免下次调用 LLM 时历史不成对导致报错：
-            //   1. 保存已流式生成的 assistant 文本为 STOP 事件，避免上一轮内容丢失
-            //   2. 为末尾不成对的 assistant(toolCalls) 补虚拟 ToolResponse（若存在）
-            //      — pause 时调用是尽力而为；竞态残留的孤儿由 sendMessage 开头兜底再补
-            if (this.session != null) {
-                String sid = this.session.id();
+        currentState.isStreaming = false;
+        currentState.isPaused = true;
+        Store.isStreaming.set(false);
+        Store.isPaused.set(true);
+        cancelStateSubscription(currentState);
 
-                if (currentAssistantCard != null) {
-                    String partial = currentAssistantCard.getContent();
-                    if (partial != null && !partial.isBlank()) {
-                        sessionManager.appendEvent(MessageEvent.assistantStop(sid, partial));
-                    }
-                    currentAssistantCard.setStreaming(false);
-                    currentAssistantCard = null;
+        // 中途停止时善后事件文件，避免下次调用 LLM 时历史不成对导致报错：
+        //   1. 保存已流式生成的 assistant 文本为 STOP 事件，避免上一轮内容丢失
+        //   2. 为末尾不成对的 assistant(toolCalls) 补虚拟 ToolResponse（若存在）
+        //      — pause 时调用是尽力而为；竞态残留的孤儿由 sendMessage 开头兜底再补
+        if (this.session != null) {
+            String sid = this.session.id();
+
+            if (currentState.currentAssistantCard != null) {
+                String partial = currentState.currentAssistantCard.getContent();
+                if (partial != null && !partial.isBlank()) {
+                    sessionManager.appendEvent(MessageEvent.assistantStop(sid, partial));
                 }
-
-                sessionManager.finalizeInterruptedToolCalls(sid);
-            } else if (currentAssistantCard != null) {
-                currentAssistantCard.setStreaming(false);
-                currentAssistantCard = null;
+                currentState.currentAssistantCard.setStreaming(false);
+                currentState.currentAssistantCard = null;
             }
+
+            sessionManager.finalizeInterruptedToolCalls(sid);
+        } else if (currentState.currentAssistantCard != null) {
+            currentState.currentAssistantCard.setStreaming(false);
+            currentState.currentAssistantCard = null;
         }
     }
 
     /**
-     * 取消当前订阅和取消信号。
+     * 取消指定 state 的订阅与取消信号（不删除 state 本身，便于切回恢复）。
      */
-    private void cancelCurrentSubscription() {
-        if (cancelSink != null) {
-            cancelSink.tryEmitEmpty();
-            cancelSink = null;
+    private void cancelStateSubscription(SessionRuntimeState state) {
+        if (state.cancelSink != null) {
+            state.cancelSink.tryEmitEmpty();
+            state.cancelSink = null;
         }
-        if (currentSubscription != null && !currentSubscription.isDisposed()) {
-            currentSubscription.dispose();
+        if (state.subscription != null && !state.subscription.isDisposed()) {
+            state.subscription.dispose();
         }
-        currentSubscription = null;
+        state.subscription = null;
     }
 
     /**
-     * 释放资源（模式切换时调用，取消事件订阅）。
+     * 释放资源（模式切换时调用）：取消所有 session 的订阅、清空所有缓存。
      * 子类可 override 扩展清理逻辑，但必须 super.dispose()。
      */
     public void dispose() {
-        cancelCurrentSubscription();
-        this.currentAssistantCard = null;
+        for (SessionRuntimeState state : sessionStates.values()) {
+            cancelStateSubscription(state);
+        }
+        sessionStates.clear();
+        sessionAgents.clear();
+        currentState = null;
     }
 
     // ===== 抽象方法：子类实现模式专有逻辑 =====

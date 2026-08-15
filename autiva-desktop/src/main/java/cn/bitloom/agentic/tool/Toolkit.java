@@ -2,6 +2,7 @@ package cn.bitloom.agentic.tool;
 
 import cn.bitloom.agentic.agent.AgentDefinition;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
+import cn.bitloom.agentic.cron.CronManager;
 import cn.bitloom.agentic.evolve.EvolveAgentEnricher;
 import cn.bitloom.agentic.evolve.EvolverAgent;
 import cn.bitloom.agentic.evolve.experience.ExperienceEngine;
@@ -10,60 +11,32 @@ import cn.bitloom.agentic.evolve.trajectory.TrajectoryRepository;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
 import cn.bitloom.agentic.skill.SkillManager;
-import cn.bitloom.agentic.task.repository.TaskRepository;
-import cn.bitloom.agentic.tool.command.CommandExecutor;
-import cn.bitloom.agentic.tool.command.CommandTool;
-import cn.bitloom.agentic.tool.command.PersistentShellRegistry;
-import cn.bitloom.agentic.tool.command.ProcessManager;
-import cn.bitloom.agentic.tool.command.ProcessTool;
+import cn.bitloom.agentic.tool.task.repository.TaskRepository;
+import cn.bitloom.agentic.tool.askuser.AskUserQuestionTool;
+import cn.bitloom.agentic.tool.command.*;
 import cn.bitloom.agentic.tool.cron.CronCreateTool;
 import cn.bitloom.agentic.tool.cron.CronDeleteTool;
 import cn.bitloom.agentic.tool.cron.CronListTool;
 import cn.bitloom.agentic.tool.cron.CronTriggerTool;
-import cn.bitloom.agentic.tool.evolve.EvolveStatusTool;
-import cn.bitloom.agentic.tool.evolve.EvolveTriggerTool;
-import cn.bitloom.agentic.tool.evolve.GeneActivateTool;
-import cn.bitloom.agentic.tool.evolve.GeneCreateTool;
-import cn.bitloom.agentic.tool.evolve.GeneDeleteTool;
-import cn.bitloom.agentic.tool.evolve.GeneGetTool;
-import cn.bitloom.agentic.tool.evolve.GeneListTool;
-import cn.bitloom.agentic.tool.evolve.GeneUpdateTool;
-import cn.bitloom.agentic.tool.file.DiffGenerator;
-import cn.bitloom.agentic.tool.file.EditTool;
-import cn.bitloom.agentic.tool.file.ReadTool;
-import cn.bitloom.agentic.tool.file.WriteTool;
-import cn.bitloom.agentic.tool.interaction.AskUserQuestionTool;
-import cn.bitloom.agentic.tool.interaction.TodoWriteTool;
-import cn.bitloom.agentic.tool.manage.app.AppConfigGetTool;
-import cn.bitloom.agentic.tool.manage.app.AppConfigPathTool;
-import cn.bitloom.agentic.tool.manage.app.AppConfigReadTool;
-import cn.bitloom.agentic.tool.manage.app.AppConfigSetIsolationTool;
-import cn.bitloom.agentic.tool.manage.mcp.McpConfigListTool;
-import cn.bitloom.agentic.tool.manage.mcp.McpConfigPathTool;
-import cn.bitloom.agentic.tool.manage.mcp.McpConfigUpdateTool;
-import cn.bitloom.agentic.tool.manage.skill.SkillConfigDeleteTool;
-import cn.bitloom.agentic.tool.manage.skill.SkillConfigGetTool;
-import cn.bitloom.agentic.tool.manage.skill.SkillConfigListTool;
-import cn.bitloom.agentic.tool.manage.skill.SkillConfigReloadTool;
-import cn.bitloom.agentic.tool.web.BochaSearchProvider;
-import cn.bitloom.agentic.tool.file.GlobTool;
-import cn.bitloom.agentic.tool.file.GrepTool;
-import cn.bitloom.agentic.tool.web.WebSearchTool;
+import cn.bitloom.agentic.tool.evolve.*;
+import cn.bitloom.agentic.tool.file.*;
 import cn.bitloom.agentic.tool.skill.SkillTool;
 import cn.bitloom.agentic.tool.task.TaskOutputTool;
 import cn.bitloom.agentic.tool.task.TaskTool;
+import cn.bitloom.agentic.tool.todo.TodoWriteTool;
+import cn.bitloom.agentic.tool.web.BochaSearchProvider;
 import cn.bitloom.agentic.tool.web.WebFetchTool;
+import cn.bitloom.agentic.tool.web.WebSearchTool;
 import cn.bitloom.agentic.util.GuiQuestionHandler;
 import cn.bitloom.agentic.util.GuiTodoEventHandler;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.config.ConfigManager;
-import cn.bitloom.agentic.cron.CronManager;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.ai.mcp.AsyncMcpToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -190,20 +163,6 @@ public class Toolkit {
                 .taskRepository(taskRepository).build());
         // 技能
         tools.add(SkillTool.builder().skillManager(skillManager).build());
-        // 技能配置
-        tools.add(SkillConfigListTool.builder().skillManager(skillManager).build());
-        tools.add(SkillConfigGetTool.builder().skillManager(skillManager).build());
-        tools.add(SkillConfigDeleteTool.builder().skillManager(skillManager).build());
-        tools.add(SkillConfigReloadTool.builder().skillManager(skillManager).build());
-        // MCP 配置
-        tools.add(McpConfigListTool.builder().build());
-        tools.add(McpConfigPathTool.builder().build());
-        tools.add(McpConfigUpdateTool.builder().build());
-        // 应用配置
-        tools.add(AppConfigGetTool.builder().configManager(configManager).build());
-        tools.add(AppConfigPathTool.builder().configManager(configManager).build());
-        tools.add(AppConfigReadTool.builder().configManager(configManager).build());
-        tools.add(AppConfigSetIsolationTool.builder().configManager(configManager).build());
         // 进化系统工具（仅当 app.evolve.enabled=true 时注册）
         if (configManager.isEvolveEnabled()) {
             addEvolveTools(tools);

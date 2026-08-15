@@ -172,6 +172,10 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         // 注入工具卡片路由回调：ToolMessageCard 直接发送到 EditorPanel，不进 messages 列表
         this.getViewModel().setToolCardHandler(this::addToolToEditorPanel);
 
+        // 注入 session 激活回调：切换 session 时清空 EditorPanel 工具卡片 / todo
+        // 后台 session 的工具事件不显示在 UI，切回时按需重新产生（不持久化历史工具卡片）
+        this.getViewModel().setSessionActivatedHandler(_ -> clearEditorPanelCards());
+
         // 配置 stick-to-bottom 跟随模式
         setupStickToBottom();
 
@@ -467,6 +471,17 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     /**
+     * 切换 session 时清空 EditorPanel 的工具卡片 / todo，确保只显示当前 active session 的产物。
+     * 后台 session 已产生的工具卡片不恢复（按当前设计，工具卡片不持久化）。
+     */
+    private void clearEditorPanelCards() {
+        if (indexController == null || indexController.getEditorPanelController() == null) return;
+        indexController.getEditorPanelController().clearToolCalls();
+        indexController.getEditorPanelController().clearTodos();
+        toolUIBridge.resetTodoCard();
+    }
+
+    /**
      * toolUIBridge 回调：将工具节点添加到聊天区或编辑器面板。
      * 由 HomePageRouter 在模式切换时重绑定。
      */
@@ -485,7 +500,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         if (node instanceof TaskCard taskCard) {
             taskCard.setOnContentChanged(c -> onCardContentChanged());
         }
-        this.getViewModel().getMessages().add(new NodeMessageCard(node));
+        this.getViewModel().addNodeMessage(node);
     }
 
     private HBox createMessageRow(Node card, MessageType type) {
@@ -732,34 +747,38 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     /**
-     * 重置为新会话状态（通用逻辑 + 子类专有逻辑）
+     * 重置 UI 为新会话状态。
+     * <p>
+     * 仅重置 UI 元素（sendField、tags、icon、chatListContainer 可见性等）和 EditorPanel 工具卡片。
+     * <b>不再清空 messages 或重新加载历史</b>——messages 内容完全由 ViewModel 管理
+     * （createNewSession 会 clear，switchToSession 会 setAll 恢复或加载历史）。
+     * 根据 messages 是否为空决定显示初始 icon 状态还是聊天状态。
      */
     public void resetForNewSession() {
         this.sendField.clear();
         this.tags.clear();
-        this.getViewModel().getMessages().clear();
         toolUIBridge.resetTodoCard();
         if (indexController != null && indexController.getEditorPanelController() != null) {
             indexController.getEditorPanelController().clearToolCalls();
             indexController.getEditorPanelController().clearTodos();
         }
 
-        this.homePage.setAlignment(Pos.CENTER);
-        VBox.setMargin(this.sendBox, new Insets(0, 0, 0, 0));
-        this.chatListContainer.setVisible(false);
-        this.chatListContainer.setManaged(false);
-
-        this.icon.setVisible(true);
-        this.icon.setManaged(true);
-        this.icon.setOpacity(1);
-        this.icon.setTranslateY(0);
-
         // 子类专有重置逻辑
         onResetForNewSession();
 
-        if (this.getViewModel().hasHistoricalMessages()) {
-            this.animateToChatState();
-            this.getViewModel().prepareHistoricalMessages();
+        // 根据 messages 内容决定 UI 状态：有内容则切换到聊天视图，无内容则显示初始 icon
+        if (!this.getViewModel().getMessages().isEmpty()) {
+            animateToChatState();
+        } else {
+            this.homePage.setAlignment(Pos.CENTER);
+            VBox.setMargin(this.sendBox, new Insets(0, 0, 0, 0));
+            this.chatListContainer.setVisible(false);
+            this.chatListContainer.setManaged(false);
+
+            this.icon.setVisible(true);
+            this.icon.setManaged(true);
+            this.icon.setOpacity(1);
+            this.icon.setTranslateY(0);
         }
     }
 

@@ -1,4 +1,4 @@
-package cn.bitloom.agentic.task.repository;
+package cn.bitloom.agentic.tool.task.repository;
 
 import lombok.Getter;
 

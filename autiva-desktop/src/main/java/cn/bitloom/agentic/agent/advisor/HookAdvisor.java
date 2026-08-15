@@ -63,8 +63,9 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
         ChatClientResponse response = chain.nextCall(current);
 
         // afterModelCall: 按 order 顺序执行
+        String finishReason = extractFinishReason(response);
         for (IAgentHook hook : hooks) {
-            hook.afterModelCall(current, response);
+            hook.afterModelCall(current, response, finishReason);
         }
 
         if (response.chatResponse() != null && response.chatResponse().hasFinishReasons(Set.of("STOP"))) {
@@ -97,8 +98,9 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
         return responses
                 .doOnNext(resp -> {
                     // afterModelCall: 在每个 response 上按 order 顺序执行
+                    String fr = extractFinishReason(resp);
                     for (IAgentHook hook : hooks) {
-                        hook.afterModelCall(finalRequest, resp);
+                        hook.afterModelCall(finalRequest, resp, fr);
                     }
                     if (resp.chatResponse() != null && resp.chatResponse().hasFinishReasons(Set.of("STOP"))) {
                         isStopped.set(true);
@@ -126,6 +128,18 @@ public class HookAdvisor implements CallAdvisor, StreamAdvisor {
         for (IAgentHook hook : hooks) {
             hook.afterConversationRound(ctx);
         }
+    }
+
+    /**
+     * 从响应中提取停止原因（如 "STOP"、"TOOL_CALLS"），可能为 null。
+     */
+    private String extractFinishReason(ChatClientResponse response) {
+        if (response != null && response.chatResponse() != null
+                && response.chatResponse().getResult() != null
+                && response.chatResponse().getResult().getMetadata() != null) {
+            return response.chatResponse().getResult().getMetadata().getFinishReason();
+        }
+        return null;
     }
 
     /**

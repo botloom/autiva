@@ -3,7 +3,6 @@ package cn.bitloom.agentic.hook;
 import cn.bitloom.agentic.permission.strategy.ToolApprovalStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Locale;
@@ -28,7 +27,6 @@ import java.util.stream.Collectors;
  * 工具时，只需新增策略实现并由 Spring 管理，无需改动本类分发逻辑。
  */
 @Slf4j
-@Component
 public class PermissionHook implements IAgentHook {
 
     private final Map<String, ToolApprovalStrategy> strategyByTool;

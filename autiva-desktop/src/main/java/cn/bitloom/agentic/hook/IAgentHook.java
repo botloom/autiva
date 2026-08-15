@@ -29,8 +29,14 @@ public interface IAgentHook {
         return request;
     }
 
-    /** 模型调用后回调 */
-    default void afterModelCall(ChatClientRequest request, ChatClientResponse response) {
+    /**
+     * 模型调用后回调。
+     *
+     * @param request      请求
+     * @param response     响应
+     * @param finishReason 停止原因（如 "STOP"、"TOOL_CALLS"、"LENGTH"），流式模式下取最后一个非空值，可能为 null
+     */
+    default void afterModelCall(ChatClientRequest request, ChatClientResponse response, String finishReason) {
     }
 
     /**
