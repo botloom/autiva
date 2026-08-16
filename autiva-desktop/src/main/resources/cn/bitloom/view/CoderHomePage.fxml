@@ -49,6 +49,12 @@
           VBox.vgrow="NEVER">
     </VBox>
 
+    <HBox fx:id="planModeBarSlot"
+          visible="false" managed="false"
+          maxWidth="1000" prefWidth="600" minWidth="300"
+          VBox.vgrow="NEVER">
+    </HBox>
+
     <VBox fx:id="sendBox"
           styleClass="home-page__send-box"
           alignment="TOP_CENTER"

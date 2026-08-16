@@ -23,7 +23,7 @@ public abstract class FileApprovalStrategy implements ToolApprovalStrategy {
     protected abstract String action();
 
     @Override
-    public String approve(String input, String projectDir, String sessionId) {
+    public String approve(String toolName, String input, String projectDir, String sessionId) {
         String filePath = JsonUtils.extractString(input, "filePath", "file_path");
         if (filePath == null || filePath.isBlank()) {
             return null;

@@ -67,6 +67,30 @@ public final class MessageEvent extends AbstractEvent {
             .build();
     }
 
+    /**
+     * 返回替换了 metadata 的副本（id 等标识字段保持不变）。
+     * 用于通知事件的一次性消费标记等原地元数据更新场景。
+     */
+    public MessageEvent withMetadata(Map<String, Object> newMetadata) {
+        return MessageEvent.builder()
+            .sessionId(this.getSessionId())
+            .eventType(this.getEventType())
+            .id(this.getId())
+            .timestamp(this.getTimestamp())
+            .branch(this.getBranch())
+            .message(this.getMessage())
+            .metadata(newMetadata != null ? newMetadata : new HashMap<>())
+            .archived(this.isArchived())
+            .build();
+    }
+
+    /**
+     * 后台任务通知事件标记（metadata key）：notification=true 的 root 事件
+     * 由 SessionMemoryAdvisor 注入下一轮上下文后标记 consumed（一次性消费）。
+     */
+    public static final String METADATA_NOTIFICATION = "notification";
+    public static final String METADATA_CONSUMED = "consumed";
+
     @JsonIgnore
     public boolean isSynthetic() {
         Object v = metadata.get(METADATA_SYNTHETIC);

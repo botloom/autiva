@@ -7,6 +7,8 @@ import cn.bitloom.agentic.tool.Toolkit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 /**
  * Work 模式首页 ViewModel。
  * <p>
@@ -22,8 +24,13 @@ public class WorkHomePageViewModel extends AbstractHomePageViewModel {
                                  ModelFactory modelFactory,
                                  Toolkit toolkit,
                                  cn.bitloom.agentic.skill.SkillManager skillManager,
-                                 cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
-        super(fileSystemSessionManager, definitionManager, modelFactory, toolkit, skillManager, evolveEnricher);
+                                 List<cn.bitloom.agentic.permission.strategy.ToolApprovalStrategy> approvalStrategies,
+                                 cn.bitloom.config.ConfigManager configManager,
+                                 cn.bitloom.agentic.tool.mcp.McpConnectionManager mcpConnectionManager,
+                                 cn.bitloom.agentic.goal.GoalManager goalManager,
+                                 cn.bitloom.bridge.desktop.ToolUIBridge toolUIBridge) {
+        super(fileSystemSessionManager, definitionManager, modelFactory, toolkit, skillManager, approvalStrategies,
+                configManager, mcpConnectionManager, goalManager, toolUIBridge);
     }
 
     @Override

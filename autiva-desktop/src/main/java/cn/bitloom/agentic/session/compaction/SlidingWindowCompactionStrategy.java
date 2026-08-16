@@ -114,6 +114,9 @@ public final class SlidingWindowCompactionStrategy implements CompactionStrategy
 		// Snap forward to the nearest turn start (USER message) so we never keep a
 		// partial turn — e.g. an assistant reply without its originating user message.
 		int cutIndex = CompactionUtils.snapToTurnStart(real, rawCutIndex);
+		// Then advance past any leading orphan tool_response whose tool call was archived,
+		// keeping tool_call ↔ tool_response pairs intact.
+		cutIndex = CompactionUtils.snapToToolBoundary(real, cutIndex);
 
 		List<MessageEvent> keptReal = new ArrayList<>(real.subList(cutIndex, real.size()));
 		List<MessageEvent> removedReal = real.subList(0, cutIndex);

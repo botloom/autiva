@@ -29,10 +29,13 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PermissionHook implements IAgentHook {
 
+    private final List<ToolApprovalStrategy> approvalStrategies;
     private final Map<String, ToolApprovalStrategy> strategyByTool;
 
     public PermissionHook(List<ToolApprovalStrategy> approvalStrategies) {
+        this.approvalStrategies = List.copyOf(approvalStrategies);
         this.strategyByTool = approvalStrategies.stream()
+                .filter(s -> s.toolName() != null)
                 .collect(Collectors.toMap(
                         s -> s.toolName().toLowerCase(Locale.ROOT),
                         Function.identity()));
@@ -53,19 +56,34 @@ public class PermissionHook implements IAgentHook {
         String projectDir = extractString(context, "projectPath");
         String sessionId = extractString(context, "sessionId");
 
-        ToolApprovalStrategy strategy = toolName == null
-                ? null
-                : strategyByTool.get(toolName.toLowerCase(Locale.ROOT));
+        ToolApprovalStrategy strategy = findStrategy(toolName);
         if (strategy == null) {
             return ToolCallDecision.proceed(input);
         }
 
-        String blockReason = strategy.approve(input, projectDir, sessionId);
+        String blockReason = strategy.approve(toolName, input, projectDir, sessionId);
         if (blockReason != null) {
             log.info("[PermissionHook] 工具调用被拦截: tool={}, reason={}", toolName, blockReason);
             return ToolCallDecision.block(blockReason);
         }
         return ToolCallDecision.proceed(input);
+    }
+
+    /**
+     * 查找处理该工具的策略：精确匹配（快路径）→ matches 匹配（动态命名工具，如 MCP）。
+     */
+    private ToolApprovalStrategy findStrategy(String toolName) {
+        if (toolName == null) {
+            return null;
+        }
+        ToolApprovalStrategy exact = strategyByTool.get(toolName.toLowerCase(Locale.ROOT));
+        if (exact != null && exact.matches(toolName)) {
+            return exact;
+        }
+        return approvalStrategies.stream()
+                .filter(s -> s.matches(toolName))
+                .findFirst()
+                .orElse(null);
     }
 
     /**

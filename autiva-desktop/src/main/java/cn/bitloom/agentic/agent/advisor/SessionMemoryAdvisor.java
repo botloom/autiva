@@ -195,8 +195,14 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 		eventFilter = eventFilter.merge(EventFilter.active());
 
 		List<AbstractEvent> events = this.sessionService.getEvents(sessionId, eventFilter);
+
+		// 后台任务通知消费（push 模型）：未消费的 notification 事件注入本轮上下文后
+		// 立即标记 consumed（一次性，防止每轮重复注入）；已消费的通知从上下文剔除，
+		// 保留在 session 中供 UI / 搜索查看
+		consumeNotifications(events, sessionId);
+
 		List<Message> history = events.stream()
-			.filter(e -> e instanceof MessageEvent)
+			.filter(e -> e instanceof MessageEvent me && !isConsumedNotification(me))
 			.map(e -> ((MessageEvent) e).getMessage())
 			.filter(Objects::nonNull)
 			.toList();
@@ -216,8 +222,10 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 
 		// 4. 将当前用户消息追加到会话，受配置的消息过滤器约束。
 		// 跳过仅影响持久化 — 输出提示词不受影响
+		// reactive_compact 重试时跳过（首次调用已持久化该消息，避免重试产生重复事件）
 		Message userMessage = request.prompt().getLastUserOrToolResponseMessage();
-		if (shouldPersist(userMessage, sessionId)) {
+		boolean isReactiveRetry = isReactiveRetry(request.context());
+		if (!isReactiveRetry && shouldPersist(userMessage, sessionId)) {
 			String branch = getBranch(request.context());
 			MessageEvent.MessageEventBuilder eventBuilder = MessageEvent.builder()
 				.id(this.requestEventIdGenerator.generate(request, userMessage))
@@ -279,6 +287,38 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 					r -> this.after(r, chain)));
 	}
 
+	/**
+	 * 后台任务通知消费：将本轮注入上下文的未消费 notification 事件标记 consumed。
+	 * 标记失败仅记录（下轮可能重复注入一次，可接受，不阻塞主流程）。
+	 */
+	private void consumeNotifications(List<AbstractEvent> events, String sessionId) {
+		for (AbstractEvent event : events) {
+			if (event instanceof MessageEvent me && isNotification(me) && !isConsumedNotification(me)) {
+				try {
+					this.sessionService.updateEventMetadata(sessionId, me.getId(),
+							MessageEvent.METADATA_CONSUMED, Boolean.TRUE);
+				}
+				catch (Exception ex) {
+					logger.debug("标记通知 consumed 失败: sessionId={}, eventId={}: {}", sessionId, me.getId(),
+							ex.getMessage());
+				}
+			}
+		}
+	}
+
+	private boolean isNotification(MessageEvent event) {
+		Object v = event.getMetadata() != null ? event.getMetadata().get(MessageEvent.METADATA_NOTIFICATION) : null;
+		return v instanceof Boolean b && b;
+	}
+
+	private boolean isConsumedNotification(MessageEvent event) {
+		if (!isNotification(event)) {
+			return false;
+		}
+		Object v = event.getMetadata() != null ? event.getMetadata().get(MessageEvent.METADATA_CONSUMED) : null;
+		return v instanceof Boolean b && b;
+	}
+
 	private String getSessionId(Map<String, @Nullable Object> context) {
 		Object value = context.get(SESSION_ID_CONTEXT_KEY);
 		if (value instanceof String s && !s.isBlank()) {
@@ -300,6 +340,16 @@ public final class SessionMemoryAdvisor implements BaseAdvisor, MemoryAdvisor {
 	private String getBranch(Map<String, @Nullable Object> context) {
 		Object value = context.get(BRANCH_CONTEXT_KEY);
 		return (value instanceof String s && !s.isBlank()) ? s : null;
+	}
+
+	/**
+	 * 检查本次调用是否为 reactive_compact 重试（Agent 在上下文超长紧急压缩后重发）。
+	 * 重试时跳过用户消息的重复持久化。
+	 */
+	private boolean isReactiveRetry(Map<String, @Nullable Object> context) {
+		Object ctx = context.get("runtimeContext");
+		return ctx instanceof cn.bitloom.agentic.agent.RuntimeContext rc
+				&& Boolean.TRUE.equals(rc.getParam(cn.bitloom.agentic.agent.Agent.CTX_REACTIVE_RETRY));
 	}
 
 	/**

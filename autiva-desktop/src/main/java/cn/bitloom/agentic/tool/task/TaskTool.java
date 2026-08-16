@@ -1,51 +1,26 @@
 package cn.bitloom.agentic.tool.task;
 
 import cn.bitloom.agentic.agent.Agent;
-import cn.bitloom.agentic.agent.AgentDefinition;
-import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.agent.RuntimeContext;
-import cn.bitloom.agentic.agent.advisor.AutoMemoryToolsAdvisor;
-import cn.bitloom.agentic.agent.advisor.SessionMemoryAdvisor;
-import cn.bitloom.agentic.agent.advisor.SkillContextAdvisor;
-import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.model.ModelFactory;
-import cn.bitloom.agentic.model.ModelTypeEnum;
-import cn.bitloom.agentic.session.EventFilter;
 import cn.bitloom.agentic.session.FileSystemSessionManager;
-import cn.bitloom.agentic.session.MessageFilter;
 import cn.bitloom.agentic.session.Session;
-import cn.bitloom.agentic.session.compaction.RecursiveSummarizationCompactionStrategy;
-import cn.bitloom.agentic.session.compaction.TokenCountTrigger;
 import cn.bitloom.agentic.tool.task.repository.TaskRepository;
 import cn.bitloom.agentic.tool.AbstractTool;
 import cn.bitloom.agentic.tool.ToolResult;
-import cn.bitloom.agentic.tool.Toolkit;
-import cn.bitloom.agentic.tool.command.ShellSession;
-import cn.bitloom.agentic.tool.session.ConversationSearchTool;
-import cn.bitloom.agentic.tool.session.CrossSessionSearchTool;
 import cn.bitloom.bridge.desktop.ToolUIBridge;
-import cn.bitloom.constant.AppConstants;
 import cn.bitloom.exception.AgentException;
-import cn.bitloom.store.Store;
 import cn.bitloom.util.JsonUtils;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
-import org.springframework.ai.chat.messages.MessageType;
-import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tokenizer.JTokkitTokenCountEstimator;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.util.Assert;
 
 import javafx.application.Platform;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -94,30 +69,21 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
     private final TaskRepository taskRepository;
     private final ToolUIBridge toolUIBridge;
     private final FileSystemSessionManager sessionManager;
-    private final AgentDefinitionManager definitionManager;
-    private final ModelFactory modelFactory;
-    private final Toolkit toolkit;
-    private final SkillManager skillManager;
-    private final cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher;
+    private final cn.bitloom.agentic.agent.SubAgentFactory subAgentFactory;
+    private final cn.bitloom.agentic.goal.GoalManager goalManager;
 
     private TaskTool(String description,
                      TaskRepository taskRepository,
                      ToolUIBridge toolUIBridge,
                      FileSystemSessionManager sessionManager,
-                     AgentDefinitionManager definitionManager,
-                     ModelFactory modelFactory,
-                     Toolkit toolkit,
-                     SkillManager skillManager,
-                     cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
+                     cn.bitloom.agentic.agent.SubAgentFactory subAgentFactory,
+                     cn.bitloom.agentic.goal.GoalManager goalManager) {
         super("Task", description, Input.class);
         this.taskRepository = taskRepository;
         this.toolUIBridge = toolUIBridge;
         this.sessionManager = sessionManager;
-        this.definitionManager = definitionManager;
-        this.modelFactory = modelFactory;
-        this.toolkit = toolkit;
-        this.skillManager = skillManager;
-        this.evolveEnricher = evolveEnricher;
+        this.subAgentFactory = subAgentFactory;
+        this.goalManager = goalManager;
     }
 
     @Override
@@ -170,11 +136,14 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
                     if (this.toolUIBridge != null) {
                         this.toolUIBridge.completeTaskCard(taskId, null);
                     }
+                    notifyBackgroundCompletion(parentSession.id(), taskId, taskCall.description(), result, null);
                     return result;
                 } catch (Exception e) {
                     if (this.toolUIBridge != null) {
                         this.toolUIBridge.failTaskCard(taskId, e.getMessage());
                     }
+                    notifyBackgroundCompletion(parentSession.id(), taskId, taskCall.description(), null,
+                            e.getMessage());
                     throw e;
                 }
             });
@@ -197,6 +166,57 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             }
             throw AgentException.subagentExecutionFailed(subagentName, e);
         }
+    }
+
+    /**
+     * 后台任务完成/失败时向父 session 追加 synthetic 通知事件（push 模型，对标 s11 通知收集）。
+     * <p>
+     * branch=null（root 可见），SessionMemoryAdvisor 下一轮加载时注入主智能体上下文并标记
+     * consumed（一次性消费，防止每轮重复注入）；TaskOutput 工具保留——主动查询与被动通知双通道并存。
+     * 不复用原 tool_use_id（一个 tool_use 只对应一个 tool_result 的 API 约束）。
+     */
+    private void notifyBackgroundCompletion(String parentSessionId, String taskId, String description,
+            String result, String error) {
+        try {
+            String status = error != null ? "失败" : "完成";
+            String summary = error != null
+                    ? "失败原因：" + truncate(error, 500)
+                    : "结果摘要：" + truncate(result != null ? result : "", 500);
+            String text = "<task_notification>\n后台任务 " + taskId + "（" + description + "）已" + status + "。\n"
+                    + summary + "\n完整结果可通过 TaskOutput 工具获取。\n</task_notification>";
+
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put(MessageEvent.METADATA_SYNTHETIC, Boolean.TRUE);
+            metadata.put(MessageEvent.METADATA_NOTIFICATION, Boolean.TRUE);
+            MessageEvent notification = MessageEvent.builder()
+                    .sessionId(parentSessionId)
+                    .message(new UserMessage(text))
+                    .metadata(metadata)
+                    .build();
+            sessionManager.appendEvent(notification);
+
+            // UI：系统通知卡片（区别于用户消息样式）
+            if (this.toolUIBridge != null) {
+                this.toolUIBridge.showNotification("后台任务 " + taskId + "（" + description + "）已" + status,
+                        parentSessionId);
+            }
+
+            // Goal Loop defer 恢复：目标 deferred 时后台任务完成即自动续轮推进目标
+            if (this.goalManager != null) {
+                this.goalManager.resumeIfDeferred(parentSessionId,
+                        "<task_notification>\n后台任务 " + taskId + "（" + description + "）已" + status
+                                + "，完整结果已注入上下文。请继续推进既定目标。\n</task_notification>");
+            }
+        } catch (Exception e) {
+            log.warn("写入后台任务通知失败: taskId={}", taskId, e);
+        }
+    }
+
+    private String truncate(String text, int maxChars) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() <= maxChars ? text : text.substring(0, maxChars) + "...";
     }
 
     /**
@@ -226,22 +246,6 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
     }
 
     /**
-     * 根据父 session ID 解析 memory 目录（继承父 session 的 mode 和 projectName）。
-     */
-    private Path resolveMemoriesDir(String parentSessionId) {
-        String[] parts = parentSessionId.split("-", 3);
-        String mode = parts[0];
-        if ("code".equals(mode)) {
-            String projectName = parts.length > 1 ? parts[1] : null;
-            if (projectName == null || projectName.isBlank()) {
-                throw new IllegalStateException("code 模式 sessionId 必须包含 projectName: " + parentSessionId);
-            }
-            return AppConstants.Memory.projectMemoryDir(projectName);
-        }
-        return AppConstants.Memory.workMemoryDir();
-    }
-
-    /**
      * 执行子智能体任务（复用父 Session，通过 branch 隔离事件）。
      * <p>
      * 流程：
@@ -258,7 +262,7 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         String taskId = branch;
         MessageEvent inputEvent = MessageEvent.userMessage(parentSessionId, taskCall.prompt());
 
-        Agent agent = buildAgent(parentSession, taskCall.subagentName(), branch);
+        Agent agent = subAgentFactory.build(parentSession, taskCall.subagentName(), branch, projectPath, null, null);
         RuntimeContext ctx = RuntimeContext.builder()
                 .sessionId(parentSessionId)
                 .userId(parentSession.userId())
@@ -279,67 +283,6 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         return "agent_id: " + taskId + "\n\n" + result;
     }
 
-    /**
-     * 构建 Agent（带 branch 过滤的 SessionMemoryAdvisor）。
-     */
-    private Agent buildAgent(Session parentSession, String agentId, String branch) {
-        AgentDefinition definition = definitionManager.getDefinition(agentId);
-        if (definition == null) {
-            throw AgentException.subagentNotFound("子智能体定义不存在: " + agentId
-                    + "，可用定义: " + definitionManager.getSubagentDefinitions().stream()
-                            .map(AgentDefinition::name).toList());
-        }
-        ModelTypeEnum modelType = Store.selectedModel.get() != null ? Store.selectedModel.get() : ModelTypeEnum.DEEPSEEK;
-        ChatModel chatModel = modelFactory.model(modelType);
-        String uid = parentSession.userId() != null ? parentSession.userId() : "default-user";
-
-        List<Advisor> advisors = new ArrayList<>();
-
-        // EventFilter.forBranch(branch): 子智能体仅能看到自己 branch 的事件 + root 事件（主智能体历史）
-        // 配合 SessionMemoryAdvisor 写入 branch 字段，实现多智能体共享 session 但上下文隔离
-        SessionMemoryAdvisor sessionMemoryAdvisor = SessionMemoryAdvisor.builder(sessionManager)
-                .defaultUserId(uid)
-                .eventFilter(EventFilter.forBranch(branch))
-                .messageFilter(MessageFilter.byMessageType(MessageType.USER, MessageType.ASSISTANT, MessageType.TOOL)
-                        .and(MessageFilter.skipEmptyMessages()))
-                .compactionTrigger(TokenCountTrigger.builder()
-                        .threshold(100000)
-                        .tokenCountEstimator(new JTokkitTokenCountEstimator())
-                        .build())
-                .compactionStrategy(RecursiveSummarizationCompactionStrategy.builder(
-                                ChatClient.builder(chatModel).build())
-                        .build())
-                .build();
-        advisors.add(sessionMemoryAdvisor);
-
-        Path memoriesDir = resolveMemoriesDir(parentSession.id());
-        AutoMemoryToolsAdvisor autoMemoryToolsAdvisor = AutoMemoryToolsAdvisor.builder()
-                .memoriesRootDirectory(memoriesDir.toString())
-                .build();
-        advisors.add(autoMemoryToolsAdvisor);
-
-        advisors.add(SkillContextAdvisor.builder().skillManager(skillManager).build());
-
-        // 进化系统：条件注入 GeneInjector Advisor
-        evolveEnricher.enrichAdvisors(advisors);
-
-        List<ToolCallback> allTools = new ArrayList<>(toolkit.buildToolCallbacks(definition));
-        allTools.add(ConversationSearchTool.builder(sessionManager).build().toToolCallback());
-        allTools.add(CrossSessionSearchTool.builder(sessionManager, uid).build().toToolCallback());
-
-        Agent agent = Agent.builder()
-                .name(agentId)
-                .definition(definition)
-                .model(chatModel)
-                .systemPrompt(definition.content() + ShellSession.envBlock())
-                .tools(allTools)
-                .hooks(evolveEnricher.buildHooks())
-                .advisors(advisors)
-                .build();
-        log.info("构建子智能体: agentId={}, branch={}", agentId, branch);
-        return agent;
-    }
-
     public static Builder builder() {
         return new Builder();
     }
@@ -349,11 +292,8 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         private TaskRepository taskRepository;
         private ToolUIBridge toolUIBridge;
         private FileSystemSessionManager sessionManager;
-        private AgentDefinitionManager definitionManager;
-        private ModelFactory modelFactory;
-        private Toolkit toolkit;
-        private SkillManager skillManager;
-        private cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher;
+        private cn.bitloom.agentic.agent.SubAgentFactory subAgentFactory;
+        private cn.bitloom.agentic.goal.GoalManager goalManager;
 
         private Builder() {
         }
@@ -373,44 +313,24 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
             return this;
         }
 
-        public Builder definitionManager(AgentDefinitionManager definitionManager) {
-            this.definitionManager = definitionManager;
+        public Builder subAgentFactory(cn.bitloom.agentic.agent.SubAgentFactory subAgentFactory) {
+            this.subAgentFactory = subAgentFactory;
             return this;
         }
 
-        public Builder modelFactory(ModelFactory modelFactory) {
-            this.modelFactory = modelFactory;
-            return this;
-        }
-
-        public Builder toolkit(Toolkit toolkit) {
-            this.toolkit = toolkit;
-            return this;
-        }
-
-        public Builder skillManager(SkillManager skillManager) {
-            this.skillManager = skillManager;
-            return this;
-        }
-
-        public Builder evolveEnricher(cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
-            this.evolveEnricher = evolveEnricher;
+        public Builder goalManager(cn.bitloom.agentic.goal.GoalManager goalManager) {
+            this.goalManager = goalManager;
             return this;
         }
 
         public TaskTool build() {
             Assert.notNull(this.sessionManager, "必须提供sessionManager");
-            Assert.notNull(this.definitionManager, "必须提供definitionManager");
-            Assert.notNull(this.modelFactory, "必须提供modelFactory");
-            Assert.notNull(this.toolkit, "必须提供toolkit");
-            Assert.notNull(this.skillManager, "必须提供skillManager");
-            Assert.notNull(this.evolveEnricher, "必须提供evolveEnricher");
+            Assert.notNull(this.subAgentFactory, "必须提供subAgentFactory");
 
             return new TaskTool(TASK_DESCRIPTION,
                     this.taskRepository, this.toolUIBridge,
-                    this.sessionManager, this.definitionManager,
-                    this.modelFactory, this.toolkit, this.skillManager,
-                    this.evolveEnricher);
+                    this.sessionManager, this.subAgentFactory,
+                    this.goalManager);
         }
     }
 }

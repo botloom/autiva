@@ -35,12 +35,14 @@ public class ProjectFileWatcherService {
     private final GitStatusService gitStatusService;
 
     private final WatchService watchService;
+    /** 仅负责调度目录注册与去抖刷新任务，不得提交阻塞死循环（监听循环跑在专用线程上） */
     private final ExecutorService executor;
     private final Map<WatchKey, Path> keyToDir = new ConcurrentHashMap<>();
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     private volatile Path currentRoot;
     private volatile boolean refreshScheduled = false;
+    private volatile Thread pollThread;
 
     public ProjectFileWatcherService(ProjectStatusStore projectStatusStore,
                                      GitStatusService gitStatusService) throws IOException {
@@ -48,7 +50,7 @@ public class ProjectFileWatcherService {
         this.gitStatusService = gitStatusService;
         this.watchService = FileSystems.getDefault().newWatchService();
         this.executor = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "autiva-file-watcher");
+            Thread t = new Thread(r, "autiva-file-watcher-scheduler");
             t.setDaemon(true);
             return t;
         });
@@ -56,6 +58,7 @@ public class ProjectFileWatcherService {
 
     /**
      * 开始递归监听指定项目根。若已监听其他根则先停止再监听。
+     * 监听循环运行在独立守护线程，保证调度线程上的去抖刷新任务不被阻塞。
      */
     public synchronized void watch(Path root) {
         if (root == null) {
@@ -69,7 +72,10 @@ public class ProjectFileWatcherService {
         currentRoot = abs;
         running.set(true);
         executor.execute(this::registerAll);
-        executor.execute(this::pollLoop);
+        Thread t = new Thread(this::pollLoop, "autiva-file-watcher");
+        t.setDaemon(true);
+        this.pollThread = t;
+        t.start();
     }
 
     /**
@@ -84,9 +90,11 @@ public class ProjectFileWatcherService {
         currentRoot = null;
         keyToDir.keySet().forEach(k -> k.cancel());
         keyToDir.clear();
-        try {
-            watchService.poll();
-        } catch (Exception ignored) {
+        // 中断监听线程，唤醒可能阻塞在 take() 的循环使其退出
+        Thread t = pollThread;
+        if (t != null) {
+            t.interrupt();
+            pollThread = null;
         }
     }
 

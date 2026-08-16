@@ -175,6 +175,9 @@ public final class RecursiveSummarizationCompactionStrategy implements Compactio
 		// 始终从轮次边界开始，不会出现半个未完成的轮次。
 		// 子代理的 USER 消息（branch != null）会被跳过——它们属于轮次内部。
 		int cutIndex = CompactionUtils.snapToTurnStart(realEvents, rawCutIndex);
+		// 再跳过开头的孤儿 tool_response（其配对 tool_call 已被归档），
+		// 保证 tool_call ↔ tool_response 成对不被拆散。
+		cutIndex = CompactionUtils.snapToToolBoundary(realEvents, cutIndex);
 
 		// 拆分真实事件：归档较旧的事件，保留最新的窗口
 		List<MessageEvent> toArchive = realEvents.subList(0, cutIndex);

@@ -30,6 +30,7 @@ import reactor.core.publisher.Flux;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * 统一智能体类，合并了原 AbstractAgent + MainAgent + SubagentExecutor 的功能。
@@ -53,14 +54,21 @@ public class Agent {
     private final @NonNull List<ToolCallback> tools;
     @Getter
     private final @NonNull List<IAgentHook> hooks;
+    /** 紧急上下文压缩器（reactive_compact）：sessionId -> 强制压缩，可为 null */
+    private final Consumer<String> reactiveCompactor;
+
+    /** RuntimeContext 标记：本次调用是 reactive_compact 重试（跳过用户消息重复持久化） */
+    public static final String CTX_REACTIVE_RETRY = "reactiveCompactRetry";
 
     private Agent(@NonNull String name, @NonNull AgentDefinition definition, @NonNull ChatClient chatClient,
-                  @NonNull List<ToolCallback> tools, @NonNull List<IAgentHook> hooks) {
+                  @NonNull List<ToolCallback> tools, @NonNull List<IAgentHook> hooks,
+                  Consumer<String> reactiveCompactor) {
         this.name = name;
         this.definition = definition;
         this.chatClient = chatClient;
         this.tools = tools;
         this.hooks = hooks;
+        this.reactiveCompactor = reactiveCompactor;
     }
 
     /**
@@ -119,6 +127,18 @@ public class Agent {
                     })
                     .subscribe(sink::next, sink::error, sink::complete);
         }).onErrorResume(e -> {
+            // reactive_compact：上下文超长被 API 拒绝时，紧急压缩后重试一次（MAX_REACTIVE_RETRIES=1）
+            if (isContextLengthError(e) && reactiveCompactor != null && sessionId != null
+                    && !Boolean.TRUE.equals(ctx.getParam(CTX_REACTIVE_RETRY))) {
+                try {
+                    reactiveCompactor.accept(sessionId);
+                    ctx.put(CTX_REACTIVE_RETRY, Boolean.TRUE);
+                    log.warn("[Agent] 上下文超长，已执行紧急压缩，重试一次: sessionId={}", sessionId);
+                    return runStream(inputEvent, ctx);
+                } catch (Exception compactEx) {
+                    log.error("[Agent] 紧急压缩失败，回退到兜底消息", compactEx);
+                }
+            }
             log.error("LLM stream error: {}, msg: {}", e.getClass().getSimpleName(), e.getMessage());
             AssistantMessage fallback = MessageUtil.buildFallbackMessage();
             MessageEvent fallbackEvent = EventConverter.fromMessage(sessionId, fallback);
@@ -127,6 +147,23 @@ public class Agent {
             }
             return Flux.just(fallbackEvent);
         });
+    }
+
+    /**
+     * 识别上下文超长类错误（各 provider 消息措辞不同）。
+     */
+    private boolean isContextLengthError(Throwable e) {
+        String msg = e.getMessage();
+        if (msg == null) {
+            return false;
+        }
+        String lower = msg.toLowerCase();
+        return lower.contains("context length")
+                || lower.contains("prompt is too long")
+                || lower.contains("maximum context")
+                || lower.contains("context window")
+                || lower.contains("too many tokens")
+                || lower.contains("input tokens exceed");
     }
 
     /**
@@ -152,6 +189,7 @@ public class Agent {
         private List<ToolCallback> tools = new ArrayList<>();
         private List<IAgentHook> hooks = new ArrayList<>();
         private List<Advisor> advisors = new ArrayList<>();
+        private Consumer<String> reactiveCompactor;
         private boolean enableLogging = true;
 
         public Builder name(String name) {
@@ -186,6 +224,15 @@ public class Agent {
 
         public Builder advisors(List<Advisor> advisors) {
             this.advisors = advisors;
+            return this;
+        }
+
+        /**
+         * 紧急上下文压缩器（reactive_compact）：上下文超长被 API 拒绝时调用，强制压缩后重试一次。
+         * 典型实现：{@code sid -> sessionManager.compact(sid, r -> true, stagedStrategy)}
+         */
+        public Builder reactiveCompactor(Consumer<String> reactiveCompactor) {
+            this.reactiveCompactor = reactiveCompactor;
             return this;
         }
 
@@ -236,7 +283,7 @@ public class Agent {
             if (hookAdvisor != null) {
                 builder.defaultAdvisors(hookAdvisor);
             }
-            return new Agent(name, definition, builder.build(), wrappedTools, allHooks);
+            return new Agent(name, definition, builder.build(), wrappedTools, allHooks, reactiveCompactor);
         }
     }
 }

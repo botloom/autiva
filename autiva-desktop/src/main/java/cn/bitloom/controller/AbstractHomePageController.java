@@ -5,6 +5,8 @@ import cn.bitloom.bridge.desktop.ToolUIBridge;
 import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.AutoResizeTextArea;
+import cn.bitloom.node.SlashCommandPopup;
+import cn.bitloom.node.SlashCommands;
 import cn.bitloom.node.message.*;
 import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.node.tool.TaskCard;
@@ -101,6 +103,19 @@ public abstract class AbstractHomePageController implements Initializable, Butto
      */
     private NodeMessageCard loadingIndicatorCard = null;
 
+    /** slash 命令建议浮层（输入 / 时弹出，仅命令模式 VM 支持） */
+    private final SlashCommandPopup slashPopup = new SlashCommandPopup(SlashCommands.all(), command -> {
+        if (command.hasArg()) {
+            // 带参命令：补全命令名 + 空格，聚焦输入参数
+            sendField.setText(command.fullName() + " ");
+            sendField.positionCaret(sendField.getText().length());
+            sendField.requestFocus();
+        } else {
+            // 无参命令：直接执行
+            getViewModel().handleSlashCommand(command.fullName());
+        }
+    });
+
     @Getter
     protected final ToolUIBridge toolUIBridge;
     @Getter
@@ -128,12 +143,23 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.sendButton.setOnAction(event -> this.handleSendMessage());
         this.stopButton.setOnAction(event -> this.getViewModel().pauseGeneration());
 
-        // Enter 发送消息（Shift+Enter 换行）
+        // Enter 发送消息（Shift+Enter 换行）；浮层打开时 ↑↓ 选择 / Enter 确认 / Esc 关闭
         this.sendField.setPromptText("给呆芽发消息...");
         this.sendField.setOnKeyPressed(e -> {
+            if (this.slashPopup.handleKeyEvent(e)) {
+                e.consume();
+                return;
+            }
             if (e.getCode() == javafx.scene.input.KeyCode.ENTER && !e.isShiftDown()) {
                 e.consume();
                 this.handleSendMessage();
+            }
+        });
+
+        // slash 命令建议：文本形如 /xxx 时在输入框上方弹出过滤列表（仅命令模式）
+        this.sendField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (this.getViewModel().isSlashCommandSupported()) {
+                this.slashPopup.update(this.sendField, newVal);
             }
         });
 
@@ -479,6 +505,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         indexController.getEditorPanelController().clearToolCalls();
         indexController.getEditorPanelController().clearTodos();
         toolUIBridge.resetTodoCard();
+        toolUIBridge.resetGoalCard();
     }
 
     /**
@@ -525,6 +552,20 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         String message = buildMessage();
         if (message.isBlank()) {
             return;
+        }
+        // slash 命令拦截：以 / 开头（// 转义为普通文本）由 ViewModel 分发，不进入 agent 流
+        if (message.startsWith("/") && !message.startsWith("//")) {
+            slashPopup.hide();
+            boolean handled = this.getViewModel().handleSlashCommand(message);
+            if (!handled) {
+                Store.warnMessage.set("当前模式不支持命令，直接发送请去掉开头的 /");
+            }
+            this.sendField.clear();
+            this.tags.clear();
+            return;
+        }
+        if (message.startsWith("//")) {
+            message = message.substring(1); // // 转义：去掉一个 / 后作为普通消息发送
         }
         if (!this.chatListContainer.isVisible()) {
             this.animateToChatState();
@@ -758,6 +799,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.sendField.clear();
         this.tags.clear();
         toolUIBridge.resetTodoCard();
+        toolUIBridge.resetGoalCard();
         if (indexController != null && indexController.getEditorPanelController() != null) {
             indexController.getEditorPanelController().clearToolCalls();
             indexController.getEditorPanelController().clearTodos();

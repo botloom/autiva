@@ -23,7 +23,7 @@ public class CommandApprovalStrategy implements ToolApprovalStrategy {
     }
 
     @Override
-    public String approve(String input, String projectDir, String sessionId) {
+    public String approve(String toolName, String input, String projectDir, String sessionId) {
         String command = JsonUtils.extractString(input, "command");
         if (command == null || command.isBlank()) {
             return null;

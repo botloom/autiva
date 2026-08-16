@@ -55,6 +55,8 @@ public class CodeHomePageController extends AbstractHomePageController {
     @FXML
     private VBox approvalBar;
     @FXML
+    private HBox planModeBarSlot;
+    @FXML
     private MenuButton projectSelectButton;
     @FXML
     private Button branchDisplayButton;
@@ -106,6 +108,34 @@ public class CodeHomePageController extends AbstractHomePageController {
             approvalBar.setVisible(true);
             approvalBar.setManaged(true);
         });
+
+        // 计划批准卡片（Plan Mode）：同样显示在 approvalBar
+        this.toolUIBridge.setOnShowPlanApproval(card -> {
+            approvalBar.getChildren().clear();
+            approvalBar.getChildren().add(card);
+            approvalBar.setVisible(true);
+            approvalBar.setManaged(true);
+        });
+
+        // approvalBar 内容为空时自动隐藏（卡片决策后 dismiss 移除自身）
+        this.approvalBar.getChildren().addListener((javafx.collections.ListChangeListener<Node>) change -> {
+            if (this.approvalBar.getChildren().isEmpty()) {
+                this.approvalBar.setVisible(false);
+                this.approvalBar.setManaged(false);
+            }
+        });
+
+        // Plan Mode 指示条：跟随 planMode 属性显隐，退出按钮等同 /plan 切换
+        cn.bitloom.node.PlanModeBar planModeBar = new cn.bitloom.node.PlanModeBar(
+                () -> this.viewModel.handleSlashCommand("/plan"));
+        this.planModeBarSlot.getChildren().add(planModeBar);
+        this.viewModel.planModeProperty().addListener((obs, oldVal, newVal) -> Platform.runLater(() -> {
+            boolean plan = Boolean.TRUE.equals(newVal);
+            planModeBarSlot.setVisible(plan);
+            planModeBarSlot.setManaged(plan);
+            sendField.setPromptText(plan ? "描述你的任务，呆芽将只读调研并制定计划..."
+                    : "给呆芽发消息...");
+        }));
 
         // diff 审查条按钮事件
         this.diffReviewHeader.setOnMouseClicked(e -> {

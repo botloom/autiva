@@ -105,4 +105,37 @@ public final class CompactionUtils {
 		return idx;
 	}
 
+	/**
+	 * Advances {@code cutIndex} forward past any leading tool-response events whose
+	 * originating {@code assistant(toolCalls)} event would be archived (i.e. sits before
+	 * the cut). This guarantees the kept window never starts with an orphan
+	 * {@code tool_response} that has no preceding tool call in the active context — such an
+	 * orphan would confuse multi-turn tool-call sequences during summarization.
+	 *
+	 * <p>
+	 * A complete tool interaction is laid out as {@code assistant(toolCalls)} →
+	 * {@code tool_response}. After {@link #snapToTurnStart} aligns the cut to a root-level
+	 * {@code USER} message, the kept window can still begin with a {@code tool_response}
+	 * when the preceding {@code assistant(toolCalls)} was part of the archived segment. In
+	 * that case we walk forward until the leading {@code tool_response} block is consumed,
+	 * so the kept window starts at the next {@code assistant(toolCalls)} (or subsequent
+	 * user / assistant event) instead.
+	 * @param real the list of non-synthetic session events
+	 * @param cutIndex the turn-aligned cut point; must be in {@code [0, real.size()]}
+	 * @return the adjusted index, advanced past any leading orphan {@code tool_response}
+	 * events, or {@code real.size()} if the remainder consists only of such events
+	 */
+	static int snapToToolBoundary(List<MessageEvent> real, int cutIndex) {
+		int idx = cutIndex;
+		// Walk past any leading tool_response events. Such a response is only valid in the
+		// active window if its originating assistant(toolCalls) is also kept (i.e. it sits
+		// at or after the cut). Since tool responses follow their tool call immediately and
+		// the cut is already turn-aligned, a leading tool_response means its tool call was
+		// archived — advance to keep the pair intact.
+		while (idx < real.size() && real.get(idx).isToolResponse()) {
+			idx++;
+		}
+		return idx;
+	}
+
 }

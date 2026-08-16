@@ -1,8 +1,6 @@
 app:
   session:
     isolation: PER_PEER
-  evolve:
-    enabled: false
 spring:
   ai:
     deepseek:

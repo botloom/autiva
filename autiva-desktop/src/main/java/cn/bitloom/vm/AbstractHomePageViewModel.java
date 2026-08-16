@@ -5,6 +5,7 @@ import cn.bitloom.agentic.agent.AgentDefinition;
 import cn.bitloom.agentic.agent.AgentDefinitionManager;
 import cn.bitloom.agentic.agent.RuntimeContext;
 import cn.bitloom.agentic.agent.advisor.AutoMemoryToolsAdvisor;
+import cn.bitloom.agentic.agent.advisor.MemoryRecallAdvisor;
 import cn.bitloom.agentic.agent.advisor.SessionMemoryAdvisor;
 import cn.bitloom.agentic.agent.advisor.SkillContextAdvisor;
 import cn.bitloom.agentic.agent.advisor.SubagentContextAdvisor;
@@ -12,15 +13,24 @@ import cn.bitloom.agentic.event.AbstractEvent;
 import cn.bitloom.agentic.event.CompactionEvent;
 import cn.bitloom.agentic.event.DiffEvent;
 import cn.bitloom.agentic.event.MessageEvent;
-import cn.bitloom.agentic.evolve.EvolveAgentEnricher;
+import cn.bitloom.agentic.hook.IAgentHook;
+import cn.bitloom.agentic.hook.MemoryExtractionHook;
+import cn.bitloom.agentic.hook.PermissionHook;
+import cn.bitloom.agentic.hook.TodoReminderHook;
+import cn.bitloom.agentic.hook.ToolCallBudgetHook;
+import cn.bitloom.agentic.hook.ToolResultOffloadHook;
+import cn.bitloom.agentic.memory.FileSystemAgentMemoryStore;
+import cn.bitloom.agentic.memory.MemoryConsolidator;
 import cn.bitloom.agentic.model.ModelFactory;
 import cn.bitloom.agentic.model.ModelTypeEnum;
 import cn.bitloom.agentic.session.*;
 import cn.bitloom.agentic.session.compaction.RecursiveSummarizationCompactionStrategy;
+import cn.bitloom.agentic.session.compaction.StagedCompactionStrategy;
 import cn.bitloom.agentic.session.compaction.TokenCountTrigger;
 import cn.bitloom.agentic.skill.SkillManager;
 import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.agentic.tool.command.ShellSession;
+import cn.bitloom.agentic.tool.plan.ExitPlanModeTool;
 import cn.bitloom.agentic.tool.session.ConversationSearchTool;
 import cn.bitloom.agentic.tool.session.CrossSessionSearchTool;
 import cn.bitloom.constant.AgentMode;
@@ -50,6 +60,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -72,12 +83,21 @@ import java.util.function.Consumer;
 @Slf4j
 public abstract class AbstractHomePageViewModel {
 
+    /** Plan Mode 工具白名单：只读探索 + 交互（ExitPlanMode 由 buildAgent 单独追加） */
+    private static final Set<String> PLAN_MODE_ALLOWED = Set.of(
+            "Read", "Glob", "Grep", "WebFetch", "WebSearch",
+            "TodoWrite", "AskUserQuestion",
+            "ConversationSearch", "CrossSessionSearch");
+
     protected final FileSystemSessionManager sessionManager;
     protected final AgentDefinitionManager definitionManager;
     protected final ModelFactory modelFactory;
     protected final Toolkit toolkit;
     protected final SkillManager skillManager;
-    protected final EvolveAgentEnricher evolveEnricher;
+    protected final List<cn.bitloom.agentic.permission.strategy.ToolApprovalStrategy> approvalStrategies;
+    protected final cn.bitloom.config.ConfigManager configManager;
+    protected final cn.bitloom.agentic.goal.GoalManager goalManager;
+    protected final cn.bitloom.bridge.desktop.ToolUIBridge toolUIBridge;
 
     /** UI 绑定的稳定消息列表引用，切换 session 时通过 setAll 替换内容 */
     @Getter
@@ -109,6 +129,21 @@ public abstract class AbstractHomePageViewModel {
 
     public BooleanProperty historyLoadingProperty() {
         return historyLoading;
+    }
+
+    /**
+     * Plan Mode（计划模式）：开启后构建的智能体仅保留只读探索工具，
+     * 系统提示词注入计划模式指令，完成后经 ExitPlanMode 提交计划等待批准。
+     * 切换后需 evictAgent 使下一次消息按新模式重建智能体。
+     */
+    private final BooleanProperty planMode = new SimpleBooleanProperty(false);
+
+    public BooleanProperty planModeProperty() {
+        return planMode;
+    }
+
+    public boolean isPlanMode() {
+        return planMode.get();
     }
 
     /**
@@ -148,13 +183,27 @@ public abstract class AbstractHomePageViewModel {
                                         ModelFactory modelFactory,
                                         Toolkit toolkit,
                                         SkillManager skillManager,
-                                        cn.bitloom.agentic.evolve.EvolveAgentEnricher evolveEnricher) {
+                                        List<cn.bitloom.agentic.permission.strategy.ToolApprovalStrategy> approvalStrategies,
+                                        cn.bitloom.config.ConfigManager configManager,
+                                        cn.bitloom.agentic.tool.mcp.McpConnectionManager mcpConnectionManager,
+                                        cn.bitloom.agentic.goal.GoalManager goalManager,
+                                        cn.bitloom.bridge.desktop.ToolUIBridge toolUIBridge) {
         this.sessionManager = sessionManager;
         this.definitionManager = definitionManager;
         this.modelFactory = modelFactory;
         this.toolkit = toolkit;
         this.skillManager = skillManager;
-        this.evolveEnricher = evolveEnricher;
+        this.approvalStrategies = approvalStrategies;
+        this.configManager = configManager;
+        this.goalManager = goalManager;
+        this.toolUIBridge = toolUIBridge;
+        // MCP 连接变化（McpConnect/断开）→ evict 全部 per-session Agent 缓存，
+        // 下一次 sendMessage 经 computeIfAbsent 重建，工具池即含最新 MCP 工具。
+        // 正在流式处理中的 Agent 不受影响（引用仍被持有），新工具自下一轮对话生效。
+        mcpConnectionManager.addChangeListener(sessionAgents::clear);
+        // Goal Loop 自动续轮：GoalJudgeHook / 后台任务通知通过 GoalManager 触发，
+        // 本 VM 仅处理自己管理过的 session（sessionStates 路由），非本 VM 的静默忽略。
+        goalManager.registerContinuation(this::continueRound);
     }
 
     public void createNewSession() {
@@ -325,7 +374,7 @@ public abstract class AbstractHomePageViewModel {
     }
 
     /**
-     * 构建 systemPrompt（code 模式注入全局规则和项目规则）。
+     * 构建 systemPrompt（code 模式注入全局规则和项目规则；计划模式追加计划指令）。
      */
     protected String buildSystemPrompt(String agentId, AgentDefinition definition) {
         String systemPrompt = definition.content();
@@ -351,6 +400,16 @@ public abstract class AbstractHomePageViewModel {
                 log.warn("读取项目规则失败: {}", project.path(), e);
             }
         }
+        // 计划模式：注入只读约束与计划提交要求
+        if (planMode.get()) {
+            systemPrompt += "\n\n# 计划模式\n"
+                    + "你正处于计划模式：只允许只读探索（读文件、搜索、查网页），"
+                    + "严禁创建、修改、删除文件或执行任何有副作用的命令。\n"
+                    + "任务：针对用户需求充分调研代码库后，制定具体到文件级的实施计划，"
+                    + "然后调用 ExitPlanMode 工具提交计划等待用户批准。\n"
+                    + "计划必须包含：将创建/修改的文件与各自改动要点、实施步骤顺序、风险与回滚方式。\n"
+                    + "用户给出反馈时，按反馈调整计划并重新提交；不要在计划模式下开始实施。";
+        }
         // code 模式注入项目路径作为 Working directory，让 LLM 感知项目根目录
         return systemPrompt + ShellSession.envBlock(project != null ? project.path() : null);
     }
@@ -366,6 +425,13 @@ public abstract class AbstractHomePageViewModel {
 
         List<Advisor> advisors = new ArrayList<>();
 
+        // 四步压缩管线（低成本优先：滑动窗口裁剪 → 旧工具结果占位符化 → 水位检查 → LLM 摘要）
+        StagedCompactionStrategy stagedStrategy = StagedCompactionStrategy.builder(
+                        RecursiveSummarizationCompactionStrategy.builder(
+                                ChatClient.builder(chatModel).build())
+                        .build())
+                .tokenThreshold(100000)
+                .build();
         SessionMemoryAdvisor sessionMemoryAdvisor = SessionMemoryAdvisor.builder(sessionManager)
                 .defaultUserId(uid)
                 .messageFilter(MessageFilter.byMessageType(MessageType.USER, MessageType.ASSISTANT, MessageType.TOOL)
@@ -374,17 +440,28 @@ public abstract class AbstractHomePageViewModel {
                         .threshold(100000)
                         .tokenCountEstimator(new JTokkitTokenCountEstimator())
                         .build())
-                .compactionStrategy(RecursiveSummarizationCompactionStrategy.builder(
-                                ChatClient.builder(chatModel).build())
-                        .build())
+                .compactionStrategy(stagedStrategy)
                 .build();
         advisors.add(sessionMemoryAdvisor);
 
         Path memoriesDir = resolveMemoryDir(agentId, getCurrentProject());
+        // 记忆自动化三件套共享同一 store：
+        // (a) 选择式召回——仅首轮注入相关记忆背景；(b) 回合提取 Hook——见下方 hooks；
+        // (c) 整理触发器——文件数 ≥ 阈值时注入 reminder 并由 Hook 异步整理
+        FileSystemAgentMemoryStore memoryStore = new FileSystemAgentMemoryStore(memoriesDir);
         AutoMemoryToolsAdvisor autoMemoryToolsAdvisor = AutoMemoryToolsAdvisor.builder()
+                .memoryStore(memoryStore)
                 .memoriesRootDirectory(memoriesDir.toString())
+                .memoryConsolidationTrigger(
+                        MemoryConsolidator.triggerWhen(memoryStore, MemoryConsolidator.DEFAULT_THRESHOLD))
                 .build();
         advisors.add(autoMemoryToolsAdvisor);
+
+        advisors.add(MemoryRecallAdvisor.builder()
+                .sessionManager(sessionManager)
+                .memoryStore(memoryStore)
+                .chatClient(ChatClient.builder(chatModel).build())
+                .build());
 
         advisors.add(SkillContextAdvisor.builder().skillManager(skillManager).build());
 
@@ -393,12 +470,40 @@ public abstract class AbstractHomePageViewModel {
                 .definition(definition)
                 .build());
 
-        // 进化系统：条件注入 GeneInjector Advisor
-        evolveEnricher.enrichAdvisors(advisors);
-
         List<ToolCallback> allTools = new ArrayList<>(toolkit.buildToolCallbacks(definition));
         allTools.add(ConversationSearchTool.builder(sessionManager).build().toToolCallback());
         allTools.add(CrossSessionSearchTool.builder(sessionManager, uid).build().toToolCallback());
+
+        // 计划模式：仅保留只读探索工具，追加 ExitPlanMode（计划提交出口）
+        if (planMode.get()) {
+            allTools = new ArrayList<>(allTools.stream()
+                    .filter(tc -> PLAN_MODE_ALLOWED.contains(tc.getToolDefinition().name()))
+                    .toList());
+            allTools.add(ExitPlanModeTool.builder()
+                    .listener(this::onPlanSubmitted)
+                    .build()
+                    .toToolCallback());
+        }
+
+        // 基础 Hook 集：预算保护 / 权限审批 / Todo 提醒 / 工具结果落盘（每次 new，避免状态串扰）
+        List<IAgentHook> hooks = new ArrayList<>();
+        hooks.add(new ToolCallBudgetHook(configManager.getMaxToolCalls()));
+        hooks.add(new PermissionHook(approvalStrategies));
+        hooks.add(new TodoReminderHook());
+        hooks.add(new ToolResultOffloadHook());
+        // 记忆自动化 (b)：回合结束异步提取长期记忆（仅主智能体，用户交互入口）
+        hooks.add(MemoryExtractionHook.builder()
+                .sessionManager(sessionManager)
+                .memoryStore(memoryStore)
+                .chatClient(ChatClient.builder(chatModel).build())
+                .build());
+        // Goal Loop（s17 目标闭环）：独立判断器复核目标达成，未达成自动续轮
+        hooks.add(cn.bitloom.agentic.goal.GoalJudgeHook.builder()
+                .goalManager(goalManager)
+                .sessionManager(sessionManager)
+                .chatClient(ChatClient.builder(chatModel).build())
+                .listener(this::onGoalUpdated)
+                .build());
 
         Agent agent = Agent.builder()
                 .name(agentId)
@@ -406,8 +511,10 @@ public abstract class AbstractHomePageViewModel {
                 .model(chatModel)
                 .systemPrompt(buildSystemPrompt(agentId, definition))
                 .tools(allTools)
-                .hooks(evolveEnricher.buildHooks())
+                .hooks(hooks)
                 .advisors(advisors)
+                // reactive_compact：上下文超长被 API 拒绝时强制压缩（绕过触发器）后重试一次
+                .reactiveCompactor(sid -> sessionManager.compact(sid, req -> true, stagedStrategy))
                 .build();
         log.info("构建智能体: agentId={}", agentId);
         return agent;
@@ -415,7 +522,10 @@ public abstract class AbstractHomePageViewModel {
 
     // ===== 发送消息 =====
 
-    public void sendMessage(String text) {
+    /**
+     * 确保当前 session 存在（首次交互时创建）。sendMessage 与 slash 命令共用。
+     */
+    protected Session ensureSession() {
         if (this.session == null) {
             String agentId = Store.currentAgent.get();
             String sessionId = buildSessionId(agentId);
@@ -430,6 +540,42 @@ public abstract class AbstractHomePageViewModel {
             this.session = sessionManager.create(builder.build());
             Store.currentSessionId.set(this.session.id());
         }
+        return this.session;
+    }
+
+    /**
+     * 处理 slash 命令（Controller 在 handleSendMessage 中拦截以 / 开头的消息后调用）。
+     *
+     * @return true 表示命令已消费（不进入 agent 流）；false 表示当前模式不支持命令
+     */
+    public boolean handleSlashCommand(String text) {
+        return false;
+    }
+
+    /** 当前模式是否支持 slash 命令（控制命令建议浮层是否启用） */
+    public boolean isSlashCommandSupported() {
+        return false;
+    }
+
+    /** evict 指定 session 的 Agent 缓存（下一次 sendMessage 按当前状态重建，如计划模式切换） */
+    protected void evictAgent(String sessionId) {
+        sessionAgents.remove(sessionId);
+    }
+
+    /**
+     * 智能体提交计划（ExitPlanModeTool 回调，工具线程）。
+     * 默认直接放弃；子类 override 实现批准 UI 与批准后自动执行。
+     */
+    protected void onPlanSubmitted(String sessionId, String plan, CompletableFuture<String> future) {
+        future.complete(ExitPlanModeTool.DECISION_ABANDONED);
+    }
+
+    /** agent 流结束回调（doOnComplete，FX 线程）。子类可用于批准后的自动执行轮等 */
+    protected void onStreamCompleted(String sessionId) {
+    }
+
+    public void sendMessage(String text) {
+        ensureSession();
 
         // 确保 state 存在（首次发消息或切回后首次发消息都会创建）
         final String sid = this.session.id();
@@ -465,37 +611,13 @@ public abstract class AbstractHomePageViewModel {
                     // Agent 与 session 1:1 绑定，session 级缓存（首次构建，后续复用）
                     Agent agent = sessionAgents.computeIfAbsent(sid,
                             k -> buildAgent(currentSession, agentId));
-                    ProjectInfo project = getCurrentProject();
                     RuntimeContext ctx = RuntimeContext.builder()
                             .sessionId(sid)
                             .userId(currentSession.userId())
-                            .projectPath(project != null ? project.path() : null)
+                            .projectPath(resolveProjectPath(currentSession))
                             .put("lastUserMessage", messageText)
                             .build();
-                    stateRef.subscription = agent.runStream(inputEvent, ctx)
-                            .takeUntilOther(stateRef.cancelSink.asMono())
-                            .doOnNext(event -> Platform.runLater(() -> processEvent(event, sid)))
-                            .doOnComplete(() -> Platform.runLater(() -> {
-                                stateRef.isStreaming = false;
-                                stateRef.isPaused = false;
-                                // 仅当仍是 active session 时同步 Store，避免覆盖其他 session 的 UI 状态
-                                if (currentState == stateRef) {
-                                    Store.isStreaming.set(false);
-                                    Store.isPaused.set(false);
-                                }
-                            }))
-                            .doOnError(e -> {
-                                log.error("agent run error", e);
-                                Platform.runLater(() -> {
-                                    stateRef.isStreaming = false;
-                                    stateRef.isPaused = false;
-                                    if (currentState == stateRef) {
-                                        Store.isStreaming.set(false);
-                                        Store.isPaused.set(false);
-                                    }
-                                });
-                            })
-                            .subscribe();
+                    subscribeAgentStream(agent, inputEvent, ctx, sid, stateRef);
                 } catch (Exception e) {
                     log.error("sendMessage error", e);
                     Platform.runLater(() -> {
@@ -513,6 +635,142 @@ public abstract class AbstractHomePageViewModel {
 
         // 触发侧边栏刷新（更新会话标题）
         Store.refreshHistory.set(!Store.refreshHistory.get());
+    }
+
+    /**
+     * 订阅 Agent 事件流（sendMessage 与 Goal Loop 自动续轮共用）。
+     */
+    private void subscribeAgentStream(Agent agent, MessageEvent inputEvent, RuntimeContext ctx,
+            String sid, SessionRuntimeState stateRef) {
+        stateRef.subscription = agent.runStream(inputEvent, ctx)
+                .takeUntilOther(stateRef.cancelSink.asMono())
+                .doOnNext(event -> Platform.runLater(() -> processEvent(event, sid)))
+                .doOnComplete(() -> Platform.runLater(() -> {
+                    stateRef.isStreaming = false;
+                    stateRef.isPaused = false;
+                    // 仅当仍是 active session 时同步 Store，避免覆盖其他 session 的 UI 状态
+                    if (currentState == stateRef) {
+                        Store.isStreaming.set(false);
+                        Store.isPaused.set(false);
+                    }
+                    onStreamCompleted(sid);
+                }))
+                .doOnError(e -> {
+                    log.error("agent run error", e);
+                    Platform.runLater(() -> {
+                        stateRef.isStreaming = false;
+                        stateRef.isPaused = false;
+                        if (currentState == stateRef) {
+                            Store.isStreaming.set(false);
+                            Store.isPaused.set(false);
+                        }
+                    });
+                })
+                .subscribe();
+    }
+
+    /**
+     * 自动续轮：以 synthetic 消息对 sessionId 发起下一次 runStream，无需用户输入。
+     * Goal Loop（goal_feedback）与计划批准后的执行轮共用。
+     */
+    protected void continueRound(String sessionId, String message) {
+        SessionRuntimeState stateRef = sessionStates.get(sessionId);
+        if (stateRef == null) {
+            return; // 非本 VM 管理的 session（coder/work 路由）
+        }
+        Session targetSession = sessionManager.getById(sessionId);
+        if (targetSession == null) {
+            return;
+        }
+        // 等待上一轮流式结束（judge 在 afterConversationRound 异步触发，与 doOnComplete 存在小概率竞态）
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (stateRef.isStreaming && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        if (stateRef.isStreaming) {
+            log.warn("目标续轮取消：上一轮仍在流式: session={}", sessionId);
+            return;
+        }
+
+        stateRef.isStreaming = true;
+        stateRef.isPaused = false;
+        stateRef.cancelSink = Sinks.empty();
+        Platform.runLater(() -> {
+            if (currentState == stateRef) {
+                Store.isStreaming.set(true);
+                Store.isPaused.set(false);
+            }
+        });
+
+        MessageEvent inputEvent = MessageEvent.userMessage(sessionId, message);
+        inputEvent.setMetadata(Map.of(MessageEvent.METADATA_SYNTHETIC, Boolean.TRUE));
+
+        CompletableFuture.runAsync(() -> {
+            sessionManager.withLock(sessionId, () -> {
+                try {
+                    Agent agent = sessionAgents.get(sessionId);
+                    if (agent == null) {
+                        log.warn("目标续轮取消：Agent 缓存不存在: session={}", sessionId);
+                        stateRef.isStreaming = false;
+                        return null;
+                    }
+                    RuntimeContext ctx = RuntimeContext.builder()
+                            .sessionId(sessionId)
+                            .userId(targetSession.userId())
+                            .projectPath(resolveProjectPath(targetSession))
+                            .put("lastUserMessage", message)
+                            .build();
+                    subscribeAgentStream(agent, inputEvent, ctx, sessionId, stateRef);
+                } catch (Exception e) {
+                    log.error("continueGoalRound error", e);
+                    stateRef.isStreaming = false;
+                    Platform.runLater(() -> {
+                        if (currentState == stateRef) {
+                            Store.isStreaming.set(false);
+                        }
+                    });
+                }
+                return null;
+            });
+        });
+    }
+
+    /**
+     * 解析 session 的 projectPath（Goal 续轮时 session 可能非 active，
+     * 按 session.metadata 的 projectId 解析而非当前 UI 状态）。
+     */
+    protected String resolveProjectPath(Session session) {
+        ProjectInfo project = getCurrentProject();
+        return project != null ? project.path() : null;
+    }
+
+    /**
+     * Goal 状态更新回调（GoalJudgeHook listener）：更新 GoalCard + 终态通知。
+     * /goal 命令设置目标后复用此方法刷新卡片。
+     */
+    protected void onGoalUpdated(String sessionId, cn.bitloom.agentic.goal.GoalState state) {
+        String goalJson = cn.bitloom.util.JsonUtils.toJson(Map.of(
+                "goal", state.getGoal(),
+                "status", state.getStatus(),
+                "judgeCount", state.getJudgeCount(),
+                "blockedCount", state.getBlockedCount(),
+                "lastReason", state.getLastReason() != null ? state.getLastReason() : ""));
+        if (toolUIBridge != null) {
+            toolUIBridge.showGoal(goalJson);
+            if (cn.bitloom.agentic.goal.GoalState.STATUS_ACHIEVED.equals(state.getStatus())) {
+                toolUIBridge.showNotification("目标已达成（判定 " + state.getJudgeCount() + " 次）", sessionId);
+            } else if (cn.bitloom.agentic.goal.GoalState.STATUS_IMPOSSIBLE.equals(state.getStatus())) {
+                toolUIBridge.showNotification("目标无法达成：" + state.getLastReason(), sessionId);
+            } else if (cn.bitloom.agentic.goal.GoalState.STATUS_BLOCKED.equals(state.getStatus())) {
+                toolUIBridge.showNotification("目标续轮已暂停（连续 " + state.getBlockedCount()
+                        + " 次未通过判定）：" + state.getLastReason(), sessionId);
+            }
+        }
     }
 
     // ===== 事件处理 =====
@@ -558,7 +816,10 @@ public abstract class AbstractHomePageViewModel {
 
     private void processUserEvent(MessageEvent e, SessionRuntimeState state, boolean isActive) {
         state.currentAssistantCard = null;
-        UserMessageCard card = new UserMessageCard(e.getText());
+        // synthetic 消息（Goal 续轮 goal_feedback / 后台任务通知等系统注入）以通知样式渲染
+        MessageCard card = e.isSynthetic()
+                ? new cn.bitloom.node.message.NotificationCard(e.getText())
+                : new UserMessageCard(e.getText());
         if (isActive) messages.add(card);
         state.savedMessages.add(card);
     }

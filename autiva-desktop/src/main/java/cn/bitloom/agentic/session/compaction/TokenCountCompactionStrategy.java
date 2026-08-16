@@ -106,6 +106,9 @@ public final class TokenCountCompactionStrategy implements CompactionStrategy {
 		// window always starts at a turn boundary. Sub-agent USER messages (branch != null)
 		// are skipped — they are turn-internal, not turn starts.
 		int cutIndex = CompactionUtils.snapToTurnStart(real, rawCutIndex);
+		// Then advance past any leading orphan tool_response whose tool call was archived,
+		// keeping tool_call ↔ tool_response pairs intact.
+		cutIndex = CompactionUtils.snapToToolBoundary(real, cutIndex);
 
 		// Build kept and archived lists in chronological order
 		List<MessageEvent> kept = new ArrayList<>(real.subList(cutIndex, real.size()));

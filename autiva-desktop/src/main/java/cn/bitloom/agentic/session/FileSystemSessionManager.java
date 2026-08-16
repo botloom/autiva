@@ -54,6 +54,24 @@ public class FileSystemSessionManager implements ISessionManager {
         }
     }
 
+    /**
+     * 非阻塞锁变体：锁被占用时立即返回 null，不执行 action。
+     * 用于定时任务投递（pending_delivery 语义）：session 忙时标记待投递，稍后重试。
+     *
+     * @return action 执行结果；锁被占用返回 null
+     */
+    public <T> T tryWithLock(String sessionId, Supplier<T> action) {
+        ReentrantLock lock = sessionLocks.computeIfAbsent(sessionId, k -> new ReentrantLock());
+        if (!lock.tryLock()) {
+            return null;
+        }
+        try {
+            return action.get();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     @Override
     public Session create(CreateSessionRequest request) {
         String id = request.id() != null ? request.id() : UUID.randomUUID().toString();
@@ -326,6 +344,59 @@ public class FileSystemSessionManager implements ISessionManager {
         } catch (IOException e) {
             log.error("撤回事件失败: sessionId={}", sessionId, e);
         }
+    }
+
+    @Override
+    public boolean updateEventMetadata(String sessionId, String eventId, String key, Object value) {
+        if (sessionId == null || eventId == null) return false;
+        return withLock(sessionId, () -> {
+            // 1. 内存缓冲中的事件：原地替换（通知事件可能尚未刷盘）
+            for (Map.Entry<String, CopyOnWriteArrayList<AbstractEvent>> entry : pendingEvents.entrySet()) {
+                String k = entry.getKey();
+                if (!k.equals(sessionId) && !k.startsWith(sessionId + "@")) continue;
+                CopyOnWriteArrayList<AbstractEvent> buffer = entry.getValue();
+                for (int i = 0; i < buffer.size(); i++) {
+                    AbstractEvent e = buffer.get(i);
+                    if (e instanceof MessageEvent me && eventId.equals(me.getId())) {
+                        buffer.set(i, me.withMetadata(withEntry(me.getMetadata(), key, value)));
+                        return true;
+                    }
+                }
+            }
+            // 2. 已落盘事件：逐行定位后重写文件（通知标记更新频率低，可接受）
+            Path eventsFile = AppConstants.Session.eventsFile(sessionId);
+            if (!Files.exists(eventsFile)) return false;
+            try {
+                List<String> lines = Files.readAllLines(eventsFile, java.nio.charset.StandardCharsets.UTF_8);
+                boolean updated = false;
+                List<String> out = new ArrayList<>(lines.size());
+                for (String line : lines) {
+                    if (!updated && !line.isBlank() && line.contains(eventId)) {
+                        AbstractEvent e = deserializeEvent(line);
+                        if (e instanceof MessageEvent me && eventId.equals(me.getId())) {
+                            out.add(JsonUtils.toJson(me.withMetadata(withEntry(me.getMetadata(), key, value))));
+                            updated = true;
+                            continue;
+                        }
+                    }
+                    out.add(line);
+                }
+                if (updated) {
+                    Files.write(eventsFile, out, java.nio.charset.StandardCharsets.UTF_8,
+                            StandardOpenOption.TRUNCATE_EXISTING);
+                }
+                return updated;
+            } catch (IOException e) {
+                log.error("更新事件 metadata 失败: sessionId={}, eventId={}", sessionId, eventId, e);
+                return false;
+            }
+        });
+    }
+
+    private Map<String, Object> withEntry(Map<String, Object> metadata, String key, Object value) {
+        Map<String, Object> md = new HashMap<>(metadata != null ? metadata : Map.of());
+        md.put(key, value);
+        return md;
     }
 
     @Override

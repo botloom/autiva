@@ -34,4 +34,12 @@ public interface TaskRepository {
 	 * 清除仓库中的所有任务。
 	 */
 	void clear();
+
+	/**
+	 * 检查是否有仍在运行中的后台任务（Goal Loop defer 判定用）。
+	 * @return 如果存在未完成任务则返回true
+	 */
+	default boolean hasRunningTasks() {
+		return false;
+	}
 }

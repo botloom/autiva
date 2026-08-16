@@ -26,8 +26,9 @@ public class ConfigManager {
     @Value("${app.search.bocha-api-key:}")
     private String bochaApiKey;
 
-    @Value("${app.evolve.enabled:false}")
-    private boolean evolveEnabled;
+    /** 每轮对话的工具调用预算（防 LLM 工具调用死循环） */
+    @Value("${app.agent.max-tool-calls:50}")
+    private int maxToolCalls;
 
     @Value("${spring.ai.deepseek.chat.base-url:}")
     private String deepseekBaseUrl;

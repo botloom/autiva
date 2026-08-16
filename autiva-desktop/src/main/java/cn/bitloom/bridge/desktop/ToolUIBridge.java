@@ -28,6 +28,7 @@ public class ToolUIBridge {
     private final Map<String, TaskCard> activeTaskCards = new ConcurrentHashMap<>();
     private final Map<String, TaskCard> sessionTaskCards = new ConcurrentHashMap<>();
     private TodoCard currentTodoCard = null;
+    private cn.bitloom.node.tool.GoalCard currentGoalCard = null;
 
     @Setter
     private Consumer<Node> onNodeAdded;
@@ -35,6 +36,21 @@ public class ToolUIBridge {
     /** 主智能体批准回调：把 ApprovalCard 放到输入框上方的 approvalBar（不持久化到聊天历史） */
     @Setter
     private Consumer<ApprovalCard> onShowApproval;
+
+    /** 计划批准回调（Plan Mode）：把 PlanApprovalCard 放到输入框上方的 approvalBar */
+    @Setter
+    private Consumer<Node> onShowPlanApproval;
+
+    /**
+     * 展示计划批准卡片（ExitPlanModeTool 提交计划后由 VM 调用）。
+     */
+    public void showPlanApproval(Node card) {
+        Platform.runLater(() -> {
+            if (this.onShowPlanApproval != null) {
+                this.onShowPlanApproval.accept(card);
+            }
+        });
+    }
 
     /**
      * 处理子智能体事件（供 TaskTool 直接调用）。
@@ -47,6 +63,46 @@ public class ToolUIBridge {
                 Platform.runLater(() -> card.processEvent(messageEvent));
             }
         }
+    }
+
+    /**
+     * 在主聊天流展示系统通知卡片（后台任务完成/失败等，区别于用户消息样式）。
+     * 通知事件的持久化由 TaskTool 写入 session，此处仅负责实时 UI 反馈。
+     */
+    public void showNotification(String text, String sessionId) {
+        Platform.runLater(() -> {
+            if (this.onNodeAdded != null) {
+                this.onNodeAdded.accept(new cn.bitloom.node.message.NotificationCard(text));
+            }
+        });
+    }
+
+    /**
+     * 展示/更新目标状态卡片（Goal Loop）：目标 / 状态 / 判定次数 / 最近判定原因。
+     * 主对话场景复用 currentGoalCard 避免重复建卡；goalJson 结构见 GoalCard.update。
+     */
+    public void showGoal(String goalJson) {
+        Platform.runLater(() -> {
+            try {
+                if (currentGoalCard == null) {
+                    currentGoalCard = new cn.bitloom.node.tool.GoalCard(goalJson);
+                    if (this.onNodeAdded != null) {
+                        this.onNodeAdded.accept(currentGoalCard);
+                    }
+                } else {
+                    currentGoalCard.update(goalJson);
+                }
+            } catch (Exception e) {
+                log.error("Error showing goal card", e);
+            }
+        });
+    }
+
+    /**
+     * 重置当前 GoalCard 引用（新会话时调用，使下次 showGoal 创建新卡片）
+     */
+    public void resetGoalCard() {
+        this.currentGoalCard = null;
     }
 
     public void showQuestions(String questionsJson, CompletableFuture<String> answerFuture, String sessionId) {

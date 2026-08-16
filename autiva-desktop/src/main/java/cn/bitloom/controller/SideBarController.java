@@ -173,6 +173,14 @@ public class SideBarController implements Initializable, PageHolder {
             Platform.runLater(this::refreshHistoryList);
         });
 
+        // 监听文件变化刷新信号：仅注册一次，文件变化时重建目录树（仅在树可见时生效）
+        projectStatusStore.refreshSignal.addListener((obs, oldVal, newVal) -> {
+            if (watchedProjectPath == null || currentTreeView == null) {
+                return;
+            }
+            Platform.runLater(this::refreshProjectTree);
+        });
+
         refreshHistoryList();
     }
 
@@ -469,13 +477,6 @@ public class SideBarController implements Initializable, PageHolder {
         } catch (Exception e) {
             log.error("构建侧边栏目录树失败: {}", watchedProjectPath, e);
         }
-        // 监听 Git 状态刷新信号：重建目录树以反映新增/删除/修改（仅在树可见时）
-        projectStatusStore.refreshSignal.addListener((obs, oldVal, newVal) -> {
-            if (watchedProjectPath == null || currentTreeView == null) {
-                return;
-            }
-            Platform.runLater(this::refreshProjectTree);
-        });
         return treeView;
     }
 

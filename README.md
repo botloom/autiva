@@ -2,7 +2,7 @@
 
 > AI 智能体桌面客户端 — 基于 JavaFX 25 + Spring Boot 4.1 + Spring AI 2.0 构建
 
-Autiva 是一个可扩展的 AI 智能体桌面应用，提供多智能体架构、工具系统、技能系统、记忆系统、进化引擎和 IM 集成，旨在打造一个可自主进化的 AI 代理平台。
+Autiva 是一个可扩展的 AI 智能体桌面应用，提供多智能体架构、工具系统、技能系统、记忆系统和 IM 集成，旨在打造一个可自主工作的 AI 代理平台。
 
 ## 界面展示
 
@@ -34,14 +34,6 @@ autiva/
 │       │   │   └── advisor/     #     Agent 建议器（记忆、会话、技能、环境、日志等）
 │       │   ├── cron/            #   定时任务引擎
 │       │   ├── event/           #   事件总线（消息、Diff、UI 卡片事件）
-│       │   ├── evolve/          #   进化系统引擎
-│       │   │   ├── gene/        #     基因模型与选择器
-│       │   │   ├── trajectory/  #     执行轨迹记录
-│       │   │   ├── verify/      #     质量验证（结果/过程/质量验证器）
-│       │   │   ├── solidify/    #     进化固化器（金丝雀检查）
-│       │   │   ├── routing/     #     动态路由引擎
-│       │   │   ├── safety/      #     安全校验
-│       │   │   └── experience/  #     经验引擎
 │       │   ├── hook/            #   Agent 钩子系统（权限控制）
 │       │   ├── memory/          #   长期记忆存储
 │       │   ├── model/           #   AI 模型工厂
@@ -60,15 +52,14 @@ autiva/
 │       │   │   ├── skill/       #     技能工具
 │       │   │   ├── session/     #     会话搜索工具
 │       │   │   ├── interaction/ #     TodoWrite、AskUserQuestion
-│       │   │   ├── manage/      #     配置管理（App/Skill/MCP）
-│       │   │   └── evolve/      #     进化管理工具
+│       │   │   └── manage/      #     配置管理（App/Skill/MCP）
 │       │   └── util/            #   Agent 工具类
 │       ├── bridge/              # 外部集成
 │       │   ├── wechat/          #   微信 iLink 协议接入
 │       │   └── desktop/         #   Tool ↔ UI 桥接
 │       ├── bootstrap/           # 应用启动引导（splash screen、目录/配置初始化）
-│       ├── config/              # 配置管理（调度、Evolve 等）
-│       ├── constant/            # 常量定义（目录结构、Session 路由、Evolve 布局）
+│       ├── config/              # 配置管理
+│       ├── constant/            # 常量定义（目录结构、Session 路由）
 │       ├── controller/          # JavaFX 页面控制器
 │       ├── holder/              # UI 组件持有者
 │       ├── node/                # 自定义 UI 节点
@@ -138,17 +129,6 @@ autiva/
 - 技能热加载与运行时管理
 - 技能上下文自动注入（SkillContextAdvisor）
 
-### 进化系统（Evolve）
-- **EvolverAgent**：智能体自我进化引擎
-- **基因模型**：Gene + GeneCategory + GeneRepository + GeneSelector + GeneInjector
-- **轨迹记录**：TrajectoryRecorder + TrajectoryRepository（全链路执行轨迹）
-- **验证体系**：ResultVerifier + ProcessVerifier + QualityVerifier（LLM 质量评估）
-- **路由引擎**：RoutingEngine + RoutingEntry（动态路由）
-- **固化器**：CanaryCheck（金丝雀检查）+ Solidifier + EvolutionEvent
-- **经验引擎**：ExperienceEngine + Experience + ExperienceStatus
-- **安全保障**：EvolutionSafety（安全校验）
-- 数据存储于 `~/.autiva/evolve/`（基因、路由、经验、进化事件）与 `~/.autiva/logs/executions/`
-
 ### 画布系统
 - 类似 Excalidraw 的手绘风格画布
 - 支持矩形、椭圆、菱形、箭头、线条、文本、自由手绘等工具
@@ -210,8 +190,6 @@ macOS 打包：
 app:
   session:
     isolation: PER_PEER          # 会话隔离模式
-  evolve:
-    enabled: false               # 进化系统开关
 spring:
   ai:
     deepseek:
@@ -263,13 +241,8 @@ spring:
 ├── projects/                    # 项目注册表
 │   └── registry.json
 ├── skills/                      # 技能目录（ZIP 包）
-├── evolve/                      # 进化系统数据
-│   ├── genes/
-│   ├── routing.json
-│   └── memory/                  # 进化经验、事件
 └── logs/                        # 运行日志
-    ├── autiva-front.log
-    └── executions/              # 进化执行轨迹日志
+    └── autiva-front.log
 ```
 
 ## 许可证

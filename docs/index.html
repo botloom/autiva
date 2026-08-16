@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Autiva — AI 智能体桌面客户端</title>
-<meta name="description" content="Autiva 是一款基于 JavaFX 25 + Spring Boot 4.1 + Spring AI 2.0 的 AI 智能体桌面客户端。提供多智能体架构、工具系统、技能系统、记忆系统、进化引擎与 IM 集成。" />
+<meta name="description" content="Autiva 是一款基于 JavaFX 25 + Spring Boot 4.1 + Spring AI 2.0 的 AI 智能体桌面客户端。提供多智能体架构、工具系统、技能系统、记忆系统、目标闭环与 IM 集成。" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Manrope:wght@300..800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -390,7 +390,7 @@
     <div>
       <span class="eyebrow reveal"><span class="dot"></span>JavaFX 25 · Spring Boot 4.1 · Spring AI 2.0</span>
       <h1 class="title reveal d1">可扩展的<br>AI 智能体<em>桌面</em>应用。</h1>
-      <p class="lede reveal d2">Autiva 打造一个可自主进化的 AI 代理平台——多智能体架构、工具系统、技能系统、记忆系统、进化引擎与 IM 集成，全部以 JavaFX 原生桌面体验承载。</p>
+      <p class="lede reveal d2">Autiva 打造一个可自主工作的 AI 代理平台——多智能体架构、工具系统、技能系统、记忆系统、目标闭环与 IM 集成，全部以 JavaFX 原生桌面体验承载。</p>
       <div class="cta-row reveal d3">
         <a class="btn btn-primary" href="#start">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -437,7 +437,7 @@
     <div class="sec-head reveal">
       <div class="sec-tag">概览 · OVERVIEW</div>
       <h2 class="sec-title">一个承载<em>完整智能体</em>生命周期的工作台。</h2>
-      <p class="sec-desc">从多智能体编排、工具执行、技能加载到记忆与进化，Autiva 把智能体所需的全部能力打包进一个原生桌面应用，数据可控、离线可用、按需扩展。</p>
+      <p class="sec-desc">从多智能体编排、工具执行、技能加载到记忆与协作，Autiva 把智能体所需的全部能力打包进一个原生桌面应用，数据可控、离线可用、按需扩展。</p>
     </div>
     <div class="value-grid">
       <div class="value-card reveal d1">
@@ -448,7 +448,7 @@
       <div class="value-card reveal d2">
         <div class="vc-icon vc-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg></div>
         <h3>本地优先</h3>
-        <p>智能体定义、会话（events.jsonl）、记忆、进化数据全部存于 ~/.autiva/，数据不出本机。会话按模式与项目隔离管理。</p>
+        <p>智能体定义、会话（events.jsonl）、记忆数据全部存于 ~/.autiva/，数据不出本机。会话按模式与项目隔离管理。</p>
       </div>
       <div class="value-card reveal d3">
         <div class="vc-icon vc-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg></div>
@@ -465,7 +465,7 @@
     <div class="sec-head reveal">
       <div class="sec-tag">核心能力 · CAPABILITIES</div>
       <h2 class="sec-title">六大系统，<em>协同</em>驱动智能体。</h2>
-      <p class="sec-desc">从智能体编排到工具执行，从长期记忆到技能加载，从自进化到画布交互，每个系统都为\"可自主进化的 AI 代理平台\"这一目标服务。</p>
+      <p class="sec-desc">从智能体编排到工具执行，从长期记忆到技能加载，从团队协作到画布交互，每个系统都为\"可自主工作的 AI 代理平台\"这一目标服务。</p>
     </div>
     <div class="cap-grid">
       <div class="cap-card reveal d1" style="--accent:#2DD4BF;--accent-soft:rgba(45,212,191,0.14);--accent-line:rgba(45,212,191,0.25)">
@@ -513,14 +513,14 @@
         </ul>
       </div>
       <div class="cap-card reveal d5" style="--accent:#2DD4BF;--accent-soft:rgba(45,212,191,0.14);--accent-line:rgba(45,212,191,0.25)">
-        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h10"/><path d="M12 21V3"/><path d="M5 8c3 0 5 2 7 5 2 3 4 5 7 5"/></svg></div>
-        <h3>进化系统</h3>
-        <div class="sub">EVOLVE ENGINE</div>
-        <p>基于基因模型、执行轨迹与质量验证，演进智能体行为。路由引擎动态路由，金丝雀检查保障进化安全，经验引擎沉淀经验。</p>
+        <div class="cap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+        <h3>协作与目标闭环</h3>
+        <div class="sub">TEAMS · GOAL LOOP</div>
+        <p>持久队友经邮箱通信与共享任务板协作；目标由独立判断器复核达成情况，未达成自动续轮；工作流固定编排形状，journal 支持断点续跑。</p>
         <ul class="cap-points">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>基因模型 + 执行轨迹记录</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>三层质量验证器</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>动态路由 + 金丝雀检查</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Agent Teams 邮箱协作</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>独立判断器 + 自动续轮</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Workflow 编排 + 断点续跑</li>
         </ul>
       </div>
       <div class="cap-card reveal d6" style="--accent:#9B8CFF;--accent-soft:rgba(155,140,255,0.14);--accent-line:rgba(155,140,255,0.25)">
@@ -550,7 +550,7 @@
       <div class="arch-layer" style="--accent:#2DD4BF">
         <div><span class="ltag">AGENTIC</span><div class="lname">智能体核心</div></div>
         <div class="arch-modules">
-          <span class="arch-chip">agent</span><span class="arch-chip">advisors</span><span class="arch-chip">cron</span><span class="arch-chip">event</span><span class="arch-chip">evolve</span><span class="arch-chip">memory</span><span class="arch-chip">session</span><span class="arch-chip">skill</span><span class="arch-chip">task</span><span class="arch-chip">tool</span>
+          <span class="arch-chip">agent</span><span class="arch-chip">advisors</span><span class="arch-chip">cron</span><span class="arch-chip">event</span><span class="arch-chip">goal</span><span class="arch-chip">memory</span><span class="arch-chip">session</span><span class="arch-chip">skill</span><span class="arch-chip">task</span><span class="arch-chip">team</span><span class="arch-chip">workflow</span>
         </div>
       </div>
       <div class="arch-layer" style="--accent:#9B8CFF">
@@ -574,7 +574,7 @@
       <div class="arch-layer" style="--accent:#8B96A3">
         <div><span class="ltag">PERSISTENCE</span><div class="lname">数据目录</div></div>
         <div class="arch-modules">
-          <span class="arch-chip">~/.autiva/agents/</span><span class="arch-chip">workspace/sessions/</span><span class="arch-chip">workspace/{work,code}/memory/</span><span class="arch-chip">evolve/</span><span class="arch-chip">skills/</span><span class="arch-chip">projects/registry.json</span>
+          <span class="arch-chip">~/.autiva/agents/</span><span class="arch-chip">workspace/sessions/</span><span class="arch-chip">workspace/{work,code}/memory/</span><span class="arch-chip">skills/</span><span class="arch-chip">projects/registry.json</span>
         </div>
       </div>
     </div>
@@ -588,7 +588,7 @@
     <div class="sec-head reveal">
       <div class="sec-tag">数据布局 · DATA LAYOUT</div>
       <h2 class="sec-title">~/.autiva/，<em>目录即架构</em>。</h2>
-      <p class="sec-desc">启动时自动初始化目录结构与默认配置。智能体定义、子智能体、按模式隔离的工作区、进化数据与日志，全部落在单一数据目录中。</p>
+      <p class="sec-desc">启动时自动初始化目录结构与默认配置。智能体定义、子智能体、按模式隔离的工作区与日志，全部落在单一数据目录中。</p>
     </div>
     <div class="dq-grid">
       <div class="dq-card reveal d1">
@@ -606,8 +606,7 @@
           <li>│&nbsp;&nbsp;└─ <span class="dir">code/</span> AUTIVA.md + {projectName}/{sessions, memory}</li>
           <li>├─ <span class="dir">projects/</span> <span class="cm">// registry.json 项目注册表</span></li>
           <li>├─ <span class="dir">skills/</span> <span class="cm">// ZIP 技能包</span></li>
-          <li>├─ <span class="dir">evolve/</span> <span class="cm">// 基因、路由、经验、事件</span></li>
-          <li>└─ <span class="dir">logs/</span> <span class="cm">// autiva-front.log + executions/</span></li>
+          <li>└─ <span class="dir">logs/</span> <span class="cm">// autiva-front.log</span></li>
         </ul>
       </div>
       <div class="dq-card reveal d2">
@@ -728,16 +727,16 @@
               <text x="490" y="86" fill="#8B96A3" text-anchor="middle" font-size="10">Toolkit</text>
 
               <rect x="230" y="180" width="140" height="60" rx="10" fill="rgba(125,211,160,0.08)" stroke="#7DD3A0" stroke-width="1.5"/>
-              <text x="300" y="208" fill="#7DD3A0" text-anchor="middle" font-weight="600">进化引擎</text>
-              <text x="300" y="226" fill="#8B96A3" text-anchor="middle" font-size="10">EvolutionEngine</text>
+              <text x="300" y="208" fill="#7DD3A0" text-anchor="middle" font-weight="600">目标闭环</text>
+              <text x="300" y="226" fill="#8B96A3" text-anchor="middle" font-size="10">GoalJudgeHook</text>
 
               <rect x="40" y="320" width="140" height="60" rx="10" fill="rgba(232,237,242,0.04)" stroke="#8B96A3" stroke-width="1.5"/>
               <text x="110" y="348" fill="#E8EDF2" text-anchor="middle" font-weight="600">会话</text>
               <text x="110" y="366" fill="#8B96A3" text-anchor="middle" font-size="10">Session</text>
 
               <rect x="420" y="320" width="140" height="60" rx="10" fill="rgba(232,237,242,0.04)" stroke="#8B96A3" stroke-width="1.5"/>
-              <text x="490" y="348" fill="#E8EDF2" text-anchor="middle" font-weight="600">JGit</text>
-              <text x="490" y="366" fill="#8B96A3" text-anchor="middle" font-size="10">GeneRepository</text>
+              <text x="490" y="348" fill="#E8EDF2" text-anchor="middle" font-weight="600">工作流</text>
+              <text x="490" y="366" fill="#8B96A3" text-anchor="middle" font-size="10">WorkflowJournal</text>
 
               <!-- arrows -->
               <path d="M180 70 L230 70" stroke="#2DD4BF" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
@@ -747,8 +746,8 @@
               <path d="M335 240 L450 320" stroke="#7DD3A0" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
 
               <text x="300" y="130" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">推理循环</text>
-              <text x="210" y="285" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">固化</text>
-              <text x="395" y="285" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">版本化</text>
+              <text x="210" y="285" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">复核</text>
+              <text x="395" y="285" fill="#5E6772" text-anchor="middle" font-size="10" font-style="italic">续跑</text>
             </g>
           </svg>
         </div>
@@ -759,7 +758,6 @@
           <div class="term-line"><span class="c">[Agent]</span> 加载定义: ~/.autiva/agents/code/agent.md</div>
           <div class="term-line"><span class="c">[Tool]</span> 注册工具 30 个 · 白名单已合并 config.json</div>
           <div class="term-line"><span class="c">[Session]</span> 创建会话 code-project-<span class="g">a1f3c2d</span></div>
-          <div class="term-line"><span class="c">[Evolve]</span> 加载基因 4 个 · 路由表 12 条</div>
           <div class="term-line"><span class="c">[Memory]</span> 注入热记忆 1.2KB · 摘要 0.4KB</div>
           <div class="term-line"><span class="c">[Agent]</span> <span class="g">●</span> 流式推理中...</div>
           <div class="term-line"><span class="p">autiva@desktop</span>:<span class="o">~/project</span>$ <span style="color:var(--teal)">▍</span></div>
@@ -801,7 +799,7 @@
     <div class="sec-head reveal">
       <div class="sec-tag">技术栈 · TECH STACK</div>
       <h2 class="sec-title">站在<em>成熟</em>生态之上。</h2>
-      <p class="sec-desc">Spring AI 提供推理与工具调用骨架，JavaFX 承载原生体验，JGit 管理基因版本，JediTermFX 还原终端。</p>
+      <p class="sec-desc">Spring AI 提供推理与工具调用骨架，JavaFX 承载原生体验，JGit 提供 Git 状态与 Diff 能力，JediTermFX 还原终端。</p>
     </div>
     <div class="stack-grid reveal">
       <div class="stack-item"><div class="gd"></div><div class="nm">Spring Boot</div><div class="vr">4.x</div></div>
@@ -826,7 +824,7 @@
     <div class="sec-head reveal">
       <div class="sec-tag">快速开始 · QUICK START</div>
       <h2 class="sec-title">三步<em>启动</em>你的 Autiva。</h2>
-      <p class="sec-desc">克隆仓库、构建产物、运行桌面端。首次启动会从种子基因初始化 ~/.autiva/ 目录。</p>
+      <p class="sec-desc">克隆仓库、构建产物、运行桌面端。首次启动会自动初始化 ~/.autiva/ 目录。</p>
     </div>
     <div class="qs-grid">
       <div class="qs-step reveal d1">
@@ -875,13 +873,12 @@
           <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#04201c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12c0-4 3-7 8-7s8 3 8 7-3 7-8 7-8-3-8-7Z"/><path d="M4 12c2 0 4 1 6 1s4-1 6-1 4 1 6 1" opacity="0.5"/></svg></span>
           <span class="brand-name">Autiva</span>
         </a>
-        <p>会进化的桌面智能体运行时。基于 Spring Boot + JavaFX，融合 GeneOS 自进化引擎。</p>
+        <p>可自主工作的桌面智能体运行时。基于 Spring Boot + JavaFX，融合目标闭环与多智能体协作。</p>
       </div>
       <div class="foot-col">
         <h4>产品</h4>
         <a href="#capabilities">核心能力</a>
         <a href="#architecture">架构</a>
-        <a href="#evolution">进化闭环</a>
         <a href="#demo">界面演示</a>
       </div>
       <div class="foot-col">
@@ -901,7 +898,7 @@
     </div>
     <div class="foot-bottom">
       <span>© 2026 BITLOOM · Autiva Desktop</span>
-      <span>本地优先 · 自我进化 · 可版本回溯</span>
+      <span>本地优先 · 目标闭环 · 多智能体协作</span>
     </div>
   </div>
 </footer>

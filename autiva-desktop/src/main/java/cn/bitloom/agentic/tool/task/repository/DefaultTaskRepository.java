@@ -78,7 +78,12 @@ public class DefaultTaskRepository implements TaskRepository {
 
 	
 	public void clearCompletedTasks() {
-		this.backgroundTasks.entrySet().removeIf(entry -> entry.getValue().isCompleted());
+		this.backgroundTasks.entrySet().removeIf(entry -> !entry.getValue().isCompleted());
+	}
+
+	@Override
+	public boolean hasRunningTasks() {
+		return this.backgroundTasks.values().stream().anyMatch(task -> !task.isCompleted());
 	}
 
 	/**

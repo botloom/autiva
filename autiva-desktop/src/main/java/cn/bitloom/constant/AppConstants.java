@@ -101,6 +101,18 @@ public class AppConstants {
             return sessionDir(sessionId).resolve("events.jsonl");
         }
 
+        public static Path todosFile(String sessionId) {
+            return sessionDir(sessionId).resolve("todos.json");
+        }
+
+        public static Path cronTasksFile(String sessionId) {
+            return sessionDir(sessionId).resolve("cron-tasks.json");
+        }
+
+        public static Path teammatesFile(String sessionId) {
+            return sessionDir(sessionId).resolve("teammates.json");
+        }
+
     }
 
     public static class Memory {
@@ -127,35 +139,6 @@ public class AppConstants {
 
     public static class Context {
         private Context() {}
-    }
-
-    public static class Evolve {
-        private Evolve() {}
-
-        public static final Path EVOLVE_DIR = APP_DIR.resolve("evolve");
-        public static final Path GENES_DIR = EVOLVE_DIR.resolve("genes");
-        public static final Path ROUTING_FILE = EVOLVE_DIR.resolve("routing.json");
-        public static final Path MEMORY_DIR = EVOLVE_DIR.resolve("memory");
-        public static final Path MEMORY_RULES_FILE = MEMORY_DIR.resolve("rules.jsonl");
-        public static final Path EXPERIENCES_DIR = MEMORY_DIR.resolve("experiences");
-        public static final Path EVOLUTION_EVENTS_FILE = MEMORY_DIR.resolve("evolution-events.jsonl");
-        public static final Path EXECUTIONS_DIR = APP_DIR.resolve("logs").resolve("executions");
-
-        public static Path geneDir(String geneId) {
-            return GENES_DIR.resolve(geneId);
-        }
-
-        public static Path geneFile(String geneId) {
-            return geneDir(geneId).resolve("gene.md");
-        }
-
-        public static Path geneVersionsDir(String geneId) {
-            return geneDir(geneId).resolve("versions");
-        }
-
-        public static Path executionLogFile(String date) {
-            return EXECUTIONS_DIR.resolve(date + ".jsonl");
-        }
     }
 
     public static class Stage {

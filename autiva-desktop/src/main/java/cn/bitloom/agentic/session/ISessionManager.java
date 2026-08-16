@@ -71,6 +71,21 @@ public interface ISessionManager {
 
     CompactionResult compact(String sessionId, CompactionTrigger trigger, CompactionStrategy strategy);
 
+    /**
+     * 原地更新已存储事件的 metadata 字段（按事件 id 定位）。
+     * 用于后台任务通知的一次性消费标记等场景。事件可能位于内存缓冲或已落盘，
+     * 实现需同时处理两处。
+     *
+     * @param sessionId 会话 ID
+     * @param eventId   事件 ID
+     * @param key       metadata 键
+     * @param value     metadata 值
+     * @return 是否找到并更新了事件
+     */
+    default boolean updateEventMetadata(String sessionId, String eventId, String key, Object value) {
+        return false;
+    }
+
     void persistSession(Session session);
 
     @Nullable

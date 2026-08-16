@@ -12,6 +12,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 待办事项遗漏提醒 Hook。
@@ -40,8 +41,8 @@ public class TodoReminderHook implements IAgentHook {
                     + " 轮工具调用未使用 TodoWrite 更新待办事项列表。"
                     + "请检查当前任务进度，并在需要时调用 TodoWrite 工具更新任务状态。";
 
-    /** 提醒状态（每轮对话结束后重置） */
-    private State state;
+    /** 提醒状态，按 sessionId+branch 隔离（每轮对话结束后移除） */
+    private final Map<String, State> states = new ConcurrentHashMap<>();
 
     @Override
     public String name() {
@@ -55,6 +56,8 @@ public class TodoReminderHook implements IAgentHook {
 
     @Override
     public ChatClientRequest beforeModelCall(ChatClientRequest request) {
+        String key = stateKey(request);
+        State state = key != null ? states.get(key) : null;
         if (state == null || !state.pendingReminder) {
             return request;
         }
@@ -70,8 +73,7 @@ public class TodoReminderHook implements IAgentHook {
                     .metadata(Map.of(METADATA_SYNTHETIC, Boolean.TRUE))
                     .build());
 
-            log.info("[TodoReminderHook] 在下一次模型调用前注入 TodoWrite 提醒（synthetic 用户消息）: sessionId={}",
-                    extractSessionId(request));
+            log.info("[TodoReminderHook] 在下一次模型调用前注入 TodoWrite 提醒（synthetic 用户消息）: key={}", key);
             return request.mutate()
                     .prompt(prompt.mutate().messages(messages).build())
                     .build();
@@ -91,12 +93,15 @@ public class TodoReminderHook implements IAgentHook {
             return;
         }
 
+        String key = stateKey(request);
+        if (key == null) {
+            return;
+        }
+        State state = states.computeIfAbsent(key, k -> new State());
+
         boolean usedTodo = response.chatResponse().getResult().getOutput().getToolCalls().stream()
                 .anyMatch(tc -> TODO_TOOL_NAME.equals(tc.name()));
 
-        if (state == null) {
-            state = new State();
-        }
         if (usedTodo) {
             state.todoActive = true;
             state.streakWithoutTodo = 0;
@@ -112,34 +117,58 @@ public class TodoReminderHook implements IAgentHook {
         if (state.streakWithoutTodo >= REMINDER_THRESHOLD) {
             state.pendingReminder = true;
             state.streakWithoutTodo = 0; // 提醒后重新计数，避免连续重复提醒
-            log.debug("[TodoReminderHook] 连续 {} 次调用未使用 TodoWrite，标记待注入提醒: sessionId={}",
-                    REMINDER_THRESHOLD, extractSessionId(request));
+            log.debug("[TodoReminderHook] 连续 {} 次调用未使用 TodoWrite，标记待注入提醒: key={}",
+                    REMINDER_THRESHOLD, key);
         }
     }
 
     @Override
     public void afterConversationRound(RuntimeContext ctx) {
-        // 一轮对话结束，重置状态，计数从头开始
-        state = null;
+        // 一轮对话结束，移除该 session 的状态，计数从头开始
+        if (ctx == null) {
+            return;
+        }
+        String key = stateKey(ctx.getSessionId(), ctx.getBranch());
+        if (key != null) {
+            states.remove(key);
+        }
     }
 
-    private String extractSessionId(ChatClientRequest request) {
+    /** 从 ChatClientRequest 提取状态 key（sessionId+branch） */
+    private String stateKey(ChatClientRequest request) {
         try {
+            String sessionId = null;
+            String branch = null;
             Object sid = request.context().get(ChatMemory.CONVERSATION_ID);
             if (sid instanceof String s) {
-                return s;
+                sessionId = s;
+            } else {
+                Object ctx = request.context().get("runtimeContext");
+                if (ctx instanceof RuntimeContext rc) {
+                    sessionId = rc.getSessionId();
+                    branch = rc.getBranch();
+                }
             }
-            Object ctx = request.context().get("runtimeContext");
-            if (ctx instanceof RuntimeContext rc) {
-                return rc.getSessionId();
+            Object branchParam = request.context()
+                    .get(cn.bitloom.agentic.agent.advisor.SessionMemoryAdvisor.BRANCH_CONTEXT_KEY);
+            if (branch == null && branchParam instanceof String bp) {
+                branch = bp;
             }
+            return stateKey(sessionId, branch);
         } catch (Exception ignored) {
             // 忽略上下文访问异常
         }
         return null;
     }
 
-    /** 提醒状态（每个 Hook 实例独立，无 session 概念） */
+    private String stateKey(String sessionId, String branch) {
+        if (sessionId == null) {
+            return null;
+        }
+        return branch != null ? sessionId + ":" + branch : sessionId + ":root";
+    }
+
+    /** 提醒状态（按 sessionId+branch 隔离） */
     private static final class State {
         /** 是否已使用过 TodoWrite */
         boolean todoActive = false;
