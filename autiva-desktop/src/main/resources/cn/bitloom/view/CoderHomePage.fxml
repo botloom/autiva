@@ -49,12 +49,6 @@
           VBox.vgrow="NEVER">
     </VBox>
 
-    <HBox fx:id="planModeBarSlot"
-          visible="false" managed="false"
-          maxWidth="1000" prefWidth="600" minWidth="300"
-          VBox.vgrow="NEVER">
-    </HBox>
-
     <VBox fx:id="sendBox"
           styleClass="home-page__send-box"
           alignment="TOP_CENTER"
@@ -77,6 +71,18 @@
                 <graphic>
                     <SvgImageView fitWidth="16" fitHeight="16" svgPath="/cn/bitloom/images/git-branch.svg"/>
                 </graphic>
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </Button>
+            <Button fx:id="goalButton" styleClass="home-page__mode-btn" text="Goal" prefHeight="37" disable="true">
+                <tooltip><Tooltip text="目标闭环：设置可验证目标，独立判断器每轮复核，未达成自动续轮"/></tooltip>
+                <HBox.margin>
+                    <Insets bottom="8"/>
+                </HBox.margin>
+            </Button>
+            <Button fx:id="planButton" styleClass="home-page__mode-btn" text="Plan" prefHeight="37" disable="true">
+                <tooltip><Tooltip text="计划模式：只读探索并制定计划，批准后自动执行"/></tooltip>
                 <HBox.margin>
                     <Insets bottom="8"/>
                 </HBox.margin>

@@ -1,12 +1,10 @@
 package cn.bitloom.node.tool;
 
 import cn.bitloom.agentic.tool.plan.ExitPlanModeTool;
-import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -16,7 +14,8 @@ import javafx.scene.layout.VBox;
 import java.util.function.Consumer;
 
 /**
- * 计划批准卡片（Plan Mode）：展示智能体提交的实施计划，等待用户决策。
+ * 计划批准条（Plan Mode）：计划已保存到项目 .autiva/plan 目录，
+ * 此处仅显示保存路径与决策按钮，不重复渲染计划全文。
  *
  * <p>三个动作：
  * <ul>
@@ -24,14 +23,14 @@ import java.util.function.Consumer;
  *   <li>发送反馈 → {@link ExitPlanModeTool#FEEDBACK_PREFIX} + 反馈文本（智能体调整计划后重新提交）</li>
  *   <li>放弃 → {@link ExitPlanModeTool#DECISION_ABANDONED}（退出计划模式，不执行）</li>
  * </ul>
- * 决策后卡片从父容器移除（dismiss）。
+ * 决策后从父容器移除（dismiss）。
  */
 public class PlanApprovalCard extends VBox {
 
     /** 决策回调：APPROVED / FEEDBACK::文本 / ABANDONED */
     private final Consumer<String> decisionConsumer;
 
-    public PlanApprovalCard(String plan, Consumer<String> decisionConsumer) {
+    public PlanApprovalCard(String planFilePath, Consumer<String> decisionConsumer) {
         this.decisionConsumer = decisionConsumer;
 
         setPadding(new Insets(12, 14, 12, 14));
@@ -44,21 +43,20 @@ public class PlanApprovalCard extends VBox {
                 -fx-border-width: 1;
                 """);
 
-        Label title = new Label("计划待批准");
+        Label title = new Label("计划已保存，等待批准");
         title.setStyle("-fx-text-fill: #1d1d1f; -fx-font-size: 13px; -fx-font-weight: 600;");
 
-        TextArea planArea = new TextArea(plan);
-        planArea.setEditable(false);
-        planArea.setWrapText(true);
-        planArea.setPrefRowCount(Math.min(12, Math.max(4, plan.split("\n").length)));
-        planArea.setStyle("""
-                -fx-background-color: #f5f5f7;
-                -fx-background-radius: 8;
-                -fx-border-color: transparent;
-                -fx-font-size: 12px;
-                -fx-text-fill: #1d1d1f;
-                """);
-        VBox.setVgrow(planArea, Priority.ALWAYS);
+        Label pathLabel = new Label(planFilePath);
+        pathLabel.setWrapText(true);
+        pathLabel.setStyle("-fx-text-fill: #0071e3; -fx-font-size: 12px;");
+        pathLabel.setCursor(javafx.scene.Cursor.HAND);
+        pathLabel.setOnMouseClicked(e -> {
+            try {
+                java.awt.Desktop.getDesktop().open(new java.io.File(planFilePath).getParentFile());
+            } catch (Exception ignored) {
+                // 打开目录失败忽略（环境无桌面支持等）
+            }
+        });
 
         // 反馈输入行（默认隐藏，点击"发送反馈"展开）
         TextField feedbackField = new TextField();
@@ -145,7 +143,7 @@ public class PlanApprovalCard extends VBox {
         HBox buttons = new HBox(8, feedbackBtn, abandonBtn, spacer, approveBtn);
         buttons.setAlignment(Pos.CENTER_LEFT);
 
-        getChildren().addAll(title, planArea, feedbackRow, buttons);
+        getChildren().addAll(title, pathLabel, feedbackRow, buttons);
     }
 
     private void decide(String decision) {
@@ -156,7 +154,7 @@ public class PlanApprovalCard extends VBox {
     /** 从父容器移除自身 */
     public void dismiss() {
         if (getParent() instanceof javafx.scene.layout.Pane pane) {
-            Platform.runLater(() -> pane.getChildren().remove(this));
+            javafx.application.Platform.runLater(() -> pane.getChildren().remove(this));
         }
     }
 }

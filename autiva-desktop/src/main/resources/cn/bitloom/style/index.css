@@ -9,32 +9,41 @@
     -fx-padding: 0;
 }
 
-/* SplitPane：主区域 + 编辑器面板 */
-.index__split {
+/* 侧边栏外层容器（内容 + 右缘拖拽条），固定像素宽度由代码维护 */
+.index__sidebar-holder {
     -fx-background-color: transparent;
-    -fx-background-insets: 0;
     -fx-padding: 0;
-    -fx-border-width: 0;
+    -fx-spacing: 0;
 }
 
-.index__split .split-pane-divider {
+/* 编辑器面板外层容器（左缘拖拽条 + 内容），固定像素宽度由代码维护 */
+.index__editor-holder {
     -fx-background-color: transparent;
-    -fx-padding: 0 5 0 5;
+    -fx-padding: 0;
+    -fx-spacing: 0;
+}
+
+/* 宽度拖拽条：默认透明，hover 时中央显示 2px 蓝色细条
+   尺寸由 IndexController 代码设置，此处仅保留视觉样式 */
+.index__drag-handle {
     -fx-cursor: h-resize;
-    /* 默认透明贴片，扩大命中区的同时保持隐形 */
-    -fx-background-radius: 1;
+    -fx-background-color: transparent;
 }
 
-/* hover 仅在中央显示 2px 细条，贴合分隔线本体 */
-.index__split .split-pane-divider:hover {
+.index__drag-handle:hover {
     -fx-background-color: rgba(0, 113, 227, 0.35);
-    -fx-background-insets: 0 4 0 4;
+    -fx-background-insets: 0 5 0 5;
 }
 
-/* 右侧编辑器面板容器（悬浮卡片外层留白，与左侧 sidebar 统一为 8px） */
+.index__drag-handle:pressed {
+    -fx-background-color: rgba(0, 113, 227, 0.55);
+    -fx-background-insets: 0 5 0 5;
+}
+
+/* 右侧编辑器面板容器（悬浮卡片外层留白，与左侧 sidebar 统一为 8px）
+   宽度（min/pref/max）由 IndexController 代码全权管理，勿在 CSS 设置，
+   否则 CSS 重算会覆盖拖拽时设置的值导致拖不动 */
 .editor-panel-slot {
     -fx-background-color: transparent;
     -fx-padding: 8;
-    -fx-min-width: 400;
-    -fx-pref-width: 640;
 }

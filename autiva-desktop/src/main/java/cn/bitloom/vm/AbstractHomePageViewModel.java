@@ -147,6 +147,16 @@ public abstract class AbstractHomePageViewModel {
     }
 
     /**
+     * Goal Loop 活跃状态：目标设置后为 true，达成 / 无法达成 / 暂停 / 清除后为 false。
+     * goal 按钮据此显示开关态。
+     */
+    private final BooleanProperty goalActive = new SimpleBooleanProperty(false);
+
+    public BooleanProperty goalActiveProperty() {
+        return goalActive;
+    }
+
+    /**
      * 工具卡片路由回调：TOOL_CALLS 事件创建的 ToolMessageCard 直接通过此回调路由到 EditorPanel，
      * 不再进入 messages 列表（消除"加入消息列表再过滤"反模式）。
      * 仅 active session 的事件会推送；切换 session 时由 Controller 清空 EditorPanel。
@@ -543,20 +553,6 @@ public abstract class AbstractHomePageViewModel {
         return this.session;
     }
 
-    /**
-     * 处理 slash 命令（Controller 在 handleSendMessage 中拦截以 / 开头的消息后调用）。
-     *
-     * @return true 表示命令已消费（不进入 agent 流）；false 表示当前模式不支持命令
-     */
-    public boolean handleSlashCommand(String text) {
-        return false;
-    }
-
-    /** 当前模式是否支持 slash 命令（控制命令建议浮层是否启用） */
-    public boolean isSlashCommandSupported() {
-        return false;
-    }
-
     /** evict 指定 session 的 Agent 缓存（下一次 sendMessage 按当前状态重建，如计划模式切换） */
     protected void evictAgent(String sessionId) {
         sessionAgents.remove(sessionId);
@@ -754,6 +750,9 @@ public abstract class AbstractHomePageViewModel {
      * /goal 命令设置目标后复用此方法刷新卡片。
      */
     protected void onGoalUpdated(String sessionId, cn.bitloom.agentic.goal.GoalState state) {
+        // 同步 goal 按钮开关态：active 进行中，其余终态关闭
+        boolean active = cn.bitloom.agentic.goal.GoalState.STATUS_ACTIVE.equals(state.getStatus());
+        goalActive.set(active);
         String goalJson = cn.bitloom.util.JsonUtils.toJson(Map.of(
                 "goal", state.getGoal(),
                 "status", state.getStatus(),

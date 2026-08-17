@@ -214,9 +214,10 @@ public class EditorPanelController implements Initializable {
             // cell 填满 ListView 内容宽度，宽度由视图决定而非内容
             setMaxWidth(Double.MAX_VALUE);
             if (node instanceof Region region) {
-                // 卡片宽度跟随 cell（卡片内部已声明 prefWidth=USE_COMPUTED_SIZE），
-                // maxWidth 允许伸展到 cell 宽度
+                // 卡片宽度严格绑定 cell 宽度（wrap Label 的 prefWidth 按单行计算，
+                // 若不绑定会以内容自然宽度撑大卡片、横向溢出视图）
                 region.setMaxWidth(Double.MAX_VALUE);
+                region.prefWidthProperty().bind(widthProperty());
             }
             setGraphic(node);
         }

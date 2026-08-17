@@ -26,8 +26,8 @@ public class ConfigManager {
     @Value("${app.search.bocha-api-key:}")
     private String bochaApiKey;
 
-    /** 每轮对话的工具调用预算（防 LLM 工具调用死循环） */
-    @Value("${app.agent.max-tool-calls:50}")
+    /** 每轮对话的工具调用预算（防 LLM 工具调用死循环；编码任务需覆盖读文件+修改+编译验证多轮） */
+    @Value("${app.agent.max-tool-calls:150}")
     private int maxToolCalls;
 
     @Value("${spring.ai.deepseek.chat.base-url:}")

@@ -55,7 +55,9 @@ public class CodeHomePageController extends AbstractHomePageController {
     @FXML
     private VBox approvalBar;
     @FXML
-    private HBox planModeBarSlot;
+    private Button goalButton;
+    @FXML
+    private Button planButton;
     @FXML
     private MenuButton projectSelectButton;
     @FXML
@@ -66,6 +68,16 @@ public class CodeHomePageController extends AbstractHomePageController {
 
     private boolean diffReviewExpanded = false;
 
+    /**
+     * Goal 目标待输入状态：点击 Goal 按钮后进入，直接在输入框输入目标描述并回车即设置，不弹窗。
+     */
+    private boolean goalInputPending = false;
+
+    /** Goal 目标输入引导提示文案。 */
+    private static final String GOAL_INPUT_PROMPT =
+            "输入目标描述（结束状态 + 验证方式 + 限制条件），回车设置目标...";
+
+
     public CodeHomePageController(ToolUIBridge toolUIBridge,
                                   WindowManager windowManager,
                                   CodeHomePageViewModel viewModel,
@@ -73,6 +85,87 @@ public class CodeHomePageController extends AbstractHomePageController {
         super(toolUIBridge, windowManager);
         this.viewModel = viewModel;
         this.diffService = diffService;
+    }
+
+    /**
+     * goal 按钮 toggle：进入目标输入模式（无论是否已有目标，输入新内容回车即覆盖）；再点退出。
+     */
+    private void handleGoalButton() {
+        if (goalInputPending) {
+            exitGoalInput();
+            return;
+        }
+        // 互斥：进入目标待输入前先关闭计划模式（goal 与 plan 二选一）
+        if (Boolean.TRUE.equals(this.viewModel.planModeProperty().get())) {
+            this.viewModel.togglePlanMode();
+        }
+        // 不弹窗：进入目标待输入模式，在输入框中直接输入目标描述并回车设置
+        goalInputPending = true;
+        sendField.clear();
+        updateSendFieldPrompt();
+        updateModeButtonState();
+        sendField.requestFocus();
+        sendField.requestLayout();
+    }
+
+    /**
+     * 统一计算输入框提示文案：目标待输入 > 计划模式 > 默认。
+     */
+    private void updateSendFieldPrompt() {
+        if (goalInputPending) {
+            sendField.setPromptText(GOAL_INPUT_PROMPT);
+        } else if (Boolean.TRUE.equals(this.viewModel.planModeProperty().get())) {
+            sendField.setPromptText("描述你的任务，呆芽将只读调研并制定计划...");
+        } else {
+            sendField.setPromptText("给呆芽发消息...");
+        }
+        sendField.requestLayout();
+    }
+
+    /**
+     * 退出目标待输入状态并恢复提示。
+     */
+    private void exitGoalInput() {
+        goalInputPending = false;
+        updateSendFieldPrompt();
+        updateModeButtonState();
+    }
+
+    /**
+     * 发送拦截：目标待输入状态下，输入内容作为目标设置而非普通消息发送。
+     */
+    @Override
+    protected void handleSendMessage() {
+        if (goalInputPending) {
+            String text = sendField.getText().trim();
+            if (!text.isBlank()) {
+                goalInputPending = false;
+                sendField.clear();
+                this.viewModel.setGoal(text);
+            }
+            return;
+        }
+        super.handleSendMessage();
+    }
+
+    /**
+     * 更新 goal / plan 按钮状态：选中项目后启用，激活/开启时高亮（Apple 蓝选中态）。
+     */
+    private void updateModeButtonState() {
+        boolean projectReady = this.viewModel.getCurrentProject() != null;
+        this.goalButton.setDisable(!projectReady);
+        this.planButton.setDisable(!projectReady);
+        // goal 高亮：目标待输入中或目标已激活时均显示选中态
+        boolean goalOn = this.viewModel.goalActiveProperty().get() || goalInputPending;
+        boolean planOn = this.viewModel.planModeProperty().get();
+        this.goalButton.getStyleClass().remove("home-page__mode-btn--active");
+        if (goalOn) {
+            this.goalButton.getStyleClass().add("home-page__mode-btn--active");
+        }
+        this.planButton.getStyleClass().remove("home-page__mode-btn--active");
+        if (planOn) {
+            this.planButton.getStyleClass().add("home-page__mode-btn--active");
+        }
     }
 
     @Override
@@ -125,17 +218,26 @@ public class CodeHomePageController extends AbstractHomePageController {
             }
         });
 
-        // Plan Mode 指示条：跟随 planMode 属性显隐，退出按钮等同 /plan 切换
-        cn.bitloom.node.PlanModeBar planModeBar = new cn.bitloom.node.PlanModeBar(
-                () -> this.viewModel.handleSlashCommand("/plan"));
-        this.planModeBarSlot.getChildren().add(planModeBar);
-        this.viewModel.planModeProperty().addListener((obs, oldVal, newVal) -> Platform.runLater(() -> {
-            boolean plan = Boolean.TRUE.equals(newVal);
-            planModeBarSlot.setVisible(plan);
-            planModeBarSlot.setManaged(plan);
-            sendField.setPromptText(plan ? "描述你的任务，呆芽将只读调研并制定计划..."
-                    : "给呆芽发消息...");
-        }));
+        // Goal / Plan 模式按钮（toggle）：点击开启，再点击关闭；选中态高亮
+        this.goalButton.setOnAction(e -> handleGoalButton());
+        this.planButton.setOnAction(e -> this.viewModel.togglePlanMode());
+        // 互斥：进入计划模式时退出目标待输入状态；任何变化都刷新按钮态与输入提示
+        this.viewModel.planModeProperty().addListener((obs, oldVal, newVal) -> {
+            if (Boolean.TRUE.equals(newVal)) {
+                exitGoalInput();
+            } else {
+                updateSendFieldPrompt();
+            }
+            updateModeButtonState();
+        });
+        this.viewModel.goalActiveProperty().addListener((obs, oldVal, newVal) -> {
+            updateModeButtonState();
+            updateSendFieldPrompt();
+        });
+        // 项目选中前禁用（FXML 初始 disable=true），选中项目后启用
+        this.viewModel.currentProjectProperty().addListener((obs, oldVal, newVal) ->
+                updateModeButtonState());
+        updateModeButtonState();
 
         // diff 审查条按钮事件
         this.diffReviewHeader.setOnMouseClicked(e -> {

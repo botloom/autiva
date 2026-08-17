@@ -120,6 +120,19 @@ public class ToolCallBudgetHook implements IAgentHook {
     }
 
     @Override
+    public void beforeConversationRound(RuntimeContext ctx) {
+        if (ctx == null) {
+            return;
+        }
+        // 轮次开始即重置：上一轮若经中断/异常结束（未触发 afterConversationRound），
+        // 残留计数会带入本轮导致误报预算耗尽
+        String key = stateKey(ctx.getSessionId(), ctx.getBranch());
+        if (key != null) {
+            states.remove(key);
+        }
+    }
+
+    @Override
     public void afterConversationRound(RuntimeContext ctx) {
         if (ctx == null) {
             return;

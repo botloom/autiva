@@ -19,7 +19,16 @@
     "MemoryStrReplace",
     "MemoryInsert",
     "MemoryDelete",
-    "MemoryRename"
+    "MemoryRename",
+    "SpawnTeammate",
+    "ListTeammates",
+    "SendMessage",
+    "TeammateShutdown",
+    "TaskCreate",
+    "TaskList",
+    "TaskClaim",
+    "TaskComplete",
+    "Workflow"
   ],
   "mcpServers": {},
   "skills": [],

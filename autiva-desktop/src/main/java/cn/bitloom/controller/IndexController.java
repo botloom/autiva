@@ -12,8 +12,9 @@ import cn.bitloom.vm.CodeHomePageViewModel;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.scene.control.SplitPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,8 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.ResourceBundle;
+import java.util.function.DoubleConsumer;
+import java.util.function.DoubleSupplier;
 
 @Slf4j
 @Component
@@ -33,7 +36,13 @@ public class IndexController implements Initializable {
     @Getter
     private BorderPane rootContainer;
     @FXML
-    private SplitPane mainSplit;
+    private HBox sidebarHolder;
+    @FXML
+    private Region sidebarDragHandle;
+    @FXML
+    private HBox editorHolder;
+    @FXML
+    private Region editorDragHandle;
     @FXML
     @Getter
     private ButtonBarController buttonBarController;
@@ -49,9 +58,23 @@ public class IndexController implements Initializable {
     private final Router router;
     private final HomePageRouter homePageRouter;
 
-    private double savedDividerPos = 0.72;
-    /** 侧边栏展开时的宽度（像素，默认 260，拖拽或折叠后更新；展开时按此宽度放置分隔线） */
+    /** 拖拽条固定宽度（像素）：覆盖「边缘留白 + 间隙」整段区域，命中区足够宽 */
+    private static final double DRAG_HANDLE_WIDTH = 14;
+    private static final double SIDEBAR_MIN_WIDTH = 200;
+    private static final double SIDEBAR_MAX_WIDTH = 600;
+    private static final double EDITOR_MIN_WIDTH = 320;
+    private static final double EDITOR_MAX_WIDTH = 960;
+    /** 中间主内容区最小宽度（与 FXML minWidth 一致），用于推算右栏可用上限 */
+    private static final double MAIN_MIN_WIDTH = 360;
+    /** 编辑器首次挂载时按窗口宽度的比例初始化（对齐原 SplitPane 0.72 分割的观感） */
+    private static final double EDITOR_INIT_RATIO = 0.28;
+
+    /** 侧边栏内容宽度（像素，拖拽后更新；显示时按此宽度放置） */
     private double savedSidebarWidth = 260.0;
+    /** 编辑器面板内容宽度（像素，拖拽后更新；显示时按此宽度放置） */
+    private double savedEditorWidth = 480.0;
+    /** 用户是否手动拖拽过编辑器宽度（未拖拽时每次挂载按窗口比例重算） */
+    private boolean editorWidthCustomized = false;
 
     public IndexController(@Lazy Router router, HomePageRouter homePageRouter) {
         this.router = router;
@@ -69,13 +92,25 @@ public class IndexController implements Initializable {
         // 预加载两套 FXML 并绑定占位容器，初始模式由 Store.currentAgent 决定
         homePageRouter.bind(this, homePageSlot, editorPanelSlot);
 
-        // 编辑器面板初始从 SplitPane 移除（默认隐藏）
-        mainSplit.getItems().remove(editorPanelSlot);
+        // 三区独立布局：侧边栏/编辑器固定像素宽度，显隐仅增删 BorderPane 槽位，互不影响宽度
+        rootContainer.setRight(null);
 
-        // 侧边栏初始从 SplitPane 移除（配合 SideBarController 默认隐藏）
+        // 侧边栏初始隐藏（配合 SideBarController 默认隐藏）
         if (sideBarController != null && sideBarController.getSideBar() != null) {
-            mainSplit.getItems().remove(sideBarController.getSideBar());
+            rootContainer.setLeft(null);
         }
+
+        setupDragHandles();
+
+        // 窗口缩放时按可用宽度重新夹紧两侧栏宽，保证不与中间区争抢导致溢出
+        rootContainer.widthProperty().addListener((obs, oldW, newW) -> {
+            if (rootContainer.getLeft() == sidebarHolder) {
+                applySidebarWidth();
+            }
+            if (rootContainer.getRight() == editorHolder) {
+                applyEditorWidth();
+            }
+        });
 
         this.initializeButtonBar();
 
@@ -148,14 +183,9 @@ public class IndexController implements Initializable {
         if (sideBarController == null || sideBarController.getSideBar() == null) {
             return;
         }
-        var sideBar = sideBarController.getSideBar();
         if (sideBarController.isSidebarVisible()) {
-            // 折叠：记录当前像素宽度（可能存在尚未布局宽度为 0 的情况，忽略之）
-            double w = sideBar.getWidth();
-            if (w > 0) {
-                savedSidebarWidth = w;
-            }
-            mainSplit.getItems().remove(sideBar);
+            // 折叠：宽度已由拖拽实时维护在 savedSidebarWidth，直接摘除槽位即可
+            rootContainer.setLeft(null);
             sideBarController.hide();
             // 关闭后清除左侧侧边栏按钮激活态
             buttonBarController.setSidebarActive(false);
@@ -167,31 +197,164 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 确保侧边栏在 SplitPane 中可见。
+     * 确保侧边栏在 BorderPane 左槽位可见。
      */
     private void ensureSidebarVisible() {
         if (sideBarController == null || sideBarController.getSideBar() == null) {
             return;
         }
-        var sideBar = sideBarController.getSideBar();
-        // 先恢复可见性，保证 add 时以正常托管状态参与一次性布局，不产生闪烁帧
+        // 先恢复可见性并同步宽度，保证挂载时以目标宽度一次性布局，不产生闪烁帧
         sideBarController.show();
-        if (!mainSplit.getItems().contains(sideBar)) {
-            mainSplit.getItems().add(0, sideBar);
-            // 同步设置 divider 位置，避免先按默认比例布局一次再跳回造成闪烁；
-            // 宽度尚未布局时为 0，此时才延迟到宽度可用后设置。
-            double total = mainSplit.getWidth();
-            if (total > 0) {
-                mainSplit.setDividerPosition(0, Math.min(savedSidebarWidth / total, 0.9));
-            } else {
-                Platform.runLater(() -> {
-                    double w = mainSplit.getWidth();
-                    if (w > 0) {
-                        mainSplit.setDividerPosition(0, Math.min(savedSidebarWidth / w, 0.9));
-                    }
-                });
-            }
+        applySidebarWidth();
+        rootContainer.setLeft(sidebarHolder);
+        // 侧边栏占用增加后编辑器可用上限变小，同步收缩避免溢出
+        if (rootContainer.getRight() == editorHolder) {
+            applyEditorWidth();
         }
+    }
+
+    /**
+     * 将 savedSidebarWidth 应用到侧边栏容器与内容节点。
+     * min/pref/max 三连锁死：无论内容自身 min 多大都不会撑开容器，
+     * BorderPane 也无法在空间不足时将其压到 min 以下。
+     * 拖拽条尺寸同步代码设置，不依赖 CSS。
+     */
+    private void applySidebarWidth() {
+        double w = clamp(savedSidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+        savedSidebarWidth = w;
+        double holderW = w + DRAG_HANDLE_WIDTH;
+        sidebarHolder.setMinWidth(holderW);
+        sidebarHolder.setPrefWidth(holderW);
+        sidebarHolder.setMaxWidth(holderW);
+        setHandleWidth(sidebarDragHandle);
+        var sideBar = sideBarController.getSideBar();
+        sideBar.setMinWidth(w);
+        sideBar.setPrefWidth(w);
+        sideBar.setMaxWidth(w);
+    }
+
+    /**
+     * 将 savedEditorWidth 应用到编辑器容器与内容节点。
+     * 三连锁死后额外按窗口可用宽度收缩上限，保证右栏永不溢出窗口
+     * （否则卡片右上角关闭按钮会被顶出可视区）。
+     */
+    private void applyEditorWidth() {
+        double w = clamp(savedEditorWidth, EDITOR_MIN_WIDTH, computeEditorMaxWidth());
+        savedEditorWidth = w;
+        double holderW = w + DRAG_HANDLE_WIDTH;
+        editorHolder.setMinWidth(holderW);
+        editorHolder.setPrefWidth(holderW);
+        editorHolder.setMaxWidth(holderW);
+        setHandleWidth(editorDragHandle);
+        editorPanelSlot.setMinWidth(w);
+        editorPanelSlot.setPrefWidth(w);
+        editorPanelSlot.setMaxWidth(w);
+    }
+
+    /** 拖拽条宽度代码化管理，并保证透明区域可拾取鼠标事件 */
+    private void setHandleWidth(Region handle) {
+        handle.setMinWidth(DRAG_HANDLE_WIDTH);
+        handle.setPrefWidth(DRAG_HANDLE_WIDTH);
+        handle.setMaxWidth(DRAG_HANDLE_WIDTH);
+        handle.setPickOnBounds(true);
+    }
+
+    /**
+     * 编辑器宽度上限：窗口宽度 - 侧边栏占用 - 中间区实际最小宽度。
+     * 用中间区真实 minWidth（内容可能声明比常量更大的下限）而非静态常量，
+     * 避免拖宽右栏时中间区被压穿、右栏滑出窗口边缘。
+     */
+    private double computeEditorMaxWidth() {
+        double rootW = rootContainer.getWidth();
+        if (rootW <= 0) {
+            return EDITOR_MAX_WIDTH;
+        }
+        double sidebarOccupied = rootContainer.getLeft() == sidebarHolder
+                ? savedSidebarWidth + DRAG_HANDLE_WIDTH : 0;
+        double centerMin = MAIN_MIN_WIDTH;
+        if (rootContainer.getCenter() instanceof Region center) {
+            centerMin = Math.max(center.minWidth(-1), MAIN_MIN_WIDTH);
+        }
+        double available = rootW - sidebarOccupied - centerMin;
+        return clamp(available, EDITOR_MIN_WIDTH, EDITOR_MAX_WIDTH);
+    }
+
+    /**
+     * 注册侧边栏右缘 / 编辑器左缘的水平拖拽：按像素调节宽度并夹紧到上下限。
+     * 采用「按下时记录起点 + 拖动时绝对偏移」方式，夹紧后不产生漂移。
+     */
+    private void setupDragHandles() {
+        setupWidthDrag(sidebarDragHandle,
+                () -> savedSidebarWidth,
+                w -> {
+                    savedSidebarWidth = clamp(w, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                    applySidebarWidth();
+                },
+                false);
+        // 编辑器拖拽条在左缘：向左拖（负偏移）增宽，故取反
+        setupWidthDrag(editorDragHandle,
+                () -> savedEditorWidth,
+                w -> {
+                    editorWidthCustomized = true;
+                    savedEditorWidth = clamp(w, EDITOR_MIN_WIDTH, computeEditorMaxWidth());
+                    applyEditorWidth();
+                },
+                true);
+    }
+
+    /**
+     * 注册侧边栏右缘 / 编辑器左缘的水平拖拽：按像素调节宽度并夹紧到上下限。
+     * 拖动事件挂在 Scene 级过滤器上：即使拖拽过程中布局变化导致事件被
+     * 其它组件重定向（如 WebView/CodeArea 的 DnD），也能稳定收到全部拖动事件。
+     */
+    private void setupWidthDrag(Region handle, DoubleSupplier currentWidth,
+                                DoubleConsumer applyWidth, boolean invertOffset) {
+        final double[] pressX = {0};
+        final double[] pressW = {0};
+        final boolean[] dragging = {false};
+        // scene 级临时处理器（按下时挂载、释放时摘除）
+        final javafx.event.EventHandler<javafx.scene.input.MouseEvent>[] dragHandler = new javafx.event.EventHandler[1];
+        final javafx.event.EventHandler<javafx.scene.input.MouseEvent>[] releaseHandler = new javafx.event.EventHandler[1];
+
+        handle.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+            if (e.getButton() != javafx.scene.input.MouseButton.PRIMARY) {
+                return;
+            }
+            pressX[0] = e.getSceneX();
+            pressW[0] = currentWidth.getAsDouble();
+            dragging[0] = true;
+
+            javafx.scene.Scene scene = handle.getScene();
+            if (scene == null) {
+                return;
+            }
+            dragHandler[0] = ev -> {
+                if (!dragging[0]) {
+                    return;
+                }
+                // 鼠标已释放但未收到 RELEASED（如移出窗口）时自动结束
+                if (!ev.isPrimaryButtonDown()) {
+                    dragging[0] = false;
+                    scene.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_DRAGGED, dragHandler[0]);
+                    scene.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, releaseHandler[0]);
+                    return;
+                }
+                double offset = (ev.getSceneX() - pressX[0]) * (invertOffset ? -1 : 1);
+                applyWidth.accept(pressW[0] + offset);
+            };
+            releaseHandler[0] = ev -> {
+                dragging[0] = false;
+                scene.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_DRAGGED, dragHandler[0]);
+                scene.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, releaseHandler[0]);
+            };
+            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_DRAGGED, dragHandler[0]);
+            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, releaseHandler[0]);
+            e.consume();
+        });
+    }
+
+    private double clamp(double v, double min, double max) {
+        return Math.max(min, Math.min(max, v));
     }
 
     /**
@@ -258,45 +421,31 @@ public class IndexController implements Initializable {
     }
 
     /**
-     * 关闭编辑器面板（保存 divider 位置并从 SplitPane 移除）
+     * 关闭编辑器面板（从 BorderPane 右槽位摘除）
      */
     public void closeEditorPanel() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        int editorIndex = mainSplit.getItems().indexOf(editorPanelSlot);
-        if (editorIndex >= 0) {
-            // 保存 content/editor 分界（editor 恒为最后一项）
-            int dividerIndex = editorIndex - 1;
-            if (dividerIndex >= 0 && dividerIndex < mainSplit.getDividers().size()) {
-                savedDividerPos = mainSplit.getDividerPositions()[dividerIndex];
-            }
-            mainSplit.getItems().remove(editorPanelSlot);
-        }
+        rootContainer.setRight(null);
         editor.hide();
     }
 
     /**
-     * 确保编辑器面板在 SplitPane 中可见
+     * 确保编辑器面板在 BorderPane 右槽位可见
      */
     public void ensureEditorVisible() {
         EditorPanelController editor = getEditorPanelController();
         if (editor == null) return;
-        if (!mainSplit.getItems().contains(editorPanelSlot)) {
-            mainSplit.getItems().add(editorPanelSlot);
-            // editor 恒为最后一项，content/editor 分界即最后一根 divider
-            int dividerIndex = mainSplit.getItems().size() - 2;
-            // 同步设置 divider 位置，避免新增列先按默认比例布局一帧再跳回造成闪烁；
-            // 宽度尚未布局时为 0，此时才延迟到宽度可用后设置。
-            double total = mainSplit.getWidth();
-            if (total > 0) {
-                mainSplit.setDividerPosition(dividerIndex, savedDividerPos);
-            } else {
-                Platform.runLater(() -> mainSplit.setDividerPosition(dividerIndex, savedDividerPos));
+        if (rootContainer.getRight() != editorHolder) {
+            // 未手动定制过宽度时按窗口比例初始化，对齐原 SplitPane 分割观感
+            if (!editorWidthCustomized && rootContainer.getWidth() > 0) {
+                savedEditorWidth = clamp(rootContainer.getWidth() * EDITOR_INIT_RATIO,
+                        EDITOR_MIN_WIDTH, EDITOR_MAX_WIDTH);
             }
+            // 同步宽度后挂载，保证以目标宽度一次性布局，不产生闪烁帧
+            applyEditorWidth();
+            rootContainer.setRight(editorHolder);
         }
-        // editorPanelSlot 在 FXML 中初始 visible=false/managed=false，需要显式恢复
-        editorPanelSlot.setVisible(true);
-        editorPanelSlot.setManaged(true);
         editor.show();
     }
 

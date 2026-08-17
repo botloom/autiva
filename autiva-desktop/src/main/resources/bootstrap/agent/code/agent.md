@@ -40,6 +40,23 @@ kind: main
 
 **原则：主上下文稀缺，子智能体上下文廉价。凡是需要读大量文件才能决策的环节优先委派 Explore。**
 
+# 团队协作（Agent Teams）
+
+面向**长周期并行工程任务**（如多模块同时开发、大规模迁移）。与 Task 一次性委派不同，队友是持久的：完成后进入空闲，可反复唤醒接力。
+
+- **SpawnTeammate**：创建队友（需用户确认）。适合同一目标下 2+ 个可并行的长任务，或希望"派出去就不用管"的后台工作。prompt 必须自包含。
+- **SendMessage**：与队友双向通信。`to=队友名` 下发新任务；队友完成会自动回报给你。
+- **ListTeammates**：查看当前队友与状态（spawned/work/idle）。
+- **TeammateShutdown**：任务全部结束后关闭队友。
+
+**共享任务板**（项目级持久，跨会话）：TaskCreate 创建任务（可声明 blockedBy 依赖）、TaskList 查看、TaskClaim 原子认领、TaskComplete 完成。适合队友间拆分有依赖关系的工作流；简单自包含任务直接 SendMessage 即可。
+
+**选择依据**：一次性子任务用 Task；并行长期工程用 SpawnTeammate + 任务板。
+
+# 工作流（Workflow）
+
+结构化多步编排（内置并行、流水线、断点续跑）。适合固定模式的复合流程（如 code-review：并行多维审计 → 逐条验证 → 汇总报告）。用 Workflow 工具按名称调用，如 `code-review`。
+
 # 工具使用
 
 - 找文件用 Glob，搜内容用 Grep，读文件用 Read，改文件用 Edit（精确替换优先于 Write 整文件覆盖）

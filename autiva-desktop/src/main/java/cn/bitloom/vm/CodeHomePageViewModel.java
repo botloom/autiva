@@ -9,7 +9,6 @@ import cn.bitloom.agentic.session.Session;
 import cn.bitloom.agentic.tool.Toolkit;
 import cn.bitloom.agentic.tool.plan.ExitPlanModeTool;
 import cn.bitloom.constant.AgentMode;
-import cn.bitloom.node.SlashCommands;
 import cn.bitloom.node.tool.PlanApprovalCard;
 import cn.bitloom.store.Store;
 import javafx.application.Platform;
@@ -104,56 +103,53 @@ public class CodeHomePageViewModel extends AbstractHomePageViewModel {
         super.sendMessage(text);
     }
 
-    // ===== Slash 命令系统（/goal /plan） =====
-
-    @Override
-    public boolean isSlashCommandSupported() {
-        return true;
-    }
-
-    @Override
-    public boolean handleSlashCommand(String text) {
-        SlashCommands.Parsed parsed = SlashCommands.parse(text);
-        if (parsed == null) {
-            return false;
-        }
-        switch (parsed.name()) {
-            case "goal" -> handleGoalCommand(parsed.args());
-            case "plan" -> handlePlanCommand();
-            default -> Store.warnMessage.set(
-                    "未知命令 /" + parsed.name() + "，可用命令：/goal <目标描述>、/plan");
-        }
-        return true;
-    }
+    // ===== Goal / Plan 模式控制（输入区按钮触发） =====
 
     /**
-     * /goal：直接激活目标闭环（不经 LLM）。目标需包含结束状态 + 验证方式 + 限制条件。
+     * 设置目标闭环（goal 按钮开启时调用，不经 LLM）。
+     * 目标需包含结束状态 + 验证方式 + 限制条件。
      */
-    private void handleGoalCommand(String args) {
+    public void setGoal(String description) {
         if (currentProject.get() == null) {
             Store.warnMessage.set("请先选择项目再设置目标");
             return;
         }
-        if (args == null || args.isBlank()) {
-            Store.warnMessage.set("用法：/goal <目标描述：结束状态 + 验证方式 + 限制条件>");
+        if (description == null || description.isBlank()) {
             return;
         }
         Session s = ensureSession();
-        cn.bitloom.agentic.goal.GoalState state = goalManager.setGoal(s.id(), args.trim());
+        cn.bitloom.agentic.goal.GoalState state = goalManager.setGoal(s.id(), description.trim());
         onGoalUpdated(s.id(), state);
     }
 
     /**
-     * /plan：切换计划模式。切换后 evict 当前 session 的 Agent，
+     * 清除当前目标（goal 按钮关闭时调用）。
+     */
+    public void clearGoal() {
+        if (session == null) {
+            return;
+        }
+        goalManager.clearGoal(session.id());
+        goalActiveProperty().set(false);
+        toolUIBridge.resetGoalCard();
+        toolUIBridge.showNotification("目标已清除", session.id());
+    }
+
+    /**
+     * 切换计划模式（plan 按钮触发）。切换后 evict 当前 session 的 Agent，
      * 下一次消息按新模式重建（计划模式：只读工具 + ExitPlanMode）。
      */
-    private void handlePlanCommand() {
+    public void togglePlanMode() {
         if (currentProject.get() == null) {
             Store.warnMessage.set("请先选择项目再使用计划模式");
             return;
         }
         boolean enter = !isPlanMode();
         planModeProperty().set(enter);
+        // 互斥：进入计划模式时清除已激活的目标（goal 与 plan 二选一）
+        if (enter && goalActiveProperty().get()) {
+            clearGoal();
+        }
         if (session != null) {
             evictAgent(session.id());
         }
@@ -165,14 +161,41 @@ public class CodeHomePageViewModel extends AbstractHomePageViewModel {
 
     /**
      * 智能体提交计划（ExitPlanModeTool 回调，工具线程）：
-     * 经 ToolUIBridge 显示批准卡片，用户决策经 future 返回给工具。
+     * 计划保存到项目 .autiva/plan 目录，经 ToolUIBridge 显示批准条（仅路径 + 决策按钮），
+     * 用户决策经 future 返回给工具。
      */
     @Override
     protected void onPlanSubmitted(String sessionId, String plan, CompletableFuture<String> future) {
+        // 落盘：{projectPath}/.autiva/plan/plan-{时间戳}.md
+        String filePath = savePlanFile(plan);
         Platform.runLater(() -> {
-            PlanApprovalCard card = new PlanApprovalCard(plan, decision -> onPlanDecided(sessionId, plan, decision, future));
+            PlanApprovalCard card = new PlanApprovalCard(
+                    filePath != null ? filePath : "(保存失败，计划仅在对话中)",
+                    decision -> onPlanDecided(sessionId, plan, decision, future));
             toolUIBridge.showPlanApproval(card);
         });
+    }
+
+    /** 保存计划文件，返回绝对路径（失败返回 null） */
+    private String savePlanFile(String plan) {
+        ProjectInfo project = getCurrentProject();
+        if (project == null) {
+            return null;
+        }
+        try {
+            java.nio.file.Path planDir = java.nio.file.Path.of(project.path())
+                    .resolve(".autiva").resolve("plan");
+            java.nio.file.Files.createDirectories(planDir);
+            String fileName = "plan-" + java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".md";
+            java.nio.file.Path file = planDir.resolve(fileName);
+            java.nio.file.Files.writeString(file, plan);
+            log.info("[Plan] 计划已保存: {}", file);
+            return file.toString();
+        } catch (Exception e) {
+            log.warn("[Plan] 计划保存失败", e);
+            return null;
+        }
     }
 
     /** 用户对计划做出决策（FX 线程） */

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.Region?>
 
 <BorderPane fx:id="rootContainer"
             styleClass="index-root"
@@ -12,14 +12,28 @@
             xmlns:fx="http://javafx.com/fxml"
             fx:controller="cn.bitloom.controller.IndexController"
 >
+    <!-- 左侧侧边栏：固定像素宽度 + 右缘拖拽条，与右栏互不干扰 -->
+    <left>
+        <HBox fx:id="sidebarHolder" styleClass="index__sidebar-holder">
+            <fx:include source="components/SideBar.fxml" fx:id="sideBar" HBox.hgrow="ALWAYS"/>
+            <Region fx:id="sidebarDragHandle" styleClass="index__drag-handle"/>
+        </HBox>
+    </left>
+
+    <!-- 中间主内容区：自动伸缩 -->
     <center>
-        <SplitPane fx:id="mainSplit" styleClass="index__split" dividerPositions="0.2, 0.8">
-            <fx:include source="components/SideBar.fxml" fx:id="sideBar"/>
-            <VBox styleClass="index__main-content" minWidth="480" SplitPane.resizableWithParent="true">
-                <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
-                <VBox fx:id="homePageSlot" VBox.vgrow="ALWAYS"/>
-            </VBox>
-            <VBox fx:id="editorPanelSlot" styleClass="editor-panel-slot" minWidth="480" prefWidth="640" visible="false" managed="false"/>
-        </SplitPane>
+        <VBox styleClass="index__main-content" minWidth="360">
+            <fx:include source="components/ButtonBar.fxml" fx:id="buttonBar"/>
+            <VBox fx:id="homePageSlot" VBox.vgrow="ALWAYS"/>
+        </VBox>
     </center>
+
+    <!-- 右侧编辑器面板：固定像素宽度 + 左缘拖拽条，与左栏互不干扰
+         宽度由 IndexController 代码管理，不在 FXML 声明 -->
+    <right>
+        <HBox fx:id="editorHolder" styleClass="index__editor-holder">
+            <Region fx:id="editorDragHandle" styleClass="index__drag-handle"/>
+            <VBox fx:id="editorPanelSlot" styleClass="editor-panel-slot" HBox.hgrow="ALWAYS"/>
+        </HBox>
+    </right>
 </BorderPane>
