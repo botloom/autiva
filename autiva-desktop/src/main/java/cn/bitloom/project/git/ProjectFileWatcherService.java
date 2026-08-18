@@ -38,6 +38,8 @@ public class ProjectFileWatcherService {
     /** 仅负责调度目录注册与去抖刷新任务，不得提交阻塞死循环（监听循环跑在专用线程上） */
     private final ExecutorService executor;
     private final Map<WatchKey, Path> keyToDir = new ConcurrentHashMap<>();
+    /** 已注册的 Git 元数据目录（.git 根 / .git/refs 及其子目录），用于识别 Git 提交引发的刷新 */
+    private final Set<Path> gitMetaDirs = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     private volatile Path currentRoot;
@@ -90,6 +92,7 @@ public class ProjectFileWatcherService {
         currentRoot = null;
         keyToDir.keySet().forEach(k -> k.cancel());
         keyToDir.clear();
+        gitMetaDirs.clear();
         // 中断监听线程，唤醒可能阻塞在 take() 的循环使其退出
         Thread t = pollThread;
         if (t != null) {
@@ -105,6 +108,36 @@ public class ProjectFileWatcherService {
         Set<Path> dirs = gitStatusService.collectWatchDirs(currentRoot);
         for (Path dir : dirs) {
             registerDir(dir);
+        }
+        registerGitMetaDirs(currentRoot);
+    }
+
+    /**
+     * 额外注册 Git 元数据目录（.git 根 / .git/refs 及其子目录），
+     * 使 git commit/add 等变更 HEAD/索引/引用后能触发状态刷新（提交后工作区改动应被清空重算）。
+     * 不注册 .git/objects 等高频写入目录，避免无效刷新。
+     */
+    private void registerGitMetaDirs(Path root) {
+        Path gitDir = root.resolve(".git");
+        if (!java.nio.file.Files.isDirectory(gitDir)) {
+            return;
+        }
+        gitMetaDirs.add(gitDir.toAbsolutePath().normalize());
+        registerDir(gitDir);
+        collectRefDirs(gitDir.resolve("refs"));
+    }
+
+    private void collectRefDirs(Path refsDir) {
+        if (!java.nio.file.Files.isDirectory(refsDir)) {
+            return;
+        }
+        gitMetaDirs.add(refsDir.toAbsolutePath().normalize());
+        registerDir(refsDir);
+        try (var stream = java.nio.file.Files.list(refsDir)) {
+            stream.filter(java.nio.file.Files::isDirectory)
+                    .forEach(this::collectRefDirs);
+        } catch (Exception e) {
+            log.debug("扫描 Git refs 目录失败: {}", refsDir, e);
         }
     }
 
@@ -132,8 +165,15 @@ public class ProjectFileWatcherService {
             Path dir = keyToDir.get(key);
             boolean relevant = false;
             if (dir != null) {
+                // Git 元数据目录（.git 根 / refs）的事件：多为 commit/add 导致 HEAD/索引/引用变化，
+                // 即使路径位于 .git 下也应触发状态重算（否则提交后工作区改动不会被清空重算）
+                boolean isGitMeta = gitMetaDirs.contains(dir.toAbsolutePath().normalize());
                 for (WatchEvent<?> event : key.pollEvents()) {
                     Path child = dir.resolve((Path) event.context());
+                    if (isGitMeta) {
+                        relevant = true;
+                        continue;
+                    }
                     if (gitStatusService.isIgnoredPath(child)) {
                         continue;
                     }
