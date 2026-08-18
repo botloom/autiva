@@ -73,7 +73,6 @@ public class CronListTool extends AbstractTool<CronListTool.Input> {
         }
 
         sb.append(String.join("\n", taskDetails));
-        log.info("[ToolCall] cron_list - 查询完成, 共 {} 个任务", tasks.size());
         return ToolResult.builder().status(ToolResult.Status.SUCCESS)
                 .message(tasks.size() + " 个定时任务")
                 .data(Map.of("count", tasks.size()))

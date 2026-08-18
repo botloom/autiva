@@ -85,7 +85,6 @@ public class PersistentShellSession implements Closeable {
     /** 进程死了则惰性重启 + 恢复 cwd */
     private void ensureAlive() {
         if (alive && shell != null && shell.isAlive()) {
-            log.debug("[PersistentShell] ensureAlive: alive=true, pid={}", shell.pid());
             return;
         }
         log.info("[PersistentShell] ensureAlive: process dead (alive={}, shell={}), restarting...",
@@ -161,12 +160,10 @@ public class PersistentShellSession implements Closeable {
 
             String markerId = shellExecutor.generateMarkerId();
             String wrapped = shellExecutor.wrapPersistentCommand(command, markerId);
-            log.info("[PersistentShell] writing to stdin: markerId={}, wrapped='{}'", markerId, wrapped);
 
             try {
                 stdin.write((wrapped + "\n").getBytes(StandardCharsets.UTF_8));
                 stdin.flush();
-                log.debug("[PersistentShell] stdin write+flush OK");
             } catch (IOException e) {
                 log.error("[PersistentShell] stdin write failed", e);
                 alive = false;
@@ -182,19 +179,15 @@ public class PersistentShellSession implements Closeable {
                 try {
                     byte[] buf = new byte[8192];
                     int n;
-                    int totalRead = 0;
                     while ((n = stdout.read(buf)) != -1) {
                         synchronized (stdoutBuf) {
                             stdoutBuf.write(buf, 0, n);
                         }
-                        totalRead += n;
                         String current = stdoutBuf.toString(StandardCharsets.UTF_8);
                         if (current.contains(markerId)) {
-                            log.debug("[PersistentShell] stdout marker found after {} bytes", totalRead);
                             break;
                         }
                     }
-                    log.debug("[PersistentShell] stdout reader end: totalRead={}", totalRead);
                 } catch (IOException e) {
                     log.warn("[PersistentShell] stdout reader IOException: {}", e.getMessage());
                 } finally {
@@ -250,8 +243,6 @@ public class PersistentShellSession implements Closeable {
                 log.warn("[PersistentShell] TIMED OUT after {}ms, marker not found. Killing shell.", effectiveTimeout);
                 // 通知 stdout reader 退出（杀进程会关闭流，read 抛 IOException）
                 killAndRestart();
-            } else {
-                log.debug("[PersistentShell] completed within timeout");
             }
 
             // 等待 stderr reader 收尾
@@ -263,17 +254,9 @@ public class PersistentShellSession implements Closeable {
 
             String rawStdout = EncodingHelper.decodeBest(stdoutBuf.toByteArray());
             String rawStderr = EncodingHelper.decodeBest(stderrBuf.toByteArray());
-            log.info("[PersistentShell] raw output: stdoutLen={}, stderrLen={}, timedOut={}",
-                    rawStdout.length(), rawStderr.length(), !completed);
-            if (log.isDebugEnabled() && !rawStdout.isEmpty()) {
-                log.debug("[PersistentShell] raw stdout (first 500 chars): {}",
-                        rawStdout.substring(0, Math.min(500, rawStdout.length())));
-            }
 
             ShellExecutor.ParseResult parseResult = shellExecutor.parseOutput(
                     rawStdout, markerId, shellSession.getCwd(), !completed);
-            log.info("[PersistentShell] parseResult: exitCode={}, cwd='{}', outputLen={}",
-                    parseResult.exitCode(), parseResult.cwd(), parseResult.output() != null ? parseResult.output().length() : 0);
 
             if (parseResult.cwd() != null && !parseResult.cwd().isEmpty()) {
                 shellSession.updateCwd(parseResult.cwd());

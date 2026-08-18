@@ -101,7 +101,6 @@ public class CommandTool extends AbstractTool<CommandTool.Input> {
         log.info("[CommandTool] executeForeground: sessionId='{}', projectPath='{}', effectiveTimeout={}ms",
                 sessionId, projectPath, effectiveTimeout);
         PersistentShellSession shellSession = shellRegistry.getOrCreate(sessionId, projectPath);
-        log.debug("[CommandTool] got shell instance, calling shell.execute()");
         CommandResult result = shellSession.execute(command, effectiveTimeout, reusePrompt);
         long elapsed = System.currentTimeMillis() - start;
         log.info("[CommandTool] executeForeground done: exitCode={}, timedOut={}, elapsed={}ms",

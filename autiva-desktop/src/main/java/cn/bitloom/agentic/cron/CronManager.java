@@ -194,8 +194,6 @@ public class CronManager {
 
         taskMap.put(name, taskInfo);
         persistSessionTasks(sessionId);
-
-        log.info("[CronManager] 创建成功: name={}", name);
     }
 
     public Map<String, CronTaskInfo> getAllTasks(String sessionId) {
@@ -239,8 +237,6 @@ public class CronManager {
         taskInfo.getScheduledFuture().cancel(false);
         taskMap.remove(name);
         persistSessionTasks(sessionId);
-
-        log.info("[CronManager] 删除成功: name={}", name);
     }
 
     public boolean taskExists(String name) {
@@ -264,7 +260,6 @@ public class CronManager {
         }
 
         triggerTaskInternal(taskInfo);
-        log.info("[CronManager] 触发成功: name={}", name);
     }
 
     private ScheduledFuture<?> scheduleTask(String name, String type, Integer intervalSeconds,
@@ -382,7 +377,6 @@ public class CronManager {
         taskInfo.setPendingDelivery(false);
         taskInfo.setLastFiredAt(Instant.now());
         persistSessionTasks(taskInfo.getSessionId());
-        log.info("[CronManager] 定时任务执行完成: name={}, sessionId={}", taskInfo.getName(), taskInfo.getSessionId());
         return true;
     }
 

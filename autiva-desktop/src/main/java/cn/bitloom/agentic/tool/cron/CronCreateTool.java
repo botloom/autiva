@@ -42,7 +42,6 @@ public class CronCreateTool extends AbstractTool<CronCreateTool.Input> {
             cronManager.createTask(input.name(), input.type(), input.intervalSeconds(),
                     input.delaySeconds(), input.cronExpression(), input.message(),
                     getSessionId(toolContext), Store.currentAgent.get());
-            log.info("[ToolCall] cron_create - 创建成功: name={}", input.name());
             return ToolResult.success("定时任务创建成功: " + input.name());
 
         } catch (Exception e) {

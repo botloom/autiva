@@ -6,7 +6,6 @@ import cn.bitloom.holder.ButtonBarHolder;
 import cn.bitloom.holder.PageHolder;
 import cn.bitloom.node.AutoResizeTextArea;
 import cn.bitloom.node.message.*;
-import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.node.tool.TaskCard;
 import cn.bitloom.node.tool.TodoCard;
 import cn.bitloom.store.Store;
@@ -25,9 +24,6 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.Tooltip;
-import javafx.scene.input.Clipboard;
-import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.ScrollEvent;
@@ -37,7 +33,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
-import javafx.stage.Window;
 import javafx.util.Duration;
 import lombok.Getter;
 import lombok.Setter;
@@ -328,119 +323,18 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     }
 
     /**
-     * 为消息卡片组装行视图（card + 操作栏 + row 对齐）。
-     * 操作栏位于消息气泡之外（wrapper 内、气泡下方），符合 home-page.css 的布局约定。
+     * 为消息卡片组装行视图（仅 card + row 对齐，不再包外层 card wrapper）。
      */
     private HBox buildMessageRow(MessageCard card) {
         card.maxWidthProperty().bind(
                 Bindings.max(100, chatScrollPane.widthProperty().subtract(32).multiply(0.75))
         );
 
-        VBox messageWrapper = new VBox();
-        messageWrapper.getStyleClass().add("chat-message-wrapper");
-        messageWrapper.getChildren().add(card);
-
-        HBox actions = buildMessageActions(card);
-        if (!actions.getChildren().isEmpty()) {
-            messageWrapper.getChildren().add(actions);
-        }
-
-        return createMessageRow(messageWrapper, card.getMessageType());
-    }
-
-    /**
-     * 组装消息操作栏：用户消息含「复制 + 撤回」，AI 消息含「复制」。
-     */
-    private HBox buildMessageActions(MessageCard card) {
-        HBox actions = new HBox();
-        actions.getStyleClass().add("chat-message__actions");
-
-        if (card instanceof UserMessageCard userCard) {
-            actions.getStyleClass().add("chat-message__actions--user");
-            userCard.setOnWithdraw(uc -> getViewModel().withdrawMessage(uc));
-
-            Button copyBtn = buildActionIconButton("copy", "复制", () -> {}, true);
-            copyBtn.setOnAction(e -> {
-                e.consume();
-                copyText(userCard.getContent());
-                copyBtn.getStyleClass().add("chat-message__action-btn--copied");
-            });
-            Button withdrawBtn = buildActionIconButton("revoke", "撤回本条及之后的消息",
-                    () -> confirmWithdraw(userCard), true);
-            actions.getChildren().addAll(copyBtn, withdrawBtn);
-        } else if (card instanceof AssistantMessageCard assistantCard) {
+        if (card instanceof AssistantMessageCard assistantCard) {
             assistantCard.setOnContentChanged(c -> onCardContentChanged());
-            Button copyBtn = buildActionIconButton("copy", "复制", () -> {}, false);
-            copyBtn.setVisible(false);
-            copyBtn.setManaged(false);
-            copyBtn.setOnAction(e -> {
-                e.consume();
-                copyText(assistantCard.getContent());
-                copyBtn.getStyleClass().add("chat-message__action-btn--copied");
-            });
-            // 内容就绪后显示复制按钮（历史/流式完成都会触发）
-            assistantCard.contentProperty().addListener((obs, oldVal, newVal) -> {
-                if (newVal != null && !newVal.isBlank()) {
-                    copyBtn.setVisible(true);
-                    copyBtn.setManaged(true);
-                }
-            });
-            if (assistantCard.getContent() != null && !assistantCard.getContent().isBlank()) {
-                copyBtn.setVisible(true);
-                copyBtn.setManaged(true);
-            }
-            actions.getChildren().add(copyBtn);
         }
 
-        return actions;
-    }
-
-    /**
-     * 构建图标操作按钮。
-     */
-    private Button buildActionIconButton(String svgName, String tip, Runnable action, boolean visible) {
-        Button btn = new Button();
-        btn.getStyleClass().add("chat-message__action-btn");
-        SvgImageView icon = new SvgImageView();
-        icon.setFitWidth(14);
-        icon.setFitHeight(14);
-        icon.setSvgPath("/cn/bitloom/images/" + svgName + ".svg");
-        btn.setGraphic(icon);
-        btn.setTooltip(new Tooltip(tip));
-        btn.setVisible(visible);
-        btn.setManaged(visible);
-        btn.setOnAction(e -> {
-            e.consume();
-            action.run();
-        });
-        return btn;
-    }
-
-    /**
-     * 撤回前弹出确认对话框：确认后撤回本条用户消息及之后的所有消息。
-     */
-    private void confirmWithdraw(UserMessageCard userCard) {
-        Window owner = homePage.getScene() != null ? homePage.getScene().getWindow() : null;
-        windowManager.showDialog("cn/bitloom/view/AgentConfirmDialog.fxml",
-                owner,
-                controller -> {
-                    if (controller instanceof AgentConfirmDialogController confirmController) {
-                        confirmController.init("撤回消息",
-                                "确定要撤回本条消息及其之后的所有消息吗？此操作不可撤销。",
-                                confirmed -> {
-                                    if (confirmed) {
-                                        getViewModel().withdrawMessage(userCard);
-                                    }
-                                });
-                    }
-                });
-    }
-
-    private void copyText(String text) {
-        if (text == null || text.isBlank()) return;
-        ClipboardContent cc = new ClipboardContent();
-        cc.putString(text);
-        Clipboard.getSystemClipboard().setContent(cc);
+        return createMessageRow(card, card.getMessageType());
     }
 
     /**

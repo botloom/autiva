@@ -35,7 +35,6 @@ public class CronTriggerTool extends AbstractTool<CronTriggerTool.Input> {
         try {
             String sessionId = getSessionId(toolContext);
             cronManager.triggerTask(sessionId, input.name());
-            log.info("[ToolCall] cron_trigger - 触发成功: name={}", input.name());
             return ToolResult.success("定时任务已手动触发: " + input.name());
 
         } catch (Exception e) {

@@ -132,7 +132,6 @@ public class WebFetchTool extends AbstractTool<WebFetchTool.Input> implements Au
         String content = this.getCachedContent(cacheKey);
 
         if (content != null) {
-            log.debug("URL缓存命中：{}", url);
             return ToolResult.builder()
                     .status(ToolResult.Status.SUCCESS)
                     .message("已获取 " + url)
@@ -140,8 +139,6 @@ public class WebFetchTool extends AbstractTool<WebFetchTool.Input> implements Au
                     .rawOutput(content)
                     .build();
         }
-
-        log.debug("URL缓存未命中：{}", url);
 
         String htmlContent;
         try {
@@ -180,8 +177,6 @@ public class WebFetchTool extends AbstractTool<WebFetchTool.Input> implements Au
             try {
                 if (attempt > 0) {
                     long backoffMs = (long) Math.pow(2, attempt - 1) * 1000;
-                    log.debug("重试获取URL：{}（尝试 {}/{}），等待 {}ms", url, attempt,
-                            this.maxRetries, backoffMs);
                     Thread.sleep(backoffMs);
                 }
 

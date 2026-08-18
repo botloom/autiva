@@ -127,9 +127,7 @@ public class GrepTool extends AbstractTool<GrepTool.Input> {
     public ToolResult execute(Input input, ToolContext context) {
         try {
             Path searchPath = ToolUtils.resolveWorkingDirectory(input.path(), this.workingDirectory);
-            log.debug("[Grep] pattern='{}', path='{}', resolvedPath='{}', outputMode='{}', glob='{}', type='{}'",
-                    input.pattern(), input.path(), searchPath, input.outputMode(), input.glob(), input.type());
-
+ 
             if (!Files.exists(searchPath)) {
                 String errorMsg = "错误：路径不存在: " + searchPath.toAbsolutePath();
                 return ToolResult.error(errorMsg, errorMsg);
@@ -466,8 +464,6 @@ public class GrepTool extends AbstractTool<GrepTool.Input> {
             log.warn("[Grep] candidates 为空，searchPath='{}', matchers={}", searchPath, matchers.size());
             return;
         }
-
-        log.debug("[Grep] 候选文件数={}, 并行扫描中...", candidates.size());
 
         // 2. 并行处理候选文件；processor 返回 false 时尽量提前终止
         candidates.parallelStream()

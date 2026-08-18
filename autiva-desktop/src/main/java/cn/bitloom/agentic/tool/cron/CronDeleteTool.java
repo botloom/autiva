@@ -35,7 +35,6 @@ public class CronDeleteTool extends AbstractTool<CronDeleteTool.Input> {
         try {
             String sessionId = getSessionId(toolContext);
             cronManager.deleteTask(sessionId, input.name());
-            log.info("[ToolCall] cron_delete - 删除成功: name={}", input.name());
             return ToolResult.success("定时任务已删除: " + input.name());
 
         } catch (Exception e) {

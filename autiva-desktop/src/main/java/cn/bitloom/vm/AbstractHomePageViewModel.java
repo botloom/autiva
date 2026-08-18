@@ -963,44 +963,6 @@ public abstract class AbstractHomePageViewModel {
         state.savedMessages.add(card);
     }
 
-    /**
-     * 撤回用户消息：删除该条消息及其之后的所有消息（UI 与持久化事件历史）。
-     * 仅作用于当前 active session。后台 session 的撤回不支持（UI 不可见）。
-     *
-     * @param card 触发撤回的用户消息卡片
-     */
-    public void withdrawMessage(UserMessageCard card) {
-        if (card == null) return;
-        int index = messages.indexOf(card);
-        if (index < 0) return;
-
-        // 停止当前 session 的流（仅 active session，不影响后台 session）
-        if (currentState != null) {
-            currentState.isStreaming = false;
-            currentState.isPaused = false;
-            cancelStateSubscription(currentState);
-            currentState.currentAssistantCard = null;
-        }
-        Store.isStreaming.set(false);
-        Store.isPaused.set(false);
-
-        // 删除 UI 中的该条 + 之后所有消息
-        messages.remove(index, messages.size());
-
-        // 同步删除 currentState.savedMessages 中对应位置之后的所有消息
-        if (currentState != null) {
-            int savedIndex = currentState.savedMessages.indexOf(card);
-            if (savedIndex >= 0) {
-                currentState.savedMessages.subList(savedIndex, currentState.savedMessages.size()).clear();
-            }
-        }
-
-        // 截断持久化事件历史，确保重启/重新加载后上下文一致
-        if (this.session != null) {
-            sessionManager.truncateEventsFrom(this.session.id(), card.getContent());
-        }
-    }
-
     public void clear() {
         // 清空当前 session 的 UI 与 state
         messages.clear();

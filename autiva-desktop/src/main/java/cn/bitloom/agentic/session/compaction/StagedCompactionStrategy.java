@@ -78,14 +78,12 @@ public final class StagedCompactionStrategy implements CompactionStrategy {
         List<MessageEvent> current = new ArrayList<>(snipResult.compactedEvents());
         List<MessageEvent> archived = new ArrayList<>(snipResult.archivedEvents());
         int tokensSaved = snipResult.tokensEstimatedSaved();
-        log.debug("[StagedCompaction] 第2步裁剪: 归档 {} 条事件", archived.size());
 
         // ===== 第 3 步 micro_compact：旧 tool 结果占位符化 =====
         PlaceholderResult phResult = placeholderizeToolResponses(request, current);
         current = phResult.compacted;
         archived.addAll(phResult.archived);
         tokensSaved += phResult.tokensSaved;
-        log.debug("[StagedCompaction] 第3步占位符化: 归档 {} 条完整工具结果", phResult.archived.size());
 
         // ===== 水位检查：能否省掉 LLM 摘要 =====
         if (isBelowTargetLevel(current)) {

@@ -132,7 +132,7 @@ public class TodoWriteTool extends AbstractTool<TodoWriteTool.Input> {
 
 	public static class Builder {
 
-		private TodoEventHandler todoEventHandler = (todos, sessionId) -> log.debug("Updated Todos: {}", todos);
+		private TodoEventHandler todoEventHandler = (todos, sessionId) -> {};
 
 		public Builder todoEventHandler(TodoEventHandler todoEventHandler) {
 			this.todoEventHandler = todoEventHandler;
