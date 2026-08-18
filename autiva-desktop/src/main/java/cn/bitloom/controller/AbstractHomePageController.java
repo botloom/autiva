@@ -484,9 +484,10 @@ public abstract class AbstractHomePageController implements Initializable, Butto
 
     /**
      * toolUIBridge 回调：将工具节点添加到聊天区或编辑器面板。
+     * sessionId 为节点所属会话，由 ViewModel 路由到对应会话的消息列表（active 才实时显示）。
      * 由 HomePageRouter 在模式切换时重绑定。
      */
-    public void addChatNode(Node node) {
+    public void addChatNode(String sessionId, Node node) {
         if (node instanceof TodoCard todoCard) {
             if (indexController != null && indexController.getEditorPanelController() != null) {
                 indexController.getEditorPanelController().addTodoCard(todoCard);
@@ -501,7 +502,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         if (node instanceof TaskCard taskCard) {
             taskCard.setOnContentChanged(c -> onCardContentChanged());
         }
-        this.getViewModel().addNodeMessage(node);
+        this.getViewModel().addNodeMessage(sessionId, node);
     }
 
     private HBox createMessageRow(Node card, MessageType type) {

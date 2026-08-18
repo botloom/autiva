@@ -760,7 +760,7 @@ public abstract class AbstractHomePageViewModel {
                 "blockedCount", state.getBlockedCount(),
                 "lastReason", state.getLastReason() != null ? state.getLastReason() : ""));
         if (toolUIBridge != null) {
-            toolUIBridge.showGoal(goalJson);
+            toolUIBridge.showGoal(goalJson, sessionId);
             if (cn.bitloom.agentic.goal.GoalState.STATUS_ACHIEVED.equals(state.getStatus())) {
                 toolUIBridge.showNotification("目标已达成（判定 " + state.getJudgeCount() + " 次）", sessionId);
             } else if (cn.bitloom.agentic.goal.GoalState.STATUS_IMPOSSIBLE.equals(state.getStatus())) {
@@ -905,15 +905,27 @@ public abstract class AbstractHomePageViewModel {
     }
 
     /**
-     * 向 UI messages 添加节点消息卡片（如 TaskCard），同步到 currentState.savedMessages。
-     * 由 Controller 通过 toolUIBridge 回调调用，确保 active session 的节点消息在切换走时不丢失。
+     * 向 UI messages 添加节点消息卡片（如 TaskCard），按所属 sessionId 路由：
+     * active session 同时更新 UI messages 与 savedMessages；
+     * 非 active session 只更新对应 state 的 savedMessages（避免污染当前 UI，切回时恢复显示）。
+     * 由 Controller 通过 toolUIBridge 回调调用。
      */
-    public void addNodeMessage(javafx.scene.Node node) {
-        NodeMessageCard card = new NodeMessageCard(node);
-        messages.add(card);
-        if (currentState != null) {
-            currentState.savedMessages.add(card);
+    public void addNodeMessage(String sessionId, javafx.scene.Node node) {
+        SessionRuntimeState state = sessionStates.get(sessionId);
+        if (state == null) {
+            // 兜底：找不到所属 state 时回落到当前 active state（正常情况下任务卡片所属 session 必在 state 中）
+            state = currentState;
         }
+        NodeMessageCard card = new NodeMessageCard(node);
+        if (state == null) {
+            messages.add(card);
+            return;
+        }
+        boolean isActive = (state == currentState);
+        if (isActive) {
+            messages.add(card);
+        }
+        state.savedMessages.add(card);
     }
 
     /**

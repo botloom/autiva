@@ -119,13 +119,13 @@ public class TaskTool extends AbstractTool<TaskTool.Input> {
         // taskId 直接用 branch，供 ToolUIBridge 路由
         String taskId = branch;
 
-        // TaskCard UI
+        // TaskCard UI（携带所属父 session，确保卡片路由到正确会话而非当前活跃会话）
         if (this.toolUIBridge != null) {
             ObjectNode taskJson = JsonUtils.createObject();
             taskJson.put("subagentName", subagentName);
             taskJson.put("description", taskCall.description());
             taskJson.put("taskId", taskId);
-            this.toolUIBridge.createTaskCard(taskId, JsonUtils.toJson(taskJson));
+            this.toolUIBridge.createTaskCard(parentSessionId, taskId, JsonUtils.toJson(taskJson));
         }
 
         // 后台任务

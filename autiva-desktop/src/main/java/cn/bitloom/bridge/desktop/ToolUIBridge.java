@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -30,8 +31,9 @@ public class ToolUIBridge {
     private TodoCard currentTodoCard = null;
     private cn.bitloom.node.tool.GoalCard currentGoalCard = null;
 
+    /** 卡片节点投放回调（sessionId, node）。仅应投放到 active session；非 active 由 VM 按 session 路由记录。 */
     @Setter
-    private Consumer<Node> onNodeAdded;
+    private BiConsumer<String, Node> onNodeAdded;
 
     /** 主智能体批准回调：把 ApprovalCard 放到输入框上方的 approvalBar（不持久化到聊天历史） */
     @Setter
@@ -72,7 +74,7 @@ public class ToolUIBridge {
     public void showNotification(String text, String sessionId) {
         Platform.runLater(() -> {
             if (this.onNodeAdded != null) {
-                this.onNodeAdded.accept(new cn.bitloom.node.message.NotificationCard(text));
+                this.onNodeAdded.accept(sessionId, new cn.bitloom.node.message.NotificationCard(text));
             }
         });
     }
@@ -81,13 +83,13 @@ public class ToolUIBridge {
      * 展示/更新目标状态卡片（Goal Loop）：目标 / 状态 / 判定次数 / 最近判定原因。
      * 主对话场景复用 currentGoalCard 避免重复建卡；goalJson 结构见 GoalCard.update。
      */
-    public void showGoal(String goalJson) {
+    public void showGoal(String goalJson, String sessionId) {
         Platform.runLater(() -> {
             try {
                 if (currentGoalCard == null) {
                     currentGoalCard = new cn.bitloom.node.tool.GoalCard(goalJson);
                     if (this.onNodeAdded != null) {
-                        this.onNodeAdded.accept(currentGoalCard);
+                        this.onNodeAdded.accept(sessionId, currentGoalCard);
                     }
                 } else {
                     currentGoalCard.update(goalJson);
@@ -117,7 +119,7 @@ public class ToolUIBridge {
                 if (taskCard != null) {
                     taskCard.addQuestionCard(card);
                 } else if (this.onNodeAdded != null) {
-                    this.onNodeAdded.accept(card);
+                    this.onNodeAdded.accept(sessionId, card);
                 }
             } catch (Exception e) {
                 log.error("Error showing questions", e);
@@ -168,7 +170,7 @@ public class ToolUIBridge {
                     this.onShowApproval.accept(card);
                 } else if (this.onNodeAdded != null) {
                     // fallback：加到聊天区
-                    this.onNodeAdded.accept(card);
+                    this.onNodeAdded.accept(sessionId, card);
                 }
             } catch (Exception e) {
                 log.error("Error showing approval", e);
@@ -199,7 +201,7 @@ public class ToolUIBridge {
                     if (currentTodoCard == null) {
                         currentTodoCard = new TodoCard(todosJson);
                         if (this.onNodeAdded != null) {
-                            this.onNodeAdded.accept(currentTodoCard);
+                            this.onNodeAdded.accept(sessionId, currentTodoCard);
                         }
                     } else {
                         currentTodoCard.update(todosJson);
@@ -218,14 +220,16 @@ public class ToolUIBridge {
         this.currentTodoCard = null;
     }
 
-    public void createTaskCard(String taskId, String taskJson) {
+    public void createTaskCard(String sessionId, String taskId, String taskJson) {
         TaskCard card = new TaskCard(taskJson);
         this.activeTaskCards.put(taskId, card);
         this.sessionTaskCards.put(taskId, card);
         Platform.runLater(() -> {
             try {
                 if (this.onNodeAdded != null) {
-                    this.onNodeAdded.accept(card);
+                    // 携带所属 sessionId，由 VM 路由到对应 session 的消息列表（active 才实时显示，
+                    // 非 active 仅记录到该 session 的 savedMessages，切回时恢复显示）
+                    this.onNodeAdded.accept(sessionId, card);
                 }
             } catch (Exception e) {
                 log.error("Error showing task card", e);

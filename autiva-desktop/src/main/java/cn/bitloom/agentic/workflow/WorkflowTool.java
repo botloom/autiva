@@ -79,7 +79,8 @@ public class WorkflowTool extends AbstractTool<WorkflowTool.Input> {
                     ? WorkflowJournal.open(sessionId, runId)
                     : WorkflowJournal.create(sessionId, runId);
             if (toolUIBridge != null) {
-                javafx.application.Platform.runLater(() -> toolUIBridge.createTaskCard(taskId,
+                String cardSessionId = sessionId;
+                javafx.application.Platform.runLater(() -> toolUIBridge.createTaskCard(cardSessionId, taskId,
                         JsonUtils.toJson(Map.of("subagentName", "workflow:" + input.name(),
                                 "description", meta.get().description(), "taskId", taskId))));
             }

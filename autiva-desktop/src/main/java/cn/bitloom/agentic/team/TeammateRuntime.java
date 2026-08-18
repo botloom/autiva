@@ -143,7 +143,7 @@ public class TeammateRuntime {
                 card.put("description", claimed != null ? claimed.getSubject()
                         : "处理 " + messages.size() + " 条新消息");
                 card.put("taskId", taskId);
-                javafx.application.Platform.runLater(() -> toolUIBridge.createTaskCard(taskId,
+                javafx.application.Platform.runLater(() -> toolUIBridge.createTaskCard(sessionId, taskId,
                         JsonUtils.toJson(card)));
             }
 
