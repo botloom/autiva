@@ -501,15 +501,19 @@
 .editor-panel__code-area,
 .editor-panel__diff-area {
     -fx-background-color: transparent;
-    -fx-font-family: "SF Mono", "Menlo", "Consolas", monospace;
-    -fx-font-size: 12px;
-    -fx-text-fill: -autiva-text-primary;
+    /* IDEA 默认等宽字体栈，JetBrains Mono 优先，Consolas 作为 Windows 兜底 */
+    -fx-font-family: "JetBrains Mono", "Consolas", "Menlo", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 13px;
+    -fx-text-fill: #000000;
     -fx-padding: 8 0 8 0;
 }
 
 .editor-panel__code-area .text,
 .editor-panel__diff-area .text {
-    -fx-fill: -autiva-text-primary;
+    -fx-fill: #000000;
+    /* bold 让文字浑厚醒目，LCD 平滑提升小字号清晰度 */
+    -fx-font-weight: bold;
+    -fx-font-smoothing-type: lcd;
 }
 
 /* 行号列 */
@@ -557,44 +561,44 @@
     -fx-border-width: 0 0 0 3;
 }
 
-/* ===== 语法高亮 Token（参考 Xcode 浅色主题） ===== */
+/* ===== 语法高亮 Token（参考 IntelliJ IDEA 浅色主题配色） ===== */
 
 .text.syntax-keyword {
-    -fx-fill: #9b2393;
-    -fx-font-weight: normal;
+    -fx-fill: #000080;
 }
 
 .text.syntax-string {
-    -fx-fill: #c41a16;
+    -fx-fill: #008000;
 }
 
 .text.syntax-comment {
-    -fx-fill: #536579;
+    -fx-fill: #808080;
     -fx-font-style: italic;
 }
 
 .text.syntax-number {
-    -fx-fill: #272ad8;
+    -fx-fill: #0000ff;
 }
 
 .text.syntax-annotation {
-    -fx-fill: #8f6b47;
+    -fx-fill: #808000;
 }
 
 .text.syntax-literal {
-    -fx-fill: #272ad8;
+    -fx-fill: #0000ff;
 }
 
 .text.syntax-type {
-    -fx-fill: #3900a0;
+    -fx-fill: #000000;
+    -fx-font-weight: bold;
 }
 
 .text.syntax-key {
-    -fx-fill: #9b2393;
+    -fx-fill: #000080;
 }
 
 .text.syntax-operator {
-    -fx-fill: #1d1d1f;
+    -fx-fill: #000000;
 }
 
 /* ===== Diff 元信息条 ===== */

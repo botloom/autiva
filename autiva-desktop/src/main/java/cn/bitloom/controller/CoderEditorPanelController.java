@@ -11,6 +11,7 @@ import cn.bitloom.project.git.GitFileStatus;
 import cn.bitloom.project.git.GitStatusService;
 import cn.bitloom.project.git.ProjectStatusStore;
 import cn.bitloom.vm.CodeHomePageViewModel;
+import jakarta.annotation.PreDestroy;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.fxml.Initializable;
@@ -21,7 +22,8 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
-import javafx.scene.layout.*;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 import lombok.extern.slf4j.Slf4j;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.Caret;
@@ -35,6 +37,10 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
 
@@ -52,6 +58,14 @@ public class CoderEditorPanelController extends EditorPanelController implements
     private final ProjectStatusStore projectStatusStore;
     private final GitStatusService gitStatusService;
     private boolean refreshSubscribed = false;
+
+    /** 编辑器实时 git 标注防抖调度器：停止输入后延迟重算行级改动并重绘 */
+    private static final long GIT_REFRESH_DEBOUNCE_MS = 300;
+    private final ScheduledExecutorService gitRefreshExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "autiva-editor-git-refresh");
+        t.setDaemon(true);
+        return t;
+    });
 
     public CoderEditorPanelController(PtyTerminalService ptyTerminalService,
                                       ProjectStatusStore projectStatusStore,
@@ -94,8 +108,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
             selectTab(terminalTab);
         } else {
             container = new SubTabContainer(
-                    c -> openTerminal(resolveWorkingDir()),
-                    subTab -> cleanupTerminalSubTab(subTab));
+                    _ -> openTerminal(resolveWorkingDir()),
+                    this::cleanupTerminalSubTab);
             final EditorTab newTab = createTab(ViewType.TERMINAL, container.getView());
             newTab.userData.put("container", container);
             newTab.userData.put("workingDir", workingDir);
@@ -202,8 +216,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
             }
         } else {
             container = new SubTabContainer(
-                    c -> openFileViaDialog(),
-                    subTab -> {});
+                    _ -> openFileViaDialog(),
+                    this::cancelGitRefreshJob);
             final EditorTab newTab = createTab(ViewType.FILE, container.getView());
             newTab.userData.put("container", container);
             container.setOnEmpty(() -> closeTab(newTab));
@@ -238,8 +252,11 @@ public class CoderEditorPanelController extends EditorPanelController implements
             codeArea.replaceText(content);
             // 记录是否有未保存改动，外部变化时避免覆盖用户编辑
             subTab.userData.put("dirty", false);
-            codeArea.textProperty().addListener((obs, oldText, newText) ->
-                    subTab.userData.put("dirty", !content.equals(newText)));
+            codeArea.textProperty().addListener((obs, oldText, newText) -> {
+                subTab.userData.put("dirty", !content.equals(newText));
+                // 编辑后防抖重算行级 git 标注并重绘，实现「直接编辑实时显示颜色变化」
+                scheduleGitColorRefresh(subTab, codeArea, lineStatusRef, filePath);
+            });
             codeArea.getStyleClass().add("editor-panel__code-area");
             SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(filePath);
             highlighter.apply(codeArea, content);
@@ -250,6 +267,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
             codeArea.setOnKeyPressed(e -> {
                 if (e.isControlDown() && e.getCode() == javafx.scene.input.KeyCode.S) {
                     e.consume();
+                    cancelGitRefreshJob(subTab);
                     saveFileContent(filePath, codeArea.getText());
                     subTab.userData.put("dirty", false);
                 }
@@ -310,13 +328,22 @@ public class CoderEditorPanelController extends EditorPanelController implements
      * 通过内联样式覆盖默认字号（内联优先于样式类），滚轮时重建行号工厂使其同步缩放。
      */
     private void setupCodeAreaZoom(CodeArea codeArea, SimpleDoubleProperty fontSize, AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef) {
-        codeArea.setOnScroll(e -> {
-            if (!e.isControlDown() || e.getDeltaY() == 0) {
+        // 用 addEventFilter（capturing 阶段）而非 setOnScroll（bubble 阶段）：
+        // 外层 VirtualizedScrollPane 会在 bubble 阶段先 consume 滚轮事件用于滚动，
+        // 导致 Ctrl+滚轮无法在 codeArea 上收到。capturing 阶段提前拦截并在 Ctrl 下 consume，
+        // 既保证缩放生效，又阻止普通滚动被触发。
+        codeArea.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (!e.isControlDown()) {
+                return;
+            }
+            // 高精度轨道滚轮 deltaY 可能为 0，改用垂直像素总量判断方向
+            double deltaY = e.getDeltaY() != 0 ? e.getDeltaY() : e.getTotalDeltaY();
+            if (deltaY == 0) {
                 return;
             }
             // 向上滚放大，向下滚缩小；步进约 15%
-            double factor = e.getDeltaY() > 0 ? 1.15 : 1 / 1.15;
-            double next = Math.round(Math.max(8.0, Math.min(48.0, fontSize.get() * factor)) * 100.0) / 100.0;
+            double factor = deltaY > 0 ? 1.15 : 1 / 1.15;
+            double next = Math.round(Math.clamp(fontSize.get() * factor, 8.0, 48.0) * 100.0) / 100.0;
             if (next == fontSize.get()) {
                 return;
             }
@@ -324,6 +351,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
             codeArea.setUserData(next);
             codeArea.setStyle("-fx-font-size: " + next + "px;");
             applyGitGutter(codeArea, lineStatusRef, next);
+            // 缩放已完成，阻止事件继续被滚动容器消费
             e.consume();
         });
     }
@@ -346,6 +374,14 @@ public class CoderEditorPanelController extends EditorPanelController implements
                 label.getStyleClass().add("git-lineno--modified");
             }
             label.setAlignment(Pos.CENTER_RIGHT);
+            // 固定行号单元格宽度，避免行号随位数"一位窄、多位宽"跳动。
+            // 宽度 = 等宽字符宽(约 0.62×字号) × 最大位数 + 左右留白，随缩放联动。
+            int paraCount = codeArea.getParagraphs().size();
+            int maxDigits = Math.max(1, String.valueOf(Math.max(1, paraCount)).length());
+            double cellWidth = maxDigits * (fontSize - 1) * 0.62 + 24;
+            label.setPrefWidth(cellWidth);
+            label.setMinWidth(cellWidth);
+            label.setMaxWidth(cellWidth);
             return label;
         };
         codeArea.setParagraphGraphicFactory(factory);
@@ -369,6 +405,53 @@ public class CoderEditorPanelController extends EditorPanelController implements
             codeArea.setParagraphStyle(i, style == null ? List.of() : List.of(style));
         }
     }
+
+    /**
+     * 编辑器内容变化后防抖调度「实时 git 标注刷新」：
+     * <p>停止输入 {@link #GIT_REFRESH_DEBOUNCE_MS} 后，用内存编辑文本相对 HEAD 重新计算行级改动
+     * （后台线程），随后在 FX 线程更新 {@code lineStatusRef} 并重绘行号、段落背景与 tab 标题色。
+     * <p>同一 sub tab 的待执行刷新任务可被后续编辑取消（防抖合并），避免高频输入触发频繁 diff。
+     */
+    private void scheduleGitColorRefresh(SubTabContainer.SubTab subTab, CodeArea codeArea,
+                                         AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef, Path filePath) {
+        Object prior = subTab.userData.get("gitRefreshJob");
+        if (prior instanceof ScheduledFuture<?> pf) {
+            pf.cancel(false);
+        }
+        ScheduledFuture<?> job = gitRefreshExecutor.schedule(() -> {
+            if (subTab.userData.get("gitRefreshJob") == null) {
+                return;
+            }
+            Map<Integer, GitFileStatus> statusMap = gitStatusService.diffLineStatus(
+                    projectStatusStore.getProjectRoot(), filePath, codeArea.getText());
+            Map<Integer, GitFileStatus> fresh = statusMap.isEmpty() ? Map.of() : statusMap;
+            Platform.runLater(() -> {
+                if (subTab.userData.get("gitRefreshJob") == null) {
+                    return;
+                }
+                lineStatusRef.set(fresh);
+                double size = codeArea.getUserData() instanceof Number num ? num.doubleValue() : 12.0;
+                applyGitGutter(codeArea, lineStatusRef, size);
+                applyGitParaStyles(codeArea, lineStatusRef);
+                applyGitStyleToSubTab(subTab, filePath);
+                subTab.userData.remove("gitRefreshJob");
+            });
+        }, GIT_REFRESH_DEBOUNCE_MS, TimeUnit.MILLISECONDS);
+        subTab.userData.put("gitRefreshJob", job);
+    }
+
+    /**
+     * 取消指定文件子 tab 尚未执行的实时 git 标注刷新任务（关闭 tab / 保存前调用）。
+     */
+    private void cancelGitRefreshJob(SubTabContainer.SubTab subTab) {
+        Object pending = subTab.userData.get("gitRefreshJob");
+        if (pending instanceof ScheduledFuture<?> pf) {
+            pf.cancel(false);
+        }
+        subTab.userData.remove("gitRefreshJob");
+    }
+
+
 
     /**
      * 根据项目 Git 状态为已打开的文件子 tab 标题着色，并在状态变化时同步刷新。
@@ -459,6 +542,12 @@ public class CoderEditorPanelController extends EditorPanelController implements
         } catch (IOException e) {
             log.error("保存文件失败: {}", filePath, e);
         }
+    }
+
+    /** 应用关闭时释放编辑器实时 git 标注调度线程 */
+    @PreDestroy
+    public void destroy() {
+        gitRefreshExecutor.shutdownNow();
     }
 
     // ===== 加载与错误状态 =====
@@ -591,7 +680,7 @@ public class CoderEditorPanelController extends EditorPanelController implements
     private int[] lineRangeFor(String text, int rawStart, int rawEnd) {
         int start = Math.min(rawStart, text.length());
         int end = Math.min(rawEnd, text.length());
-        if (end > 0 && end <= text.length() && text.charAt(end - 1) == '\n') {
+        if (end > 0 && text.charAt(end - 1) == '\n') {
             end--;
         }
         int startLine = charIndexToLine(text, start);

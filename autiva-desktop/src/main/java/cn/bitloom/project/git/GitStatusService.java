@@ -106,6 +106,19 @@ public class GitStatusService {
      * @return 行号 → 状态映射；非 Git 仓库 / 读取失败 / 文件在根外返回空 map
      */
     public Map<Integer, GitFileStatus> diffLineStatus(Path projectRoot, Path filePath) {
+        return diffLineStatus(projectRoot, filePath, null);
+    }
+
+    /**
+     * 计算单文件相对 HEAD 的行级改动，工作区内容可显式传入（供编辑器实时标注：编辑未保存时以内存文本参与 diff，
+     * 而非磁盘上的旧内容）；{@code workingContent} 为 null 时按原逻辑读取磁盘内容。
+     *
+     * @param projectRoot     Git 仓库根路径
+     * @param filePath        目标文件
+     * @param workingContent  编辑中的工作区内容（可为 null，此时读磁盘）
+     * @return 行号 → 状态映射；非 Git 仓库 / 读取失败 / 文件在根外返回空 map
+     */
+    public Map<Integer, GitFileStatus> diffLineStatus(Path projectRoot, Path filePath, String workingContent) {
         Map<Integer, GitFileStatus> result = new HashMap<>();
         if (projectRoot == null || filePath == null || !Files.isRegularFile(filePath)
                 || !gitService.isGitRepository(projectRoot)) {
@@ -121,7 +134,8 @@ public class GitStatusService {
             Repository repo = git.getRepository();
             ObjectId head = repo.resolve("HEAD");
             String headContent = normalizeLineEndings(readHeadContent(repo, head, relPath));
-            String curContent = normalizeLineEndings(Files.readString(absFile, StandardCharsets.UTF_8));
+            String curContent = normalizeLineEndings(
+                    workingContent != null ? workingContent : Files.readString(absFile, StandardCharsets.UTF_8));
             RawText a = new RawText(headContent.getBytes(StandardCharsets.UTF_8));
             RawText b = new RawText(curContent.getBytes(StandardCharsets.UTF_8));
             DiffAlgorithm algo = new HistogramDiff();

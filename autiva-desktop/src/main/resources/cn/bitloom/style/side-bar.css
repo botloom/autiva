@@ -251,7 +251,7 @@
 
 .sidebar__project-sessions {
     -fx-spacing: 2;
-    -fx-padding: 0 0 0 26;
+    -fx-padding: 0 0 0 12;
 }
 
 /* 智能体模式分段切换按钮（iOS SegmentedControl 风格） */

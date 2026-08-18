@@ -227,7 +227,7 @@ public class IndexController implements Initializable {
      * 拖拽条尺寸同步代码设置，不依赖 CSS。
      */
     private void applySidebarWidth() {
-        double w = clamp(savedSidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+        double w = clamp(savedSidebarWidth, SIDEBAR_MIN_WIDTH, computeSidebarMaxWidth());
         savedSidebarWidth = w;
         double holderW = w + DRAG_HANDLE_WIDTH;
         sidebarHolder.setMinWidth(holderW);
@@ -314,6 +314,26 @@ public class IndexController implements Initializable {
     }
 
     /**
+     * 侧边栏宽度上限：窗口宽度 - 编辑器占用 - 中间区实际最小宽度。
+     * 与 computeEditorMaxWidth 对称：右侧已展开固定宽度时，左侧增宽受限，
+     * 避免左侧挤占已固定的右侧空间导致右栏内容被裁剪出可视区。
+     */
+    private double computeSidebarMaxWidth() {
+        double rootW = rootContainer.getWidth();
+        if (rootW <= 0) {
+            return SIDEBAR_MAX_WIDTH;
+        }
+        double editorOccupied = rootContainer.getRight() == editorHolder
+                ? savedEditorWidth + DRAG_HANDLE_WIDTH : 0;
+        double centerMin = MAIN_MIN_WIDTH;
+        if (rootContainer.getCenter() instanceof Region center) {
+            centerMin = Math.max(center.minWidth(-1), MAIN_MIN_WIDTH);
+        }
+        double available = rootW - editorOccupied - centerMin;
+        return clamp(available, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+    }
+
+    /**
      * 注册侧边栏右缘 / 编辑器左缘的水平拖拽：按像素调节宽度并夹紧到上下限。
      * 采用「按下时记录起点 + 拖动时绝对偏移」方式，夹紧后不产生漂移。
      */
@@ -321,7 +341,7 @@ public class IndexController implements Initializable {
         setupWidthDrag(sidebarDragHandle,
                 () -> savedSidebarWidth,
                 w -> {
-                    savedSidebarWidth = clamp(w, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                    savedSidebarWidth = clamp(w, SIDEBAR_MIN_WIDTH, computeSidebarMaxWidth());
                     applySidebarWidth();
                 },
                 false);
