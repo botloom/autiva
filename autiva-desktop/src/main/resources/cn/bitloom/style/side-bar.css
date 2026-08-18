@@ -477,16 +477,17 @@
 .sidebar__tree-container .tree-view .tree-cell:filled:selected:focused.file-tree__file--git-untracked {
     -fx-text-fill: #ff3b30;
 }
-.sidebar__tree-container .tree-view .tree-cell:selected.file-tree__folder--git-changed,
-.sidebar__tree-container .tree-view .tree-cell:filled:selected:focused.file-tree__folder--git-changed {
-    -fx-text-fill: #ff9500;
-    -fx-font-weight: 600;
-}
-
 /* 选中时普通文件夹保留默认深色（覆盖 :selected 的蓝字字色） */
 .sidebar__tree-container .tree-view .tree-cell:selected.file-tree__folder,
 .sidebar__tree-container .tree-view .tree-cell:filled:selected:focused.file-tree__folder {
     -fx-text-fill: #1d1d1f;
+    -fx-font-weight: 600;
+}
+
+/* 选中时含改动的目录保持橙色强调（置于上面普通文件夹规则之后，特异性相同时据此覆盖回橙色） */
+.sidebar__tree-container .tree-view .tree-cell:selected.file-tree__folder--git-changed,
+.sidebar__tree-container .tree-view .tree-cell:filled:selected:focused.file-tree__folder--git-changed {
+    -fx-text-fill: #ff9500;
     -fx-font-weight: 600;
 }
 
