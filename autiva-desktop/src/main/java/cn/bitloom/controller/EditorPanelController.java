@@ -1,6 +1,5 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.tool.file.FileDiff;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -43,7 +42,7 @@ import java.util.function.Consumer;
 @Primary
 public class EditorPanelController implements Initializable {
 
-    public enum ViewType { TERMINAL, FILE, DIFF, TOOL_CALLS, TODO }
+    public enum ViewType { TERMINAL, FILE, TOOL_CALLS, TODO }
 
     @FXML
     @Getter
@@ -453,10 +452,6 @@ public class EditorPanelController implements Initializable {
         // work 模式不支持终端视图
     }
 
-    public void showDiffView() {
-        // work 模式不支持 diff 视图
-    }
-
     public void showFileView() {
         // work 模式不支持文件内容视图
     }
@@ -520,10 +515,6 @@ public class EditorPanelController implements Initializable {
 
     public void showFileContent(Path filePath) {
         // work 模式不支持文件内容显示
-    }
-
-    public void showDiffInProjectView(FileDiff diff) {
-        // work 模式不支持 diff 显示
     }
 
     // ===== 视图数据结构 =====

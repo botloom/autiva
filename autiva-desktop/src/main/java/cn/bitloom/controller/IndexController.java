@@ -1,6 +1,5 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.tool.file.FileDiff;
 import cn.bitloom.controller.EditorPanelController.ViewType;
 import cn.bitloom.project.ProjectInfo;
 import cn.bitloom.constant.AgentMode;
@@ -12,10 +11,15 @@ import cn.bitloom.vm.CodeHomePageViewModel;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.geometry.Insets;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -58,8 +62,11 @@ public class IndexController implements Initializable {
     private final Router router;
     private final HomePageRouter homePageRouter;
 
-    /** 拖拽条固定宽度（像素）：覆盖「边缘留白 + 间隙」整段区域，命中区足够宽 */
-    private static final double DRAG_HANDLE_WIDTH = 14;
+    /** 拖拽条固定宽度（像素）：命中区宽度，足够宽以便轻松触发，又不明显挤占内容空间 */
+    private static final double DRAG_HANDLE_WIDTH = 20;
+    /** 拖拽把手的视觉尺寸（像素）：与命中区不同，把手仅是一小段居中圆角条，非整条高度 */
+    private static final double DRAG_HANDLE_BAR_HEIGHT = 48;
+    private static final double DRAG_HANDLE_BAR_WIDTH = 8;
     private static final double SIDEBAR_MIN_WIDTH = 200;
     private static final double SIDEBAR_MAX_WIDTH = 600;
     private static final double EDITOR_MIN_WIDTH = 320;
@@ -257,6 +264,33 @@ public class IndexController implements Initializable {
         handle.setPrefWidth(DRAG_HANDLE_WIDTH);
         handle.setMaxWidth(DRAG_HANDLE_WIDTH);
         handle.setPickOnBounds(true);
+        applyDraggableHandle(handle);
+    }
+
+    /**
+     * 在命中区中央动态绘制一把「竖向居中、固定尺寸」的圆角小把手。
+     * 用像素 insets 计算而非 CSS 百分比：CSS 的 background-insets 百分比对拖到
+     * 该条高度在布局中不可靠（会铺满整高），这里监听高度每次重算保证真正居中。
+     * 默认透明，hover 显示半透明蓝，pressed 加强——视觉反馈交给代码而非 CSS 伪类。
+     */
+    private void applyDraggableHandle(Region handle) {
+        Runnable paint = () -> {
+            double h = handle.getHeight();
+            if (h <= 0) {
+                return;
+            }
+            double barH = Math.min(DRAG_HANDLE_BAR_HEIGHT, h);
+            double y = (h - barH) / 2.0;
+            double x = (DRAG_HANDLE_WIDTH - DRAG_HANDLE_BAR_WIDTH) / 2.0;
+            Color fill = handle.isPressed()
+                    ? Color.rgb(0, 113, 227, 0.6)
+                    : handle.isHover() ? Color.rgb(0, 113, 227, 0.45) : Color.TRANSPARENT;
+            handle.setBackground(new Background(new BackgroundFill(fill,
+                    new CornerRadii(3), new Insets(y, x, y, x))));
+        };
+        handle.heightProperty().addListener((o, a, b) -> paint.run());
+        handle.hoverProperty().addListener((o, a, b) -> paint.run());
+        handle.pressedProperty().addListener((o, a, b) -> paint.run());
     }
 
     /**
@@ -490,16 +524,6 @@ public class IndexController implements Initializable {
         if (editor == null) return;
         ensureEditorVisible();
         editor.showFileContent(file);
-    }
-
-    /**
-     * 在项目视图中显示指定文件的 diff（点击对话框上方的 diff 文件卡片时调用）
-     */
-    public void showDiffInProjectView(FileDiff diff) {
-        EditorPanelController editor = getEditorPanelController();
-        if (editor == null) return;
-        ensureEditorVisible();
-        editor.showDiffInProjectView(diff);
     }
 
     /**

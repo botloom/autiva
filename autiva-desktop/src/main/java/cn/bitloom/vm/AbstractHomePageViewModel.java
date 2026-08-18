@@ -53,7 +53,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tokenizer.JTokkitTokenCountEstimator;
 import org.springframework.ai.tool.ToolCallback;
 import reactor.core.Disposable;
-import reactor.core.publisher.Sinks;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -172,10 +171,8 @@ public abstract class AbstractHomePageViewModel {
      * per-session 运行时状态。所有可变状态都放在这里，ViewModel 仅持有当前 active 引用。
      */
     protected static final class SessionRuntimeState {
-        /** 当前 agent 流订阅（用于 pause 取消） */
+        /** 当前 agent 流订阅（用于 pause 取消，dispose 经 sink.onCancel 级联取消 LLM 流） */
         Disposable subscription;
-        /** 取消信号（用于 pauseGeneration 中断 blockLast） */
-        Sinks.Empty<Object> cancelSink;
         /** 当前流式 assistant 消息卡片 */
         AssistantMessageCard currentAssistantCard = null;
         /** 待响应的工具调用卡片，按 toolCallId 索引 */
@@ -342,6 +339,30 @@ public abstract class AbstractHomePageViewModel {
     public boolean hasHistoricalMessages() {
         return this.session != null
                 && !sessionManager.getEvents(this.session.id()).isEmpty();
+    }
+
+    /** session 运行状态（供侧边栏列表显示，运行时状态不持久化） */
+    public enum SessionStatus {
+        /** 智能体执行中（含后台 session） */
+        RUNNING,
+        /** 用户已停止 */
+        PAUSED,
+        /** 空闲 */
+        IDLE
+    }
+
+    /**
+     * 查询指定 session 的运行状态（运行时状态，重启后均为 IDLE）。
+     */
+    public SessionStatus getSessionStatus(String sessionId) {
+        SessionRuntimeState state = sessionStates.get(sessionId);
+        if (state == null) {
+            return SessionStatus.IDLE;
+        }
+        if (state.isPaused) {
+            return SessionStatus.PAUSED;
+        }
+        return state.isStreaming ? SessionStatus.RUNNING : SessionStatus.IDLE;
     }
 
     // ===== Agent 构建 =====
@@ -591,7 +612,6 @@ public abstract class AbstractHomePageViewModel {
         currentState.isPaused = false;
         Store.isStreaming.set(true);
         Store.isPaused.set(false);
-        currentState.cancelSink = Sinks.empty();
 
         // 子类实现消息上下文构建（coder 模式附加项目信息）
         String messageText = buildMessageWithContext(text);
@@ -635,11 +655,12 @@ public abstract class AbstractHomePageViewModel {
 
     /**
      * 订阅 Agent 事件流（sendMessage 与 Goal Loop 自动续轮共用）。
+     * pause 时直接 dispose 订阅：Agent.runStream 内部经 sink.onCancel 级联取消 LLM 流，
+     * 走 cancel 路径而非 complete，因此不会误触发 onStreamCompleted 的续轮逻辑。
      */
     private void subscribeAgentStream(Agent agent, MessageEvent inputEvent, RuntimeContext ctx,
             String sid, SessionRuntimeState stateRef) {
         stateRef.subscription = agent.runStream(inputEvent, ctx)
-                .takeUntilOther(stateRef.cancelSink.asMono())
                 .doOnNext(event -> Platform.runLater(() -> processEvent(event, sid)))
                 .doOnComplete(() -> Platform.runLater(() -> {
                     stateRef.isStreaming = false;
@@ -649,9 +670,15 @@ public abstract class AbstractHomePageViewModel {
                         Store.isStreaming.set(false);
                         Store.isPaused.set(false);
                     }
+                    // 状态翻转，刷新侧边栏运行状态图标
+                    Store.refreshHistory.set(!Store.refreshHistory.get());
                     onStreamCompleted(sid);
                 }))
                 .doOnError(e -> {
+                    // pause 触发的取消异常不是真实错误，保留 paused 状态
+                    if (stateRef.isPaused) {
+                        return;
+                    }
                     log.error("agent run error", e);
                     Platform.runLater(() -> {
                         stateRef.isStreaming = false;
@@ -660,6 +687,7 @@ public abstract class AbstractHomePageViewModel {
                             Store.isStreaming.set(false);
                             Store.isPaused.set(false);
                         }
+                        Store.refreshHistory.set(!Store.refreshHistory.get());
                     });
                 })
                 .subscribe();
@@ -692,15 +720,22 @@ public abstract class AbstractHomePageViewModel {
             log.warn("目标续轮取消：上一轮仍在流式: session={}", sessionId);
             return;
         }
+        // 用户已停止该 session：拒绝所有自动续轮（Goal 判定 / 后台任务恢复 / 计划批准执行轮），
+        // 用户重新发消息时才会解除暂停
+        if (stateRef.isPaused) {
+            log.info("会话已停止，跳过自动续轮: session={}", sessionId);
+            return;
+        }
 
         stateRef.isStreaming = true;
         stateRef.isPaused = false;
-        stateRef.cancelSink = Sinks.empty();
         Platform.runLater(() -> {
             if (currentState == stateRef) {
                 Store.isStreaming.set(true);
                 Store.isPaused.set(false);
             }
+            // 状态翻转，刷新侧边栏运行状态图标
+            Store.refreshHistory.set(!Store.refreshHistory.get());
         });
 
         MessageEvent inputEvent = MessageEvent.userMessage(sessionId, message);
@@ -997,6 +1032,8 @@ public abstract class AbstractHomePageViewModel {
         Store.isStreaming.set(false);
         Store.isPaused.set(true);
         cancelStateSubscription(currentState);
+        // 状态翻转，刷新侧边栏运行状态图标
+        Store.refreshHistory.set(!Store.refreshHistory.get());
 
         // 中途停止时善后事件文件，避免下次调用 LLM 时历史不成对导致报错：
         //   1. 保存已流式生成的 assistant 文本为 STOP 事件，避免上一轮内容丢失
@@ -1022,13 +1059,10 @@ public abstract class AbstractHomePageViewModel {
     }
 
     /**
-     * 取消指定 state 的订阅与取消信号（不删除 state 本身，便于切回恢复）。
+     * 取消指定 state 的订阅（不删除 state 本身，便于切回恢复）。
+     * dispose 经 Agent.runStream 的 sink.onCancel 级联取消内部 LLM 流与工具循环。
      */
     private void cancelStateSubscription(SessionRuntimeState state) {
-        if (state.cancelSink != null) {
-            state.cancelSink.tryEmitEmpty();
-            state.cancelSink = null;
-        }
         if (state.subscription != null && !state.subscription.isDisposed()) {
             state.subscription.dispose();
         }

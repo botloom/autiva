@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -214,6 +215,14 @@ public class CodeHomePageController extends AbstractHomePageController {
 
         // 计划批准卡片（Plan Mode）：同样显示在 approvalBar
         this.toolUIBridge.setOnShowPlanApproval(card -> {
+            // 点击计划路径在应用内文件视图打开计划文档（而非系统文件管理器）
+            if (card instanceof cn.bitloom.node.tool.PlanApprovalCard planCard) {
+                planCard.setFileOpener(file -> {
+                    if (indexController != null) {
+                        indexController.showFileInPanel(file);
+                    }
+                });
+            }
             approvalBar.getChildren().clear();
             approvalBar.getChildren().add(card);
             approvalBar.setVisible(true);
@@ -288,23 +297,28 @@ public class CodeHomePageController extends AbstractHomePageController {
     @Override
     public void refreshDiffReviewBarFromService() {
         java.util.List<FileDiff> pending = diffService.getPendingDiffs();
-        java.util.Set<String> pendingIds = pending.stream()
-                .map(FileDiff::id)
-                .collect(java.util.stream.Collectors.toSet());
+        // 同一文件只保留最新一个 pending diff，按 filePath 去重
+        java.util.Map<String, FileDiff> latestByPath = new java.util.LinkedHashMap<>();
+        for (FileDiff d : pending) {
+            latestByPath.put(d.filePath(), d);
+        }
+        java.util.Set<String> pendingPaths = latestByPath.keySet();
 
-        // 移除已不在 pending 中的卡片
-        diffReviewList.getChildren().removeIf(node ->
-                !(node.getUserData() instanceof FileDiff diff) || !pendingIds.contains(diff.id()));
+        // 移除已不在 pending 中的卡片（按 filePath）
+        diffReviewList.getChildren().removeIf(node -> {
+            if (!(node.getUserData() instanceof FileDiff diff)) return true;
+            return !pendingPaths.contains(diff.filePath());
+        });
 
         // 添加新增的卡片（pending 中有但卡片列表中没有的）
-        java.util.Set<String> existingIds = diffReviewList.getChildren().stream()
+        java.util.Set<String> existingPaths = diffReviewList.getChildren().stream()
                 .filter(node -> node.getUserData() instanceof FileDiff)
-                .map(node -> ((FileDiff) node.getUserData()).id())
+                .map(node -> ((FileDiff) node.getUserData()).filePath())
                 .collect(java.util.stream.Collectors.toSet());
 
-        for (FileDiff diff : pending) {
-            if (!existingIds.contains(diff.id())) {
-                diffReviewList.getChildren().add(createDiffFileCard(diff));
+        for (FileDiff diff : latestByPath.values()) {
+            if (!existingPaths.contains(diff.filePath())) {
+                addDiffFileCard(diff);
             }
         }
 
@@ -312,7 +326,21 @@ public class CodeHomePageController extends AbstractHomePageController {
     }
 
     private void addDiffFileCard(FileDiff diff) {
-        diffReviewList.getChildren().add(createDiffFileCard(diff));
+        // 同一文件只保留一张卡片：已有则用新 diff 替换，避免重复显示
+        int idx = -1;
+        for (int i = 0; i < diffReviewList.getChildren().size(); i++) {
+            Node n = diffReviewList.getChildren().get(i);
+            if (n.getUserData() instanceof FileDiff existing
+                    && existing.filePath().equals(diff.filePath())) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx >= 0) {
+            diffReviewList.getChildren().set(idx, createDiffFileCard(diff));
+        } else {
+            diffReviewList.getChildren().add(createDiffFileCard(diff));
+        }
         updateDiffReviewBar();
     }
 
@@ -412,7 +440,7 @@ public class CodeHomePageController extends AbstractHomePageController {
         card.setOnMouseClicked(e -> {
             if (e.getTarget() instanceof Button) return;
             if (indexController != null) {
-                indexController.showDiffInProjectView(diff);
+                indexController.showFileInPanel(Path.of(diff.filePath()));
             }
         });
 

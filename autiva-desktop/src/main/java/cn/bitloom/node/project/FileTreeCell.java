@@ -4,6 +4,7 @@ import cn.bitloom.node.FileIconResolver;
 import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.project.git.GitFileStatus;
 import cn.bitloom.project.git.ProjectStatusStore;
+import javafx.css.PseudoClass;
 import javafx.scene.Node;
 import javafx.scene.control.TreeCell;
 import javafx.scene.input.ClipboardContent;
@@ -29,6 +30,10 @@ public class FileTreeCell extends TreeCell<Path> {
 
     private static final double ICON_SIZE = 16;
 
+    /** 瞬态伪类：hover / pressed，随节点存在而非随行位置 */
+    private static final PseudoClass HOVER = PseudoClass.getPseudoClass("hover");
+    private static final PseudoClass PRESSED = PseudoClass.getPseudoClass("pressed");
+
     /** 全局共享的 Git 状态存储，由 SideBarController 设置 */
     private static ProjectStatusStore statusStore;
 
@@ -37,6 +42,17 @@ public class FileTreeCell extends TreeCell<Path> {
      */
     public static void setStatusStore(ProjectStatusStore store) {
         statusStore = store;
+    }
+
+    /**
+     * cell 被 VirtualFlow 回收复用到新行时，hover/pressed 等瞬态伪类不会自动清除，
+     * 会导致灰背景残留在复用后的其它行上闪烁一下，这里在索引变化时强制重置。
+     */
+    @Override
+    public void updateIndex(int index) {
+        super.updateIndex(index);
+        pseudoClassStateChanged(HOVER, false);
+        pseudoClassStateChanged(PRESSED, false);
     }
 
     @Override

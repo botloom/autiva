@@ -171,7 +171,12 @@ public class ProjectFileWatcherService {
                 for (WatchEvent<?> event : key.pollEvents()) {
                     Path child = dir.resolve((Path) event.context());
                     if (isGitMeta) {
-                        relevant = true;
+                        // .git 根目录下 index / index.lock 的写入多来自 IDE 后台 git 操作的机会性索引刷新，
+                        // 并不代表工作区内容变化；跳过以免频繁触发整树重建导致界面闪烁。
+                        // refs / HEAD 等提交相关变更仍然触发刷新。
+                        if (!isIndexRefreshNoise(dir, child)) {
+                            relevant = true;
+                        }
                         continue;
                     }
                     if (gitStatusService.isIgnoredPath(child)) {
@@ -190,6 +195,22 @@ public class ProjectFileWatcherService {
                 onChanged();
             }
         }
+    }
+
+    /**
+     * 判断 .git 根目录下的事件是否为 index 机会性刷新噪声（IDE 后台 git status 等会写回 index）。
+     * 仅过滤 .git 根目录下的 index / index.lock；refs 子目录下的事件不受影响。
+     */
+    private boolean isIndexRefreshNoise(Path dir, Path child) {
+        if (currentRoot == null) {
+            return false;
+        }
+        Path gitDir = currentRoot.resolve(".git").toAbsolutePath().normalize();
+        if (!dir.toAbsolutePath().normalize().equals(gitDir)) {
+            return false;
+        }
+        String name = child.getFileName() != null ? child.getFileName().toString() : "";
+        return "index".equals(name) || "index.lock".equals(name);
     }
 
     /**

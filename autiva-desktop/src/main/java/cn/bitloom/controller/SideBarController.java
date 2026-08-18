@@ -20,9 +20,12 @@ import cn.bitloom.store.Store;
 import cn.bitloom.vm.AbstractHomePageViewModel;
 import cn.bitloom.vm.CodeHomePageViewModel;
 import cn.bitloom.window.WindowManager;
+import javafx.animation.Animation;
+import javafx.animation.FadeTransition;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
@@ -30,6 +33,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
+import javafx.util.Duration;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -40,10 +44,6 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Slf4j
@@ -53,6 +53,9 @@ public class SideBarController implements Initializable, PageHolder {
 
     private static final String ACTIVE_CSS_CLASS = "sidebar__option--active";
     private static final String HISTORY_ACTIVE_CSS_CLASS = "sidebar__history-item--active";
+
+    /** 运行中圆点的闪烁动画（全量重建列表前停止，防止节点移除后动画泄漏） */
+    private final List<Animation> statusAnimations = new ArrayList<>();
 
     private final FileSystemSessionManager fileSystemSessionManager;
     private final ProjectRegistry projectRegistry;
@@ -246,6 +249,9 @@ public class SideBarController implements Initializable, PageHolder {
     public void refreshHistoryList() {
         // 卡片重建会生成新的 header/treeBtn 实例，重置目录树切换状态
         this.activeTreeProject = null;
+        // 停止旧节点的闪烁动画（节点即将被移除，无限循环动画需显式停止）
+        this.statusAnimations.forEach(Animation::stop);
+        this.statusAnimations.clear();
 
         String currentAgent = Store.currentAgent.get();
         boolean isCoder = AgentMode.CODE.matches(currentAgent);
@@ -426,10 +432,17 @@ public class SideBarController implements Initializable, PageHolder {
         Path projectPath = Paths.get(project.path());
         this.watchedProjectPath = projectPath.toAbsolutePath().normalize();
 
+        // 先更新 Git 状态：此时 currentTreeView 尚为 null，refreshSignal 不会触发整树重建，
+        // 避免打开目录树后立刻 setRoot 重建导致的闪烁；树渲染时单元格直接读取新状态着色。
+        projectStatusStore.update(projectPath, gitStatusService.queryStatusMap(projectPath));
+
         TreeView<Path> treeView;
         if (cachedTreeView != null && cachedTreeProjectId != null && cachedTreeProjectId.equals(project.id())) {
             // 复用已构建的目录树，保留之前展开/选中的节点状态
             treeView = cachedTreeView;
+            // 单元格仍是旧状态着色：refresh() 仅强制单元格重绘（updateItem 重跑），
+            // 不重建树结构，展开/选中/滚动状态全部保留
+            treeView.refresh();
         } else {
             treeView = buildNewTreeView();
             cachedTreeView = treeView;
@@ -439,8 +452,6 @@ public class SideBarController implements Initializable, PageHolder {
 
         // 启动文件监听，文件变化时自动刷新 Git 状态与目录树/文件视图
         projectFileWatcherService.watch(projectPath);
-        // 刷新 Git 状态并注入树着色
-        projectStatusStore.update(projectPath, gitStatusService.queryStatusMap(projectPath));
 
         // 顶部头部：与项目卡片 header 样式完全一致（文件夹图标 + 项目名 + 悬浮按钮）
         HBox treeHeader = createProjectHeader(project, true);
@@ -692,20 +703,19 @@ public class SideBarController implements Initializable, PageHolder {
         item.getStyleClass().add("sidebar__history-item");
         item.setAlignment(Pos.CENTER_LEFT);
         item.setSpacing(4);
+        // 子节点各自使用自身高度，按 item 的 center-left 对齐，
+        // 避免 fillHeight 拉伸导致状态点/文字/按钮中心线不齐
+        item.setFillHeight(false);
 
         VBox textContainer = new VBox();
         textContainer.getStyleClass().add("sidebar__history-text");
+        textContainer.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(textContainer, Priority.ALWAYS);
 
         Label titleLabel = new Label(resolveSessionTitle(session));
         titleLabel.getStyleClass().add("sidebar__history-item-title");
 
-        Object updObj = session.metadata().get("updateAt");
-        long lastActiveTime = updObj instanceof Number n ? n.longValue() : (session.createdAt() != null ? session.createdAt().toEpochMilli() : 0L);
-        Label timeLabel = new Label(formatTime(lastActiveTime));
-        timeLabel.getStyleClass().add("sidebar__history-item-time");
-
-        textContainer.getChildren().addAll(titleLabel, timeLabel);
+        textContainer.getChildren().add(titleLabel);
 
         // 删除按钮
         Button deleteBtn = new Button();
@@ -745,7 +755,7 @@ public class SideBarController implements Initializable, PageHolder {
             deleteBtn.setVisible(false);
         });
 
-        item.getChildren().addAll(textContainer, deleteBtn);
+        item.getChildren().addAll(createStatusIndicator(session), textContainer, deleteBtn);
 
         item.setOnMouseClicked(event -> {
             if (event.getTarget() != deleteBtn && event.getTarget() != deleteIcon) {
@@ -762,6 +772,31 @@ public class SideBarController implements Initializable, PageHolder {
         return item;
     }
 
+    /**
+     * session 运行状态圆点（标题前方，固定尺寸保证标题对齐）：
+     * 空闲/已停止 = 灰边空心圆；执行中 = 灰色实心圆闪烁（FadeTransition 驱动）。
+     */
+    private Region createStatusIndicator(Session session) {
+        Region dot = new Region();
+        dot.getStyleClass().add("sidebar__status-dot");
+        // margin 隔距（padding 会扩大实心背景绘制区域导致胶囊形）
+        HBox.setMargin(dot, new Insets(0, 6, 0, 2));
+
+        AbstractHomePageViewModel vm = currentViewModel();
+        if (vm != null
+                && vm.getSessionStatus(session.id()) == AbstractHomePageViewModel.SessionStatus.RUNNING) {
+            dot.getStyleClass().add("sidebar__status-dot--running");
+            FadeTransition blink = new FadeTransition(Duration.millis(900), dot);
+            blink.setFromValue(1.0);
+            blink.setToValue(0.25);
+            blink.setAutoReverse(true);
+            blink.setCycleCount(FadeTransition.INDEFINITE);
+            blink.play();
+            statusAnimations.add(blink);
+        }
+        return dot;
+    }
+
     private void updateHistoryActiveState(HBox newActive) {
         if (activeHistoryItem != null) {
             activeHistoryItem.getStyleClass().remove(HISTORY_ACTIVE_CSS_CLASS);
@@ -770,16 +805,6 @@ public class SideBarController implements Initializable, PageHolder {
         newActive.getStyleClass().add(HISTORY_ACTIVE_CSS_CLASS);
         newActive.setStyle(null);
         activeHistoryItem = newActive;
-    }
-
-    private String formatTime(long timestamp) {
-        if (timestamp <= 0) return "";
-        LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
-        LocalDateTime now = LocalDateTime.now();
-        if (dateTime.toLocalDate().equals(now.toLocalDate())) {
-            return dateTime.format(DateTimeFormatter.ofPattern("HH:mm"));
-        }
-        return dateTime.format(DateTimeFormatter.ofPattern("MM/dd HH:mm"));
     }
 
     public void updateActiveState(String path) {

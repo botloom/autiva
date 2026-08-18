@@ -1,7 +1,5 @@
 package cn.bitloom.controller;
 
-import cn.bitloom.agentic.tool.file.DiffService;
-import cn.bitloom.agentic.tool.file.FileDiff;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighter;
 import cn.bitloom.node.editor.syntax.SyntaxHighlighterFactory;
 import cn.bitloom.node.message.InputTag;
@@ -14,12 +12,14 @@ import cn.bitloom.project.git.GitStatusService;
 import cn.bitloom.project.git.ProjectStatusStore;
 import cn.bitloom.vm.CodeHomePageViewModel;
 import javafx.application.Platform;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
 import lombok.extern.slf4j.Slf4j;
@@ -32,8 +32,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
@@ -43,25 +41,22 @@ import java.util.function.IntFunction;
 /**
  * Coder 模式编辑器面板控制器。
  * <p>
- * 继承通用 {@link EditorPanelController}，扩展 coder 专有的终端/文件/DIFF 视图。
- * 所有视图以 Tab 形式管理，终端/文件/DIFF 支持多开。
+ * 继承通用 {@link EditorPanelController}，扩展 coder 专有的终端/文件视图。
+ * 所有视图以 Tab 形式管理，终端/文件支持多开。
  */
 @Slf4j
 @Component
 public class CoderEditorPanelController extends EditorPanelController implements Initializable {
 
     private final PtyTerminalService ptyTerminalService;
-    private final DiffService diffService;
     private final ProjectStatusStore projectStatusStore;
     private final GitStatusService gitStatusService;
     private boolean refreshSubscribed = false;
 
     public CoderEditorPanelController(PtyTerminalService ptyTerminalService,
-                                      DiffService diffService,
                                       ProjectStatusStore projectStatusStore,
                                       GitStatusService gitStatusService) {
         this.ptyTerminalService = ptyTerminalService;
-        this.diffService = diffService;
         this.projectStatusStore = projectStatusStore;
         this.gitStatusService = gitStatusService;
     }
@@ -236,7 +231,10 @@ public class CoderEditorPanelController extends EditorPanelController implements
             AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef =
                     new AtomicReference<>(computeLineStatus(filePath));
             subTab.userData.put("lineStatus", lineStatusRef);
-            applyGitGutter(codeArea, lineStatusRef);
+            // 支持 Ctrl + 滚轮缩放代码（正文 + 行号联动），默认 12px
+            SimpleDoubleProperty codeFontSize = new SimpleDoubleProperty(12.0);
+            applyGitGutter(codeArea, lineStatusRef, codeFontSize.get());
+            setupCodeAreaZoom(codeArea, codeFontSize, lineStatusRef);
             codeArea.replaceText(content);
             // 记录是否有未保存改动，外部变化时避免覆盖用户编辑
             subTab.userData.put("dirty", false);
@@ -308,12 +306,37 @@ public class CoderEditorPanelController extends EditorPanelController implements
     }
 
     /**
+     * 让代码区支持 Ctrl + 滚轮缩放：正文字号与行号联动放大/缩小。
+     * 通过内联样式覆盖默认字号（内联优先于样式类），滚轮时重建行号工厂使其同步缩放。
+     */
+    private void setupCodeAreaZoom(CodeArea codeArea, SimpleDoubleProperty fontSize, AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef) {
+        codeArea.setOnScroll(e -> {
+            if (!e.isControlDown() || e.getDeltaY() == 0) {
+                return;
+            }
+            // 向上滚放大，向下滚缩小；步进约 15%
+            double factor = e.getDeltaY() > 0 ? 1.15 : 1 / 1.15;
+            double next = Math.round(Math.max(8.0, Math.min(48.0, fontSize.get() * factor)) * 100.0) / 100.0;
+            if (next == fontSize.get()) {
+                return;
+            }
+            fontSize.set(next);
+            codeArea.setUserData(next);
+            codeArea.setStyle("-fx-font-size: " + next + "px;");
+            applyGitGutter(codeArea, lineStatusRef, next);
+            e.consume();
+        });
+    }
+
+    /**
      * 设置代码区行号工厂：在标准行号基础上，为 Git 改动行追加状态修饰类。
      * 行状态引用可被外部替换后通过重设工厂刷新（RichTextFX 重设工厂会重建可见行图形）。
      */
-    private void applyGitGutter(CodeArea codeArea, AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef) {
+    private void applyGitGutter(CodeArea codeArea, AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef, double fontSize) {
         IntFunction<Node> factory = idx -> {
             Label label = new Label(String.valueOf(idx + 1));
+            // 行号字号随正文缩放联动（保持比正文小 1px），内联样式覆盖 .lineno 的默认值
+            label.setStyle("-fx-font-size: " + (fontSize - 1) + "px;");
             label.getStyleClass().addAll("lineno", "git-lineno");
             GitFileStatus st = lineStatusRef.get().get(idx);
             // 新增/未跟踪行 → 绿色；修改行 → 蓝色；删除做锚定的行 → 蓝色
@@ -409,11 +432,12 @@ public class CoderEditorPanelController extends EditorPanelController implements
                                                 @SuppressWarnings("unchecked")
                                                 AtomicReference<Map<Integer, GitFileStatus>> lr =
                                                         (AtomicReference<Map<Integer, GitFileStatus>>) lineRef;
-                                                // 内容变化时先同步文本，再统一刷新行号着色与段落 gutter 标注
+                                                // 内容变化时先同步文本，再统一刷新行号着色与段落 gutter 标注（保持用户缩放字号）
                                                 if (!ca.getText().equals(fresh)) {
                                                     ca.replaceText(fresh);
                                                 }
-                                                applyGitGutter(ca, lr);
+                                                double size = ca.getUserData() instanceof Number num ? num.doubleValue() : 12.0;
+                                                applyGitGutter(ca, lr, size);
                                                 applyGitParaStyles(ca, lr);
                                             }
                                         }
@@ -435,214 +459,6 @@ public class CoderEditorPanelController extends EditorPanelController implements
         } catch (IOException e) {
             log.error("保存文件失败: {}", filePath, e);
         }
-    }
-
-    // ===== DIFF 视图（单例） =====
-
-    @Override
-    public void showDiffInProjectView(FileDiff diff) {
-        show();
-        EditorTab diffTab = findTabByType(ViewType.DIFF);
-        if (diffTab != null) {
-            // 已有 DIFF tab，替换内容
-            String diffId = diff.id();
-            if (diffId.equals(diffTab.userData.get("diffId"))) {
-                selectTab(diffTab);
-                return;
-            }
-            // 清理旧内容并重新渲染
-            if (diffTab.content instanceof VBox vbox) {
-                vbox.getChildren().clear();
-            }
-            diffTab.userData.put("diffId", diffId);
-            diffTab.userData.put("diff", diff);
-            renderDiffIntoContent(diff, (VBox) diffTab.content, diffTab);
-            selectTab(diffTab);
-            return;
-        }
-
-        String fileName = Paths.get(diff.filePath()).getFileName().toString();
-        VBox diffContent = new VBox();
-        diffContent.getStyleClass().add("editor-panel__view");
-        VBox.setVgrow(diffContent, Priority.ALWAYS);
-
-        EditorTab tab = createTab(ViewType.DIFF, diffContent);
-        tab.userData.put("diffId", diff.id());
-        tab.userData.put("diff", diff);
-        addTab(tab);
-        selectTab(tab);
-
-        renderDiffIntoContent(diff, diffContent, tab);
-    }
-
-    /**
-     * 渲染 diff 内容到指定容器（工具栏 + 左右对比）
-     */
-    private void renderDiffIntoContent(FileDiff diff, VBox container, EditorTab tab) {
-        // 构建文本和行号
-        StringBuilder leftText = new StringBuilder();
-        StringBuilder rightText = new StringBuilder();
-        List<Integer> leftLineNumbers = new ArrayList<>();
-        List<Integer> rightLineNumbers = new ArrayList<>();
-        List<String> leftParagraphStyles = new ArrayList<>();
-        List<String> rightParagraphStyles = new ArrayList<>();
-
-        if (diff.hunks() != null) {
-            for (FileDiff.Hunk hunk : diff.hunks()) {
-                int currentOldLine = hunk.oldStart() - 1;
-                int currentNewLine = hunk.newStart() - 1;
-                if (hunk.lines() != null) {
-                    for (FileDiff.DiffLine line : hunk.lines()) {
-                        switch (line.type()) {
-                            case REMOVE -> {
-                                currentOldLine++;
-                                leftText.append(line.content()).append("\n");
-                                leftLineNumbers.add(currentOldLine);
-                                leftParagraphStyles.add("diff-line-remove-left");
-                                rightText.append("\n");
-                                rightLineNumbers.add(0);
-                                rightParagraphStyles.add("diff-line-empty");
-                            }
-                            case ADD -> {
-                                currentNewLine++;
-                                leftText.append("\n");
-                                leftLineNumbers.add(0);
-                                leftParagraphStyles.add("diff-line-empty");
-                                rightText.append(line.content()).append("\n");
-                                rightLineNumbers.add(currentNewLine);
-                                rightParagraphStyles.add("diff-line-add-right");
-                            }
-                            case CONTEXT -> {
-                                currentOldLine++;
-                                currentNewLine++;
-                                leftText.append(line.content()).append("\n");
-                                leftLineNumbers.add(currentOldLine);
-                                leftParagraphStyles.add(null);
-                                rightText.append(line.content()).append("\n");
-                                rightLineNumbers.add(currentNewLine);
-                                rightParagraphStyles.add(null);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        CodeArea leftArea = buildDiffCodeArea(leftText.toString(), leftLineNumbers, leftParagraphStyles, diff.filePath());
-        CodeArea rightArea = buildDiffCodeArea(rightText.toString(), rightLineNumbers, rightParagraphStyles, diff.filePath());
-
-        // 滚动联动
-        final boolean[] syncing = {false};
-        leftArea.estimatedScrollYProperty().addListener((obs, old, val) -> {
-            if (syncing[0]) return;
-            syncing[0] = true;
-            rightArea.estimatedScrollYProperty().setValue(val);
-            syncing[0] = false;
-        });
-        rightArea.estimatedScrollYProperty().addListener((obs, old, val) -> {
-            if (syncing[0]) return;
-            syncing[0] = true;
-            leftArea.estimatedScrollYProperty().setValue(val);
-            syncing[0] = false;
-        });
-
-        VirtualizedScrollPane<CodeArea> leftScroll = new VirtualizedScrollPane<>(leftArea);
-        leftScroll.getStyleClass().add("editor-panel__code-scroll");
-        VirtualizedScrollPane<CodeArea> rightScroll = new VirtualizedScrollPane<>(rightArea);
-        rightScroll.getStyleClass().add("editor-panel__code-scroll");
-
-        VBox leftBox = new VBox(leftScroll);
-        leftBox.getStyleClass().add("editor-panel__diff-left");
-        VBox.setVgrow(leftScroll, Priority.ALWAYS);
-        VBox rightBox = new VBox(rightScroll);
-        rightBox.getStyleClass().add("editor-panel__diff-right");
-        VBox.setVgrow(rightScroll, Priority.ALWAYS);
-
-        SplitPane splitPane = new SplitPane(leftBox, rightBox);
-        splitPane.getStyleClass().add("editor-panel__diff-split");
-        splitPane.setDividerPositions(0.5);
-        VBox.setVgrow(splitPane, Priority.ALWAYS);
-
-        // 工具栏
-        HBox toolbar = new HBox(8);
-        toolbar.getStyleClass().add("editor-panel__diff-toolbar");
-        toolbar.setAlignment(Pos.CENTER_LEFT);
-        Label pathLabel = new Label(Paths.get(diff.filePath()).getFileName().toString());
-        pathLabel.getStyleClass().add("editor-panel__diff-toolbar-path");
-        pathLabel.setTooltip(new Tooltip(diff.filePath()));
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        Button rejectBtn = new Button("撤销");
-        rejectBtn.getStyleClass().addAll("editor-panel__diff-toolbar-btn", "editor-panel__diff-toolbar-btn--reject");
-        Button approveBtn = new Button("保留");
-        approveBtn.getStyleClass().addAll("editor-panel__diff-toolbar-btn", "editor-panel__diff-toolbar-btn--approve");
-        toolbar.getChildren().addAll(pathLabel, spacer, rejectBtn, approveBtn);
-
-        rejectBtn.setOnAction(e -> {
-            diffService.rejectFileDiff(diff);
-            closeTab(tab);
-            if (indexController != null) {
-                indexController.refreshDiffReviewBar();
-            }
-        });
-        approveBtn.setOnAction(e -> {
-            diffService.approveFileDiff(diff);
-            closeTab(tab);
-            if (indexController != null) {
-                indexController.refreshDiffReviewBar();
-            }
-        });
-
-        container.getChildren().addAll(toolbar, splitPane);
-
-        setupCodeAreaContextMenu(leftArea, null);
-        setupCodeAreaContextMenu(rightArea, null);
-    }
-
-    private CodeArea buildDiffCodeArea(String text, List<Integer> lineNumbers, List<String> paragraphStyles, String filePath) {
-        CodeArea codeArea = new CodeArea();
-        codeArea.setEditable(false);
-        codeArea.setShowCaret(Caret.CaretVisibility.ON);
-        codeArea.getStyleClass().add("editor-panel__diff-area");
-
-        if (text.endsWith("\n")) {
-            text = text.substring(0, text.length() - 1);
-        }
-        codeArea.replaceText(text);
-
-        int paragraphCount = codeArea.getParagraphs().size();
-        for (int i = 0; i < paragraphCount && i < paragraphStyles.size(); i++) {
-            String style = paragraphStyles.get(i);
-            if (style != null) {
-                codeArea.setParagraphStyle(i, List.of(style));
-            }
-        }
-
-        codeArea.moveTo(0);
-
-        codeArea.setParagraphGraphicFactory(idx -> {
-            Label label = new Label();
-            if (idx >= 0 && idx < lineNumbers.size()) {
-                int lineNo = lineNumbers.get(idx);
-                if (lineNo > 0) {
-                    label.setText(String.valueOf(lineNo));
-                }
-            }
-            label.getStyleClass().addAll("diff-lineno", "diff-lineno--single");
-            label.setAlignment(Pos.CENTER_RIGHT);
-            label.setPrefWidth(38);
-            label.setMinWidth(38);
-            return label;
-        });
-
-        try {
-            SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(Paths.get(filePath));
-            highlighter.apply(codeArea, codeArea.getText());
-        } catch (Exception e) {
-            log.warn("diff 语法高亮失败: {}", filePath, e);
-        }
-
-        return codeArea;
     }
 
     // ===== 加载与错误状态 =====

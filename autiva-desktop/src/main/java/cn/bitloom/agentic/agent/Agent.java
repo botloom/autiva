@@ -25,11 +25,14 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.ToolCallback;
+import reactor.core.Disposable;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -104,7 +107,7 @@ public class Agent {
             }
 
             UserMessage userMessage = EventConverter.toUserMessage(inputEvent);
-            this.chatClient.prompt()
+            Disposable inner = this.chatClient.prompt()
                     .advisors(a -> {
                         if (sessionId != null) {
                             a.param(ChatMemory.CONVERSATION_ID, sessionId);
@@ -126,7 +129,15 @@ public class Agent {
                         return event;
                     })
                     .subscribe(sink::next, sink::error, sink::complete);
+            // 级联取消：下游 dispose 时同步取消内部 LLM 流订阅，
+            // 否则 LLM 调用与工具循环会在 Spring AI 内部线程继续执行（pause 失效的根因）
+            sink.onCancel(inner::dispose);
+            sink.onDispose(inner::dispose);
         }).onErrorResume(e -> {
+            // 取消引发的异常不是真实错误，静默终止即可
+            if (Exceptions.isCancel(e)) {
+                return Flux.empty();
+            }
             // reactive_compact：上下文超长被 API 拒绝时，紧急压缩后重试一次（MAX_REACTIVE_RETRIES=1）
             if (isContextLengthError(e) && reactiveCompactor != null && sessionId != null
                     && !Boolean.TRUE.equals(ctx.getParam(CTX_REACTIVE_RETRY))) {

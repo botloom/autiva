@@ -50,6 +50,8 @@ public class DiffService implements DiffGenerator {
      */
     @Override
     public FileDiff generateDiff(Path filePath, String oldContent, String newContent) {
+        // 同一文件只保留最新一个 pending diff：移除同路径的旧 diff，避免审查列表重复
+        pendingDiffs.values().removeIf(pending -> pending.filePath().equals(filePath.toString()));
         String id = UUID.randomUUID().toString();
         boolean isCreate = oldContent == null;
         boolean isDelete = newContent == null;

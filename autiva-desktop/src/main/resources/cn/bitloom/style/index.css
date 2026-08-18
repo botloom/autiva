@@ -23,21 +23,12 @@
     -fx-spacing: 0;
 }
 
-/* 宽度拖拽条：默认透明，hover 时中央显示 2px 蓝色细条
-   尺寸由 IndexController 代码设置，此处仅保留视觉样式 */
+/* 宽度拖拽条：命中区尺寸由 IndexController 代码维护，此处仅保留鼠标光标。
+   居中小把手的绘制交给代码动态完成（详见 IndexController.applyDraggableHandle），
+   不使用 CSS 伪类设 background，避免与代码绘制的把手互相覆盖/铺满整高。 */
 .index__drag-handle {
     -fx-cursor: h-resize;
     -fx-background-color: transparent;
-}
-
-.index__drag-handle:hover {
-    -fx-background-color: rgba(0, 113, 227, 0.35);
-    -fx-background-insets: 0 5 0 5;
-}
-
-.index__drag-handle:pressed {
-    -fx-background-color: rgba(0, 113, 227, 0.55);
-    -fx-background-insets: 0 5 0 5;
 }
 
 /* 右侧编辑器面板容器（悬浮卡片外层留白，与左侧 sidebar 统一为 8px）

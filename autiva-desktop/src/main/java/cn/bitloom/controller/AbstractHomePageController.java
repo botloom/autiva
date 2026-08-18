@@ -172,9 +172,12 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         // 注入工具卡片路由回调：ToolMessageCard 直接发送到 EditorPanel，不进 messages 列表
         this.getViewModel().setToolCardHandler(this::addToolToEditorPanel);
 
-        // 注入 session 激活回调：切换 session 时清空 EditorPanel 工具卡片 / todo
-        // 后台 session 的工具事件不显示在 UI，切回时按需重新产生（不持久化历史工具卡片）
-        this.getViewModel().setSessionActivatedHandler(_ -> clearEditorPanelCards());
+        // 注入 session 激活回调：切换 session 时清空 EditorPanel 工具卡片 / todo，
+        // 并强制滚动到底部（stickToBottom 残留旧值会导致切回的 session 不跟随最新消息）
+        this.getViewModel().setSessionActivatedHandler(_ -> {
+            clearEditorPanelCards();
+            forceScrollToBottom();
+        });
 
         // 配置 stick-to-bottom 跟随模式
         setupStickToBottom();
@@ -195,6 +198,8 @@ public abstract class AbstractHomePageController implements Initializable, Butto
                     this.getViewModel().getMessages().remove(loadingIndicatorCard);
                     loadingIndicatorCard = null;
                 }
+                // 历史加载完成：强制滚动到底部显示最新消息
+                forceScrollToBottom();
             }
         });
 
@@ -692,6 +697,19 @@ public abstract class AbstractHomePageController implements Initializable, Butto
     private void scrollToBottom() {
         if (!stickToBottom) return;
         chatScrollPane.scrollYToPixel(Double.MAX_VALUE);
+    }
+
+    /**
+     * 强制滚动到底部（session 切换 / 历史加载完成时）。
+     * 重置跟随标记（跨 session 残留的 false 会导致不跟随），并延迟两帧执行：
+     * messages.setAll 后 VirtualFlow 需要一个布局 pass 才能得到正确的高度估算。
+     */
+    private void forceScrollToBottom() {
+        stickToBottom = true;
+        Platform.runLater(() -> {
+            chatScrollPane.scrollYToPixel(Double.MAX_VALUE);
+            Platform.runLater(() -> chatScrollPane.scrollYToPixel(Double.MAX_VALUE));
+        });
     }
 
     /**

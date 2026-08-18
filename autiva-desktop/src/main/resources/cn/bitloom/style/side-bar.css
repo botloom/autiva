@@ -166,18 +166,34 @@
     -fx-spacing: 1;
 }
 
+/* session 运行状态圆点（标题前方） */
+.sidebar__status-dot {
+    -fx-min-width: 8;
+    -fx-min-height: 8;
+    -fx-pref-width: 8;
+    -fx-pref-height: 8;
+    -fx-max-width: 8;
+    -fx-max-height: 8;
+    -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-border-color: #c7c7cc;
+    -fx-border-width: 1;
+}
+
+/* 执行中：浅灰实心圆（闪烁由 FadeTransition 驱动） */
+.sidebar__status-dot--running {
+    -fx-background-color: #c7c7cc;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
 .sidebar__history-item-title {
     -fx-font-size: 13px;
     -fx-font-weight: 500;
     -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -fx-text-fill: #1d1d1f;
     -fx-wrap-text: false;
-}
-
-.sidebar__history-item-time {
-    -fx-font-size: 11px;
-    -fx-font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    -fx-text-fill: #86868b;
 }
 
 /* 历史对话删除按钮 */
@@ -490,4 +506,5 @@
     -fx-text-fill: #ff9500;
     -fx-font-weight: 600;
 }
+
 

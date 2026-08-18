@@ -11,6 +11,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
+import java.nio.file.Path;
 import java.util.function.Consumer;
 
 /**
@@ -30,8 +31,14 @@ public class PlanApprovalCard extends VBox {
     /** 决策回调：APPROVED / FEEDBACK::文本 / ABANDONED */
     private final Consumer<String> decisionConsumer;
 
+    /** 点击路径时在应用内文件视图打开文件（由 controller 注入）；为 null 时回退打开父目录 */
+    private Consumer<Path> fileOpener;
+
+    private final String planFilePath;
+
     public PlanApprovalCard(String planFilePath, Consumer<String> decisionConsumer) {
         this.decisionConsumer = decisionConsumer;
+        this.planFilePath = planFilePath;
 
         setPadding(new Insets(12, 14, 12, 14));
         setSpacing(8);
@@ -51,6 +58,11 @@ public class PlanApprovalCard extends VBox {
         pathLabel.setStyle("-fx-text-fill: #0071e3; -fx-font-size: 12px;");
         pathLabel.setCursor(javafx.scene.Cursor.HAND);
         pathLabel.setOnMouseClicked(e -> {
+            // 优先在应用内文件视图打开计划文档；未注入打开回调时回退打开父目录
+            if (fileOpener != null && planFilePath != null && !planFilePath.startsWith("(")) {
+                fileOpener.accept(Path.of(planFilePath));
+                return;
+            }
             try {
                 java.awt.Desktop.getDesktop().open(new java.io.File(planFilePath).getParentFile());
             } catch (Exception ignored) {
@@ -149,6 +161,13 @@ public class PlanApprovalCard extends VBox {
     private void decide(String decision) {
         dismiss();
         decisionConsumer.accept(decision);
+    }
+
+    /**
+     * 设置点击路径时在应用内文件视图打开文件的回调（由 controller 注入）。
+     */
+    public void setFileOpener(Consumer<Path> fileOpener) {
+        this.fileOpener = fileOpener;
     }
 
     /** 从父容器移除自身 */
