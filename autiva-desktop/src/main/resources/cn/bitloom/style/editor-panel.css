@@ -525,24 +525,36 @@
 
 /* 文件代码区 Git 状态已改为按行（行号处）着色，见下方 .git-lineno 修饰类 */
 
-/* 行号处 Git 改动标记：右侧 3px 色条（贴近代码区）+ 行号文字对应着色 */
+/* 行号处 Git 改动标记：整块浅色背景（新增绿/修改蓝），与代码区段落背景连续 */
 .editor-panel__code-area .lineno.git-lineno {
     -fx-padding: 0 8 0 3;
     -fx-background-insets: 0;
 }
 
 .editor-panel__code-area .lineno.git-lineno--added {
-    -fx-border-width: 0 3 0 1;
-    -fx-border-color: transparent -autiva-green transparent -autiva-separator;
+    -fx-background-color: rgba(52, 199, 89, 0.12);
     -fx-text-fill: -autiva-green;
     -fx-font-weight: bold;
 }
 
 .editor-panel__code-area .lineno.git-lineno--modified {
-    -fx-border-width: 0 3 0 1;
-    -fx-border-color: transparent -autiva-blue transparent -autiva-separator;
+    -fx-background-color: rgba(0, 113, 227, 0.12);
     -fx-text-fill: -autiva-blue;
     -fx-font-weight: bold;
+}
+
+/* 代码区变化行段落：整行浅色背景 + 左侧彩色竖线（gutter 标注）
+   注意：RichTextFX 把 setParagraphStyle 的样式类应用在 .paragraph-text（TextFlow）上，而非 .paragraph-box */
+.editor-panel__code-area .paragraph-text.git-para--added {
+    -fx-background-color: rgba(52, 199, 89, 0.12);
+    -fx-border-color: transparent transparent transparent -autiva-green;
+    -fx-border-width: 0 0 0 3;
+}
+
+.editor-panel__code-area .paragraph-text.git-para--modified {
+    -fx-background-color: rgba(0, 113, 227, 0.12);
+    -fx-border-color: transparent transparent transparent -autiva-blue;
+    -fx-border-width: 0 0 0 3;
 }
 
 /* ===== 语法高亮 Token（参考 Xcode 浅色主题） ===== */
@@ -730,31 +742,18 @@
     -fx-spacing: 0;
 }
 
-/* 右侧 ADD 行高亮（绿色背景） */
-.paragraph-box.diff-line-add-right {
+/* 右侧 ADD 行高亮（绿色背景）—— RichTextFX 将段落样式类应用在 .paragraph-text 上 */
+.editor-panel__diff-area .paragraph-text.diff-line-add-right {
     -fx-background-color: rgba(52, 199, 89, 0.15);
 }
 
 /* 左侧 REMOVE 行高亮（红色背景） */
-.paragraph-box.diff-line-remove-left {
+.editor-panel__diff-area .paragraph-text.diff-line-remove-left {
     -fx-background-color: rgba(255, 59, 48, 0.15);
 }
 
 /* 空行占位 */
-.paragraph-box.diff-line-empty {
-    -fx-background-color: transparent;
-}
-
-/* 兼容旧选择器 */
-.diff-line-add-right {
-    -fx-background-color: rgba(52, 199, 89, 0.15);
-}
-
-.diff-line-remove-left {
-    -fx-background-color: rgba(255, 59, 48, 0.15);
-}
-
-.diff-line-empty {
+.editor-panel__diff-area .paragraph-text.diff-line-empty {
     -fx-background-color: transparent;
 }
 

@@ -245,6 +245,8 @@ public class CoderEditorPanelController extends EditorPanelController implements
             codeArea.getStyleClass().add("editor-panel__code-area");
             SyntaxHighlighter highlighter = SyntaxHighlighterFactory.forPath(filePath);
             highlighter.apply(codeArea, content);
+            // 语法高亮完成后为改动行设置段落背景与左侧竖线（gutter 标注）
+            applyGitParaStyles(codeArea, lineStatusRef);
             codeArea.moveTo(0);
 
             codeArea.setOnKeyPressed(e -> {
@@ -327,6 +329,25 @@ public class CoderEditorPanelController extends EditorPanelController implements
     }
 
     /**
+     * 为 Git 改动行设置段落样式：整行浅色背景 + 左侧彩色竖线（gutter 标注）。
+     * 与 {@link #applyGitGutter} 的行号着色配合，使变化行在代码区直观可见。
+     */
+    private void applyGitParaStyles(CodeArea codeArea, AtomicReference<Map<Integer, GitFileStatus>> lineStatusRef) {
+        int paraCount = codeArea.getParagraphs().size();
+        Map<Integer, GitFileStatus> map = lineStatusRef.get();
+        for (int i = 0; i < paraCount; i++) {
+            GitFileStatus st = map.get(i);
+            String style = null;
+            if (st == GitFileStatus.ADDED) {
+                style = "git-para--added";
+            } else if (st == GitFileStatus.MODIFIED) {
+                style = "git-para--modified";
+            }
+            codeArea.setParagraphStyle(i, style == null ? List.of() : List.of(style));
+        }
+    }
+
+    /**
      * 根据项目 Git 状态为已打开的文件子 tab 标题着色，并在状态变化时同步刷新。
      * 代码区改为按行（行号处）着色，由 {@link #applyGitGutter} 处理。
      */
@@ -388,10 +409,12 @@ public class CoderEditorPanelController extends EditorPanelController implements
                                                 @SuppressWarnings("unchecked")
                                                 AtomicReference<Map<Integer, GitFileStatus>> lr =
                                                         (AtomicReference<Map<Integer, GitFileStatus>>) lineRef;
+                                                // 内容变化时先同步文本，再统一刷新行号着色与段落 gutter 标注
+                                                if (!ca.getText().equals(fresh)) {
+                                                    ca.replaceText(fresh);
+                                                }
                                                 applyGitGutter(ca, lr);
-                                            }
-                                            if (!ca.getText().equals(fresh)) {
-                                                ca.replaceText(fresh);
+                                                applyGitParaStyles(ca, lr);
                                             }
                                         }
                                     });
