@@ -166,6 +166,16 @@ public class CodeHomePageController extends AbstractHomePageController {
         if (planOn) {
             this.planButton.getStyleClass().add("home-page__mode-btn--active");
         }
+        // 未选择项目时同时锁死输入框（编码模式必须有工作目录才能发消息）
+        refreshSendInputDisabled();
+    }
+
+    /**
+     * Coder 模式未选择项目时锁定发送输入框，必须选择项目才能输入。
+     */
+    @Override
+    protected boolean isSendInputLocked() {
+        return this.viewModel.getCurrentProject() == null;
     }
 
     @Override

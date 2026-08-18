@@ -183,7 +183,7 @@ public abstract class AbstractHomePageController implements Initializable, Butto
         this.getViewModel().historyLoadingProperty().addListener((obs, oldVal, newVal) -> {
             boolean loading = newVal != null && newVal;
             this.sendButton.setDisable(loading);
-            this.sendField.setDisable(loading);
+            this.refreshSendInputDisabled();
             this.addFileButton.setDisable(loading);
             if (loading) {
                 if (loadingIndicatorCard == null) {
@@ -229,6 +229,22 @@ public abstract class AbstractHomePageController implements Initializable, Butto
      */
     protected void onMessagesChanged(boolean hasMessages) {
         // 默认空实现，子类可 override
+    }
+
+    /**
+     * 统一刷新发送输入框禁用态：历史加载中或模式锁定（如 Coder 未选项目）均禁用。
+     * 子类在影响 {@link #isSendInputLocked()} 的状态变化时调用。
+     */
+    protected void refreshSendInputDisabled() {
+        boolean loading = Boolean.TRUE.equals(this.getViewModel().historyLoadingProperty().get());
+        this.sendField.setDisable(loading || isSendInputLocked());
+    }
+
+    /**
+     * 子类可 override：返回是否因模式原因锁定输入框（如 Coder 模式未选择项目）。
+     */
+    protected boolean isSendInputLocked() {
+        return false;
     }
 
     /**
