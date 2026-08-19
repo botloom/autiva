@@ -330,10 +330,6 @@
     -fx-cursor: hand;
 }
 
-.sidebar__tree-container .tree-view .tree-cell:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.05);
-}
-
 .sidebar__tree-container .tree-view .tree-cell:selected {
     -fx-background-color: rgba(0, 113, 227, 0.1);
     -fx-text-fill: #0071e3;
@@ -361,10 +357,6 @@
 
 .sidebar__tree-container .tree-view .tree-cell:expanded .arrow {
     -fx-rotate: 90;
-    -fx-background-color: #1d1d1f;
-}
-
-.sidebar__tree-container .tree-view .tree-cell:hover .arrow {
     -fx-background-color: #1d1d1f;
 }
 
@@ -432,9 +424,9 @@
     -fx-font-weight: 500;
 }
 
-.sidebar__tree-container .tree-view .tree-cell.file-tree__folder:pressed {
-    -fx-background-color: rgba(0, 0, 0, 0.08);
-}
+/* 注：目录树行不使用 :hover / :pressed 背景反馈（折叠时 VirtualFlow 复用 cell 会使这两类瞬态残留/闪灭，
+   造成闪烁）。仅保留 :selected 选中蓝高亮，状态绑定 item 本身、稳定不闪。 */
+
 
 /* 文件类型文字颜色衬点亮色图标，形成清晰的类型区分 */
 .sidebar__tree-container .tree-view .tree-cell.file-tree__file--code {

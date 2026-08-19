@@ -4,7 +4,6 @@ import cn.bitloom.node.FileIconResolver;
 import cn.bitloom.node.svg.SvgImageView;
 import cn.bitloom.project.git.GitFileStatus;
 import cn.bitloom.project.git.ProjectStatusStore;
-import javafx.css.PseudoClass;
 import javafx.scene.Node;
 import javafx.scene.control.TreeCell;
 import javafx.scene.input.ClipboardContent;
@@ -12,7 +11,6 @@ import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -30,10 +28,6 @@ public class FileTreeCell extends TreeCell<Path> {
 
     private static final double ICON_SIZE = 16;
 
-    /** 瞬态伪类：hover / pressed，随节点存在而非随行位置 */
-    private static final PseudoClass HOVER = PseudoClass.getPseudoClass("hover");
-    private static final PseudoClass PRESSED = PseudoClass.getPseudoClass("pressed");
-
     /** 全局共享的 Git 状态存储，由 SideBarController 设置 */
     private static ProjectStatusStore statusStore;
 
@@ -44,16 +38,11 @@ public class FileTreeCell extends TreeCell<Path> {
         statusStore = store;
     }
 
-    /**
-     * cell 被 VirtualFlow 回收复用到新行时，hover/pressed 等瞬态伪类不会自动清除，
-     * 会导致灰背景残留在复用后的其它行上闪烁一下，这里在索引变化时强制重置。
-     */
-    @Override
-    public void updateIndex(int index) {
-        super.updateIndex(index);
-        pseudoClassStateChanged(HOVER, false);
-        pseudoClassStateChanged(PRESSED, false);
-    }
+    // 注意：不在这里重写 updateIndex 手动清 hover/pressed。
+    // hover 由 JavaFX 按鼠标位置实时维护(mouseEntered/Exited)，折叠重排时
+    // 强制清 hover 会让"鼠标正停着"的那行灰影闪灭又出现(表现为点击后消失、松开后复现)。
+    // pressed 在 CSS 中已不加 folder 行按压背景，无需干预。
+    // 两者均交由 JavaFX 原生状态机处理，避免引入闪烁。
 
     @Override
     protected void updateItem(Path item, boolean empty) {

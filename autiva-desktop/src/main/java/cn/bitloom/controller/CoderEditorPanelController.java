@@ -275,7 +275,6 @@ public class CoderEditorPanelController extends EditorPanelController implements
 
             VirtualizedScrollPane<CodeArea> scrollPane = new VirtualizedScrollPane<>(codeArea);
             scrollPane.getStyleClass().add("editor-panel__code-scroll");
-
             fileContent.getChildren().setAll(scrollPane);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
