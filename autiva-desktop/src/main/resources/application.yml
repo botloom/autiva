@@ -18,6 +18,8 @@ spring:
         name: autiva
     openai:
       api-key: not-required
+      chat:
+        max-tokens: 16384
 logging:
   level:
     root: info

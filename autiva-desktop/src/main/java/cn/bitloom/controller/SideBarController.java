@@ -275,7 +275,7 @@ public class SideBarController implements Initializable, PageHolder {
 
         if (isCoder) {
             // code 模式：按项目分组
-            renderProjectGroupedHistory(sessions);
+            renderProjectGroupedHistory(sessions, currentSessionId);
         } else {
             // work 模式：平铺
             for (Session session : sessions) {
@@ -304,8 +304,10 @@ public class SideBarController implements Initializable, PageHolder {
     /**
      * code 模式：按项目分组渲染历史对话。
      * 每个项目是一个折叠卡片，展开后显示该项目下的 session 列表。
+     *
+     * @param currentSessionId 当前活跃会话 id，含该会话的项目默认展开，其余项目默认折叠
      */
-    private void renderProjectGroupedHistory(List<Session> sessions) {
+    private void renderProjectGroupedHistory(List<Session> sessions, String currentSessionId) {
         List<ProjectInfo> projects = projectRegistry.listProjects();
         if (projects.isEmpty()) {
             return;
@@ -316,7 +318,7 @@ public class SideBarController implements Initializable, PageHolder {
                     .filter(s -> project.id().equals(s.metadata().get("projectId")))
                     .toList();
 
-            VBox projectCard = createProjectCard(project, projectSessions);
+            VBox projectCard = createProjectCard(project, projectSessions, currentSessionId);
             historyList.getChildren().add(projectCard);
         }
     }
@@ -324,7 +326,7 @@ public class SideBarController implements Initializable, PageHolder {
     /**
      * 创建项目折叠卡片。
      */
-    private VBox createProjectCard(ProjectInfo project, List<Session> projectSessions) {
+    private VBox createProjectCard(ProjectInfo project, List<Session> projectSessions, String currentSessionId) {
         VBox card = new VBox();
         card.getStyleClass().add("sidebar__project-card");
 
@@ -395,11 +397,13 @@ public class SideBarController implements Initializable, PageHolder {
         header.setOnMouseEntered(e -> { newChatBtn.setVisible(true); treeBtn.setVisible(true); });
         header.setOnMouseExited(e -> { newChatBtn.setVisible(false); treeBtn.setVisible(false); });
 
-        // session 列表容器（默认展开）
+        // session 列表容器（默认折叠；仅当前活跃会话所属项目默认为展开）
         VBox sessionList = new VBox();
         sessionList.getStyleClass().add("sidebar__project-sessions");
-        sessionList.setVisible(true);
-        sessionList.setManaged(true);
+        boolean isActiveProject = currentSessionId != null
+                && projectSessions.stream().anyMatch(s -> s.id().equals(currentSessionId));
+        sessionList.setVisible(isActiveProject);
+        sessionList.setManaged(isActiveProject);
 
         for (Session session : projectSessions) {
             HBox item = createHistoryItem(session);

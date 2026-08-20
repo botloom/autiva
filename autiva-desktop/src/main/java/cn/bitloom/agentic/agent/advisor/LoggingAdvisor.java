@@ -12,7 +12,6 @@ import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.*;
-import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -42,16 +41,24 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
     private static final String BORDER_MID = "├──────────────────────────────────────────────";
     private static final String BORDER_BOTTOM = "└──────────────────────────────────────────────";
 
-    /** 工具响应内容截断阈值（请求日志中显示历史 ToolResponse 的内容） */
+    /**
+     * 工具响应内容截断阈值（请求日志中显示历史 ToolResponse 的内容）
+     */
     private static final int TOOL_RESP_BRIEF_LEN = 200;
-    /** 正常路径 Text 截断阈值 */
+    /**
+     * 正常路径 Text 截断阈值
+     */
     private static final int TEXT_BRIEF_LEN = 1000;
-    /** 错误场景下 Text 不截断的硬上限（防止日志爆炸） */
+    /**
+     * 错误场景下 Text 不截断的硬上限（防止日志爆炸）
+     */
     private static final int TEXT_ERROR_LEN = 8000;
 
     private final AtomicInteger requestSeq = new AtomicInteger(0);
 
-    /** Agent 名称（主/子智能体标识），由 Agent.build() 注入 */
+    /**
+     * Agent 名称（主/子智能体标识），由 Agent.build() 注入
+     */
     @Nullable
     private final String agentName;
 
@@ -84,7 +91,7 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
         return responseFlux
                 .doOnNext(response -> {
                     ChatResponse chatResponse = response.chatResponse();
-                    if (chatResponse != null) {
+                    if (chatResponse != null && chatResponse.getResult() != null) {
                         var output = chatResponse.getResult().getOutput();
 
                         if (output.getText() != null && !output.getText().isEmpty()) {
@@ -271,6 +278,7 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
 
     /**
      * 拼接响应区日志行：Model / Finish / Text / Tools。
+     *
      * @param errorMode 错误场景下 Text 不截断（最多 TEXT_ERROR_LEN）
      */
     private void appendResponseLines(List<String> lines,
@@ -388,7 +396,8 @@ public class LoggingAdvisor implements StreamAdvisor, CallAdvisor {
             StringBuilder history = new StringBuilder();
             if (userCount.get() > 1) history.append("User:").append(userCount.get()).append(" ");
             if (assistantCount.get() > 0) history.append("Asst:").append(assistantCount.get());
-            if (assistantToolCallCount.get() > 0) history.append("(").append(assistantToolCallCount.get()).append("tc) ");
+            if (assistantToolCallCount.get() > 0)
+                history.append("(").append(assistantToolCallCount.get()).append("tc) ");
             if (toolRespCount.get() > 0) history.append("Tool:").append(toolRespCount.get());
             lines.add(String.format("│ %-8s│ %s", "History", history.toString().trim()));
         }
